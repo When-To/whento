@@ -57,6 +57,8 @@ func (h *Handler) HandleRobotsTxt(w http.ResponseWriter, r *http.Request) {
 			content.WriteString("Allow: /why-whento\n")
 			content.WriteString("Allow: /privacy\n")
 			content.WriteString("Allow: /terms\n")
+			content.WriteString("Allow: /login\n")
+			content.WriteString("Allow: /register\n")
 			content.WriteString("\n")
 		}
 
@@ -67,8 +69,6 @@ func (h *Handler) HandleRobotsTxt(w http.ResponseWriter, r *http.Request) {
 		content.WriteString("Disallow: /calendars/\n")
 		content.WriteString("Disallow: /settings\n")
 		content.WriteString("Disallow: /admin/\n")
-		content.WriteString("Disallow: /login\n")
-		content.WriteString("Disallow: /register\n")
 		content.WriteString("Disallow: /api/\n")
 
 		if h.buildType == "cloud" {
