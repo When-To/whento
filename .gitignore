@@ -1,0 +1,98 @@
+# ============================================
+# WHITELIST APPROACH
+# Ignore everything by default, then explicitly include what should be tracked
+# ============================================
+
+# Ignore everything at root
+/*
+
+# ============================================
+# Root Files - Explicitly Include
+# ============================================
+
+!.env.example
+
+# Go configuration
+!go.mod
+!go.sum
+!go.work
+
+# Build & Task automation
+!Makefile
+
+# Documentation
+!README.md
+!LICENSE
+!LICENSE-COMMERCIAL
+!THIRD-PARTY-LICENSES.md
+
+# Docker
+!Dockerfile
+!docker-compose.yml
+!docker-compose.dev.yml
+!.dockerignore
+
+# Git
+!.gitignore
+!.gitattributes
+
+# ============================================
+# Directories - Explicitly Include
+# ============================================
+
+# Backend source code
+!cmd/
+!internal/
+!pkg/
+!web/
+!scripts/
+
+# Frontend
+!frontend/
+
+# Database
+!migrations/
+
+# Build files
+!build/
+
+# CI/CD
+!.github/
+!.gitea/
+
+# Dev Container
+!.devcontainer/
+
+# ============================================
+# Recursive Rules for Included Directories
+# ============================================
+
+# Include all files in allowed directories by default
+!cmd/**
+!internal/**
+!pkg/**
+!web/embed.go
+!frontend/**
+!migrations/**
+!docs/**
+!.github/**
+!.gitea/**
+!.devcontainer/**
+
+# ============================================
+# Exclude Patterns Within Included Directories
+# ============================================
+
+# Build artifacts
+**/bin/
+**/dist/
+**/node_modules/
+**/tmp/
+**/*.exe
+**/*.exe~
+**/*.dll
+**/*.so
+**/*.dylib
+
+# Generated Swagger documentation
+docs/swagger/

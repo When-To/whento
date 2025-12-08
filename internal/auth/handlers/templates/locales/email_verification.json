@@ -1,0 +1,24 @@
+{
+  "fr": {
+    "subject": "Vérifiez votre adresse email WhenTo",
+    "greeting": "Bonjour {{.DisplayName}},",
+    "intro": "Merci de vous être inscrit sur WhenTo !",
+    "cta_instruction": "Veuillez vérifier votre adresse email en cliquant sur le bouton ci-dessous :",
+    "cta_button": "Vérifier mon adresse email",
+    "or_copy": "Ou copiez et collez ce lien dans votre navigateur :",
+    "expiry_notice": "Ce lien expirera dans {{.ExpiryDuration}}.",
+    "security_notice": "Si vous n'avez pas créé de compte WhenTo, vous pouvez ignorer cet email en toute sécurité.",
+    "signature": "Cordialement,<br>L'équipe WhenTo"
+  },
+  "en": {
+    "subject": "Verify your WhenTo email address",
+    "greeting": "Hello {{.DisplayName}},",
+    "intro": "Thank you for registering with WhenTo!",
+    "cta_instruction": "Please verify your email address by clicking the button below:",
+    "cta_button": "Verify Email Address",
+    "or_copy": "Or copy and paste this link into your browser:",
+    "expiry_notice": "This link will expire in {{.ExpiryDuration}}.",
+    "security_notice": "If you didn't create an account with WhenTo, you can safely ignore this email.",
+    "signature": "Best regards,<br>The WhenTo Team"
+  }
+}

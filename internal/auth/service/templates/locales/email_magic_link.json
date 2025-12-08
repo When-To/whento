@@ -1,0 +1,24 @@
+{
+  "fr": {
+    "subject": "Votre lien de connexion à WhenTo",
+    "greeting": "Bonjour {{.DisplayName}},",
+    "intro": "Vous avez demandé un lien de connexion à WhenTo.",
+    "cta_instruction": "Cliquez sur le bouton ci-dessous pour vous connecter :",
+    "cta_button": "Se connecter à WhenTo",
+    "or_copy": "Ou copiez ce lien dans votre navigateur :",
+    "expiry_notice": "Ce lien expire dans 1 heure et ne peut être utilisé qu'une seule fois.",
+    "security_notice": "Si vous n'avez pas demandé ce lien, vous pouvez ignorer cet email en toute sécurité.",
+    "signature": "Cordialement,<br>L'équipe WhenTo"
+  },
+  "en": {
+    "subject": "Your WhenTo login link",
+    "greeting": "Hello {{.DisplayName}},",
+    "intro": "You requested a login link for WhenTo.",
+    "cta_instruction": "Click the button below to log in:",
+    "cta_button": "Log in to WhenTo",
+    "or_copy": "Or copy this link into your browser:",
+    "expiry_notice": "This link expires in 1 hour and can only be used once.",
+    "security_notice": "If you didn't request this link, you can safely ignore this email.",
+    "signature": "Best regards,<br>The WhenTo Team"
+  }
+}

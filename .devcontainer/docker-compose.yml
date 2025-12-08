@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  devcontainer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/workspace:cached
+      - go-cache:/home/vscode/go
+    command: sleep infinity
+    ports:
+      - "8080:8080"   # Application (backend in prod, frontend in dev)
+    environment:
+      # Database
+      - DATABASE_URL=postgres://whento_user:whento_password@postgres:5432/whento_db?sslmode=disable
+      # Redis
+      - REDIS_URL=redis://redis:6379
+      # Go configuration
+      - GOPATH=/home/vscode/go
+      - GOCACHE=/home/vscode/go/cache
+      - GOMODCACHE=/home/vscode/go/pkg/mod
+      # Dev settings
+      - DEVCONTAINER=1
+      - GO_ENV=development
+      - LOG_LEVEL=debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: whento_db
+      POSTGRES_USER: whento_user
+      POSTGRES_PASSWORD: whento_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U whento"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+  go-cache:

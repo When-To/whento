@@ -1,0 +1,120 @@
+# WhenTo Commercial License
+
+## Overview
+
+This Commercial License Agreement ("Agreement") allows you to use WhenTo for
+purposes that would otherwise be prohibited under the Business Source License 1.1.
+
+## What Requires a Commercial License?
+
+You need a commercial license if you want to:
+
+1. **Offer WhenTo as a hosted service (SaaS)** to third parties
+2. **Resell WhenTo** as part of your product or service offering
+3. **Use WhenTo beyond your organization's internal use** in a commercial context
+
+## What's Included
+
+A commercial license grants you:
+
+- ✅ Right to offer WhenTo as a hosted service to third parties
+- ✅ Right to integrate WhenTo into commercial products
+- ✅ Removal of BSL restrictions
+- ✅ Support and updates
+- ✅ Legal protection and indemnification (Enterprise tier)
+
+## License Tiers
+
+### Startup License
+
+**300€/year**
+
+- Up to 10,000 users
+- Email support
+- Quarterly updates
+
+### Business License
+
+**1000€/year**
+
+- Unlimited users
+- Priority email support
+- Monthly updates
+- Custom branding options
+
+### Enterprise License
+
+**Custom pricing**
+
+- Unlimited users
+- Dedicated support channel
+- Custom SLA
+- On-premise deployment assistance
+- Custom feature development (negotiable)
+- Legal indemnification
+- Source code escrow
+
+## What You CANNOT Do
+
+Even with a commercial license:
+
+- ❌ Remove copyright notices or attribution
+- ❌ Claim WhenTo as your own creation
+- ❌ Use for illegal purposes
+- ❌ Resell the commercial license itself
+
+## Self-Hosted Licenses (Ed25519 Cryptographic Licenses)
+
+For self-hosted deployments with increased calendar limits:
+
+| Tier       | Calendar Limit | Price          | Support       |
+| ---------- | -------------- | -------------- | ------------- |
+| Community  | 30 calendars   | FREE           | Community     |
+| Pro        | 300 calendars  | 100€ (+ VAT)   | 1 year email  |
+| Enterprise | Unlimited      | 250€ (+ VAT)   | 2 years email |
+
+**Support renewals**: 60€/year after initial period
+
+These licenses are:
+
+- ✅ Perpetual (no expiration)
+- ✅ Cryptographically signed (Ed25519)
+- ✅ Offline validation (no phone-home)
+
+See [cmd/licensegen/README.md](cmd/licensegen/README.md) for technical details.
+
+## Term and Termination
+
+- Commercial licenses are valid for 12 months from purchase
+- Renewable annually
+- Termination for breach with 30 days written notice
+- Upon termination, you revert to BSL terms
+
+## Warranty Disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND. LICENSOR
+DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+
+## Limitation of Liability
+
+IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL,
+OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OF THE SOFTWARE, EXCEPT AS
+SPECIFIED IN ENTERPRISE AGREEMENTS.
+
+## Governing Law
+
+This Agreement shall be governed by the laws of France.
+
+## Contact
+
+For commercial licensing inquiries:
+
+- Email: contact@whento.be
+- Website: https://whento.be/pricing
+
+---
+
+Copyright (C) 2025 WhenTo Contributors
+
+This is a template. For a legally binding commercial license, please contact us.

@@ -1,0 +1,43 @@
+# ============================================
+# WHITELIST APPROACH FOR DOCKER (OPTIMIZED)
+# Only include files ACTUALLY used by Dockerfile
+# ============================================
+
+# Ignore everything at root
+*
+
+# ============================================
+# Root Files - Required for Build
+# ============================================
+
+# Go workspace configuration (REQUIRED for multi-module workspace)
+!go.mod
+!go.sum
+!go.work
+
+# ============================================
+# Directories - Required for Build
+# ============================================
+
+# Backend source code (REQUIRED for Go build)
+!cmd/
+!internal/
+!pkg/
+!web/
+!docs/
+
+# Database migrations (REQUIRED for build-migrations.sh)
+!migrations/
+
+# Frontend - Include frontend source code
+!frontend/
+frontend/dist/
+frontend/node_modules/
+
+# ============================================
+# Files - Required for Build
+# ============================================
+
+# Scripts - Include the 2 used in Dockerfile
+!scripts/build-migrations.sh
+!scripts/docker-entrypoint.sh

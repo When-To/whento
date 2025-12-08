@@ -1,0 +1,4 @@
+github.com/go-playground/tz v0.0.1 h1:KJmygVd+6hJjPsb49WWC4KVn2yTJ//e4SD25yYGQHMo=
+github.com/go-playground/tz v0.0.1/go.mod h1:wzWPR7bw9Wxnd52wSS5/efC/41wG0ykB6nTxeHHelqE=
+github.com/omidnikrah/go-holidays v1.0.0 h1:a+Fy0H1IiRYm2YBCXb5fi8sUKZ9z6TMvUORWG1g2Pt8=
+github.com/omidnikrah/go-holidays v1.0.0/go.mod h1:C2i/axOVWfU4O6Be3UfZiJ0T+qjwGOPnA97KpyhjguA=

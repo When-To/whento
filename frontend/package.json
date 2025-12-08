@@ -1,0 +1,53 @@
+{
+  "name": "whento-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:cloud": "VITE_BUILD_TYPE=cloud vite",
+    "dev:selfhosted": "VITE_BUILD_TYPE=selfhosted vite",
+    "build": "vue-tsc && vite build",
+    "build:cloud": "vue-tsc && VITE_BUILD_TYPE=cloud vite build",
+    "build:selfhosted": "vue-tsc && VITE_BUILD_TYPE=selfhosted vite build",
+    "build:docker": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --fix",
+    "type-check": "vue-tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{vue,ts,js,css,json}\"",
+    "format:check": "prettier --check \"src/**/*.{vue,ts,js,css,json}\""
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "countries-and-timezones": "^3.8.0",
+    "date-fns-tz": "^3.1.3",
+    "date-holidays": "^3.26.5",
+    "i18n-iso-countries": "^7.14.0",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0",
+    "world-countries": "^5.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@tailwindcss/postcss": "^4.1.17",
+    "@types/node": "^24.10.1",
+    "@typescript-eslint/eslint-plugin": "^8.48.0",
+    "@typescript-eslint/parser": "^8.48.0",
+    "@vitejs/plugin-vue": "^6.0.2",
+    "@vueuse/core": "^14.1.0",
+    "autoprefixer": "^10.4.19",
+    "date-fns": "^4.1.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-vue": "^10.6.2",
+    "globals": "^16.5.0",
+    "pinia": "^3.0.4",
+    "postcss": "^8.4.38",
+    "prettier": "^3.7.4",
+    "tailwindcss": "^4.1.17",
+    "typescript": "^5.4.3",
+    "typescript-eslint": "^8.48.1",
+    "vite": "^7.2.4",
+    "vue-i18n": "^11.2.2",
+    "vue-tsc": "^3.1.5"
+  }
+}
