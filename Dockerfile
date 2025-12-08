@@ -17,7 +17,7 @@ RUN npm ci
 COPY frontend/ ./
 
 # Build frontend for selfhosted
-RUN npm run build:selfhosted
+RUN npm run build
 
 # Go build stage
 FROM golang:1.25-alpine3.22 AS builder

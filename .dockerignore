@@ -31,7 +31,6 @@
 
 # Frontend - Include frontend source code
 !frontend/
-frontend/dist/
 frontend/node_modules/
 
 # ============================================

@@ -1,0 +1,129 @@
+# WhenTo Cloud - GitHub Actions workflow for private registry
+# Copyright (C) 2025 WhenTo Contributors
+# SPDX-License-Identifier: BSL-1.1
+#
+# SECURITY: This workflow publishes to a PRIVATE registry ONLY
+# The cloud image must NEVER be published to Docker Hub
+
+name: Build Cloud Image
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend for cloud
+        working-directory: frontend
+        run: npm run build:cloud
+
+      - name: Upload frontend build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-cloud
+          path: frontend/dist
+          retention-days: 1
+
+  build-and-push:
+    name: Build and Push to Private Registry
+    runs-on: ubuntu-latest
+    needs: build-frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist-cloud
+          path: frontend/dist
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install swag CLI
+        run: go install github.com/swaggo/swag/cmd/swag@latest
+
+      - name: Generate Swagger documentation
+        run: swag init -g cmd/main.go -o docs/swagger --parseInternal --generatedTime=false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Private Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.PRIVATE_REGISTRY }}
+          username: ${{ secrets.GITEA_USERNAME }}
+          password: ${{ secrets.GITEA_TOKEN }}
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+          VERSION_NUM=${VERSION#v}
+          echo "tag=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION_NUM}" >> $GITHUB_OUTPUT
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.PRIVATE_REGISTRY }}/${{ secrets.PRIVATE_IMAGE }}
+          tags: |
+            type=raw,value=cloud-latest
+            type=raw,value=cloud-${{ steps.version.outputs.version }}
+            type=semver,pattern=cloud-{{version}},value=${{ steps.version.outputs.tag }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: build/cloud/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "## Cloud image published to private registry" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** \`cloud-latest\`, \`cloud-${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
