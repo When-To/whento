@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 // Config holds the unified application configuration for all services
@@ -108,7 +110,12 @@ type EmailConfig struct {
 }
 
 // Load loads configuration from environment variables
+// It first attempts to load a .env file from the current directory (optional)
 func Load() *Config {
+	// Load .env file if it exists (silently ignore if not found)
+	// This allows configuration via .env file for binary deployments
+	_ = godotenv.Load()
+
 	return &Config{
 		// Server - single port for all services
 		Port:     getEnv("PORT", "8080"),
