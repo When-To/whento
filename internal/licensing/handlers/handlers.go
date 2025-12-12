@@ -204,4 +204,3 @@ func (h *Handler) HandleReloadLicense(w http.ResponseWriter, r *http.Request) {
 		"license": info,
 	})
 }
-

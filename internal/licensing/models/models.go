@@ -62,22 +62,22 @@ func GetTierConfig(tier LicenseTier) TierConfig {
 	configs := map[LicenseTier]TierConfig{
 		TierCommunity: models.NewLicenseTierConfig(
 			TierCommunity,
-			30,                        // CalendarLimit
-			0,                         // Price (free)
+			30,                          // CalendarLimit
+			0,                           // Price (free)
 			"Community (GitHub Issues)", // SupportLevel
 			[]string{"30 calendars (server total)", "Unlimited participants", "iCal subscriptions"},
 		),
 		TierPro: models.NewLicenseTierConfig(
 			TierPro,
-			300,            // CalendarLimit
-			10000,          // Price: 100€ + VAT lifetime
+			300,             // CalendarLimit
+			10000,           // Price: 100€ + VAT lifetime
 			"Email support", // SupportLevel
 			[]string{"300 calendars", "Unlimited participants", "iCal subscriptions", "1 year support", "60€/year renewal"},
 		),
 		TierEnterprise: models.NewLicenseTierConfig(
 			TierEnterprise,
-			0,                 // CalendarLimit: unlimited
-			25000,             // Price: 250€ + VAT lifetime
+			0,                  // CalendarLimit: unlimited
+			25000,              // Price: 250€ + VAT lifetime
 			"Priority support", // SupportLevel
 			[]string{"Unlimited calendars", "Unlimited participants", "iCal subscriptions", "2 years support", "60€/year renewal"},
 		),
@@ -99,4 +99,3 @@ type LicenseResponse struct {
 	IsActive      bool            `json:"is_active"`      // Always true for self-hosted (perpetual licenses)
 	SupportActive bool            `json:"support_active"` // Whether support is still active
 }
-

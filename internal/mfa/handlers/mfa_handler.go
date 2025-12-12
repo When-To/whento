@@ -39,18 +39,18 @@ func NewMFAHandler(service *service.MFAService, authSvc *authService.AuthService
 	}
 }
 
-//	@Summary		Begin MFA setup
-//	@Description	Initiates MFA setup by generating a TOTP secret and backup codes. Returns QR code URL and secret for authenticator app configuration.
-//	@Tags			MFA
-//	@Accept			json
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Success		200	{object}	models.TOTPSetupResponse	"TOTP secret, QR code URL, and backup codes"
-//	@Failure		401	{object}	httputil.ErrorResponse		"Unauthorized"
-//	@Failure		404	{object}	httputil.ErrorResponse		"User not found"
-//	@Failure		409	{object}	httputil.ErrorResponse		"MFA is already enabled"
-//	@Failure		500	{object}	httputil.ErrorResponse		"Internal server error"
-//	@Router			/api/v1/mfa/setup/begin [post]
+// @Summary		Begin MFA setup
+// @Description	Initiates MFA setup by generating a TOTP secret and backup codes. Returns QR code URL and secret for authenticator app configuration.
+// @Tags			MFA
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Success		200	{object}	models.TOTPSetupResponse	"TOTP secret, QR code URL, and backup codes"
+// @Failure		401	{object}	httputil.ErrorResponse		"Unauthorized"
+// @Failure		404	{object}	httputil.ErrorResponse		"User not found"
+// @Failure		409	{object}	httputil.ErrorResponse		"MFA is already enabled"
+// @Failure		500	{object}	httputil.ErrorResponse		"Internal server error"
+// @Router			/api/v1/mfa/setup/begin [post]
 func (h *MFAHandler) BeginSetup(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -82,18 +82,18 @@ func (h *MFAHandler) BeginSetup(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, response)
 }
 
-//	@Summary		Finish MFA setup
-//	@Description	Completes MFA setup by verifying the TOTP code from the authenticator app. Enables MFA for the user.
-//	@Tags			MFA
-//	@Accept			json
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			request	body		models.FinishSetupRequest	true	"TOTP code from authenticator app"
-//	@Success		200		{object}	map[string]string			"MFA enabled successfully"
-//	@Failure		400		{object}	httputil.ErrorResponse		"Invalid request or verification code"
-//	@Failure		401		{object}	httputil.ErrorResponse		"Unauthorized"
-//	@Failure		500		{object}	httputil.ErrorResponse		"Internal server error"
-//	@Router			/api/v1/mfa/setup/finish [post]
+// @Summary		Finish MFA setup
+// @Description	Completes MFA setup by verifying the TOTP code from the authenticator app. Enables MFA for the user.
+// @Tags			MFA
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Param			request	body		models.FinishSetupRequest	true	"TOTP code from authenticator app"
+// @Success		200		{object}	map[string]string			"MFA enabled successfully"
+// @Failure		400		{object}	httputil.ErrorResponse		"Invalid request or verification code"
+// @Failure		401		{object}	httputil.ErrorResponse		"Unauthorized"
+// @Failure		500		{object}	httputil.ErrorResponse		"Internal server error"
+// @Router			/api/v1/mfa/setup/finish [post]
 func (h *MFAHandler) FinishSetup(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -135,17 +135,17 @@ func (h *MFAHandler) FinishSetup(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "MFA enabled successfully"})
 }
 
-//	@Summary		Disable MFA
-//	@Description	Disables MFA for the authenticated user. Removes TOTP secret and backup codes.
-//	@Tags			MFA
-//	@Accept			json
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Success		200	{object}	map[string]string		"MFA disabled successfully"
-//	@Failure		400	{object}	httputil.ErrorResponse	"MFA is not enabled"
-//	@Failure		401	{object}	httputil.ErrorResponse	"Unauthorized"
-//	@Failure		500	{object}	httputil.ErrorResponse	"Internal server error"
-//	@Router			/api/v1/mfa/disable [post]
+// @Summary		Disable MFA
+// @Description	Disables MFA for the authenticated user. Removes TOTP secret and backup codes.
+// @Tags			MFA
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Success		200	{object}	map[string]string		"MFA disabled successfully"
+// @Failure		400	{object}	httputil.ErrorResponse	"MFA is not enabled"
+// @Failure		401	{object}	httputil.ErrorResponse	"Unauthorized"
+// @Failure		500	{object}	httputil.ErrorResponse	"Internal server error"
+// @Router			/api/v1/mfa/disable [post]
 func (h *MFAHandler) Disable(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -172,15 +172,15 @@ func (h *MFAHandler) Disable(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "MFA disabled successfully"})
 }
 
-//	@Summary		Get MFA status
-//	@Description	Returns the MFA status for the authenticated user (enabled or disabled).
-//	@Tags			MFA
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Success		200	{object}	models.MFAStatusResponse	"MFA status"
-//	@Failure		401	{object}	httputil.ErrorResponse		"Unauthorized"
-//	@Failure		500	{object}	httputil.ErrorResponse		"Internal server error"
-//	@Router			/api/v1/mfa/status [get]
+// @Summary		Get MFA status
+// @Description	Returns the MFA status for the authenticated user (enabled or disabled).
+// @Tags			MFA
+// @Produce		json
+// @Security		BearerAuth
+// @Success		200	{object}	models.MFAStatusResponse	"MFA status"
+// @Failure		401	{object}	httputil.ErrorResponse		"Unauthorized"
+// @Failure		500	{object}	httputil.ErrorResponse		"Internal server error"
+// @Router			/api/v1/mfa/status [get]
 func (h *MFAHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -204,17 +204,17 @@ func (h *MFAHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, status)
 }
 
-//	@Summary		Regenerate backup codes
-//	@Description	Generates new backup codes for the authenticated user. Invalidates all previous backup codes.
-//	@Tags			MFA
-//	@Accept			json
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Success		200	{object}	models.BackupCodesResponse	"New backup codes"
-//	@Failure		400	{object}	httputil.ErrorResponse		"MFA is not enabled"
-//	@Failure		401	{object}	httputil.ErrorResponse		"Unauthorized"
-//	@Failure		500	{object}	httputil.ErrorResponse		"Internal server error"
-//	@Router			/api/v1/mfa/backup-codes/regenerate [post]
+// @Summary		Regenerate backup codes
+// @Description	Generates new backup codes for the authenticated user. Invalidates all previous backup codes.
+// @Tags			MFA
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Success		200	{object}	models.BackupCodesResponse	"New backup codes"
+// @Failure		400	{object}	httputil.ErrorResponse		"MFA is not enabled"
+// @Failure		401	{object}	httputil.ErrorResponse		"Unauthorized"
+// @Failure		500	{object}	httputil.ErrorResponse		"Internal server error"
+// @Router			/api/v1/mfa/backup-codes/regenerate [post]
 func (h *MFAHandler) RegenerateBackupCodes(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -244,17 +244,17 @@ func (h *MFAHandler) RegenerateBackupCodes(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-//	@Summary		Verify MFA during login
-//	@Description	Verifies TOTP or backup code during login for users with MFA enabled. Completes authentication and returns JWT tokens.
-//	@Tags			Authentication
-//	@Accept			json
-//	@Produce		json
-//	@Param			request	body		models.VerifyMFARequest							true	"Temporary token and MFA code"
-//	@Success		200		{object}	object{access_token=string,token_type=string,expires_in=int,refresh_token=string,user=object}	"Authentication successful with access and refresh tokens"
-//	@Failure		400		{object}	httputil.ErrorResponse							"Invalid request or MFA not enabled"
-//	@Failure		401		{object}	httputil.ErrorResponse							"Invalid temporary token or MFA code"
-//	@Failure		500		{object}	httputil.ErrorResponse							"Internal server error"
-//	@Router			/api/v1/auth/mfa/verify [post]
+// @Summary		Verify MFA during login
+// @Description	Verifies TOTP or backup code during login for users with MFA enabled. Completes authentication and returns JWT tokens.
+// @Tags			Authentication
+// @Accept			json
+// @Produce		json
+// @Param			request	body		models.VerifyMFARequest							true	"Temporary token and MFA code"
+// @Success		200		{object}	object{access_token=string,token_type=string,expires_in=int,refresh_token=string,user=object}	"Authentication successful with access and refresh tokens"
+// @Failure		400		{object}	httputil.ErrorResponse							"Invalid request or MFA not enabled"
+// @Failure		401		{object}	httputil.ErrorResponse							"Invalid temporary token or MFA code"
+// @Failure		500		{object}	httputil.ErrorResponse							"Internal server error"
+// @Router			/api/v1/auth/mfa/verify [post]
 func (h *MFAHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 	var req models.VerifyMFARequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {

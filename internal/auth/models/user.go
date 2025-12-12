@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/whento/pkg/models"
 )
 
@@ -25,19 +26,19 @@ const (
 // User represents a user in the system
 type User struct {
 	models.TimestampedEntity
-	Email                         string     `json:"email"`
-	PasswordHash                  string     `json:"-"`
-	DisplayName                   string     `json:"display_name"`
-	Role                          string     `json:"role"`
-	Locale                        string     `json:"locale"`
-	Timezone                      string     `json:"timezone"`
-	EmailVerified                 bool       `json:"email_verified"`
-	VerificationToken             *string    `json:"-"`
-	VerificationTokenExpiresAt    *time.Time `json:"-"`
-	PasswordResetToken            *string    `json:"-"`
-	PasswordResetTokenExpiresAt   *time.Time `json:"-"`
-	MagicLinkToken                *string    `json:"-"`
-	MagicLinkTokenExpiresAt       *time.Time `json:"-"`
+	Email                       string     `json:"email"`
+	PasswordHash                string     `json:"-"`
+	DisplayName                 string     `json:"display_name"`
+	Role                        string     `json:"role"`
+	Locale                      string     `json:"locale"`
+	Timezone                    string     `json:"timezone"`
+	EmailVerified               bool       `json:"email_verified"`
+	VerificationToken           *string    `json:"-"`
+	VerificationTokenExpiresAt  *time.Time `json:"-"`
+	PasswordResetToken          *string    `json:"-"`
+	PasswordResetTokenExpiresAt *time.Time `json:"-"`
+	MagicLinkToken              *string    `json:"-"`
+	MagicLinkTokenExpiresAt     *time.Time `json:"-"`
 }
 
 // RefreshToken represents a refresh token
@@ -69,6 +70,6 @@ type UserWithSubscription struct {
 
 // MFAStatus contains MFA/authentication status for a user
 type MFAStatus struct {
-	TOTPEnabled   bool `json:"totp_enabled"`
-	PasskeyCount  int  `json:"passkey_count"`
+	TOTPEnabled  bool `json:"totp_enabled"`
+	PasskeyCount int  `json:"passkey_count"`
 }

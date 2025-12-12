@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
+	pkgModels "github.com/whento/pkg/models"
 	authModels "github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/calendar/handlers"
 	"github.com/whento/whento/internal/calendar/models"
@@ -22,15 +23,14 @@ import (
 	"github.com/whento/whento/internal/calendar/service"
 	"github.com/whento/whento/internal/config"
 	"github.com/whento/whento/internal/testutil"
-	pkgModels "github.com/whento/pkg/models"
 )
 
 // Mock CalendarService implementing service.CalendarRepository and service.ParticipantRepository
 type mockCalendarRepository struct {
-	calendar        *models.Calendar
-	calendars       []*models.Calendar
-	participants    []models.Participant
-	err             error
+	calendar                     *models.Calendar
+	calendars                    []*models.Calendar
+	participants                 []models.Participant
+	err                          error
 	createWithParticipantsCalled bool
 }
 
@@ -143,12 +143,12 @@ func (m *mockCache) IsEnabled() bool {
 }
 
 type mockQuotaService struct {
-	canCreate    bool
-	userLimit    int
-	serverLimit  int
-	usage        int
-	isOverQuota  bool
-	err          error
+	canCreate   bool
+	userLimit   int
+	serverLimit int
+	usage       int
+	isOverQuota bool
+	err         error
 }
 
 func (m *mockQuotaService) CanCreateCalendar(ctx context.Context, userID uuid.UUID) (bool, error) {
@@ -302,9 +302,9 @@ func TestCalendarHandler_CreateCalendar_Success(t *testing.T) {
 	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg)
 
 	reqBody := map[string]interface{}{
-		"name":        "Team Meeting",
-		"description": "Weekly sync",
-		"threshold":   2,
+		"name":         "Team Meeting",
+		"description":  "Weekly sync",
+		"threshold":    2,
 		"participants": []string{"Alice", "Bob"},
 	}
 

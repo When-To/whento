@@ -1136,7 +1136,7 @@ async function loadCalendar() {
       // Load notification config
       try {
         notifyConfig.value = await getNotifyConfig(calendarId)
-      } catch (error) {
+      } catch (_error) {
         // If notify config doesn't exist, use default
         notifyConfig.value = getDefaultNotifyConfig()
       }

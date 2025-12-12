@@ -37,17 +37,17 @@ func NewPasskeyHandler(service *service.PasskeyService, authSvc *authService.Aut
 	}
 }
 
-//	@Summary		Begin passkey registration
-//	@Description	Initiates passkey registration by generating WebAuthn credential creation options. Returns challenge and options for the authenticator.
-//	@Tags			Passkey
-//	@Accept			json
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Success		200	{object}	models.RegistrationOptionsResponse	"WebAuthn credential creation options"
-//	@Failure		401	{object}	httputil.ErrorResponse				"Unauthorized"
-//	@Failure		404	{object}	httputil.ErrorResponse				"User not found"
-//	@Failure		500	{object}	httputil.ErrorResponse				"Internal server error"
-//	@Router			/api/v1/passkey/register/begin [post]
+// @Summary		Begin passkey registration
+// @Description	Initiates passkey registration by generating WebAuthn credential creation options. Returns challenge and options for the authenticator.
+// @Tags			Passkey
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Success		200	{object}	models.RegistrationOptionsResponse	"WebAuthn credential creation options"
+// @Failure		401	{object}	httputil.ErrorResponse				"Unauthorized"
+// @Failure		404	{object}	httputil.ErrorResponse				"User not found"
+// @Failure		500	{object}	httputil.ErrorResponse				"Internal server error"
+// @Router			/api/v1/passkey/register/begin [post]
 func (h *PasskeyHandler) BeginRegistration(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -76,19 +76,19 @@ func (h *PasskeyHandler) BeginRegistration(w http.ResponseWriter, r *http.Reques
 	httputil.JSON(w, http.StatusOK, options)
 }
 
-//	@Summary		Finish passkey registration
-//	@Description	Completes passkey registration by verifying the credential created by the authenticator. Stores the passkey for future passwordless authentication.
-//	@Tags			Passkey
-//	@Accept			json
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			credential	body		object						true	"WebAuthn credential response from authenticator"
-//	@Success		201			{object}	models.PasskeyResponse		"Passkey registered successfully"
-//	@Failure		400			{object}	httputil.ErrorResponse		"Invalid credential or challenge"
-//	@Failure		401			{object}	httputil.ErrorResponse		"Unauthorized"
-//	@Failure		404			{object}	httputil.ErrorResponse		"User not found"
-//	@Failure		500			{object}	httputil.ErrorResponse		"Internal server error"
-//	@Router			/api/v1/passkey/register/finish [post]
+// @Summary		Finish passkey registration
+// @Description	Completes passkey registration by verifying the credential created by the authenticator. Stores the passkey for future passwordless authentication.
+// @Tags			Passkey
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Param			credential	body		object						true	"WebAuthn credential response from authenticator"
+// @Success		201			{object}	models.PasskeyResponse		"Passkey registered successfully"
+// @Failure		400			{object}	httputil.ErrorResponse		"Invalid credential or challenge"
+// @Failure		401			{object}	httputil.ErrorResponse		"Unauthorized"
+// @Failure		404			{object}	httputil.ErrorResponse		"User not found"
+// @Failure		500			{object}	httputil.ErrorResponse		"Internal server error"
+// @Router			/api/v1/passkey/register/finish [post]
 func (h *PasskeyHandler) FinishRegistration(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -124,15 +124,15 @@ func (h *PasskeyHandler) FinishRegistration(w http.ResponseWriter, r *http.Reque
 	httputil.JSON(w, http.StatusCreated, passkey.ToResponse())
 }
 
-//	@Summary		List passkeys
-//	@Description	Returns all passkeys registered for the authenticated user.
-//	@Tags			Passkey
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Success		200	{array}		models.PasskeyResponse	"List of user's passkeys"
-//	@Failure		401	{object}	httputil.ErrorResponse	"Unauthorized"
-//	@Failure		500	{object}	httputil.ErrorResponse	"Internal server error"
-//	@Router			/api/v1/passkey/list [get]
+// @Summary		List passkeys
+// @Description	Returns all passkeys registered for the authenticated user.
+// @Tags			Passkey
+// @Produce		json
+// @Security		BearerAuth
+// @Success		200	{array}		models.PasskeyResponse	"List of user's passkeys"
+// @Failure		401	{object}	httputil.ErrorResponse	"Unauthorized"
+// @Failure		500	{object}	httputil.ErrorResponse	"Internal server error"
+// @Router			/api/v1/passkey/list [get]
 func (h *PasskeyHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -161,21 +161,21 @@ func (h *PasskeyHandler) List(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, responses)
 }
 
-//	@Summary		Rename passkey
-//	@Description	Updates the friendly name of a passkey for easier identification.
-//	@Tags			Passkey
-//	@Accept			json
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			id		path		string						true	"Passkey ID (UUID)"
-//	@Param			request	body		models.RenamePasskeyRequest	true	"New passkey name"
-//	@Success		200		{object}	map[string]string			"Passkey renamed successfully"
-//	@Failure		400		{object}	httputil.ErrorResponse		"Invalid request or passkey ID"
-//	@Failure		401		{object}	httputil.ErrorResponse		"Unauthorized"
-//	@Failure		403		{object}	httputil.ErrorResponse		"Forbidden - passkey belongs to another user"
-//	@Failure		404		{object}	httputil.ErrorResponse		"Passkey not found"
-//	@Failure		500		{object}	httputil.ErrorResponse		"Internal server error"
-//	@Router			/api/v1/passkey/{id}/name [patch]
+// @Summary		Rename passkey
+// @Description	Updates the friendly name of a passkey for easier identification.
+// @Tags			Passkey
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Param			id		path		string						true	"Passkey ID (UUID)"
+// @Param			request	body		models.RenamePasskeyRequest	true	"New passkey name"
+// @Success		200		{object}	map[string]string			"Passkey renamed successfully"
+// @Failure		400		{object}	httputil.ErrorResponse		"Invalid request or passkey ID"
+// @Failure		401		{object}	httputil.ErrorResponse		"Unauthorized"
+// @Failure		403		{object}	httputil.ErrorResponse		"Forbidden - passkey belongs to another user"
+// @Failure		404		{object}	httputil.ErrorResponse		"Passkey not found"
+// @Failure		500		{object}	httputil.ErrorResponse		"Internal server error"
+// @Router			/api/v1/passkey/{id}/name [patch]
 func (h *PasskeyHandler) Rename(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -228,19 +228,19 @@ func (h *PasskeyHandler) Rename(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "Passkey renamed successfully"})
 }
 
-//	@Summary		Delete passkey
-//	@Description	Deletes a passkey from the user's account. The passkey can no longer be used for authentication.
-//	@Tags			Passkey
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			id	path		string					true	"Passkey ID (UUID)"
-//	@Success		200	{object}	map[string]string		"Passkey deleted successfully"
-//	@Failure		400	{object}	httputil.ErrorResponse	"Invalid passkey ID"
-//	@Failure		401	{object}	httputil.ErrorResponse	"Unauthorized"
-//	@Failure		403	{object}	httputil.ErrorResponse	"Forbidden - passkey belongs to another user"
-//	@Failure		404	{object}	httputil.ErrorResponse	"Passkey not found"
-//	@Failure		500	{object}	httputil.ErrorResponse	"Internal server error"
-//	@Router			/api/v1/passkey/{id} [delete]
+// @Summary		Delete passkey
+// @Description	Deletes a passkey from the user's account. The passkey can no longer be used for authentication.
+// @Tags			Passkey
+// @Produce		json
+// @Security		BearerAuth
+// @Param			id	path		string					true	"Passkey ID (UUID)"
+// @Success		200	{object}	map[string]string		"Passkey deleted successfully"
+// @Failure		400	{object}	httputil.ErrorResponse	"Invalid passkey ID"
+// @Failure		401	{object}	httputil.ErrorResponse	"Unauthorized"
+// @Failure		403	{object}	httputil.ErrorResponse	"Forbidden - passkey belongs to another user"
+// @Failure		404	{object}	httputil.ErrorResponse	"Passkey not found"
+// @Failure		500	{object}	httputil.ErrorResponse	"Internal server error"
+// @Router			/api/v1/passkey/{id} [delete]
 func (h *PasskeyHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -278,14 +278,14 @@ func (h *PasskeyHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "Passkey deleted successfully"})
 }
 
-//	@Summary		Begin passkey authentication
-//	@Description	Initiates passwordless authentication with passkeys. Supports discoverable credentials (usernameless login).
-//	@Tags			Authentication
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	models.DiscoverableAuthenticationOptionsResponse	"WebAuthn authentication options with challenge ID"
-//	@Failure		500	{object}	httputil.ErrorResponse								"Internal server error"
-//	@Router			/api/v1/auth/passkey/login/begin [post]
+// @Summary		Begin passkey authentication
+// @Description	Initiates passwordless authentication with passkeys. Supports discoverable credentials (usernameless login).
+// @Tags			Authentication
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	models.DiscoverableAuthenticationOptionsResponse	"WebAuthn authentication options with challenge ID"
+// @Failure		500	{object}	httputil.ErrorResponse								"Internal server error"
+// @Router			/api/v1/auth/passkey/login/begin [post]
 func (h *PasskeyHandler) BeginDiscoverableAuthentication(w http.ResponseWriter, r *http.Request) {
 	options, challengeID, err := h.service.BeginDiscoverableAuthentication(r.Context())
 	if err != nil {
@@ -302,18 +302,18 @@ func (h *PasskeyHandler) BeginDiscoverableAuthentication(w http.ResponseWriter, 
 	})
 }
 
-//	@Summary		Finish passkey authentication
-//	@Description	Completes passwordless authentication by verifying the passkey credential. Returns JWT tokens. If 2FA is enabled, returns mfa_required=true with a temporary token.
-//	@Tags			Authentication
-//	@Accept			json
-//	@Produce		json
-//	@Param			X-Challenge-ID	header		string										true	"Challenge ID from begin authentication"
-//	@Param			credential		body		object										true	"WebAuthn credential assertion from authenticator"
-//	@Success		200				{object}	object{access_token=string,token_type=string,expires_in=int,refresh_token=string,user=object}	"Authentication successful with access and refresh tokens"
-//	@Failure		400				{object}	httputil.ErrorResponse						"Invalid request, credential, or challenge"
-//	@Failure		401				{object}	httputil.ErrorResponse						"Invalid credentials"
-//	@Failure		500				{object}	httputil.ErrorResponse						"Internal server error"
-//	@Router			/api/v1/auth/passkey/login/finish [post]
+// @Summary		Finish passkey authentication
+// @Description	Completes passwordless authentication by verifying the passkey credential. Returns JWT tokens. If 2FA is enabled, returns mfa_required=true with a temporary token.
+// @Tags			Authentication
+// @Accept			json
+// @Produce		json
+// @Param			X-Challenge-ID	header		string										true	"Challenge ID from begin authentication"
+// @Param			credential		body		object										true	"WebAuthn credential assertion from authenticator"
+// @Success		200				{object}	object{access_token=string,token_type=string,expires_in=int,refresh_token=string,user=object}	"Authentication successful with access and refresh tokens"
+// @Failure		400				{object}	httputil.ErrorResponse						"Invalid request, credential, or challenge"
+// @Failure		401				{object}	httputil.ErrorResponse						"Invalid credentials"
+// @Failure		500				{object}	httputil.ErrorResponse						"Internal server error"
+// @Router			/api/v1/auth/passkey/login/finish [post]
 func (h *PasskeyHandler) FinishAuthentication(w http.ResponseWriter, r *http.Request) {
 	// Extract challengeId from header (sent by frontend to avoid polluting WebAuthn body)
 	challengeID := r.Header.Get("X-Challenge-ID")

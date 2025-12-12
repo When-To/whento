@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/whento/pkg/models"
 )
 
@@ -52,23 +53,23 @@ func GetPlanConfig(plan SubscriptionPlan) PlanConfig {
 	configs := map[SubscriptionPlan]PlanConfig{
 		PlanFree: models.NewSubscriptionPlanConfig(
 			PlanFree,
-			3,    // CalendarLimit
-			0,    // Price
-			"",   // StripePriceID (none for free plan)
+			3,  // CalendarLimit
+			0,  // Price
+			"", // StripePriceID (none for free plan)
 			[]string{"3 calendars", "Unlimited participants", "iCal subscriptions"},
 		),
 		PlanPro: models.NewSubscriptionPlanConfig(
 			PlanPro,
-			30,                        // CalendarLimit
-			2500,                      // Price: 25€/year + VAT
-			"",                        // StripePriceID (set via env var)
+			30,   // CalendarLimit
+			2500, // Price: 25€/year + VAT
+			"",   // StripePriceID (set via env var)
 			[]string{"30 calendars", "Unlimited participants", "iCal subscriptions", "Email support", "Annual billing"},
 		),
 		PlanPower: models.NewSubscriptionPlanConfig(
 			PlanPower,
-			0,                         // CalendarLimit: unlimited
-			10000,                     // Price: 100€/year + VAT
-			"",                        // StripePriceID (set via env var)
+			0,     // CalendarLimit: unlimited
+			10000, // Price: 100€/year + VAT
+			"",    // StripePriceID (set via env var)
 			[]string{"Unlimited calendars", "Unlimited participants", "iCal subscriptions", "Priority support", "Annual billing"},
 		),
 	}

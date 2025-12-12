@@ -28,14 +28,14 @@ func TestEmailDeduplication(t *testing.T) {
 			name:                   "Owner is also participant (email deduplication)",
 			ownerEmail:             "owner@example.com",
 			participantEmails:      []string{"owner@example.com", "alice@example.com"}, // owner email duplicated
-			expectedRecipientCount: 2,                                                    // owner deduplicated + alice
+			expectedRecipientCount: 2,                                                  // owner deduplicated + alice
 			description:            "Should deduplicate when owner email matches participant email",
 		},
 		{
 			name:                   "Multiple participants same email (edge case)",
 			ownerEmail:             "owner@example.com",
 			participantEmails:      []string{"shared@example.com", "shared@example.com"}, // duplicate
-			expectedRecipientCount: 2,                                                     // owner + 1 deduplicated shared email
+			expectedRecipientCount: 2,                                                    // owner + 1 deduplicated shared email
 			description:            "Should deduplicate when multiple participants share same email",
 		},
 		{
