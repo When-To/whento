@@ -20,9 +20,11 @@ var (
 
 // Participant represents a participant with basic info
 type Participant struct {
-	ID         uuid.UUID
-	CalendarID uuid.UUID
-	Name       string
+	ID            uuid.UUID
+	CalendarID    uuid.UUID
+	Name          string
+	Email         *string
+	EmailVerified bool
 }
 
 // ParticipantRepository handles participant database operations
@@ -38,7 +40,7 @@ func NewParticipantRepository(pool *pgxpool.Pool) *ParticipantRepository {
 // GetByID retrieves a participant by ID
 func (r *ParticipantRepository) GetByID(ctx context.Context, id uuid.UUID) (*Participant, error) {
 	query := `
-		SELECT id, calendar_id, name
+		SELECT id, calendar_id, name, email, email_verified
 		FROM participants
 		WHERE id = $1`
 
@@ -47,6 +49,8 @@ func (r *ParticipantRepository) GetByID(ctx context.Context, id uuid.UUID) (*Par
 		&participant.ID,
 		&participant.CalendarID,
 		&participant.Name,
+		&participant.Email,
+		&participant.EmailVerified,
 	)
 
 	if err != nil {
@@ -62,7 +66,7 @@ func (r *ParticipantRepository) GetByID(ctx context.Context, id uuid.UUID) (*Par
 // GetByCalendarID retrieves all participants for a calendar
 func (r *ParticipantRepository) GetByCalendarID(ctx context.Context, calendarID uuid.UUID) ([]*Participant, error) {
 	query := `
-		SELECT id, calendar_id, name
+		SELECT id, calendar_id, name, email, email_verified
 		FROM participants
 		WHERE calendar_id = $1
 		ORDER BY created_at ASC`
@@ -80,6 +84,8 @@ func (r *ParticipantRepository) GetByCalendarID(ctx context.Context, calendarID 
 			&participant.ID,
 			&participant.CalendarID,
 			&participant.Name,
+			&participant.Email,
+			&participant.EmailVerified,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan participant: %w", err)

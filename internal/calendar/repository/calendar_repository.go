@@ -65,8 +65,16 @@ func (r *CalendarRepository) Create(ctx context.Context, calendar *models.Calend
 	return nil
 }
 
+// ParticipantInput represents participant creation data
+type ParticipantInput struct {
+	Name          string
+	Email         *string
+	EmailVerified bool
+	Locale        string
+}
+
 // CreateWithParticipants creates a calendar and its participants in a transaction
-func (r *CalendarRepository) CreateWithParticipants(ctx context.Context, calendar *models.Calendar, participantNames []string) ([]models.Participant, error) {
+func (r *CalendarRepository) CreateWithParticipants(ctx context.Context, calendar *models.Calendar, participants []ParticipantInput) ([]models.Participant, error) {
 	tx, err := r.Pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -105,21 +113,24 @@ func (r *CalendarRepository) CreateWithParticipants(ctx context.Context, calenda
 	}
 
 	// Create participants
-	var participants []models.Participant
+	var createdParticipants []models.Participant
 	participantQuery := `
-		INSERT INTO participants (id, calendar_id, name)
-		VALUES ($1, $2, $3)
+		INSERT INTO participants (id, calendar_id, name, email, email_verified, locale)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING created_at`
 
-	for _, participantName := range participantNames {
+	for _, input := range participants {
 		// Skip empty names
-		if participantName == "" {
+		if input.Name == "" {
 			continue
 		}
 
 		participant := models.Participant{
-			CalendarID: calendar.ID,
-			Name:       participantName,
+			CalendarID:    calendar.ID,
+			Name:          input.Name,
+			Email:         input.Email,
+			EmailVerified: input.EmailVerified,
+			Locale:        input.Locale,
 		}
 		participant.ID = uuid.New()
 
@@ -127,6 +138,9 @@ func (r *CalendarRepository) CreateWithParticipants(ctx context.Context, calenda
 			participant.ID,
 			participant.CalendarID,
 			participant.Name,
+			participant.Email,
+			participant.EmailVerified,
+			participant.Locale,
 		).Scan(&participant.CreatedAt)
 
 		if err != nil {
@@ -137,7 +151,7 @@ func (r *CalendarRepository) CreateWithParticipants(ctx context.Context, calenda
 			return nil, fmt.Errorf("failed to create participant: %w", err)
 		}
 
-		participants = append(participants, participant)
+		createdParticipants = append(createdParticipants, participant)
 	}
 
 	// Commit transaction
@@ -145,7 +159,7 @@ func (r *CalendarRepository) CreateWithParticipants(ctx context.Context, calenda
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return participants, nil
+	return createdParticipants, nil
 }
 
 // GetByID retrieves a calendar by ID
@@ -377,4 +391,23 @@ func (r *CalendarRepository) CountAll(ctx context.Context) (int, error) {
 	}
 
 	return count, nil
+}
+
+// UpdateNotifyConfig updates the notify_config field and notify_on_threshold flag for a calendar
+func (r *CalendarRepository) UpdateNotifyConfig(ctx context.Context, id uuid.UUID, notifyConfig string, enabled bool) error {
+	query := `
+		UPDATE calendars
+		SET notify_config = $1, notify_on_threshold = $2, updated_at = NOW()
+		WHERE id = $3`
+
+	result, err := r.Pool.Exec(ctx, query, notifyConfig, enabled, id)
+	if err != nil {
+		return fmt.Errorf("failed to update notify config: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrCalendarNotFound
+	}
+
+	return nil
 }

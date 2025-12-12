@@ -107,11 +107,13 @@ clean:
 # Formatting
 format:
 	@echo "Formatting Go files with goimports..."
+	@which goimports > /dev/null || (echo "Error: goimports not installed. Install with: go install golang.org/x/tools/cmd/goimports@latest" && exit 1)
 	@goimports -w -local github.com/whento $$(find . -type f -name '*.go' -not -path './.go-cache/*' -not -path './vendor/*')
 	@echo "✓ All Go files formatted"
 
 format-check:
 	@echo "Checking Go file formatting..."
+	@which goimports > /dev/null || (echo "Error: goimports not installed. Install with: go install golang.org/x/tools/cmd/goimports@latest" && exit 1)
 	@UNFORMATTED=$$(goimports -l -local github.com/whento $$(find . -type f -name '*.go' -not -path './.go-cache/*' -not -path './vendor/*')); \
 	if [ -n "$$UNFORMATTED" ]; then \
 		echo "The following files need formatting:"; \

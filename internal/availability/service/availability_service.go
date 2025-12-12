@@ -40,9 +40,11 @@ var (
 type AvailabilityRepository interface {
 	Create(ctx context.Context, availability *models.Availability) error
 	GetByParticipantID(ctx context.Context, participantID uuid.UUID) ([]*models.Availability, error)
+	GetByParticipantIDWithDateRange(ctx context.Context, participantID uuid.UUID, startDate, endDate *time.Time) ([]*models.Availability, error)
 	GetByParticipantAndDate(ctx context.Context, participantID uuid.UUID, date time.Time) (*models.Availability, error)
 	GetByDate(ctx context.Context, calendarID uuid.UUID, date time.Time) ([]*models.Availability, error)
 	GetByCalendarDateRange(ctx context.Context, calendarID uuid.UUID, startDate, endDate time.Time) ([]*models.Availability, error)
+	GetParticipantCountForDate(ctx context.Context, calendarID uuid.UUID, date time.Time) (int, error)
 	Update(ctx context.Context, availability *models.Availability) error
 	Delete(ctx context.Context, participantID uuid.UUID, date time.Time) error
 }
@@ -72,12 +74,18 @@ type RecurrenceRepository interface {
 	DeleteException(ctx context.Context, recurrenceID uuid.UUID, excludedDate string) error
 }
 
+// NotifyService defines the interface for notification service operations
+type NotifyService interface {
+	CheckThresholdAndNotify(ctx context.Context, calendarID uuid.UUID, date time.Time, previousCount int) error
+}
+
 // AvailabilityService handles availability business logic
 type AvailabilityService struct {
 	availabilityRepo AvailabilityRepository
 	calendarRepo     CalendarRepository
 	participantRepo  ParticipantRepository
 	recurrenceRepo   RecurrenceRepository
+	notifyService    NotifyService
 	cache            cache.Cache
 }
 
@@ -87,6 +95,7 @@ func NewAvailabilityService(
 	calendarRepo CalendarRepository,
 	participantRepo ParticipantRepository,
 	recurrenceRepo RecurrenceRepository,
+	notifyService NotifyService,
 	c cache.Cache,
 ) *AvailabilityService {
 	return &AvailabilityService{
@@ -94,6 +103,7 @@ func NewAvailabilityService(
 		calendarRepo:     calendarRepo,
 		participantRepo:  participantRepo,
 		recurrenceRepo:   recurrenceRepo,
+		notifyService:    notifyService,
 		cache:            c,
 	}
 }
@@ -192,6 +202,13 @@ func (s *AvailabilityService) CreateAvailability(ctx context.Context, token, par
 		}
 	}
 
+	// Get participant count BEFORE creating availability (for threshold detection)
+	previousCount, err := s.availabilityRepo.GetParticipantCountForDate(ctx, calendarID, date)
+	if err != nil {
+		// Log error but continue - notification just won't have accurate previous count
+		previousCount = -1
+	}
+
 	// Create availability
 	availability := &models.Availability{
 		ParticipantID: partID,
@@ -211,11 +228,19 @@ func (s *AvailabilityService) CreateAvailability(ctx context.Context, token, par
 		return nil, err
 	}
 
-	return toAvailabilityResponse(availability, participant.Name), nil
+	// Trigger notification check (fire-and-forget, don't block availability operation)
+	go func() {
+		notifyCtx := context.Background()
+		if err := s.notifyService.CheckThresholdAndNotify(notifyCtx, calendarID, date, previousCount); err != nil {
+			// Log only, don't fail the availability operation
+		}
+	}()
+
+	return toAvailabilityResponse(availability, participant.Name, participant.Email, participant.EmailVerified), nil
 }
 
 // GetParticipantAvailabilities retrieves all availabilities for a participant
-func (s *AvailabilityService) GetParticipantAvailabilities(ctx context.Context, token, participantID string) ([]*models.AvailabilityResponse, error) {
+func (s *AvailabilityService) GetParticipantAvailabilities(ctx context.Context, token, participantID, startDateStr, endDateStr string) (*models.ParticipantAvailabilitiesResponse, error) {
 	// Validate calendar token
 	calendarID, err := s.calendarRepo.GetByPublicToken(ctx, token)
 	if err != nil {
@@ -244,19 +269,52 @@ func (s *AvailabilityService) GetParticipantAvailabilities(ctx context.Context, 
 		return nil, ErrParticipantNotFound
 	}
 
-	// Get availabilities
-	availabilities, err := s.availabilityRepo.GetByParticipantID(ctx, partID)
+	// Parse optional date range
+	var startDate, endDate *time.Time
+	if startDateStr != "" {
+		parsed, err := time.Parse("2006-01-02", startDateStr)
+		if err != nil {
+			return nil, ErrInvalidDate
+		}
+		startDate = &parsed
+	}
+	if endDateStr != "" {
+		parsed, err := time.Parse("2006-01-02", endDateStr)
+		if err != nil {
+			return nil, ErrInvalidDate
+		}
+		endDate = &parsed
+	}
+
+	// Get availabilities with optional date filtering
+	availabilities, err := s.availabilityRepo.GetByParticipantIDWithDateRange(ctx, partID, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert to response
-	var responses []*models.AvailabilityResponse
-	for _, avail := range availabilities {
-		responses = append(responses, toAvailabilityResponse(avail, participant.Name))
+	// Convert to response with participant info and availability items
+	items := make([]models.AvailabilityItem, len(availabilities))
+	for i, avail := range availabilities {
+		items[i] = models.AvailabilityItem{
+			ID:        avail.ID,
+			Date:      formatDate(avail.Date),
+			StartTime: avail.StartTime,
+			EndTime:   avail.EndTime,
+			Note:      avail.Note,
+			CreatedAt: avail.CreatedAt,
+			UpdatedAt: avail.UpdatedAt,
+		}
 	}
 
-	return responses, nil
+	return &models.ParticipantAvailabilitiesResponse{
+		Participant: models.ParticipantInfo{
+			ID:            participant.ID,
+			Name:          participant.Name,
+			Email:         participant.Email,
+			EmailVerified: participant.EmailVerified,
+		},
+		Availabilities: items,
+	}, nil
 }
 
 // UpdateAvailability updates an existing availability
@@ -361,12 +419,27 @@ func (s *AvailabilityService) UpdateAvailability(ctx context.Context, token, par
 		availability.Note = *req.Note
 	}
 
+	// Get participant count (for threshold detection - count doesn't change on update)
+	currentCount, err := s.availabilityRepo.GetParticipantCountForDate(ctx, calendarID, date)
+	if err != nil {
+		currentCount = -1
+	}
+
 	// Update in database
 	if err := s.availabilityRepo.Update(ctx, availability); err != nil {
 		return nil, err
 	}
 
-	return toAvailabilityResponse(availability, participant.Name), nil
+	// Trigger notification check (fire-and-forget)
+	// Note: Update doesn't change participant count, but we still check in case threshold config changed
+	go func() {
+		notifyCtx := context.Background()
+		if err := s.notifyService.CheckThresholdAndNotify(notifyCtx, calendarID, date, currentCount); err != nil {
+			// Log only, don't fail the availability operation
+		}
+	}()
+
+	return toAvailabilityResponse(availability, participant.Name, participant.Email, participant.EmailVerified), nil
 }
 
 // DeleteAvailability deletes an availability
@@ -412,6 +485,13 @@ func (s *AvailabilityService) DeleteAvailability(ctx context.Context, token, par
 		return ErrDateInPast
 	}
 
+	// Get participant count BEFORE deleting (for threshold detection)
+	previousCount, err := s.availabilityRepo.GetParticipantCountForDate(ctx, calendarID, date)
+	if err != nil {
+		// Log error but continue - notification just won't have accurate previous count
+		previousCount = -1
+	}
+
 	// Delete availability
 	if err := s.availabilityRepo.Delete(ctx, partID, date); err != nil {
 		if errors.Is(err, repository.ErrAvailabilityNotFound) {
@@ -419,6 +499,14 @@ func (s *AvailabilityService) DeleteAvailability(ctx context.Context, token, par
 		}
 		return err
 	}
+
+	// Trigger notification check (fire-and-forget)
+	go func() {
+		notifyCtx := context.Background()
+		if err := s.notifyService.CheckThresholdAndNotify(notifyCtx, calendarID, date, previousCount); err != nil {
+			// Log only, don't fail the availability operation
+		}
+	}()
 
 	return nil
 }
@@ -851,17 +939,19 @@ func isDuplicateError(err error) bool {
 	return err != nil && (err.Error() == "availability already exists for this date")
 }
 
-func toAvailabilityResponse(availability *models.Availability, participantName string) *models.AvailabilityResponse {
+func toAvailabilityResponse(availability *models.Availability, participantName string, participantEmail *string, participantEmailVerified bool) *models.AvailabilityResponse {
 	return &models.AvailabilityResponse{
-		ID:              availability.ID,
-		ParticipantID:   availability.ParticipantID,
-		ParticipantName: participantName,
-		Date:            formatDate(availability.Date),
-		StartTime:       availability.StartTime,
-		EndTime:         availability.EndTime,
-		Note:            availability.Note,
-		CreatedAt:       availability.CreatedAt,
-		UpdatedAt:       availability.UpdatedAt,
+		ID:                       availability.ID,
+		ParticipantID:            availability.ParticipantID,
+		ParticipantName:          participantName,
+		ParticipantEmail:         participantEmail,
+		ParticipantEmailVerified: participantEmailVerified,
+		Date:                     formatDate(availability.Date),
+		StartTime:                availability.StartTime,
+		EndTime:                  availability.EndTime,
+		Note:                     availability.Note,
+		CreatedAt:                availability.CreatedAt,
+		UpdatedAt:                availability.UpdatedAt,
 	}
 }
 

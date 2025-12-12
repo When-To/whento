@@ -15,11 +15,14 @@ import (
 
 	"github.com/google/uuid"
 
+	authModels "github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/calendar/handlers"
 	"github.com/whento/whento/internal/calendar/models"
+	"github.com/whento/whento/internal/calendar/repository"
 	"github.com/whento/whento/internal/calendar/service"
 	"github.com/whento/whento/internal/config"
 	"github.com/whento/whento/internal/testutil"
+	pkgModels "github.com/whento/pkg/models"
 )
 
 // Mock CalendarService implementing service.CalendarRepository and service.ParticipantRepository
@@ -31,7 +34,7 @@ type mockCalendarRepository struct {
 	createWithParticipantsCalled bool
 }
 
-func (m *mockCalendarRepository) CreateWithParticipants(ctx context.Context, calendar *models.Calendar, participantNames []string) ([]models.Participant, error) {
+func (m *mockCalendarRepository) CreateWithParticipants(ctx context.Context, calendar *models.Calendar, participantInputs []repository.ParticipantInput) ([]models.Participant, error) {
 	m.createWithParticipantsCalled = true
 	if m.err != nil {
 		return nil, m.err
@@ -113,6 +116,10 @@ func (m *mockParticipantRepository) Delete(ctx context.Context, id uuid.UUID) er
 	return m.err
 }
 
+func (m *mockParticipantRepository) SetEmailAsVerified(ctx context.Context, participantID uuid.UUID, locale string) error {
+	return m.err
+}
+
 type mockCache struct{}
 
 func (m *mockCache) Get(ctx context.Context, key string, dest interface{}) error {
@@ -186,6 +193,92 @@ func (m *mockQuotaService) IsOverQuota(ctx context.Context, userID uuid.UUID) (b
 	return m.isOverQuota, nil
 }
 
+type mockUserRepository struct {
+	user *authModels.User
+	err  error
+}
+
+func (m *mockUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*authModels.User, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	if m.user == nil {
+		return &authModels.User{
+			TimestampedEntity: pkgModels.TimestampedEntity{Entity: pkgModels.Entity{ID: id}},
+			EmailVerified:     true,
+		}, nil
+	}
+	return m.user, nil
+}
+
+func (m *mockUserRepository) GetByEmail(ctx context.Context, email string) (*authModels.User, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockUserRepository) Create(ctx context.Context, user *authModels.User) error {
+	return m.err
+}
+
+func (m *mockUserRepository) Update(ctx context.Context, user *authModels.User) error {
+	return m.err
+}
+
+func (m *mockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	return m.err
+}
+
+func (m *mockUserRepository) SetEmailAsVerified(ctx context.Context, id uuid.UUID) error {
+	return m.err
+}
+
+func (m *mockUserRepository) SetVerificationToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) error {
+	return m.err
+}
+
+func (m *mockUserRepository) GetByVerificationToken(ctx context.Context, token string) (*authModels.User, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockUserRepository) ClearVerificationToken(ctx context.Context, userID uuid.UUID) error {
+	return m.err
+}
+
+func (m *mockUserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
+	return m.err
+}
+
+func (m *mockUserRepository) UpdateRole(ctx context.Context, userID uuid.UUID, role string) error {
+	return m.err
+}
+
+func (m *mockUserRepository) ListAll(ctx context.Context) ([]authModels.User, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockUserRepository) SetPasswordResetToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) error {
+	return m.err
+}
+
+func (m *mockUserRepository) GetByPasswordResetToken(ctx context.Context, token string) (*authModels.User, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockUserRepository) ClearPasswordResetToken(ctx context.Context, userID uuid.UUID) error {
+	return m.err
+}
+
+func (m *mockUserRepository) SetMagicLinkToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) error {
+	return m.err
+}
+
+func (m *mockUserRepository) GetByMagicLinkToken(ctx context.Context, token string) (*authModels.User, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockUserRepository) ClearMagicLinkToken(ctx context.Context, userID uuid.UUID) error {
+	return m.err
+}
+
 // Verify interface implementations at compile time
 var _ service.CalendarRepository = (*mockCalendarRepository)(nil)
 var _ service.ParticipantRepository = (*mockParticipantRepository)(nil)
@@ -204,8 +297,9 @@ func TestCalendarHandler_CreateCalendar_Success(t *testing.T) {
 	mockCache := &mockCache{}
 	mockQuota := &mockQuotaService{canCreate: true}
 
-	calendarSvc := service.NewCalendarService(mockCalRepo, mockPartRepo, mockCache)
-	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, &config.Config{})
+	calendarSvc := service.NewCalendarService(mockCalRepo, mockPartRepo, nil, mockCache)
+	cfg := &config.Config{Email: config.EmailConfig{VerificationEnabled: false}}
+	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg)
 
 	reqBody := map[string]interface{}{
 		"name":        "Team Meeting",
@@ -237,8 +331,9 @@ func TestCalendarHandler_CreateCalendar_QuotaExceeded(t *testing.T) {
 	mockCache := &mockCache{}
 	mockQuota := &mockQuotaService{canCreate: false} // Quota exceeded
 
-	calendarSvc := service.NewCalendarService(mockCalRepo, mockPartRepo, mockCache)
-	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, &config.Config{})
+	calendarSvc := service.NewCalendarService(mockCalRepo, mockPartRepo, nil, mockCache)
+	cfg := &config.Config{Email: config.EmailConfig{VerificationEnabled: false}}
+	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg)
 
 	reqBody := map[string]interface{}{
 		"name": "Test Calendar",
@@ -261,8 +356,9 @@ func TestCalendarHandler_CreateCalendar_Unauthorized(t *testing.T) {
 	mockCache := &mockCache{}
 	mockQuota := &mockQuotaService{canCreate: true}
 
-	calendarSvc := service.NewCalendarService(mockCalRepo, mockPartRepo, mockCache)
-	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, &config.Config{})
+	calendarSvc := service.NewCalendarService(mockCalRepo, mockPartRepo, nil, mockCache)
+	cfg := &config.Config{Email: config.EmailConfig{VerificationEnabled: false}}
+	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg)
 
 	reqBody := map[string]interface{}{
 		"name": "Test Calendar",

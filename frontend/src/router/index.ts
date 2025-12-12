@@ -68,6 +68,12 @@ export const routes: RouteRecordRaw[] = [
     meta: { public: true },
   },
   {
+    path: '/c/verify-email/:token',
+    name: 'verify-participant-email',
+    component: () => import('@/views/VerifyParticipantEmail.vue'),
+    meta: { public: true },
+  },
+  {
     path: '/settings',
     name: 'settings',
     component: () => import('@/views/Settings.vue'),

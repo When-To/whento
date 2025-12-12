@@ -38,17 +38,44 @@ type UpdateAvailabilityRequest struct {
 	Note      *string `json:"note,omitempty" validate:"omitempty,max=1000"`
 }
 
-// AvailabilityResponse represents the response for availability
+// AvailabilityResponse represents the response for availability (single operation)
 type AvailabilityResponse struct {
-	ID              uuid.UUID `json:"id"`
-	ParticipantID   uuid.UUID `json:"participant_id"`
-	ParticipantName string    `json:"participant_name"`
-	Date            string    `json:"date"`                 // Format: "2006-01-02"
-	StartTime       *string   `json:"start_time,omitempty"` // Format: "15:04"
-	EndTime         *string   `json:"end_time,omitempty"`   // Format: "15:04"
-	Note            string    `json:"note,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID                     uuid.UUID `json:"id"`
+	ParticipantID          uuid.UUID `json:"participant_id"`
+	ParticipantName        string    `json:"participant_name"`
+	ParticipantEmail       *string   `json:"participant_email,omitempty"`
+	ParticipantEmailVerified bool    `json:"participant_email_verified"`
+	Date                   string    `json:"date"`                 // Format: "2006-01-02"
+	StartTime              *string   `json:"start_time,omitempty"` // Format: "15:04"
+	EndTime                *string   `json:"end_time,omitempty"`   // Format: "15:04"
+	Note                   string    `json:"note,omitempty"`
+	CreatedAt              time.Time `json:"created_at"`
+	UpdatedAt              time.Time `json:"updated_at"`
+}
+
+// AvailabilityItem represents a single availability without participant info
+type AvailabilityItem struct {
+	ID        uuid.UUID `json:"id"`
+	Date      string    `json:"date"`                 // Format: "2006-01-02"
+	StartTime *string   `json:"start_time,omitempty"` // Format: "15:04"
+	EndTime   *string   `json:"end_time,omitempty"`   // Format: "15:04"
+	Note      string    `json:"note,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ParticipantInfo represents participant information for availabilities response
+type ParticipantInfo struct {
+	ID            uuid.UUID `json:"id"`
+	Name          string    `json:"name"`
+	Email         *string   `json:"email,omitempty"`
+	EmailVerified bool      `json:"email_verified"`
+}
+
+// ParticipantAvailabilitiesResponse represents a participant with their availabilities
+type ParticipantAvailabilitiesResponse struct {
+	Participant     ParticipantInfo    `json:"participant"`
+	Availabilities  []AvailabilityItem `json:"availabilities"`
 }
 
 // ParticipantAvailabilitySummary represents availability summary for a participant

@@ -72,6 +72,219 @@
           </button>
         </div>
 
+        <!-- Email Notification Section (if notifications enabled for participants) -->
+        <div
+          v-if="notificationsEnabled"
+          class="card mb-6"
+        >
+          <h3 class="mb-4 font-display text-lg font-semibold text-gray-900 dark:text-white">
+            {{ t('notifications.emailVerification') }}
+          </h3>
+
+          <!-- No email added yet -->
+          <div v-if="!participant.email">
+            <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
+              {{ t('notifications.addEmail') }}
+            </p>
+            <form
+              class="flex gap-2"
+              @submit.prevent="handleAddEmail"
+            >
+              <input
+                v-model="emailInput"
+                type="email"
+                class="input flex-1"
+                :placeholder="t('notifications.emailPlaceholder')"
+                required
+              >
+              <button
+                type="submit"
+                class="btn btn-primary"
+                :disabled="addingEmail"
+              >
+                <svg
+                  v-if="addingEmail"
+                  class="mr-2 h-4 w-4 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  />
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                {{ addingEmail ? t('common.saving') : t('common.save') }}
+              </button>
+            </form>
+          </div>
+
+          <!-- Email pending verification -->
+          <div
+            v-else-if="!participant.email_verified"
+            class="space-y-3"
+          >
+            <div
+              v-if="!changingEmail"
+              class="space-y-3"
+            >
+              <div class="rounded-lg bg-orange-50 p-4 dark:bg-orange-900/20">
+                <div class="flex">
+                  <svg
+                    class="h-5 w-5 text-orange-600 dark:text-orange-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                  <p class="ml-3 text-sm text-orange-600 dark:text-orange-400">
+                    {{ t('notifications.emailPending', { email: participant.email }) }}
+                  </p>
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button
+                  class="btn btn-ghost"
+                  :disabled="resendingEmail"
+                  @click="handleResendVerification"
+                >
+                  {{ resendingEmail ? t('common.sending') : t('notifications.resendVerification') }}
+                </button>
+                <button
+                  class="btn btn-ghost"
+                  @click="changingEmail = true"
+                >
+                  {{ t('notifications.changeEmail') }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Change email form -->
+            <div
+              v-else
+              class="space-y-3"
+            >
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                {{ t('notifications.changeEmailPrompt', { currentEmail: participant.email }) }}
+              </p>
+              <form
+                class="flex gap-2"
+                @submit.prevent="handleChangeEmail"
+              >
+                <input
+                  v-model="newEmailInput"
+                  type="email"
+                  class="input flex-1"
+                  :placeholder="t('notifications.newEmailPlaceholder')"
+                  required
+                >
+                <button
+                  type="submit"
+                  class="btn btn-primary"
+                  :disabled="addingEmail"
+                >
+                  {{ addingEmail ? t('common.saving') : t('common.save') }}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  @click="changingEmail = false; newEmailInput = ''"
+                >
+                  {{ t('common.cancel') }}
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Email verified -->
+          <div
+            v-else
+            class="space-y-3"
+          >
+            <div
+              v-if="!changingEmail"
+              class="space-y-3"
+            >
+              <div class="rounded-lg bg-success-50 p-4 dark:bg-success-900/20">
+                <div class="flex">
+                  <svg
+                    class="h-5 w-5 text-success-600 dark:text-success-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <p class="ml-3 text-sm text-success-600 dark:text-success-400">
+                    {{ t('notifications.emailVerified', { email: participant.email }) }}
+                  </p>
+                </div>
+              </div>
+              <button
+                class="btn btn-ghost"
+                @click="changingEmail = true"
+              >
+                {{ t('notifications.changeEmail') }}
+              </button>
+            </div>
+
+            <!-- Change email form -->
+            <div
+              v-else
+              class="space-y-3"
+            >
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                {{ t('notifications.changeEmailPrompt', { currentEmail: participant.email }) }}
+              </p>
+              <form
+                class="flex gap-2"
+                @submit.prevent="handleChangeEmail"
+              >
+                <input
+                  v-model="newEmailInput"
+                  type="email"
+                  class="input flex-1"
+                  :placeholder="t('notifications.newEmailPlaceholder')"
+                  required
+                >
+                <button
+                  type="submit"
+                  class="btn btn-primary"
+                  :disabled="addingEmail"
+                >
+                  {{ addingEmail ? t('common.saving') : t('common.save') }}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  @click="changingEmail = false; newEmailInput = ''"
+                >
+                  {{ t('common.cancel') }}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+
         <!-- Calendar View -->
         <div class="card mb-6">
           <div class="flex items-center justify-between mb-4">
@@ -1110,12 +1323,14 @@ import WeeklyCalendarGrid, { type AvailabilityOperation } from '@/components/Wee
 import TimeSelect from '@/components/TimeSelect.vue'
 import CollapsibleSection from '@/components/CollapsibleSection.vue'
 import { clearHolidaysCache } from '@/composables/useDateValidation'
+import { addParticipantEmail, resendVerificationEmail } from '@/api/notify'
 import type {
   Availability,
   RecurrenceWithExceptions,
   CreateAvailabilityRequest,
   CreateRecurrenceRequest,
   DateAvailabilitySummary,
+  ParticipantAvailabilitiesResponse,
 } from '@/types'
 
 const route = useRoute()
@@ -1131,7 +1346,7 @@ const token = computed(() => route.params.token as string)
 const participantId = computed(() => route.params.participantId as string)
 
 const loading = ref(false)
-const availabilities = ref<Availability[]>([])
+const availabilityData = ref<ParticipantAvailabilitiesResponse | null>(null)
 const recurrences = ref<RecurrenceWithExceptions[]>([])
 const participantCounts = ref<Record<string, number>>({})
 const dateSummaries = ref<DateAvailabilitySummary[]>([])
@@ -1158,9 +1373,49 @@ const startHour = ref(8)
 const endHour = ref(20)
 const slotDuration = ref(30)
 
+// Email notification state
+const emailInput = ref('')
+const addingEmail = ref(false)
+const resendingEmail = ref(false)
+const changingEmail = ref(false)
+const newEmailInput = ref('')
+const notificationsEnabled = computed(() => {
+  // Check if calendar has notify_participants enabled
+  return calendar.value?.notify_participants === true
+})
+
 const calendar = computed(() => calendarStore.currentCalendar)
 const participant = computed(() => {
+  // If we have availability data with participant info, use it (includes email)
+  if (availabilityData.value) {
+    const participantInfo = availabilityData.value.participant
+    return {
+      id: participantInfo.id,
+      name: participantInfo.name,
+      email: participantInfo.email,
+      email_verified: participantInfo.email_verified,
+      calendar_id: calendar.value?.id || '',
+      created_at: ''
+    }
+  }
+
+  // Fall back to calendar participant if availabilities not yet loaded
   return calendar.value?.participants.find(p => p.id === participantId.value)
+})
+
+// Computed availabilities array for compatibility with existing code
+// Enriches availability items with participant info
+const availabilities = computed((): Availability[] => {
+  if (!availabilityData.value) return []
+
+  const participantInfo = availabilityData.value.participant
+  return availabilityData.value.availabilities.map(item => ({
+    ...item,
+    participant_id: participantInfo.id,
+    participant_name: participantInfo.name,
+    participant_email: participantInfo.email,
+    participant_email_verified: participantInfo.email_verified
+  }))
 })
 
 // Generate an array of month configurations to display
@@ -1540,11 +1795,36 @@ async function loadCalendar() {
 
 async function loadAvailabilities() {
   try {
-    const result = await availabilitiesApi.getByParticipant(token.value, participantId.value)
-    availabilities.value = result || []
+    // Calculate date range based on display mode
+    let startDate: Date
+    let endDate: Date
+
+    if (displayMode.value === 'week') {
+      startDate = new Date(currentWeekStartDate.value)
+      endDate = new Date(currentWeekStartDate.value)
+      endDate.setDate(endDate.getDate() + numberOfPeriods.value * 7 - 1)
+    } else {
+      const now = new Date()
+      const targetYear = displayedYear.value ?? now.getFullYear()
+      const targetMonth = displayedMonth.value ?? now.getMonth()
+
+      startDate = new Date(targetYear, targetMonth, 1)
+      endDate = new Date(targetYear, targetMonth + numberOfPeriods.value, 0)
+    }
+
+    const startStr = formatDateForAPI(startDate)
+    const endStr = formatDateForAPI(endDate)
+
+    const result = await availabilitiesApi.getByParticipant(
+      token.value,
+      participantId.value,
+      startStr,
+      endStr
+    )
+    availabilityData.value = result
   } catch (err: any) {
     console.error('Failed to load availabilities:', err)
-    availabilities.value = []
+    availabilityData.value = null
   }
 }
 
@@ -2245,6 +2525,65 @@ async function handleAvailabilityUpdated() {
   ])
 }
 
+// Email notification handlers
+async function handleAddEmail() {
+  if (!emailInput.value.trim() || !token.value || !participantId.value) {
+    return
+  }
+
+  addingEmail.value = true
+
+  try {
+    await addParticipantEmail(token.value, participantId.value, emailInput.value.trim())
+    toastStore.success(t('notifications.emailSent'))
+    emailInput.value = ''
+    // Reload participant data to get updated email info
+    await loadAvailabilities()
+  } catch (error: any) {
+    toastStore.error(error.message || t('notifications.emailError'))
+  } finally {
+    addingEmail.value = false
+  }
+}
+
+async function handleResendVerification() {
+  if (!token.value || !participantId.value) {
+    return
+  }
+
+  resendingEmail.value = true
+
+  try {
+    await resendVerificationEmail(token.value, participantId.value)
+    toastStore.success(t('notifications.emailSent'))
+  } catch (error: any) {
+    toastStore.error(error.message || t('notifications.emailError'))
+  } finally {
+    resendingEmail.value = false
+  }
+}
+
+async function handleChangeEmail() {
+  if (!newEmailInput.value.trim() || !token.value || !participantId.value) {
+    return
+  }
+
+  addingEmail.value = true
+
+  try {
+    await addParticipantEmail(token.value, participantId.value, newEmailInput.value.trim())
+    toastStore.success(t('notifications.emailChanged'))
+    newEmailInput.value = ''
+    changingEmail.value = false
+    // Reload participant data
+    await loadAvailabilities()
+  } catch (error: any) {
+    toastStore.error(error.message || t('notifications.emailError'))
+  } finally {
+    addingEmail.value = false
+  }
+}
+
 // Watch for changes in calendar settings that affect holidays and allowed dates
 watch(
   () => [
@@ -2307,7 +2646,39 @@ watch(
   }
 )
 
-onMounted(() => {
-  loadCalendar()
+// Handle auto-delete from email notification
+async function handleCancelFromEmail() {
+  const cancelDate = route.query.cancel as string | undefined
+
+  if (!cancelDate || !token.value || !participantId.value) {
+    return
+  }
+
+  try {
+    // Delete the availability for the specified date
+    await availabilitiesApi.delete(token.value, participantId.value, cancelDate)
+
+    // Reload availabilities
+    await Promise.all([
+      loadAvailabilities(),
+      loadParticipantCounts(displayedYear.value, displayedMonth.value),
+    ])
+
+    toastStore.success(`Your participation has been cancelled for ${cancelDate}`)
+
+    // Remove the cancel parameter from URL
+    router.replace({
+      path: route.path,
+      query: {}
+    })
+  } catch (err: any) {
+    toastStore.error(err.message || 'Failed to cancel participation')
+  }
+}
+
+onMounted(async () => {
+  await loadCalendar()
+  // Handle cancel from email notification after calendar is loaded
+  await handleCancelFromEmail()
 })
 </script>

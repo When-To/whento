@@ -11,14 +11,27 @@ import type {
   RecurrenceWithExceptions,
   CreateRecurrenceRequest,
   DateAvailabilitySummary,
+  ParticipantAvailabilitiesResponse,
 } from '@/types'
 
 export const availabilitiesApi = {
   // Availability operations (public with token)
-  async getByParticipant(token: string, participantId: string): Promise<Availability[]> {
-    return apiClient.get<Availability[]>(
-      `/availabilities/calendar/${token}/participant/${participantId}`
-    )
+  async getByParticipant(
+    token: string,
+    participantId: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<ParticipantAvailabilitiesResponse> {
+    const params = new URLSearchParams()
+    if (startDate) params.append('start', startDate)
+    if (endDate) params.append('end', endDate)
+
+    const queryString = params.toString()
+    const url = `/availabilities/calendar/${token}/participant/${participantId}${
+      queryString ? `?${queryString}` : ''
+    }`
+
+    return apiClient.get<ParticipantAvailabilitiesResponse>(url)
   },
 
   async create(
