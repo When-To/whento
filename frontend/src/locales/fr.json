@@ -1110,6 +1110,17 @@
     "emailVerified": "L'email {email} est vérifié",
     "emailPending": "Vérification en attente pour {email}",
     "resendVerification": "Renvoyer l'email de vérification",
-    "emailError": "Échec de l'ajout de l'email. Veuillez réessayer."
+    "emailError": "Échec de l'ajout de l'email. Veuillez réessayer.",
+    "changeEmail": "Modifier l'email",
+    "changeEmailPrompt": "Vous souhaitez changer votre email {currentEmail}. Saisissez votre nouvelle adresse email :",
+    "newEmailPlaceholder": "nouvel@email.com",
+    "emailChanged": "Email modifié avec succès. Veuillez vérifier votre nouvelle adresse email.",
+    "verifying": "Vérification de l'email...",
+    "emailVerifiedMessage": "Votre adresse email a été vérifiée. Vous recevrez maintenant des notifications lorsque le seuil est atteint ou perdu.",
+    "closeWindow": "Fermer cette fenêtre",
+    "verificationFailed": "Échec de la vérification de l'email",
+    "invalidToken": "Le lien de vérification est invalide.",
+    "tokenExpired": "Le lien de vérification a expiré. Veuillez en demander un nouveau.",
+    "verificationError": "Une erreur s'est produite lors de la vérification. Veuillez réessayer."
   }
 }

@@ -1107,6 +1107,17 @@
     "emailVerified": "Email {email} is verified",
     "emailPending": "Verification pending for {email}",
     "resendVerification": "Resend verification email",
-    "emailError": "Failed to add email. Please try again."
+    "emailError": "Failed to add email. Please try again.",
+    "changeEmail": "Change email",
+    "changeEmailPrompt": "You want to change your email from {currentEmail}. Enter your new email address:",
+    "newEmailPlaceholder": "new@email.com",
+    "emailChanged": "Email changed successfully. Please verify your new email address.",
+    "verifying": "Verifying email...",
+    "emailVerifiedMessage": "Your email address has been verified. You will now receive notifications when the threshold is reached or lost.",
+    "closeWindow": "Close this window",
+    "verificationFailed": "Email verification failed",
+    "invalidToken": "The verification link is invalid.",
+    "tokenExpired": "The verification link has expired. Please request a new one.",
+    "verificationError": "An error occurred during verification. Please try again."
   }
 }
