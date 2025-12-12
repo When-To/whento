@@ -1,0 +1,32 @@
+{
+  "en": {
+    "subject_reached": "🎉 Threshold reached for {{.CalendarName}}",
+    "subject_lost": "⚠️ Threshold lost for {{.CalendarName}}",
+    "title_reached": "Threshold Reached!",
+    "title_lost": "Threshold Lost",
+    "message_reached": "Great news! The calendar \"{{.CalendarName}}\" has reached its availability threshold.",
+    "message_lost": "The calendar \"{{.CalendarName}}\" no longer meets its availability threshold.",
+    "date_info": "Date: {{.Date}}",
+    "status_badge_reached": "{{.Count}}/{{.Threshold}} participants available",
+    "status_badge_lost": "{{.Count}}/{{.Threshold}} participants available",
+    "participants_title": "Available Participants:",
+    "time_slot_label": "Available Time Slot",
+    "view_calendar_button": "View Calendar",
+    "footer_note": "You're receiving this notification because you're subscribed to updates for this calendar."
+  },
+  "fr": {
+    "subject_reached": "🎉 Seuil atteint pour {{.CalendarName}}",
+    "subject_lost": "⚠️ Seuil perdu pour {{.CalendarName}}",
+    "title_reached": "Seuil Atteint !",
+    "title_lost": "Seuil Perdu",
+    "message_reached": "Bonne nouvelle ! Le calendrier \"{{.CalendarName}}\" a atteint son seuil de disponibilité.",
+    "message_lost": "Le calendrier \"{{.CalendarName}}\" n'atteint plus son seuil de disponibilité.",
+    "date_info": "Date : {{.Date}}",
+    "status_badge_reached": "{{.Count}}/{{.Threshold}} participants disponibles",
+    "status_badge_lost": "{{.Count}}/{{.Threshold}} participants disponibles",
+    "participants_title": "Participants Disponibles :",
+    "time_slot_label": "Créneau Horaire Disponible",
+    "view_calendar_button": "Voir le Calendrier",
+    "footer_note": "Vous recevez cette notification car vous êtes abonné aux mises à jour de ce calendrier."
+  }
+}

@@ -72,19 +72,26 @@ func (h *AvailabilityHandler) CreateAvailability(w http.ResponseWriter, r *http.
 // GetParticipantAvailabilities retrieves all availabilities for a participant
 //
 //	@Summary		Get participant availabilities
-//	@Description	Returns all availability slots for a participant. Public endpoint.
+//	@Description	Returns all availability slots for a participant. Public endpoint. Optionally filter by date range using query parameters.
 //	@Tags			Availabilities
 //	@Produce		json
 //	@Param			token	path		string	true	"Calendar public token"
 //	@Param			pid		path		string	true	"Participant ID"
-//	@Success		200		{array}		models.AvailabilityResponse
+//	@Param			start	query		string	false	"Start date (YYYY-MM-DD)"
+//	@Param			end		query		string	false	"End date (YYYY-MM-DD)"
+//	@Success		200		{object}	models.ParticipantAvailabilitiesResponse
+//	@Failure		400		{object}	httputil.ErrorResponse	"Invalid date format"
 //	@Failure		404		{object}	httputil.ErrorResponse	"Calendar or participant not found"
 //	@Router			/api/v1/availabilities/calendar/{token}/participant/{pid} [get]
 func (h *AvailabilityHandler) GetParticipantAvailabilities(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
 	participantID := chi.URLParam(r, "pid")
 
-	availabilities, err := h.availabilityService.GetParticipantAvailabilities(r.Context(), token, participantID)
+	// Get optional date range query parameters
+	startDate := r.URL.Query().Get("start")
+	endDate := r.URL.Query().Get("end")
+
+	availabilities, err := h.availabilityService.GetParticipantAvailabilities(r.Context(), token, participantID, startDate, endDate)
 	if err != nil {
 		handleAvailabilityError(w, r, err, "Failed to get availabilities")
 		return

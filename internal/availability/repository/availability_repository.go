@@ -95,16 +95,37 @@ func (r *AvailabilityRepository) GetByParticipantAndDate(ctx context.Context, pa
 
 // GetByParticipantID retrieves all availabilities for a participant
 func (r *AvailabilityRepository) GetByParticipantID(ctx context.Context, participantID uuid.UUID) ([]*models.Availability, error) {
+	return r.GetByParticipantIDWithDateRange(ctx, participantID, nil, nil)
+}
+
+// GetByParticipantIDWithDateRange retrieves availabilities for a participant, optionally filtered by date range
+func (r *AvailabilityRepository) GetByParticipantIDWithDateRange(ctx context.Context, participantID uuid.UUID, startDate, endDate *time.Time) ([]*models.Availability, error) {
 	query := `
 		SELECT id, participant_id, date,
 		       TO_CHAR(start_time, 'HH24:MI') as start_time,
 		       TO_CHAR(end_time, 'HH24:MI') as end_time,
 		       note, source, recurrence_id, created_at, updated_at
 		FROM availabilities
-		WHERE participant_id = $1
-		ORDER BY date ASC`
+		WHERE participant_id = $1`
 
-	rows, err := r.pool.Query(ctx, query, participantID)
+	args := []interface{}{participantID}
+	paramCount := 1
+
+	if startDate != nil {
+		paramCount++
+		query += fmt.Sprintf(" AND date >= $%d", paramCount)
+		args = append(args, *startDate)
+	}
+
+	if endDate != nil {
+		paramCount++
+		query += fmt.Sprintf(" AND date <= $%d", paramCount)
+		args = append(args, *endDate)
+	}
+
+	query += " ORDER BY date ASC"
+
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get availabilities: %w", err)
 	}
@@ -298,6 +319,55 @@ func (r *AvailabilityRepository) Delete(ctx context.Context, participantID uuid.
 	}
 
 	return nil
+}
+
+// GetParticipantCountForDate counts unique participants with availability for a specific date
+func (r *AvailabilityRepository) GetParticipantCountForDate(
+	ctx context.Context,
+	calendarID uuid.UUID,
+	date time.Time,
+) (int, error) {
+	// Query counts distinct participants who have availability on this date
+	// This includes both manual availabilities and recurrence-generated ones
+	query := `
+		WITH calendar_participants AS (
+			SELECT id as participant_id
+			FROM participants
+			WHERE calendar_id = $1
+		),
+		date_availabilities AS (
+			-- Manual availabilities for this date
+			SELECT DISTINCT a.participant_id
+			FROM availabilities a
+			JOIN calendar_participants cp ON a.participant_id = cp.participant_id
+			WHERE a.date = $2
+			  AND a.source = 'manual'
+
+			UNION
+
+			-- Recurrence-generated availabilities for this date
+			SELECT DISTINCT r.participant_id
+			FROM recurrences r
+			JOIN calendar_participants cp ON r.participant_id = cp.participant_id
+			WHERE EXTRACT(DOW FROM $2::DATE) = r.day_of_week
+			  AND (r.start_date IS NULL OR $2::DATE >= r.start_date)
+			  AND (r.end_date IS NULL OR $2::DATE <= r.end_date)
+			  -- Exclude if there's an exception for this date
+			  AND NOT EXISTS (
+				SELECT 1 FROM recurrence_exceptions re
+				WHERE re.recurrence_id = r.id
+				  AND re.excluded_date = $2::DATE
+			  )
+		)
+		SELECT COUNT(*) FROM date_availabilities`
+
+	var count int
+	err := r.pool.QueryRow(ctx, query, calendarID, date).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get participant count for date: %w", err)
+	}
+
+	return count, nil
 }
 
 func isDuplicateKeyError(err error) bool {

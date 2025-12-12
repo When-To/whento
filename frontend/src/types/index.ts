@@ -80,6 +80,7 @@ export interface Calendar {
   notify_on_threshold: boolean
   notify_config?: Record<string, unknown>
   lock_participants: boolean
+  notify_participants: boolean
   start_date?: string
   end_date?: string
   created_at: string
@@ -104,9 +105,12 @@ export interface CreateCalendarRequest {
   holiday_max_time?: string
   holiday_eve_min_time?: string
   holiday_eve_max_time?: string
+  notify_on_threshold?: boolean
+  notify_config?: string
   lock_participants?: boolean
   start_date?: string
   end_date?: string
+  participant_locale?: Locale
   participants?: string[]
 }
 
@@ -125,6 +129,7 @@ export interface UpdateCalendarRequest {
   holiday_eve_min_time?: string
   holiday_eve_max_time?: string
   notify_on_threshold?: boolean
+  notify_config?: string
   lock_participants?: boolean
   start_date?: string
   end_date?: string
@@ -135,6 +140,8 @@ export interface Participant {
   id?: string // Optional in public views when lock_participants is enabled
   calendar_id: string
   name: string
+  email?: string
+  email_verified?: boolean
   created_at: string
 }
 
@@ -150,12 +157,37 @@ export interface UpdateParticipantRequest {
 export interface Availability {
   id: string
   participant_id: string
+  participant_name: string
+  participant_email?: string
+  participant_email_verified: boolean
   date: string
   start_time?: string
   end_time?: string
   note?: string
   created_at: string
   updated_at: string
+}
+
+export interface AvailabilityItem {
+  id: string
+  date: string
+  start_time?: string
+  end_time?: string
+  note?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ParticipantInfo {
+  id: string
+  name: string
+  email?: string
+  email_verified: boolean
+}
+
+export interface ParticipantAvailabilitiesResponse {
+  participant: ParticipantInfo
+  availabilities: AvailabilityItem[]
 }
 
 export interface CreateAvailabilityRequest {
@@ -237,6 +269,62 @@ export interface ApiError {
 
 export interface ValidationError {
   field: string
+  message: string
+}
+
+// Notification Types
+export interface EmailChannelConfig {
+  enabled: boolean
+}
+
+export interface DiscordChannelConfig {
+  enabled: boolean
+  webhook_url?: string
+}
+
+export interface SlackChannelConfig {
+  enabled: boolean
+  webhook_url?: string
+}
+
+export interface TelegramChannelConfig {
+  enabled: boolean
+  bot_token?: string
+  chat_id?: string
+}
+
+export interface ChannelConfig {
+  email: EmailChannelConfig
+  discord: DiscordChannelConfig
+  slack: SlackChannelConfig
+  telegram: TelegramChannelConfig
+}
+
+export interface ReminderConfig {
+  enabled: boolean
+  hours_before: number
+}
+
+export interface NotifyConfig {
+  enabled: boolean
+  notify_owner: boolean
+  notify_participants: boolean
+  channels: ChannelConfig
+  reminders: ReminderConfig
+}
+
+export interface NotifyConfigResponse {
+  config: NotifyConfig
+}
+
+export interface AddParticipantEmailRequest {
+  email: string
+}
+
+export interface ParticipantEmailResponse {
+  participant_id: string
+  email: string
+  verified: boolean
   message: string
 }
 

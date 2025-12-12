@@ -94,6 +94,11 @@ import (
 	// SEO module
 	"github.com/whento/whento/internal/seo"
 
+	// Notification module
+	notifyHandlers "github.com/whento/whento/internal/notify/handlers"
+	notifyRepo "github.com/whento/whento/internal/notify/repository"
+	notifyService "github.com/whento/whento/internal/notify/service"
+
 	// Frontend embedding
 	"github.com/whento/whento/web"
 
@@ -244,8 +249,8 @@ func main() {
 	calendarRepository := calendarRepo.NewCalendarRepository(pool)
 	participantRepository := calendarRepo.NewParticipantRepository(pool)
 
-	// Initialize calendar service with cache
-	calendarSvc := calendarService.NewCalendarService(calendarRepository, participantRepository, cacheInstance)
+	// Initialize calendar service with cache and user repo (for owner participant email)
+	calendarSvc := calendarService.NewCalendarService(calendarRepository, participantRepository, userRepo, cacheInstance)
 
 	// Initialize calendar handlers (with quota service for limit checking)
 	calendarHandler := calendarHandlers.NewCalendarHandler(calendarSvc, services.QuotaService, userRepo, cfg)
@@ -258,12 +263,8 @@ func main() {
 	availParticipantRepo := availabilityRepo.NewParticipantRepository(pool)
 	recurrenceRepository := availabilityRepo.NewRecurrenceRepository(pool)
 
-	// Initialize availability service with cache
-	availabilitySvc := availabilityService.NewAvailabilityService(availabilityRepository, availCalendarRepo, availParticipantRepo, recurrenceRepository, cacheInstance)
-
-	// Initialize availability handlers
-	availabilityHandler := availabilityHandlers.NewAvailabilityHandler(availabilitySvc)
-	recurrenceHandler := availabilityHandlers.NewRecurrenceHandler(availabilitySvc)
+	// Note: availabilitySvc initialization moved after NOTIFICATION MODULE
+	// because it depends on notifySvc
 
 	// ========== ICS MODULE ==========
 	// Initialize ICS repositories
@@ -275,6 +276,62 @@ func main() {
 
 	// Initialize ICS handlers
 	icsHandler := icsHandlers.NewICSHandler(icsSvc)
+
+	// ========== NOTIFICATION MODULE ==========
+	// Initialize notification repositories
+	notificationLogRepo := notifyRepo.NewNotificationLogRepository(pool)
+
+	// Initialize notification services
+	thresholdDetector := notifyService.NewThresholdDetector(availabilityRepository, log)
+	externalNotifier := notifyService.NewExternalNotifier(log)
+
+	notifySvc := notifyService.NewNotifyService(
+		calendarRepository,
+		participantRepository,
+		availabilityRepository,
+		userRepo,
+		notificationLogRepo,
+		emailService,
+		externalNotifier,
+		thresholdDetector,
+		cfg.AppURL,
+		log,
+	)
+
+	participantEmailSvc := notifyService.NewParticipantEmailService(
+		participantRepository,
+		emailService,
+		cfg,
+		log,
+	)
+
+	// Initialize notification handlers
+	participantEmailHandler := notifyHandlers.NewParticipantEmailHandler(
+		participantEmailSvc,
+		participantRepository,
+		calendarRepository,
+		log,
+	)
+
+	notifyConfigHandler := notifyHandlers.NewNotifyConfigHandler(
+		calendarRepository,
+		log,
+	)
+
+	// ========== AVAILABILITY SERVICE (depends on notification service) ==========
+	// Initialize availability service with cache and notification service
+	availabilitySvc := availabilityService.NewAvailabilityService(
+		availabilityRepository,
+		availCalendarRepo,
+		availParticipantRepo,
+		recurrenceRepository,
+		notifySvc,
+		cacheInstance,
+	)
+
+	// Initialize availability handlers
+	availabilityHandler := availabilityHandlers.NewAvailabilityHandler(availabilitySvc)
+	recurrenceHandler := availabilityHandlers.NewRecurrenceHandler(availabilitySvc)
 
 	// Initialize rate limiter
 	rateLimiter := middleware.NewRateLimiter(redisClient)
@@ -483,6 +540,13 @@ func main() {
 			} else {
 				r.Get("/public/{token}", calendarHandler.GetPublicCalendar)
 			}
+
+			// Public participant email verification
+			r.Get("/participants/verify-email/{token}", participantEmailHandler.VerifyEmail)
+
+			// Public participant email management (requires calendar token validation)
+			r.Post("/{token}/participants/{pid}/email", participantEmailHandler.AddEmail)
+			r.Post("/{token}/participants/{pid}/resend-verification", participantEmailHandler.ResendVerification)
 		})
 
 		// Authenticated routes
@@ -512,6 +576,10 @@ func main() {
 			r.Post("/{id}/participants", participantHandler.AddParticipant)
 			r.Patch("/{id}/participants/{pid}", participantHandler.UpdateParticipant)
 			r.Delete("/{id}/participants/{pid}", participantHandler.RemoveParticipant)
+
+			// Notification config (owner only)
+			r.Get("/{id}/notify-config", notifyConfigHandler.GetConfig)
+			r.Patch("/{id}/notify-config", notifyConfigHandler.UpdateConfig)
 
 			// Admin routes
 			r.Group(func(r chi.Router) {

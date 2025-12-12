@@ -491,6 +491,13 @@
           </div>
         </CollapsibleSection>
 
+        <!-- Notifications -->
+        <NotificationSettings
+          v-model="notifyConfig"
+          :smtp-configured="smtpConfigured"
+          :show-save-button="false"
+        />
+
         <!-- Warning Message - No Participants -->
         <div
           v-if="participants.length === 0"
@@ -591,6 +598,8 @@ import { useAuthStore } from '@/stores/auth'
 import TimezoneSelector from '@/components/TimezoneSelector.vue'
 import TimeSelect from '@/components/TimeSelect.vue'
 import CollapsibleSection from '@/components/CollapsibleSection.vue'
+import NotificationSettings from '@/components/NotificationSettings.vue'
+import { getDefaultNotifyConfig, type NotifyConfig } from '@/api/notify'
 
 const router = useRouter()
 const { t, locale } = useI18n()
@@ -623,6 +632,10 @@ const form = reactive({
   start_date: '',
   end_date: '',
 })
+
+// Notification config state
+const notifyConfig = ref<NotifyConfig>(getDefaultNotifyConfig())
+const smtpConfigured = ref(true) // TODO: Fetch from backend config
 
 const participants = ref<string[]>([])
 
@@ -793,6 +806,9 @@ async function handleSubmit() {
       holiday_eve_max_time: normalizedHolidayEveMaxTime,
       start_date: form.start_date || undefined,
       end_date: form.end_date || undefined,
+      notify_on_threshold: notifyConfig.value.enabled,
+      notify_config: notifyConfig.value.enabled ? JSON.stringify(notifyConfig.value) : undefined,
+      participant_locale: locale.value,
       participants: participants.value.filter(name => name.trim() !== ''),
     } as any)
 

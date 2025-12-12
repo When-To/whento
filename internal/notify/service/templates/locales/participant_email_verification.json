@@ -1,0 +1,24 @@
+{
+  "en": {
+    "subject": "Verify your email for calendar notifications",
+    "greeting": "Hello {{.ParticipantName}},",
+    "intro": "You've been added to receive notifications for calendar events. Please verify your email address to start receiving updates when availability thresholds are met.",
+    "cta_instruction": "Click the button below to verify your email address:",
+    "cta_button": "Verify Email Address",
+    "or_copy": "Or copy and paste this link into your browser:",
+    "expiry_notice": "This verification link will expire in {{.ExpiryDuration}}.",
+    "security_notice": "If you didn't request this, you can safely ignore this email. Your email address will not be used for notifications without verification.",
+    "signature": "The WhenTo Team"
+  },
+  "fr": {
+    "subject": "Vérifiez votre email pour les notifications",
+    "greeting": "Bonjour {{.ParticipantName}},",
+    "intro": "Vous avez été ajouté pour recevoir des notifications d'événements du calendrier. Veuillez vérifier votre adresse email pour commencer à recevoir des mises à jour lorsque les seuils de disponibilité sont atteints.",
+    "cta_instruction": "Cliquez sur le bouton ci-dessous pour vérifier votre adresse email :",
+    "cta_button": "Vérifier l'adresse email",
+    "or_copy": "Ou copiez et collez ce lien dans votre navigateur :",
+    "expiry_notice": "Ce lien de vérification expire dans {{.ExpiryDuration}}.",
+    "security_notice": "Si vous n'avez pas demandé cela, vous pouvez ignorer cet email en toute sécurité. Votre adresse email ne sera pas utilisée pour les notifications sans vérification.",
+    "signature": "L'équipe WhenTo"
+  }
+}

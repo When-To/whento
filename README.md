@@ -19,7 +19,9 @@ Self-hosted web application for organizing recurring events with friends through
 - **Configurable Threshold** — Define minimum participants required for an event to be confirmed
 - **iCalendar Subscription** — Sync URL for Google Calendar, Apple Calendar, Outlook, and more
 - **Smart Recurrence** — Set weekly availability once with exceptions for special weeks
-- **Multi-language** — Interface available in French and English
+- **Multi-channel Notifications** — Get notified when threshold is reached/lost via Email, Discord, Slack, or Telegram
+- **Participant Email Verification** — Optional email verification for participants to receive notifications
+- **Multi-language** — Interface available in French and English (including emails)
 - **Timezone Support** — Each calendar can have its own timezone
 - **Holiday Policies** — Configure how public holidays are handled (ignore/allow/block)
 - **Participant Locking** — Option to disable public view and require direct participant links

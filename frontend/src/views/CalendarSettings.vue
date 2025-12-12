@@ -805,6 +805,13 @@
             </div>
           </CollapsibleSection>
 
+          <!-- Notifications -->
+          <NotificationSettings
+            v-model="notifyConfig"
+            :smtp-configured="smtpConfigured"
+            @save="handleSaveNotifications"
+          />
+
           <!-- Danger Zone -->
           <CollapsibleSection
             :title="t('common.dangerZone')"
@@ -908,6 +915,13 @@ import { useToastStore } from '@/stores/toast'
 import TimezoneSelector from '@/components/TimezoneSelector.vue'
 import TimeSelect from '@/components/TimeSelect.vue'
 import CollapsibleSection from '@/components/CollapsibleSection.vue'
+import NotificationSettings from '@/components/NotificationSettings.vue'
+import {
+  getNotifyConfig,
+  updateNotifyConfig,
+  getDefaultNotifyConfig,
+  type NotifyConfig,
+} from '@/api/notify'
 
 const router = useRouter()
 const route = useRoute()
@@ -983,6 +997,10 @@ const originalForm = reactive({
   start_date: '',
   end_date: '',
 })
+
+// Notification config state
+const notifyConfig = ref<NotifyConfig>(getDefaultNotifyConfig())
+const smtpConfigured = ref(true) // TODO: Fetch from backend config
 
 // Track if form has unsaved changes
 const hasUnsavedChanges = computed(() => {
@@ -1114,6 +1132,14 @@ async function loadCalendar() {
       // Save original date range
       originalForm.start_date = form.start_date
       originalForm.end_date = form.end_date
+
+      // Load notification config
+      try {
+        notifyConfig.value = await getNotifyConfig(calendarId)
+      } catch (error) {
+        // If notify config doesn't exist, use default
+        notifyConfig.value = getDefaultNotifyConfig()
+      }
     }
   } catch (error: any) {
     toastStore.error(error.message || t('calendar.fetchError'))
@@ -1247,6 +1273,15 @@ async function handleUpdate() {
     toastStore.error(error.message || t('calendar.updateError'))
   } finally {
     updating.value = false
+  }
+}
+
+async function handleSaveNotifications(config: NotifyConfig) {
+  try {
+    await updateNotifyConfig(calendarId, config)
+    toastStore.success(t('calendar.settingsSaved'))
+  } catch (error: any) {
+    toastStore.error(error.message || 'Failed to save notification settings')
   }
 }
 

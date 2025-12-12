@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/whento/pkg/cache"
+	authRepo "github.com/whento/whento/internal/auth/repository"
 	"github.com/whento/whento/internal/calendar/models"
 	"github.com/whento/whento/internal/calendar/repository"
 )
@@ -29,7 +31,7 @@ var (
 
 // CalendarRepository defines the interface for calendar repository operations
 type CalendarRepository interface {
-	CreateWithParticipants(ctx context.Context, calendar *models.Calendar, participantNames []string) ([]models.Participant, error)
+	CreateWithParticipants(ctx context.Context, calendar *models.Calendar, participants []repository.ParticipantInput) ([]models.Participant, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Calendar, error)
 	GetByOwnerID(ctx context.Context, ownerID uuid.UUID) ([]*models.Calendar, error)
 	GetByPublicToken(ctx context.Context, token string) (*models.Calendar, error)
@@ -45,20 +47,28 @@ type ParticipantRepository interface {
 	GetByCalendarID(ctx context.Context, calendarID uuid.UUID) ([]models.Participant, error)
 	Update(ctx context.Context, id uuid.UUID, name string) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	SetEmailAsVerified(ctx context.Context, participantID uuid.UUID, email string) error
 }
 
 // CalendarService handles calendar business logic
 type CalendarService struct {
 	calendarRepo    CalendarRepository
 	participantRepo ParticipantRepository
+	userRepo        *authRepo.UserRepository
 	cache           cache.Cache
 }
 
 // NewCalendarService creates a new calendar service
-func NewCalendarService(calendarRepo CalendarRepository, participantRepo ParticipantRepository, c cache.Cache) *CalendarService {
+func NewCalendarService(
+	calendarRepo CalendarRepository,
+	participantRepo ParticipantRepository,
+	userRepo *authRepo.UserRepository,
+	c cache.Cache,
+) *CalendarService {
 	return &CalendarService{
 		calendarRepo:    calendarRepo,
 		participantRepo: participantRepo,
+		userRepo:        userRepo,
 		cache:           c,
 	}
 }
@@ -162,19 +172,78 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 		AllowHolidayEves:  req.AllowHolidayEves,
 		AllowedHours:      allowedHoursJSON,
 		NotifyOnThreshold: req.NotifyOnThreshold,
+		NotifyConfig:      req.NotifyConfig,
 		LockParticipants:  req.LockParticipants,
 		StartDate:         startDate,
 		EndDate:           endDate,
 	}
 	calendar.ID = uuid.New()
 
+	// Determine participant locale (use request locale or fall back to owner's locale)
+	participantLocale := req.ParticipantLocale
+	var ownerEmail string
+	if participantLocale == "" || s.userRepo != nil {
+		// Get owner information for participant email matching and locale
+		if s.userRepo != nil {
+			owner, err := s.userRepo.GetByID(ctx, ownerUUID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get owner information: %w", err)
+			}
+			if participantLocale == "" {
+				participantLocale = owner.Locale
+			}
+			if owner.EmailVerified {
+				ownerEmail = owner.Email
+			}
+		}
+	}
+	if participantLocale == "" {
+		participantLocale = "en" // Default fallback
+	}
+
+	// Build participant inputs with locale and owner email if applicable
+	participantInputs := make([]repository.ParticipantInput, 0, len(req.Participants))
+	for _, name := range req.Participants {
+		input := repository.ParticipantInput{
+			Name:   name,
+			Locale: participantLocale,
+		}
+
+		// If participant name matches owner's email is available, pre-populate email
+		if ownerEmail != "" {
+			input.Email = &ownerEmail
+			input.EmailVerified = true
+		}
+
+		participantInputs = append(participantInputs, input)
+	}
+
 	// Create calendar and participants in a transaction
-	participants, err := s.calendarRepo.CreateWithParticipants(ctx, calendar, req.Participants)
+	participants, err := s.calendarRepo.CreateWithParticipants(ctx, calendar, participantInputs)
 	if err != nil {
 		if errors.Is(err, repository.ErrParticipantAlreadyExists) {
 			return nil, fmt.Errorf("duplicate participant name in request")
 		}
 		return nil, fmt.Errorf("failed to create calendar: %w", err)
+	}
+
+	// Auto-populate owner participant's email if user has verified email
+	if len(participants) > 0 && s.userRepo != nil {
+		// Get owner user information
+		owner, err := s.userRepo.GetByID(ctx, ownerUUID)
+		if err == nil && owner != nil && owner.EmailVerified && owner.Email != "" {
+			// Find participant matching owner's display name (frontend auto-adds owner as first participant)
+			for _, participant := range participants {
+				if participant.Name == owner.DisplayName {
+					// Set email as already verified for the owner participant
+					if err := s.participantRepo.SetEmailAsVerified(ctx, participant.ID, owner.Email); err != nil {
+						// Log error but don't fail calendar creation
+						// The owner can manually add their email later if this fails
+					}
+					break
+				}
+			}
+		}
 	}
 
 	return buildCalendarResponse(calendar, participants)
@@ -224,27 +293,42 @@ func buildPublicCalendarResponse(calendar *models.Calendar, participants []model
 		return nil, fmt.Errorf("failed to parse allowed_hours: %w", err)
 	}
 
+	// Check if participant notifications are enabled
+	notifyParticipants := false
+	if calendar.NotifyConfig != nil && *calendar.NotifyConfig != "" {
+		// We need to import the notify models package to parse the config
+		// For now, use a simple JSON parsing approach
+		var notifyConfig struct {
+			Enabled            bool `json:"enabled"`
+			NotifyParticipants bool `json:"notify_participants"`
+		}
+		if err := json.Unmarshal([]byte(*calendar.NotifyConfig), &notifyConfig); err == nil {
+			notifyParticipants = notifyConfig.Enabled && notifyConfig.NotifyParticipants
+		}
+	}
+
 	return &models.PublicCalendarResponse{
-		ID:                calendar.ID,
-		Name:              calendar.Name,
-		Description:       calendar.Description,
-		Threshold:         calendar.Threshold,
-		AllowedWeekdays:   calendar.AllowedWeekdays,
-		MinDurationHours:  calendar.MinDurationHours,
-		Timezone:          calendar.Timezone,
-		HolidaysPolicy:    calendar.HolidaysPolicy,
-		AllowHolidayEves:  calendar.AllowHolidayEves,
-		WeekdayTimes:      weekdayTimes,
-		HolidayMinTime:    holidayMinTime,
-		HolidayMaxTime:    holidayMaxTime,
-		HolidayEveMinTime: holidayEveMinTime,
-		HolidayEveMaxTime: holidayEveMaxTime,
-		LockParticipants:  calendar.LockParticipants,
-		ICSToken:          calendar.ICSToken,
-		StartDate:         calendar.StartDate,
-		EndDate:           calendar.EndDate,
-		Participants:      participants,
-		CreatedAt:         calendar.CreatedAt,
+		ID:                 calendar.ID,
+		Name:               calendar.Name,
+		Description:        calendar.Description,
+		Threshold:          calendar.Threshold,
+		AllowedWeekdays:    calendar.AllowedWeekdays,
+		MinDurationHours:   calendar.MinDurationHours,
+		Timezone:           calendar.Timezone,
+		HolidaysPolicy:     calendar.HolidaysPolicy,
+		AllowHolidayEves:   calendar.AllowHolidayEves,
+		WeekdayTimes:       weekdayTimes,
+		HolidayMinTime:     holidayMinTime,
+		HolidayMaxTime:     holidayMaxTime,
+		HolidayEveMinTime:  holidayEveMinTime,
+		HolidayEveMaxTime:  holidayEveMaxTime,
+		LockParticipants:   calendar.LockParticipants,
+		NotifyParticipants: notifyParticipants,
+		ICSToken:           calendar.ICSToken,
+		StartDate:          calendar.StartDate,
+		EndDate:            calendar.EndDate,
+		Participants:       participants,
+		CreatedAt:          calendar.CreatedAt,
 	}, nil
 }
 
@@ -269,23 +353,7 @@ func findSubstring(s, substr string) bool {
 
 // filterParticipants masks participant IDs based on lock_participants setting and participant_id
 func filterParticipants(lockParticipants bool, participantID string, participants []models.Participant) []models.PublicParticipant {
-	// If lock_participants is false, return all participants with their IDs
-	publicParticipants := make([]models.PublicParticipant, len(participants))
-
-	if !lockParticipants {
-		// Return all participants with their IDs visible
-		for i, p := range participants {
-			publicParticipants[i] = models.PublicParticipant{
-				ID:         &p.ID,
-				CalendarID: p.CalendarID,
-				Name:       p.Name,
-				CreatedAt:  p.CreatedAt,
-			}
-		}
-		return publicParticipants
-	}
-
-	// If lock_participants is true, mask IDs except for the specified participant
+	// Parse participant ID if provided
 	var parsedID uuid.UUID
 	var err error
 	if participantID != "" {
@@ -295,29 +363,61 @@ func filterParticipants(lockParticipants bool, participantID string, participant
 		}
 	}
 
-	// Create a new slice with masked IDs
-	for i, p := range participants {
-		// Keep the participant but mask the ID if it's not the one requested
-		if participantID != "" && p.ID == parsedID {
-			// Keep the participant with their ID
+	publicParticipants := make([]models.PublicParticipant, len(participants))
+
+	if !lockParticipants {
+		// Return all participants with their IDs visible
+		// Email info is only included for the specified participant
+		for i, p := range participants {
+			isCurrentParticipant := participantID != "" && p.ID == parsedID
 			publicParticipants[i] = models.PublicParticipant{
-				ID:         &p.ID,
-				CalendarID: p.CalendarID,
-				Name:       p.Name,
-				CreatedAt:  p.CreatedAt,
+				ID:            &p.ID,
+				CalendarID:    p.CalendarID,
+				Name:          p.Name,
+				Email:         conditionalEmail(isCurrentParticipant, p.Email),
+				EmailVerified: isCurrentParticipant && p.EmailVerified,
+				CreatedAt:     p.CreatedAt,
+			}
+		}
+		return publicParticipants
+	}
+
+	// If lock_participants is true, mask IDs except for the specified participant
+	// Email info is still only shown for the specified participant
+	for i, p := range participants {
+		isCurrentParticipant := participantID != "" && p.ID == parsedID
+		if isCurrentParticipant {
+			// Keep the participant with their ID and email
+			publicParticipants[i] = models.PublicParticipant{
+				ID:            &p.ID,
+				CalendarID:    p.CalendarID,
+				Name:          p.Name,
+				Email:         p.Email,
+				EmailVerified: p.EmailVerified,
+				CreatedAt:     p.CreatedAt,
 			}
 		} else {
-			// Mask the ID by setting it to nil
+			// Mask the ID and email by setting them to nil/false
 			publicParticipants[i] = models.PublicParticipant{
-				ID:         nil,
-				CalendarID: p.CalendarID,
-				Name:       p.Name,
-				CreatedAt:  p.CreatedAt,
+				ID:            nil,
+				CalendarID:    p.CalendarID,
+				Name:          p.Name,
+				Email:         nil,
+				EmailVerified: false,
+				CreatedAt:     p.CreatedAt,
 			}
 		}
 	}
 
 	return publicParticipants
+}
+
+// conditionalEmail returns the email if condition is true, otherwise nil
+func conditionalEmail(condition bool, email *string) *string {
+	if condition {
+		return email
+	}
+	return nil
 }
 
 // GetCalendar retrieves a calendar by ID (requires ownership or admin role)
@@ -426,6 +526,9 @@ func (s *CalendarService) UpdateCalendar(ctx context.Context, userID, userRole, 
 	}
 	if req.NotifyOnThreshold != nil {
 		calendar.NotifyOnThreshold = *req.NotifyOnThreshold
+	}
+	if req.NotifyConfig != nil {
+		calendar.NotifyConfig = req.NotifyConfig
 	}
 	if req.LockParticipants != nil {
 		calendar.LockParticipants = *req.LockParticipants
