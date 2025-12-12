@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/whento/pkg/middleware"
 )
 

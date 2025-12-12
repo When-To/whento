@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/whento/pkg/models"
 )
 
@@ -46,9 +47,9 @@ type Participant struct {
 	Name                            string     `json:"name"`
 	Email                           *string    `json:"email,omitempty"` // Nullable
 	EmailVerified                   bool       `json:"email_verified"`
-	EmailVerificationToken          *string    `json:"-"` // Not exposed in API responses
-	EmailVerificationTokenExpiresAt *time.Time `json:"-"` // Not exposed in API responses
-	Locale                          string     `json:"locale"`           // Preferred language for notifications (e.g., 'en', 'fr')
+	EmailVerificationToken          *string    `json:"-"`      // Not exposed in API responses
+	EmailVerificationTokenExpiresAt *time.Time `json:"-"`      // Not exposed in API responses
+	Locale                          string     `json:"locale"` // Preferred language for notifications (e.g., 'en', 'fr')
 	CreatedAt                       time.Time  `json:"created_at"`
 }
 
@@ -168,25 +169,25 @@ type CalendarResponse struct {
 
 // PublicCalendarResponse represents the public view of a calendar
 type PublicCalendarResponse struct {
-	ID                uuid.UUID            `json:"id"`
-	Name              string               `json:"name"`
-	Description       string               `json:"description,omitempty"`
-	Threshold         int                  `json:"threshold"`
-	AllowedWeekdays   []int                `json:"allowed_weekdays"`
-	MinDurationHours  int                  `json:"min_duration_hours"`
-	Timezone          string               `json:"timezone"`
-	HolidaysPolicy    string               `json:"holidays_policy" enums:"ignore,allow,block"`
-	AllowHolidayEves  bool                 `json:"allow_holiday_eves"`
-	WeekdayTimes      map[string]TimeRange `json:"weekday_times,omitempty"`
-	HolidayMinTime    string               `json:"holiday_min_time,omitempty"`
-	HolidayMaxTime    string               `json:"holiday_max_time,omitempty"`
+	ID                 uuid.UUID            `json:"id"`
+	Name               string               `json:"name"`
+	Description        string               `json:"description,omitempty"`
+	Threshold          int                  `json:"threshold"`
+	AllowedWeekdays    []int                `json:"allowed_weekdays"`
+	MinDurationHours   int                  `json:"min_duration_hours"`
+	Timezone           string               `json:"timezone"`
+	HolidaysPolicy     string               `json:"holidays_policy" enums:"ignore,allow,block"`
+	AllowHolidayEves   bool                 `json:"allow_holiday_eves"`
+	WeekdayTimes       map[string]TimeRange `json:"weekday_times,omitempty"`
+	HolidayMinTime     string               `json:"holiday_min_time,omitempty"`
+	HolidayMaxTime     string               `json:"holiday_max_time,omitempty"`
 	HolidayEveMinTime  string               `json:"holiday_eve_min_time,omitempty"`
 	HolidayEveMaxTime  string               `json:"holiday_eve_max_time,omitempty"`
 	LockParticipants   bool                 `json:"lock_participants"`
 	NotifyParticipants bool                 `json:"notify_participants"`
 	ICSToken           string               `json:"ics_token"`
 	StartDate          *time.Time           `json:"start_date,omitempty"`
-	EndDate           *time.Time           `json:"end_date,omitempty"`
-	Participants      []PublicParticipant  `json:"participants"`
-	CreatedAt         time.Time            `json:"created_at"`
+	EndDate            *time.Time           `json:"end_date,omitempty"`
+	Participants       []PublicParticipant  `json:"participants"`
+	CreatedAt          time.Time            `json:"created_at"`
 }

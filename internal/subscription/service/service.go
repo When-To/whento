@@ -25,10 +25,10 @@ import (
 	stripeprice "github.com/stripe/stripe-go/v84/price"
 	"github.com/stripe/stripe-go/v84/subscription"
 
+	pkgmodels "github.com/whento/pkg/models"
 	"github.com/whento/whento/internal/subscription/models"
 	"github.com/whento/whento/internal/subscription/repository"
 	vatservice "github.com/whento/whento/internal/vat/service"
-	pkgmodels "github.com/whento/pkg/models"
 )
 
 // Service handles subscription business logic
@@ -133,9 +133,9 @@ func (s *Service) refreshPlanConfigsFromStripe() error {
 	planDefaults := map[models.SubscriptionPlan]models.PlanConfig{
 		models.PlanFree: pkgmodels.NewSubscriptionPlanConfig(
 			models.PlanFree,
-			3,    // CalendarLimit
-			0,    // Price
-			"",   // StripePriceID
+			3,  // CalendarLimit
+			0,  // Price
+			"", // StripePriceID
 			[]string{"3 calendars", "Unlimited participants", "iCal subscriptions"},
 		),
 		models.PlanPro: pkgmodels.NewSubscriptionPlanConfig(
@@ -253,9 +253,9 @@ func (s *Service) initDefaultPlanConfigs() {
 	s.planConfigs = map[models.SubscriptionPlan]models.PlanConfig{
 		models.PlanFree: pkgmodels.NewSubscriptionPlanConfig(
 			models.PlanFree,
-			3,    // CalendarLimit
-			0,    // Price
-			"",   // StripePriceID (none for free)
+			3,  // CalendarLimit
+			0,  // Price
+			"", // StripePriceID (none for free)
 			[]string{"3 calendars", "Unlimited participants", "iCal subscriptions"},
 		),
 		models.PlanPro: pkgmodels.NewSubscriptionPlanConfig(

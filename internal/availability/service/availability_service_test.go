@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+
 	"github.com/whento/whento/internal/availability/models"
 )
 

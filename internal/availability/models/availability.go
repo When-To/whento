@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/whento/pkg/models"
 )
 
@@ -40,17 +41,17 @@ type UpdateAvailabilityRequest struct {
 
 // AvailabilityResponse represents the response for availability (single operation)
 type AvailabilityResponse struct {
-	ID                     uuid.UUID `json:"id"`
-	ParticipantID          uuid.UUID `json:"participant_id"`
-	ParticipantName        string    `json:"participant_name"`
-	ParticipantEmail       *string   `json:"participant_email,omitempty"`
-	ParticipantEmailVerified bool    `json:"participant_email_verified"`
-	Date                   string    `json:"date"`                 // Format: "2006-01-02"
-	StartTime              *string   `json:"start_time,omitempty"` // Format: "15:04"
-	EndTime                *string   `json:"end_time,omitempty"`   // Format: "15:04"
-	Note                   string    `json:"note,omitempty"`
-	CreatedAt              time.Time `json:"created_at"`
-	UpdatedAt              time.Time `json:"updated_at"`
+	ID                       uuid.UUID `json:"id"`
+	ParticipantID            uuid.UUID `json:"participant_id"`
+	ParticipantName          string    `json:"participant_name"`
+	ParticipantEmail         *string   `json:"participant_email,omitempty"`
+	ParticipantEmailVerified bool      `json:"participant_email_verified"`
+	Date                     string    `json:"date"`                 // Format: "2006-01-02"
+	StartTime                *string   `json:"start_time,omitempty"` // Format: "15:04"
+	EndTime                  *string   `json:"end_time,omitempty"`   // Format: "15:04"
+	Note                     string    `json:"note,omitempty"`
+	CreatedAt                time.Time `json:"created_at"`
+	UpdatedAt                time.Time `json:"updated_at"`
 }
 
 // AvailabilityItem represents a single availability without participant info
@@ -74,8 +75,8 @@ type ParticipantInfo struct {
 
 // ParticipantAvailabilitiesResponse represents a participant with their availabilities
 type ParticipantAvailabilitiesResponse struct {
-	Participant     ParticipantInfo    `json:"participant"`
-	Availabilities  []AvailabilityItem `json:"availabilities"`
+	Participant    ParticipantInfo    `json:"participant"`
+	Availabilities []AvailabilityItem `json:"availabilities"`
 }
 
 // ParticipantAvailabilitySummary represents availability summary for a participant

@@ -752,7 +752,7 @@ func (s *CalendarService) AddParticipant(ctx context.Context, userID, userRole, 
 	}
 	participant.ID = uuid.New()
 
-	if err := s.participantRepo.Create(ctx, participant); err != nil{
+	if err := s.participantRepo.Create(ctx, participant); err != nil {
 		if errors.Is(err, repository.ErrParticipantAlreadyExists) {
 			return nil, ErrParticipantExists
 		}

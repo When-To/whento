@@ -40,15 +40,15 @@ const (
 
 // PasswordResetService handles password reset business logic
 type PasswordResetService struct {
-	userRepo           *repository.UserRepository
-	tokenRepo          *repository.TokenRepository
-	emailService       *email.Service
-	jwtManager         *jwt.Manager
-	cfg                *config.Config
-	logger             *slog.Logger
-	bcryptCost         int
-	resetTemplate      *template.Template
-	resetTranslations  map[string]map[string]string
+	userRepo          *repository.UserRepository
+	tokenRepo         *repository.TokenRepository
+	emailService      *email.Service
+	jwtManager        *jwt.Manager
+	cfg               *config.Config
+	logger            *slog.Logger
+	bcryptCost        int
+	resetTemplate     *template.Template
+	resetTranslations map[string]map[string]string
 }
 
 // NewPasswordResetService creates a new password reset service

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/whento/pkg/email"
 	authRepo "github.com/whento/whento/internal/auth/repository"
 	availabilityModels "github.com/whento/whento/internal/availability/models"

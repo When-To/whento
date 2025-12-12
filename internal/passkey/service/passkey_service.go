@@ -364,4 +364,3 @@ func (s *PasskeyService) Delete(ctx context.Context, passkeyID, userID uuid.UUID
 
 	return s.repo.Delete(ctx, passkeyID)
 }
-

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/whento/pkg/email"
 	"github.com/whento/whento/internal/calendar/repository"
 	"github.com/whento/whento/internal/config"
