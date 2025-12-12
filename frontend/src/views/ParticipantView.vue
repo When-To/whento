@@ -1409,7 +1409,7 @@ const availabilities = computed((): Availability[] => {
   if (!availabilityData.value) return []
 
   const participantInfo = availabilityData.value.participant
-  return availabilityData.value.availabilities.map(item => ({
+  return availabilityData.value.availabilities.map((item): Availability => ({
     ...item,
     participant_id: participantInfo.id,
     participant_name: participantInfo.name,
