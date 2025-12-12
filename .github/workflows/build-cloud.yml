@@ -48,10 +48,35 @@ jobs:
           path: frontend/dist
           retention-days: 1
 
+  generate-swagger:
+    name: Generate Swagger Docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install swag CLI
+        run: go install github.com/swaggo/swag/cmd/swag@latest
+
+      - name: Generate Swagger docs
+        run: swag init -g cmd/main.go -o docs/swagger --parseInternal --generatedTime=false
+
+      - name: Upload Swagger docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: swagger-docs-cloud
+          path: docs/swagger
+          retention-days: 1
+
   build-and-push:
     name: Build and Push to Private Registry
     runs-on: ubuntu-latest
-    needs: build-frontend
+    needs: [build-frontend, generate-swagger]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -62,16 +87,11 @@ jobs:
           name: frontend-dist-cloud
           path: frontend/dist
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - name: Download Swagger docs
+        uses: actions/download-artifact@v4
         with:
-          go-version: '1.23'
-
-      - name: Install swag CLI
-        run: go install github.com/swaggo/swag/cmd/swag@latest
-
-      - name: Generate Swagger documentation
-        run: swag init -g cmd/main.go -o docs/swagger --parseInternal --generatedTime=false
+          name: swagger-docs-cloud
+          path: docs/swagger
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
