@@ -85,6 +85,10 @@ test:
 
 # Building
 build:
+	@echo "Building WhenTo Frontend ($(BUILD_TYPE) mode)..."
+	@rm -R web/dist/*
+	@(cd frontend && npm run build:$(BUILD_TYPE))
+	@cp -R frontend/dist/* web/dist/
 	@echo "Building WhenTo unified binary ($(BUILD_TYPE) mode)..."
 	@mkdir -p bin
 	CGO_ENABLED=0 go build -tags $(BUILD_TYPE) -ldflags="-s -w" -o bin/whento ./cmd

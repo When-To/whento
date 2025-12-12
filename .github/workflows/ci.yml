@@ -64,10 +64,34 @@ jobs:
           path: frontend/dist
           retention-days: 1
 
+  generate-swagger:
+    name: Generate Swagger Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install swag CLI
+        run: go install github.com/swaggo/swag/cmd/swag@latest
+
+      - name: Generate Swagger docs
+        run: swag init -g cmd/main.go -o docs/swagger --parseInternal --generatedTime=false
+
+      - name: Upload Swagger docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: swagger-docs
+          path: docs/swagger
+          retention-days: 1
+
   test-backend:
     name: Test Backend
     runs-on: ubuntu-latest
-    needs: build-frontend
+    needs: [build-frontend, generate-swagger]
     services:
       postgres:
         image: postgres:16
@@ -101,6 +125,12 @@ jobs:
           name: frontend-dist
           path: web/dist
 
+      - name: Download Swagger docs
+        uses: actions/download-artifact@v4
+        with:
+          name: swagger-docs
+          path: docs/swagger
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -108,12 +138,6 @@ jobs:
 
       - name: Download dependencies
         run: go mod download
-
-      - name: Install swag CLI
-        run: go install github.com/swaggo/swag/cmd/swag@latest
-
-      - name: Generate Swagger docs
-        run: swag init -g cmd/main.go -o docs/swagger --parseInternal --generatedTime=false
 
       - name: Run tests
         env:
@@ -124,7 +148,7 @@ jobs:
   build-check:
     name: Build Check
     runs-on: ubuntu-latest
-    needs: build-frontend
+    needs: [build-frontend, generate-swagger]
     steps:
       - uses: actions/checkout@v4
 
@@ -134,16 +158,16 @@ jobs:
           name: frontend-dist
           path: web/dist
 
+      - name: Download Swagger docs
+        uses: actions/download-artifact@v4
+        with:
+          name: swagger-docs
+          path: docs/swagger
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-
-      - name: Install swag CLI
-        run: go install github.com/swaggo/swag/cmd/swag@latest
-
-      - name: Generate Swagger docs
-        run: swag init -g cmd/main.go -o docs/swagger --parseInternal --generatedTime=false
 
       - name: Build selfhosted
         run: go build -tags selfhosted -o /dev/null ./cmd/
