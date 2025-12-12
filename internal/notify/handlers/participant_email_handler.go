@@ -49,10 +49,10 @@ func NewParticipantEmailHandler(
 //	@Tags			Notifications
 //	@Accept			json
 //	@Produce		json
-//	@Param			token	path		string								true	"Calendar public token"
-//	@Param			pid		path		string								true	"Participant ID"
-//	@Param			request	body		calendarModels.AddParticipantEmailRequest	true	"Email address"
-//	@Success		200		{object}	calendarModels.ParticipantEmailResponse
+//	@Param			token	path		string							true	"Calendar public token"
+//	@Param			pid		path		string							true	"Participant ID"
+//	@Param			request	body		object{email=string}			true	"Email address"
+//	@Success		200		{object}	object{participant_id=string,email=string,verified=bool,message=string}
 //	@Failure		400		{object}	httputil.ErrorResponse
 //	@Failure		404		{object}	httputil.ErrorResponse
 //	@Failure		500		{object}	httputil.ErrorResponse
