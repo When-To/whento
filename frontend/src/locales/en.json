@@ -254,6 +254,7 @@
     "minDurationHelp": "Minimum availability duration in hours to include an event in the iCalendar feed (0 = no restriction)",
     "participants": "Participants",
     "participantCount": "participant(s)",
+    "participantShort": "part.",
     "addParticipant": "Add participant",
     "participantName": "Participant name",
     "participantNamePlaceholder": "Enter participant name...",

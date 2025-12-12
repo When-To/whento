@@ -64,7 +64,7 @@ fi
 # Generate JWT keys
 if [ -f "scripts/generate-keys.sh" ]; then
     echo "🔑 Generating JWT keys..."
-    (cd scripts && ./generate-keys.sh)
+    ./scripts/generate-keys.sh
 fi
 
 # Create local config files if missing

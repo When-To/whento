@@ -136,7 +136,7 @@
                   class="input text-sm w-20"
                 >
                   <option
-                    v-for="n in displayMode === 'week' ? 52 : 12"
+                    v-for="n in displayMode === 'week' ? 4 : 12"
                     :key="n"
                     :value="n"
                   >
@@ -1150,8 +1150,8 @@ const currentWeekStartDate = ref<Date>(new Date())
 // Display mode: 'month' or 'week'
 const displayMode = ref<'month' | 'week'>('week')
 
-// Number of periods (months or weeks) to display (1-52 for weeks, 1-12 for months)
-const numberOfPeriods = ref(4)
+// Number of periods (months or weeks) to display (1-4 for weeks, 1-12 for months)
+const numberOfPeriods = ref(1)
 
 // Weekly view settings
 const startHour = ref(8)
@@ -2218,7 +2218,7 @@ async function handleBatchOperations(operations: AvailabilityOperation[]) {
         toastStore.success(t('availability.updated', 'Availability updated'))
       }
     } else {
-      toastStore.success(t('availability.batchSuccess', `${succeeded} availabilities updated`))
+      toastStore.success(t('availability.batchSuccess', { count: succeeded }))
     }
   } else if (succeeded === 0) {
     // All operations failed
@@ -2268,8 +2268,8 @@ watch(
 // Save display settings to localStorage when they change
 watch(displayMode, newMode => {
   // Adjust numberOfPeriods if it exceeds the max for the new mode
-  // Month mode: max 12, Week mode: max 52
-  const maxPeriods = newMode === 'month' ? 12 : 52
+  // Month mode: max 12, Week mode: max 4
+  const maxPeriods = newMode === 'month' ? 12 : 4
   if (numberOfPeriods.value > maxPeriods) {
     numberOfPeriods.value = maxPeriods
   }

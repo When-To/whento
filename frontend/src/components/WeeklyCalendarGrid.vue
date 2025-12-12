@@ -122,11 +122,20 @@
     </div>
 
     <!-- Grid container with sticky header -->
-    <div class="overflow-auto rounded-lg border border-gray-200 dark:border-gray-700">
-      <div class="min-w-[800px]">
+    <div
+      class="overflow-auto rounded-lg border border-gray-200 dark:border-gray-700"
+      @touchmove="handleContainerTouchMove"
+    >
+      <div
+        class="min-w-[800px]"
+        @mouseup="handlePointerUp"
+        @touchend="handlePointerUp"
+        @touchcancel="handlePointerLeave"
+      >
         <!-- Header row with days -->
         <div
           class="sticky top-0 z-10 grid grid-cols-[80px_repeat(7,1fr)] bg-gray-50 dark:bg-gray-800"
+          @touchmove="handleHeaderGridTouchMove"
         >
           <!-- Empty corner cell -->
           <div class="border-b border-r border-gray-200 p-2 dark:border-gray-700" />
@@ -160,9 +169,11 @@
                 'ring-2 ring-inset ring-red-500 bg-red-100 dark:bg-red-900/30',
             ]"
             :title="day.holidayName || undefined"
-            @mousedown="handleHeaderMouseDown(day.dateString, day.date)"
-            @mouseenter="handleHeaderMouseEnter(day.dateString, day.date)"
-            @mouseup="handleHeaderMouseUp"
+            :data-header-date="day.dateString"
+            @mousedown="handleHeaderPointerDown(day.dateString, day.date, $event)"
+            @mouseenter="handleHeaderPointerMove(day.dateString, day.date)"
+            @mouseup="handleHeaderPointerUp"
+            @touchstart="handleHeaderPointerDown(day.dateString, day.date, $event)"
           >
             <div
               :class="[
@@ -184,7 +195,10 @@
         </div>
 
         <!-- Time slots grid -->
-        <div class="relative">
+        <div
+          class="relative"
+          @touchmove="handleGridTouchMove"
+        >
           <!-- Time labels and slots -->
           <div
             v-for="timeSlot in timeSlots"
@@ -212,9 +226,12 @@
               :class="getCellClasses(day, timeSlot)"
               :style="getCellStyle(day.dateString, timeSlot.time, timeSlot.isHourStart)"
               :title="day.holidayName || undefined"
-              @mousedown="handleMouseDown(day.dateString, timeSlot.time, day.date)"
-              @mouseenter="handleMouseEnter(day.dateString, timeSlot.time, day.date)"
-              @mouseup="handleMouseUp"
+              :data-date="day.dateString"
+              :data-time="timeSlot.time"
+              @mousedown="handlePointerDown(day.dateString, timeSlot.time, day.date, $event)"
+              @mouseenter="handlePointerMove(day.dateString, timeSlot.time, day.date)"
+              @mouseup="handlePointerUp"
+              @touchstart="handlePointerDown(day.dateString, timeSlot.time, day.date, $event)"
             >
               <!-- Fill overlays (for all fills) -->
               <template v-if="!isSlotSelected(day.dateString, timeSlot.time)">
@@ -264,7 +281,8 @@
                     @click.stop="handleParticipantCountClick(day.dateString, timeSlot.time, $event)"
                     @mousedown.stop
                   >
-                    {{ fill.count }} participant{{ fill.count > 1 ? 's' : '' }}
+                    <span class="lg:hidden">{{ fill.count }} {{ t('calendar.participantShort', 'part.') }}</span>
+                    <span class="hidden lg:inline">{{ fill.count }} {{ t('calendar.participantCount', 'participant(s)') }}</span>
                   </span>
                 </div>
               </template>
@@ -714,13 +732,23 @@ const currentWeekStartDate = ref<Date>(
     : getWeekStartDate(props.initialYear, props.initialMonth, props.initialWeek)
 )
 
-// Mouse drag state
+// Pointer drag state (mouse + touch)
 const isDragging = ref(false)
 const dragStartDate = ref<string | null>(null)
 const dragStartTime = ref<string | null>(null)
 const dragEndDate = ref<string | null>(null)
 const dragEndTime = ref<string | null>(null)
 const dragMode = ref<'add' | 'remove'>('add')
+const lastMoveTime = ref(0)
+const THROTTLE_DELAY = 16 // ~60fps
+
+// Touch gesture detection (to distinguish drag from scroll)
+const touchStartTime = ref<number | null>(null)
+const touchHoldTimer = ref<number | null>(null)
+const touchIsHolding = ref(false) // True if user held for 100ms without moving
+const TOUCH_DELAY_THRESHOLD = 100 // ms - minimum delay before drag is confirmed
+const isDragConfirmed = ref(false)
+const isHeaderDragConfirmed = ref(false)
 
 // Header drag state (for day header click-and-drag)
 const isHeaderDragging = ref(false)
@@ -1717,36 +1745,135 @@ function createOrExtendAvailability(
   return null
 }
 
-// Mouse handlers for drag selection
-function handleMouseDown(dateString: string, time: string, date: Date) {
+// Pointer handlers for drag selection (mouse + touch)
+function handlePointerDown(dateString: string, time: string, date: Date, event: MouseEvent | TouchEvent) {
   // Don't allow interaction on disabled dates or time slots
   if (!isDateEnabled(date) || !isTimeSlotAllowed(date, time)) {
     return
   }
 
-  isDragging.value = true
-  dragStartDate.value = dateString
-  dragStartTime.value = time
-  dragEndDate.value = dateString
-  dragEndTime.value = time
+  // For mouse events, start dragging immediately
+  if (event.type === 'mousedown') {
+    isDragging.value = true
+    dragStartDate.value = dateString
+    dragStartTime.value = time
+    dragEndDate.value = dateString
+    dragEndTime.value = time
+    dragMode.value = hasAvailability(dateString, time) ? 'remove' : 'add'
+    isDragConfirmed.value = true
+    event.preventDefault()
+  }
+  // For touch events, start a timer to detect if user holds without moving
+  else if (event.type === 'touchstart' && 'touches' in event) {
+    touchStartTime.value = Date.now()
+    touchIsHolding.value = false
+    isDragConfirmed.value = false
 
-  // Set drag mode based on whether the clicked slot has availability
-  dragMode.value = hasAvailability(dateString, time) ? 'remove' : 'add'
+    // Start timer - if it expires without touchmove, user is holding
+    touchHoldTimer.value = window.setTimeout(() => {
+      touchIsHolding.value = true
+      // Activate drag mode immediately when timer expires
+      isDragging.value = true
+      isDragConfirmed.value = true
+    }, TOUCH_DELAY_THRESHOLD)
+
+    dragStartDate.value = dateString
+    dragStartTime.value = time
+    dragEndDate.value = dateString
+    dragEndTime.value = time
+    dragMode.value = hasAvailability(dateString, time) ? 'remove' : 'add'
+    // Don't prevent default yet - allow scroll to work
+  }
 }
 
-function handleMouseEnter(dateString: string, time: string, date: Date) {
-  if (isDragging.value) {
-    // Don't allow interaction on disabled dates or time slots
-    if (!isDateEnabled(date) || !isTimeSlotAllowed(date, time)) {
+function handlePointerMove(dateString: string, time: string, date: Date) {
+  if (!isDragging.value) return
+
+  // Throttle for performance
+  const now = Date.now()
+  if (now - lastMoveTime.value < THROTTLE_DELAY) return
+  lastMoveTime.value = now
+
+  // Don't allow interaction on disabled dates or time slots
+  if (!isDateEnabled(date) || !isTimeSlotAllowed(date, time)) {
+    return
+  }
+
+  dragEndDate.value = dateString
+  dragEndTime.value = time
+}
+
+// Container-level touch move handler to block scroll when drag is active
+function handleContainerTouchMove(event: TouchEvent) {
+  // Block scrolling on the container if any drag is confirmed
+  if (isDragConfirmed.value || isHeaderDragConfirmed.value) {
+    event.preventDefault()
+  }
+}
+
+// Grid-level touch move handler for time slots (touch drag selection)
+function handleGridTouchMove(event: TouchEvent) {
+  // If we haven't started dragging yet, check if this is a drag or scroll
+  if (!isDragConfirmed.value && touchStartTime.value !== null) {
+    // If user moved BEFORE holding for 100ms → this is a scroll
+    if (!touchIsHolding.value) {
+      // Cancel the hold timer
+      if (touchHoldTimer.value !== null) {
+        window.clearTimeout(touchHoldTimer.value)
+        touchHoldTimer.value = null
+      }
+      // Reset touch tracking - allow scroll to proceed
+      touchStartTime.value = null
+      touchIsHolding.value = false
+      dragStartDate.value = null
+      dragStartTime.value = null
+      dragEndDate.value = null
+      dragEndTime.value = null
       return
     }
+    // If user held for 100ms WITHOUT moving, then moved → this is intentional drag
+    else {
+      isDragging.value = true
+      isDragConfirmed.value = true
+      // Now prevent default to block scrolling during drag
+      event.preventDefault()
+    }
+  }
+
+  if (!isDragging.value || !isDragConfirmed.value) return
+
+  // IMPORTANT: Prevent scrolling IMMEDIATELY on ALL touchmove events once drag is confirmed
+  // This must happen BEFORE throttle check to avoid scroll jank
+  event.preventDefault()
+
+  // Throttle for performance (only for updating drag position)
+  const now = Date.now()
+  if (now - lastMoveTime.value < THROTTLE_DELAY) return
+  lastMoveTime.value = now
+
+  if (event.touches.length > 0) {
+    const touch = event.touches[0]
+    const element = document.elementFromPoint(touch.clientX, touch.clientY)
+    if (!element) return
+
+    // Find the time slot cell
+    const cell = element.closest('[data-date][data-time]') as HTMLElement
+    if (!cell) return
+
+    const dateString = cell.getAttribute('data-date')
+    const time = cell.getAttribute('data-time')
+    if (!dateString || !time) return
+
+    // Find the corresponding day and validate
+    const day = weekDays.value.find(d => d.dateString === dateString)
+    if (!day || !isDateEnabled(day.date) || !isTimeSlotAllowed(day.date, time)) return
 
     dragEndDate.value = dateString
     dragEndTime.value = time
   }
 }
 
-function handleMouseUp() {
+function handlePointerUp() {
   if (!isDragging.value) return
 
   // Collect all operations to perform in batch
@@ -2010,35 +2137,160 @@ function handleMouseUp() {
   dragEndDate.value = null
   dragEndTime.value = null
   dragMode.value = 'add'
+  touchStartTime.value = null
+  touchIsHolding.value = false
+  isDragConfirmed.value = false
+
+  // Clean up timer
+  if (touchHoldTimer.value !== null) {
+    window.clearTimeout(touchHoldTimer.value)
+    touchHoldTimer.value = null
+  }
 }
 
-// Header mouse handlers for day header click-and-drag
-function handleHeaderMouseDown(dateString: string, date: Date) {
+// Cancel drag if pointer leaves the grid
+function handlePointerLeave() {
+  if (isDragging.value) {
+    isDragging.value = false
+    dragStartDate.value = null
+    dragStartTime.value = null
+    dragEndDate.value = null
+    dragEndTime.value = null
+    dragMode.value = 'add'
+    touchStartTime.value = null
+    touchIsHolding.value = false
+    isDragConfirmed.value = false
+  }
+
+  if (isHeaderDragging.value) {
+    isHeaderDragging.value = false
+    headerDragStartDate.value = null
+    headerDragEndDate.value = null
+    headerDragMode.value = 'add'
+    touchStartTime.value = null
+    touchIsHolding.value = false
+    isHeaderDragConfirmed.value = false
+  }
+
+  // Clean up timer
+  if (touchHoldTimer.value !== null) {
+    window.clearTimeout(touchHoldTimer.value)
+    touchHoldTimer.value = null
+  }
+}
+
+// Header pointer handlers for day header click-and-drag (mouse + touch)
+function handleHeaderPointerDown(dateString: string, date: Date, event: MouseEvent | TouchEvent) {
   // Don't allow interaction on disabled dates
   if (!isDateEnabled(date)) {
     return
   }
 
-  isHeaderDragging.value = true
-  headerDragStartDate.value = dateString
-  headerDragEndDate.value = dateString
+  // For mouse events, start dragging immediately
+  if (event.type === 'mousedown') {
+    isHeaderDragging.value = true
+    headerDragStartDate.value = dateString
+    headerDragEndDate.value = dateString
+    headerDragMode.value = hasFullDayAvailability(dateString) ? 'remove' : 'add'
+    isHeaderDragConfirmed.value = true
+    event.preventDefault()
+  }
+  // For touch events, start a timer to detect if user holds without moving
+  else if (event.type === 'touchstart' && 'touches' in event) {
+    touchStartTime.value = Date.now()
+    touchIsHolding.value = false
+    isHeaderDragConfirmed.value = false
 
-  // Set drag mode based on whether the clicked date has a full-day availability
-  headerDragMode.value = hasFullDayAvailability(dateString) ? 'remove' : 'add'
+    // Start timer - if it expires without touchmove, user is holding
+    touchHoldTimer.value = window.setTimeout(() => {
+      touchIsHolding.value = true
+      // Activate drag mode immediately when timer expires
+      isHeaderDragging.value = true
+      isHeaderDragConfirmed.value = true
+    }, TOUCH_DELAY_THRESHOLD)
+
+    headerDragStartDate.value = dateString
+    headerDragEndDate.value = dateString
+    headerDragMode.value = hasFullDayAvailability(dateString) ? 'remove' : 'add'
+    // Don't prevent default yet - allow scroll to work
+  }
 }
 
-function handleHeaderMouseEnter(dateString: string, date: Date) {
-  if (isHeaderDragging.value) {
-    // Don't allow interaction on disabled dates
-    if (!isDateEnabled(date)) {
+function handleHeaderPointerMove(dateString: string, date: Date) {
+  if (!isHeaderDragging.value) return
+
+  // Throttle for performance
+  const now = Date.now()
+  if (now - lastMoveTime.value < THROTTLE_DELAY) return
+  lastMoveTime.value = now
+
+  // Don't allow interaction on disabled dates
+  if (!isDateEnabled(date)) {
+    return
+  }
+
+  headerDragEndDate.value = dateString
+}
+
+// Grid-level touch move handler for headers (touch drag selection)
+function handleHeaderGridTouchMove(event: TouchEvent) {
+  // If we haven't started dragging yet, check if this is a drag or scroll
+  if (!isHeaderDragConfirmed.value && touchStartTime.value !== null) {
+    // If user moved BEFORE holding for 100ms → this is a scroll
+    if (!touchIsHolding.value) {
+      // Cancel the hold timer
+      if (touchHoldTimer.value !== null) {
+        window.clearTimeout(touchHoldTimer.value)
+        touchHoldTimer.value = null
+      }
+      // Reset touch tracking - allow scroll to proceed
+      touchStartTime.value = null
+      touchIsHolding.value = false
+      headerDragStartDate.value = null
+      headerDragEndDate.value = null
       return
     }
+    // If user held for 100ms WITHOUT moving, then moved → this is intentional drag
+    else {
+      isHeaderDragging.value = true
+      isHeaderDragConfirmed.value = true
+      // Now prevent default to block scrolling during drag
+      event.preventDefault()
+    }
+  }
+
+  if (!isHeaderDragging.value || !isHeaderDragConfirmed.value) return
+
+  // IMPORTANT: Prevent scrolling IMMEDIATELY on ALL touchmove events once drag is confirmed
+  // This must happen BEFORE throttle check to avoid scroll jank
+  event.preventDefault()
+
+  // Throttle for performance (only for updating drag position)
+  const now = Date.now()
+  if (now - lastMoveTime.value < THROTTLE_DELAY) return
+  lastMoveTime.value = now
+
+  if (event.touches.length > 0) {
+    const touch = event.touches[0]
+    const element = document.elementFromPoint(touch.clientX, touch.clientY)
+    if (!element) return
+
+    // Find the header cell
+    const cell = element.closest('[data-header-date]') as HTMLElement
+    if (!cell) return
+
+    const dateString = cell.getAttribute('data-header-date')
+    if (!dateString) return
+
+    // Find the corresponding day and validate
+    const day = weekDays.value.find(d => d.dateString === dateString)
+    if (!day || !isDateEnabled(day.date)) return
 
     headerDragEndDate.value = dateString
   }
 }
 
-function handleHeaderMouseUp() {
+function handleHeaderPointerUp() {
   if (!isHeaderDragging.value) return
 
   // Collect all operations to perform in batch
@@ -2116,6 +2368,15 @@ function handleHeaderMouseUp() {
   headerDragStartDate.value = null
   headerDragEndDate.value = null
   headerDragMode.value = 'add'
+  touchStartTime.value = null
+  touchIsHolding.value = false
+  isHeaderDragConfirmed.value = false
+
+  // Clean up timer
+  if (touchHoldTimer.value !== null) {
+    window.clearTimeout(touchHoldTimer.value)
+    touchHoldTimer.value = null
+  }
 }
 
 // Helper to add minutes to a time string (capped at 23:59)
@@ -2465,15 +2726,48 @@ function closeParticipantPopup() {
   editedEndTime.value = ''
 }
 
-// Add global mouseup listener to handle drag end outside grid
+// Add global pointer up listeners to handle drag end outside grid
 if (typeof window !== 'undefined') {
-  window.addEventListener('mouseup', handleMouseUp)
-  window.addEventListener('mouseup', handleHeaderMouseUp)
+  window.addEventListener('mouseup', handlePointerUp)
+  window.addEventListener('touchend', handlePointerUp)
 }
 </script>
 
 <style scoped>
 .weekly-calendar-grid {
   user-select: none;
+}
+
+/* Prevent text selection during drag */
+.weekly-calendar-grid .grid.grid-cols-\[80px_repeat\(7\,1fr\)\] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  /* Reduce transition duration on mobile for better performance */
+  .weekly-calendar-grid .transition-colors {
+    transition-duration: 0.1s;
+  }
+
+  /* Use hardware acceleration for transforms */
+  .weekly-calendar-grid .relative {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+  }
+
+  /* Improve touch target size on mobile */
+  .weekly-calendar-grid .border-b.border-r {
+    min-height: 3rem;
+  }
+}
+
+/* Disable hover effects on touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .weekly-calendar-grid .hover\:bg-primary-50:hover,
+  .weekly-calendar-grid .dark\:hover\:bg-primary-900\/20:hover {
+    background-color: inherit;
+  }
 }
 </style>
