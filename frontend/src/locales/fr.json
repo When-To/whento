@@ -254,6 +254,7 @@
     "minDurationHelp": "Durée minimale de disponibilité en heures pour inclure un événement dans le flux iCalendar (0 = aucune restriction)",
     "participants": "Participants",
     "participantCount": "participant(s)",
+    "participantShort": "part.",
     "addParticipant": "Ajouter un participant",
     "participantName": "Nom du participant",
     "participantNamePlaceholder": "Entrez le nom du participant...",

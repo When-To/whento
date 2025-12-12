@@ -77,12 +77,29 @@
     <!-- Days Grid -->
     <div
       class="grid grid-cols-7 gap-1"
-      @mouseleave="handleMouseLeave"
-      @mouseup="handleMouseUp"
+      @mouseleave="handlePointerLeave"
+      @mouseup="handlePointerUp"
+      @touchend="handlePointerUp"
+      @touchmove="handleGridTouchMove"
+      @touchcancel="handlePointerLeave"
     >
       <div
         v-for="(day, index) in calendarDays"
         :key="`${day.date}-${day.isCurrentMonth}`"
+        v-memo="[
+          day.hasAvailability,
+          day.hasRecurrence,
+          day.meetsThreshold,
+          day.isToday,
+          day.isPast,
+          day.isAllowed,
+          day.isHoliday,
+          day.isHolidayEve,
+          isCellSelected(index),
+          isDragging,
+          dragMode,
+          getParticipantCount(day.dateString),
+        ]"
         :class="[
           'relative min-h-20 rounded-lg border p-2 transition-all',
           !day.isCurrentMonth
@@ -131,9 +148,10 @@
             'ring-2 ring-red-500 bg-red-100 dark:bg-red-900/30',
         ]"
         :title="day.holidayName || undefined"
-        @mousedown="handleMouseDown(index, day, $event)"
-        @mousemove="handleMouseMove(index)"
-        @mouseup="handleMouseUp"
+        @mousedown="handlePointerDown(index, day, $event)"
+        @mousemove="handlePointerMove(index)"
+        @mouseup="handlePointerUp"
+        @touchstart="handlePointerDown(index, day, $event)"
       >
         <!-- Only show content for current month days -->
         <template v-if="day.isCurrentMonth">
@@ -165,7 +183,8 @@
               @mouseenter="handleParticipantCountHoverStart(day.dateString, $event)"
               @mouseleave="handleParticipantCountHoverEnd"
             >
-              {{ getParticipantCountLabel(day.dateString) }}
+              <span class="lg:hidden">{{ getParticipantCount(day.dateString) }} {{ t('calendar.participantShort', 'part.') }}</span>
+              <span class="hidden lg:inline">{{ getParticipantCount(day.dateString) }} {{ t('calendar.participantCount', 'participant(s)') }}</span>
             </span>
           </div>
 
@@ -863,11 +882,6 @@ function getParticipantCount(dateString: string): number {
   return props.participantCounts?.[dateString] || 0
 }
 
-function getParticipantCountLabel(dateString: string): string {
-  const count = getParticipantCount(dateString)
-  return `${count} Participant${count > 1 ? 's' : ''}`
-}
-
 function isFullDayTime(startTime?: string, endTime?: string): boolean {
   // Consider as full day if:
   // - Both times are null/undefined
@@ -1100,6 +1114,15 @@ function closeParticipantPopup() {
 
 // Functions for rectangle selection
 const GRID_COLUMNS = 7
+const lastMoveTime = ref(0)
+const THROTTLE_DELAY = 16 // ~60fps
+
+// Touch gesture detection (to distinguish drag from scroll)
+const touchStartTime = ref<number | null>(null)
+const touchHoldTimer = ref<number | null>(null)
+const touchIsHolding = ref(false) // True if user held for 100ms without moving
+const TOUCH_DELAY_THRESHOLD = 100 // ms - minimum delay before drag is confirmed
+const isDragConfirmed = ref(false)
 
 // Calculate selected cells in the rectangle
 const selectedCellIndices = computed((): Set<number> => {
@@ -1148,8 +1171,47 @@ function cellHasAvailability(day: CalendarDay): boolean {
   return day.hasAvailability || day.hasRecurrence
 }
 
-// Mousedown handler
-function handleMouseDown(index: number, day: CalendarDay, event: MouseEvent) {
+// Get cell index from touch/mouse coordinates
+function getCellIndexFromPoint(x: number, y: number): number | null {
+  const element = document.elementFromPoint(x, y)
+  if (!element) return null
+
+  // Find the calendar cell element - try multiple selectors
+  let cell = element.closest('.calendar-grid .grid.grid-cols-7 > div')
+
+  // If we're inside a cell's child element, find the parent cell
+  if (!cell && element.closest('.calendar-grid')) {
+    const parent = element.parentElement
+    if (parent && parent.classList.contains('grid-cols-7')) {
+      // We might be a child of the grid, find which cell
+      const allCells = parent.children
+      for (let i = 0; i < allCells.length; i++) {
+        if (allCells[i].contains(element)) {
+          cell = allCells[i]
+          break
+        }
+      }
+    } else if (parent) {
+      // Try going up one more level
+      cell = parent.closest('.calendar-grid .grid.grid-cols-7 > div')
+    }
+  }
+
+  if (!cell) return null
+
+  // Find the index by looking at all cells
+  const allCells = cell.parentElement?.children
+  if (!allCells) return null
+
+  for (let i = 0; i < allCells.length; i++) {
+    if (allCells[i] === cell) return i
+  }
+
+  return null
+}
+
+// Unified pointer down handler (mouse + touch)
+function handlePointerDown(index: number, day: CalendarDay, event: MouseEvent | TouchEvent) {
   // Ignore if it's a click on participant counter or other interactive element
   const target = event.target as HTMLElement
   if (target.closest('[data-no-drag]')) {
@@ -1158,26 +1220,131 @@ function handleMouseDown(index: number, day: CalendarDay, event: MouseEvent) {
 
   if (!canSelectCell(day)) return
 
-  isDragging.value = true
-  dragStartIndex.value = index
+  // For mouse events, start dragging immediately
+  if (event.type === 'mousedown') {
+    isDragging.value = true
+    dragStartIndex.value = index
+    dragCurrentIndex.value = index
+    dragMode.value = cellHasAvailability(day) ? 'remove' : 'add'
+    isDragConfirmed.value = true
+    event.preventDefault()
+  }
+  // For touch events, start a timer to detect if user holds without moving
+  else if (event.type === 'touchstart' && 'touches' in event) {
+    touchStartTime.value = Date.now()
+    touchIsHolding.value = false
+    isDragConfirmed.value = false
+
+    // Start timer - if it expires without touchmove, user is holding
+    touchHoldTimer.value = window.setTimeout(() => {
+      touchIsHolding.value = true
+      // Activate drag mode immediately when timer expires
+      isDragging.value = true
+      isDragConfirmed.value = true
+    }, TOUCH_DELAY_THRESHOLD)
+
+    dragStartIndex.value = index
+    dragCurrentIndex.value = index
+    dragMode.value = cellHasAvailability(day) ? 'remove' : 'add'
+    // Don't prevent default yet - allow scroll to work
+  }
+}
+
+// Unified pointer move handler (mouse only) with throttling
+function handlePointerMove(index: number) {
+  if (!isDragging.value) return
+
+  // Throttle for performance
+  const now = Date.now()
+  if (now - lastMoveTime.value < THROTTLE_DELAY) return
+  lastMoveTime.value = now
+
+  // For mouse events, we can use the index directly
   dragCurrentIndex.value = index
+}
 
-  // Determine drag mode based on whether the starting cell has availability
-  dragMode.value = cellHasAvailability(day) ? 'remove' : 'add'
+// Grid-level touch move handler (for touch drag selection)
+function handleGridTouchMove(event: TouchEvent) {
+  // If we haven't started dragging yet, check if this is a drag or scroll
+  if (!isDragConfirmed.value && touchStartTime.value !== null) {
+    // If user moved BEFORE holding for 100ms → this is a scroll
+    if (!touchIsHolding.value) {
+      // Cancel the hold timer
+      if (touchHoldTimer.value !== null) {
+        window.clearTimeout(touchHoldTimer.value)
+        touchHoldTimer.value = null
+      }
+      // Reset touch tracking - allow scroll to proceed
+      touchStartTime.value = null
+      touchIsHolding.value = false
+      dragStartIndex.value = null
+      dragCurrentIndex.value = null
+      return
+    }
+    // If user held for 100ms WITHOUT moving, then moved → this is intentional drag
+    else {
+      isDragging.value = true
+      isDragConfirmed.value = true
+      // Now prevent default to block scrolling during drag
+      event.preventDefault()
+    }
+  }
 
-  // Prevent text selection during drag
+  if (!isDragging.value || !isDragConfirmed.value) return
+
+  // IMPORTANT: Prevent scrolling IMMEDIATELY on ALL touchmove events once drag is confirmed
+  // This must happen BEFORE throttle check to avoid scroll jank
   event.preventDefault()
+
+  // Throttle for performance (only for updating drag position)
+  const now = Date.now()
+  if (now - lastMoveTime.value < THROTTLE_DELAY) return
+  lastMoveTime.value = now
+
+  if (event.touches.length > 0) {
+    const touch = event.touches[0]
+    const cellIndex = getCellIndexFromPoint(touch.clientX, touch.clientY)
+    if (cellIndex !== null) {
+      dragCurrentIndex.value = cellIndex
+    }
+  }
 }
 
-// Mousemove handler
-function handleMouseMove(index: number) {
-  if (!isDragging.value) return
-  dragCurrentIndex.value = index
-}
+// Unified pointer up handler
+function handlePointerUp() {
+  // Clean up timer if still running
+  if (touchHoldTimer.value !== null) {
+    window.clearTimeout(touchHoldTimer.value)
+    touchHoldTimer.value = null
+  }
 
-// Mouseup handler
-function handleMouseUp() {
-  if (!isDragging.value) return
+  // Only process if drag was confirmed (for touch) or if it was a mouse drag
+  if (!isDragging.value && !isDragConfirmed.value) {
+    // Reset touch tracking
+    touchStartTime.value = null
+    touchIsHolding.value = false
+    dragStartIndex.value = null
+    dragCurrentIndex.value = null
+    isDragConfirmed.value = false
+    return
+  }
+
+  // If touch wasn't confirmed as drag (just a tap), treat as single click
+  if (!isDragConfirmed.value && dragStartIndex.value !== null) {
+    const day = calendarDays.value[dragStartIndex.value]
+    if (day && canSelectCell(day)) {
+      emit('day-click', day.dateString)
+    }
+    // Reset state
+    isDragging.value = false
+    dragStartIndex.value = null
+    dragCurrentIndex.value = null
+    dragMode.value = 'add'
+    touchStartTime.value = null
+    touchIsHolding.value = false
+    isDragConfirmed.value = false
+    return
+  }
 
   const currentMode = dragMode.value
 
@@ -1222,15 +1389,27 @@ function handleMouseUp() {
   dragStartIndex.value = null
   dragCurrentIndex.value = null
   dragMode.value = 'add'
+  touchStartTime.value = null
+  touchIsHolding.value = false
+  isDragConfirmed.value = false
 }
 
-// Cancel drag if mouse leaves the grid
-function handleMouseLeave() {
+// Cancel drag if pointer leaves the grid
+function handlePointerLeave() {
+  // Clean up timer if still running
+  if (touchHoldTimer.value !== null) {
+    window.clearTimeout(touchHoldTimer.value)
+    touchHoldTimer.value = null
+  }
+
   if (isDragging.value) {
     isDragging.value = false
     dragStartIndex.value = null
     dragCurrentIndex.value = null
     dragMode.value = 'add'
+    touchStartTime.value = null
+    touchIsHolding.value = false
+    isDragConfirmed.value = false
   }
 }
 </script>
@@ -1238,5 +1417,40 @@ function handleMouseLeave() {
 <style scoped>
 .calendar-grid {
   user-select: none;
+}
+
+/* Prevent text selection during drag */
+.calendar-grid .grid.grid-cols-7 {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  /* Reduce transition duration on mobile for better performance */
+  .calendar-grid .transition-all {
+    transition-duration: 0.1s;
+  }
+
+  /* Use hardware acceleration for transforms */
+  .calendar-grid .grid > div {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+  }
+
+  /* Improve touch target size on mobile */
+  .calendar-grid .grid > div {
+    min-height: 5rem;
+  }
+}
+
+/* Disable hover effects on touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .calendar-grid .hover\:border-primary-300:hover,
+  .calendar-grid .hover\:shadow-sm:hover,
+  .calendar-grid .dark\:hover\:border-primary-600:hover {
+    border-color: inherit;
+    box-shadow: none;
+  }
 }
 </style>
