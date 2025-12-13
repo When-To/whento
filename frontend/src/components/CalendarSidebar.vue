@@ -109,10 +109,10 @@
       @click="close"
     />
 
-    <!-- Toggle Button (always visible on public pages) -->
+    <!-- Toggle Button (desktop only - floating) -->
     <button
       v-if="shouldShowButton"
-      class="fixed left-4 top-20 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-primary-600 text-white shadow-lg transition-all hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600"
+      class="hidden md:flex fixed left-4 top-20 z-50 h-12 w-12 items-center justify-center rounded-full bg-primary-600 text-white shadow-lg transition-all hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600"
       :title="t('calendar.showCalendars', 'Show calendars')"
       @click="toggle"
     >

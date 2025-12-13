@@ -174,8 +174,8 @@
             </router-link>
           </div>
 
-          <!-- User Menu -->
-          <div class="flex items-center space-x-4">
+          <!-- User Menu (Desktop) -->
+          <div class="hidden md:flex md:items-center md:space-x-4">
             <!-- Cloud only: Shopping Cart (only for non-authenticated users) -->
             <router-link
               v-if="isCloud && !isAuthenticated"
@@ -288,6 +288,314 @@
               </button>
             </div>
           </div>
+
+          <!-- Mobile: Calendar History + Hamburger Menu -->
+          <div class="flex md:hidden items-center space-x-2">
+            <!-- Calendar History Button (mobile) -->
+            <button
+              v-if="hasCalendarHistory"
+              class="relative rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              :title="t('calendar.showCalendars', 'Show calendars')"
+              @click="toggleCalendarHistory"
+            >
+              <svg
+                class="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+              <span
+                v-if="calendarHistoryCount > 0"
+                class="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary-600 text-xs font-bold text-white"
+              >
+                {{ calendarHistoryCount }}
+              </span>
+            </button>
+
+            <!-- Hamburger Menu Button -->
+            <button
+              class="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              aria-label="Toggle menu"
+              @click="toggleMobileMenu"
+            >
+              <svg
+                v-if="!mobileMenuOpen"
+                class="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+              <svg
+                v-else
+                class="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Mobile Menu Dropdown (outside flex container) -->
+        <div
+          v-if="mobileMenuOpen"
+          class="md:hidden border-t border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 py-4"
+        >
+          <!-- Navigation Links (not authenticated) - Cloud Mode -->
+          <div
+            v-if="!isAuthenticated && isCloud"
+            class="space-y-1 pb-3"
+          >
+            <router-link
+              to="/"
+              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              :class="route.name === 'home' ? 'bg-gray-100 dark:bg-gray-800' : ''"
+              @click="closeMobileMenu"
+            >
+              {{ t('nav.home') }}
+            </router-link>
+            <router-link
+              to="/why-whento"
+              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              :class="route.name === 'why-whento' ? 'bg-gray-100 dark:bg-gray-800' : ''"
+              @click="closeMobileMenu"
+            >
+              {{ t('nav.whyWhento') }}
+            </router-link>
+            <router-link
+              to="/pricing"
+              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              :class="route.name === 'pricing' ? 'bg-gray-100 dark:bg-gray-800' : ''"
+              @click="closeMobileMenu"
+            >
+              {{ t('nav.pricing') }}
+            </router-link>
+          </div>
+
+          <!-- Navigation Links (not authenticated) - Self-hosted Mode -->
+          <div
+            v-if="!isAuthenticated && isSelfHosted"
+            class="space-y-1 pb-3"
+          >
+            <router-link
+              to="/"
+              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              :class="route.name === 'home' ? 'bg-gray-100 dark:bg-gray-800' : ''"
+              @click="closeMobileMenu"
+            >
+              {{ t('nav.home') }}
+            </router-link>
+            <a
+              :href="`${PUBLIC_APP_URL}/why-whento`"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              @click="closeMobileMenu"
+            >
+              {{ t('nav.whyWhento') }}
+            </a>
+            <a
+              :href="`${PUBLIC_APP_URL}/pricing`"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              @click="closeMobileMenu"
+            >
+              {{ t('nav.pricing') }}
+            </a>
+          </div>
+
+          <!-- Authenticated Navigation Links -->
+          <div
+            v-if="isAuthenticated"
+            class="space-y-1 pb-3"
+          >
+            <router-link
+              to="/dashboard"
+              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              :class="route.name === 'dashboard' ? 'bg-gray-100 dark:bg-gray-800' : ''"
+              @click="closeMobileMenu"
+            >
+              {{ t('nav.dashboard') }}
+            </router-link>
+            <router-link
+              v-if="isCloud"
+              to="/billing"
+              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              :class="route.name === 'billing' ? 'bg-gray-100 dark:bg-gray-800' : ''"
+              @click="closeMobileMenu"
+            >
+              {{ t('nav.billing') }}
+            </router-link>
+            <router-link
+              to="/settings"
+              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              :class="route.name === 'settings' ? 'bg-gray-100 dark:bg-gray-800' : ''"
+              @click="closeMobileMenu"
+            >
+              {{ t('nav.settings') }}
+            </router-link>
+            <router-link
+              v-if="isSelfHosted && isAdmin"
+              to="/admin/license"
+              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              :class="route.name === 'admin-license' ? 'bg-gray-100 dark:bg-gray-800' : ''"
+              @click="closeMobileMenu"
+            >
+              {{ t('nav.license') }}
+            </router-link>
+            <router-link
+              v-if="isAdmin"
+              to="/admin"
+              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              :class="route.name === 'admin' ? 'bg-gray-100 dark:bg-gray-800' : ''"
+              @click="closeMobileMenu"
+            >
+              {{ t('nav.admin') }}
+            </router-link>
+          </div>
+
+          <!-- Settings & Actions -->
+          <div class="border-t border-gray-200 dark:border-gray-700 pt-3 space-y-1">
+            <!-- Theme & Language Row -->
+            <div class="flex items-center justify-between px-3 py-2">
+              <span class="text-sm text-gray-600 dark:text-gray-400">{{ t('settings.theme') }}</span>
+              <button
+                class="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                aria-label="Toggle theme"
+                @click="toggleTheme"
+              >
+                <svg
+                  v-if="theme === 'light'"
+                  class="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                  />
+                </svg>
+                <svg
+                  v-else
+                  class="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div class="flex items-center justify-between px-3 py-2">
+              <span class="text-sm text-gray-600 dark:text-gray-400">{{ t('settings.language') }}</span>
+              <button
+                class="rounded-lg px-3 py-1 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                @click="toggleLocale"
+              >
+                {{ locale.toUpperCase() }}
+              </button>
+            </div>
+
+            <!-- Cloud only: Shopping Cart -->
+            <router-link
+              v-if="isCloud && !isAuthenticated"
+              to="/cart"
+              class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+              @click="closeMobileMenu"
+            >
+              <span class="text-sm text-gray-600 dark:text-gray-400">{{ t('nav.cart') }}</span>
+              <div class="relative">
+                <svg
+                  class="h-6 w-6 text-gray-600 dark:text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+                  />
+                </svg>
+                <span
+                  v-if="cartItemCount > 0"
+                  class="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary-600 text-xs font-bold text-white"
+                >
+                  {{ cartItemCount }}
+                </span>
+              </div>
+            </router-link>
+          </div>
+
+          <!-- Auth Actions -->
+          <div class="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
+            <div
+              v-if="!isAuthenticated"
+              class="space-y-2 px-3"
+            >
+              <router-link
+                to="/login"
+                class="block w-full btn btn-ghost text-center"
+                @click="closeMobileMenu"
+              >
+                {{ t('auth.login') }}
+              </router-link>
+              <router-link
+                to="/register"
+                class="block w-full btn btn-primary text-center"
+                @click="closeMobileMenu"
+              >
+                {{ t('auth.register') }}
+              </router-link>
+            </div>
+
+            <div
+              v-else
+              class="space-y-1"
+            >
+              <div class="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">
+                {{ user?.display_name }}
+              </div>
+              <button
+                class="block w-full text-left px-3 py-2 text-sm text-danger-600 hover:bg-gray-100 dark:text-danger-400 dark:hover:bg-gray-800 rounded-lg"
+                @click="handleLogout(); closeMobileMenu()"
+              >
+                {{ t('auth.logout') }}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </nav>
@@ -334,11 +642,14 @@ const cartStore = useCartStore()
 const { isCloud, isSelfHosted } = useBuildType()
 
 const theme = ref<'light' | 'dark'>('light')
+const mobileMenuOpen = ref(false)
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const isAdmin = computed(() => authStore.isAdmin)
 const user = computed(() => authStore.user)
 const cartItemCount = computed(() => cartStore.itemCount)
+const hasCalendarHistory = computed(() => historyStore.calendars.length > 0)
+const calendarHistoryCount = computed(() => historyStore.calendars.length)
 
 function toggleTheme() {
   theme.value = theme.value === 'light' ? 'dark' : 'light'
@@ -357,6 +668,18 @@ function updateTheme() {
 function toggleLocale() {
   locale.value = locale.value === 'fr' ? 'en' : 'fr'
   localStorage.setItem('locale', locale.value)
+}
+
+function toggleMobileMenu() {
+  mobileMenuOpen.value = !mobileMenuOpen.value
+}
+
+function closeMobileMenu() {
+  mobileMenuOpen.value = false
+}
+
+function toggleCalendarHistory() {
+  historyStore.toggle()
 }
 
 async function handleLogout() {
