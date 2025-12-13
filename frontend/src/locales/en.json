@@ -162,9 +162,12 @@
     "license": "License",
     "settings": "Settings",
     "admin": "Admin",
-    "whyWhento": "Why WhenTo"
+    "whyWhento": "Why WhenTo",
+    "cart": "Cart"
   },
   "settings": {
+    "theme": "Theme",
+    "language": "Language",
     "preferencesSaved": "Preferences saved successfully",
     "emailNotVerified": "Email address not verified",
     "emailNotVerifiedDescription": "Please verify your email address to unlock all features. You won't be able to create calendars until your email is verified.",

@@ -162,9 +162,12 @@
     "license": "Licence",
     "settings": "Paramètres",
     "admin": "Administration",
-    "whyWhento": "Pourquoi WhenTo"
+    "whyWhento": "Pourquoi WhenTo",
+    "cart": "Panier"
   },
   "settings": {
+    "theme": "Thème",
+    "language": "Langue",
     "preferencesSaved": "Préférences enregistrées avec succès",
     "emailNotVerified": "Adresse email non vérifiée",
     "emailNotVerifiedDescription": "Veuillez vérifier votre adresse email pour débloquer toutes les fonctionnalités. Vous ne pourrez pas créer de calendriers tant que votre email n'est pas vérifié.",
