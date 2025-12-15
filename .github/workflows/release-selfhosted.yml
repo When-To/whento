@@ -273,6 +273,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Extract version from tag
         id: version
         run: |
@@ -280,6 +285,19 @@ jobs:
           VERSION_NUM=${VERSION#v}
           echo "tag=${VERSION}" >> $GITHUB_OUTPUT
           echo "version=${VERSION_NUM}" >> $GITHUB_OUTPUT
+
+      - name: Extract tag message
+        id: tag_message
+        run: |
+          TAG_MESSAGE=$(git tag -l -n999 "${{ steps.version.outputs.tag }}" | sed '1d')
+          if [ -z "$TAG_MESSAGE" ]; then
+            echo "No annotated tag message found"
+            echo "has_message=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_message=true" >> $GITHUB_OUTPUT
+            # Save to file to preserve multiline content
+            echo "$TAG_MESSAGE" > tag_message.txt
+          fi
 
       - name: Download all binary artifacts
         uses: actions/download-artifact@v4
@@ -299,60 +317,77 @@ jobs:
           sha256sum * > checksums.txt
           cat checksums.txt
 
+      - name: Create release body
+        id: release_body
+        run: |
+          # Start with tag message if it exists
+          if [ "${{ steps.tag_message.outputs.has_message }}" = "true" ]; then
+            cat tag_message.txt > release_body.md
+            echo "" >> release_body.md
+            echo "---" >> release_body.md
+            echo "" >> release_body.md
+          else
+            touch release_body.md
+          fi
+
+          # Append installation instructions
+          cat >> release_body.md << 'EOF'
+          ## Installation
+
+          ### Docker (recommended)
+
+          ```bash
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          ```
+
+          ### Binary Installation
+
+          Download the appropriate binary for your platform:
+
+          | Platform | Architecture | Download |
+          |----------|--------------|----------|
+          | Linux | x86_64 (amd64) | `whento-${{ steps.version.outputs.version }}-linux-amd64.tar.gz` |
+          | Linux | ARM64 | `whento-${{ steps.version.outputs.version }}-linux-arm64.tar.gz` |
+          | Windows | x86_64 (amd64) | `whento-${{ steps.version.outputs.version }}-windows-amd64.zip` |
+          | macOS | Intel (amd64) | `whento-${{ steps.version.outputs.version }}-darwin-amd64.tar.gz` |
+          | macOS | Apple Silicon (arm64) | `whento-${{ steps.version.outputs.version }}-darwin-arm64.tar.gz` |
+
+          #### Linux/macOS
+
+          ```bash
+          # Download and extract
+          tar -xzf whento-${{ steps.version.outputs.version }}-linux-amd64.tar.gz
+
+          # Make executable (if needed)
+          chmod +x whento
+
+          # Run
+          ./whento
+          ```
+
+          #### Windows
+
+          ```powershell
+          # Extract the zip file and run
+          .\whento.exe
+          ```
+
+          ### Verify checksums
+
+          ```bash
+          sha256sum -c checksums.txt
+          ```
+
+          See [README](https://github.com/${{ github.repository }}#readme) for configuration and deployment instructions.
+          EOF
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          body_path: release_body.md
           files: |
             release/*
-          body: |
-            ## Installation
-
-            ### Docker (recommended)
-
-            ```bash
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-            ```
-
-            ### Binary Installation
-
-            Download the appropriate binary for your platform:
-
-            | Platform | Architecture | Download |
-            |----------|--------------|----------|
-            | Linux | x86_64 (amd64) | `whento-${{ steps.version.outputs.version }}-linux-amd64.tar.gz` |
-            | Linux | ARM64 | `whento-${{ steps.version.outputs.version }}-linux-arm64.tar.gz` |
-            | Windows | x86_64 (amd64) | `whento-${{ steps.version.outputs.version }}-windows-amd64.zip` |
-            | macOS | Intel (amd64) | `whento-${{ steps.version.outputs.version }}-darwin-amd64.tar.gz` |
-            | macOS | Apple Silicon (arm64) | `whento-${{ steps.version.outputs.version }}-darwin-arm64.tar.gz` |
-
-            #### Linux/macOS
-
-            ```bash
-            # Download and extract
-            tar -xzf whento-${{ steps.version.outputs.version }}-linux-amd64.tar.gz
-
-            # Make executable (if needed)
-            chmod +x whento
-
-            # Run
-            ./whento
-            ```
-
-            #### Windows
-
-            ```powershell
-            # Extract the zip file and run
-            .\whento.exe
-            ```
-
-            ### Verify checksums
-
-            ```bash
-            sha256sum -c checksums.txt
-            ```
-
-            See [README](https://github.com/${{ github.repository }}#readme) for configuration and deployment instructions.
 
       - name: Summary
         run: |

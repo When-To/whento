@@ -10,16 +10,11 @@
     <div class="mb-4 flex items-center justify-between gap-2">
       <button
         v-if="props.showNavigation !== false"
-        class="btn btn-ghost p-2 md:p-2 min-h-[44px] md:min-h-0 min-w-[44px] md:min-w-0"
+        class="btn btn-ghost p-2 md:p-2 min-h-11 md:min-h-0 min-w-11 md:min-w-0"
         :title="t('calendar.previousMonth', 'Previous month')"
         @click="previousMonth"
       >
-        <svg
-          class="h-6 w-6 md:h-5 md:w-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
+        <svg class="h-6 w-6 md:h-5 md:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -28,12 +23,11 @@
           />
         </svg>
       </button>
-      <div
-        v-else
-        class="w-11 md:w-10"
-      />
+      <div v-else class="w-11 md:w-10" />
 
-      <h3 class="font-display text-base md:text-lg font-semibold text-gray-900 dark:text-white text-center flex-1 px-2">
+      <h3
+        class="font-display text-base md:text-lg font-semibold text-gray-900 dark:text-white text-center flex-1 px-2"
+      >
         {{ currentMonthLabel }}
       </h3>
 
@@ -43,212 +37,206 @@
         :title="t('calendar.nextMonth', 'Next month')"
         @click="nextMonth"
       >
-        <svg
-          class="h-6 w-6 md:h-5 md:w-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M9 5l7 7-7 7"
-          />
+        <svg class="h-6 w-6 md:h-5 md:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
         </svg>
       </button>
-      <div
-        v-else
-        class="w-11 md:w-10"
-      />
+      <div v-else class="w-11 md:w-10" />
     </div>
 
-    <!-- Weekday Headers -->
-    <div class="mb-2 grid grid-cols-7 gap-1">
-      <div
-        v-for="day in weekDays"
-        :key="day"
-        class="text-center text-xs font-medium text-gray-600 dark:text-gray-400"
-      >
-        {{ day }}
-      </div>
-    </div>
-
-    <!-- Days Grid -->
-    <div
-      class="grid grid-cols-7 gap-1"
-      @mouseleave="handlePointerLeave"
-      @mouseup="handlePointerUp"
-      @touchend="handlePointerUp"
-      @touchmove="handleGridTouchMove"
-      @touchcancel="handlePointerLeave"
-    >
-      <div
-        v-for="(day, index) in calendarDays"
-        :key="`${day.date}-${day.isCurrentMonth}`"
-        v-memo="[
-          day.hasAvailability,
-          day.hasRecurrence,
-          day.meetsThreshold,
-          day.isToday,
-          day.isPast,
-          day.isAllowed,
-          day.isHoliday,
-          day.isHolidayEve,
-          isCellSelected(index),
-          isDragging,
-          dragMode,
-          getParticipantCount(day.dateString),
-        ]"
-        :class="[
-          'relative min-h-20 rounded-lg border p-2 transition-all',
-          !day.isCurrentMonth
-            ? 'border-transparent'
-            : day.isCurrentMonth && !day.isPast && day.isAllowed
-              ? 'cursor-pointer border-gray-200 bg-white hover:border-primary-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-primary-600'
-              : day.isCurrentMonth && (day.isPast || !day.isAllowed)
-                ? 'cursor-not-allowed border-gray-200 bg-gray-100 dark:border-gray-700 dark:bg-gray-900 opacity-50'
-                : 'border-transparent',
-          day.isCurrentMonth && day.isToday && 'ring-2 ring-primary-500 ring-offset-1',
-          day.isCurrentMonth &&
-            !day.isPast &&
-            day.isAllowed &&
-            day.meetsThreshold &&
-            'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700',
-          day.isCurrentMonth &&
-            !day.isPast &&
-            day.isAllowed &&
-            !day.meetsThreshold &&
-            day.hasAvailability &&
-            'bg-primary-50 border-primary-200 dark:bg-primary-900/20 dark:border-primary-700',
-          day.isCurrentMonth &&
-            !day.isPast &&
-            day.isAllowed &&
-            !day.meetsThreshold &&
-            day.hasRecurrence &&
-            !day.hasAvailability &&
-            'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700',
-          day.isCurrentMonth && day.isHoliday && 'ring-1 ring-orange-400 dark:ring-orange-500',
-          day.isCurrentMonth &&
-            allowHolidayEves &&
-            day.isHolidayEve &&
-            'ring-1 ring-purple-400 dark:ring-purple-500',
-          // Rectangle selection style - add mode (yellow)
-          isDragging &&
-            dragMode === 'add' &&
-            isCellSelected(index) &&
-            canSelectCell(day) &&
-            'ring-2 ring-yellow-500 bg-yellow-100 dark:bg-yellow-900/30',
-          // Rectangle selection style - remove mode (red)
-          isDragging &&
-            dragMode === 'remove' &&
-            isCellSelected(index) &&
-            canSelectCell(day) &&
-            cellHasAvailability(day) &&
-            'ring-2 ring-red-500 bg-red-100 dark:bg-red-900/30',
-        ]"
-        :title="day.holidayName || undefined"
-        @mousedown="handlePointerDown(index, day, $event)"
-        @mousemove="handlePointerMove(index)"
-        @mouseup="handlePointerUp"
-        @touchstart="handlePointerDown(index, day, $event)"
-      >
-        <!-- Only show content for current month days -->
-        <template v-if="day.isCurrentMonth">
-          <!-- Day Number and Participant Count -->
-          <div class="mb-1 flex items-baseline gap-1">
-            <span
-              :class="[
-                'text-base font-semibold',
-                day.isCurrentMonth
-                  ? day.isToday
-                    ? 'text-primary-600 dark:text-primary-400'
-                    : 'text-gray-900 dark:text-white'
-                  : 'text-gray-400 dark:text-gray-600',
-              ]"
-            >
-              {{ day.date }}
-            </span>
-            <span
-              v-if="getParticipantCount(day.dateString) >= 1"
-              data-no-drag
-              :class="[
-                'text-xs font-normal cursor-pointer hover:underline',
-                day.isCurrentMonth
-                  ? 'text-gray-600 dark:text-gray-400'
-                  : 'text-gray-400 dark:text-gray-600',
-              ]"
-              @click.stop="handleParticipantCountClick(day.dateString, $event)"
-              @mousedown.stop
-              @mouseenter="handleParticipantCountHoverStart(day.dateString, $event)"
-              @mouseleave="handleParticipantCountHoverEnd"
-            >
-              <span class="lg:hidden">{{ getParticipantCount(day.dateString) }} {{ t('calendar.participantShort', 'part.') }}</span>
-              <span class="hidden lg:inline">{{ getParticipantCount(day.dateString) }} {{ t('calendar.participantCount', 'participant(s)') }}</span>
-            </span>
-          </div>
-
-          <!-- Availability Indicator -->
+    <!-- Calendar wrapper with horizontal scroll on mobile -->
+    <div class="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+      <div class="min-w-[525px] md:min-w-0">
+        <!-- Weekday Headers -->
+        <div class="mb-2 grid grid-cols-7 gap-1.5 md:gap-1">
           <div
-            v-if="day.hasAvailability"
-            class="mt-1 space-y-0.5"
+            v-for="day in weekDays"
+            :key="day"
+            class="text-center text-xs md:text-xs font-medium text-gray-600 dark:text-gray-400 py-1"
           >
-            <div
-              v-for="(avail, idx) in day.availabilities"
-              :key="idx"
-              :class="[
-                'rounded px-1.5 py-0.5 text-xs text-white',
-                day.meetsThreshold
-                  ? 'bg-green-600 dark:bg-green-500'
-                  : 'bg-primary-600 dark:bg-primary-500',
-              ]"
-            >
-              {{ formatTimeRange(avail.start_time, avail.end_time) }}
-            </div>
+            {{ day }}
           </div>
+        </div>
 
-          <!-- Recurrence Indicator (only if no explicit availability) -->
+        <!-- Days Grid -->
+        <div
+          class="grid grid-cols-7 gap-1.5 md:gap-1"
+          @mouseleave="handlePointerLeave"
+          @mouseup="handlePointerUp"
+          @touchend="handlePointerUp"
+          @touchmove="handleGridTouchMove"
+          @touchcancel="handlePointerLeave"
+        >
           <div
-            v-else-if="day.hasRecurrence"
-            class="mt-1 space-y-0.5"
+            v-for="(day, index) in calendarDays"
+            :key="`${day.date}-${day.isCurrentMonth}`"
+            v-memo="[
+              day.hasAvailability,
+              day.hasRecurrence,
+              day.meetsThreshold,
+              day.isToday,
+              day.isPast,
+              day.isAllowed,
+              day.isHoliday,
+              day.isHolidayEve,
+              isCellSelected(index),
+              isDragging,
+              dragMode,
+              getParticipantCount(day.dateString),
+            ]"
+            :class="[
+              'relative min-h-24 md:min-h-20 rounded-lg border p-3 md:p-2 transition-all',
+              !day.isCurrentMonth
+                ? 'border-transparent'
+                : day.isCurrentMonth && !day.isPast && day.isAllowed
+                  ? 'cursor-pointer border-gray-200 bg-white hover:border-primary-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-primary-600'
+                  : day.isCurrentMonth && (day.isPast || !day.isAllowed)
+                    ? 'cursor-not-allowed border-gray-200 bg-gray-100 dark:border-gray-700 dark:bg-gray-900 opacity-50'
+                    : 'border-transparent',
+              day.isCurrentMonth && day.isToday && 'ring-2 ring-primary-500 ring-offset-1',
+              day.isCurrentMonth &&
+                !day.isPast &&
+                day.isAllowed &&
+                day.meetsThreshold &&
+                'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700',
+              day.isCurrentMonth &&
+                !day.isPast &&
+                day.isAllowed &&
+                !day.meetsThreshold &&
+                day.hasAvailability &&
+                'bg-primary-50 border-primary-200 dark:bg-primary-900/20 dark:border-primary-700',
+              day.isCurrentMonth &&
+                !day.isPast &&
+                day.isAllowed &&
+                !day.meetsThreshold &&
+                day.hasRecurrence &&
+                !day.hasAvailability &&
+                'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700',
+              day.isCurrentMonth && day.isHoliday && 'ring-1 ring-orange-400 dark:ring-orange-500',
+              day.isCurrentMonth &&
+                allowHolidayEves &&
+                day.isHolidayEve &&
+                'ring-1 ring-purple-400 dark:ring-purple-500',
+              // Rectangle selection style - add mode (yellow)
+              isDragging &&
+                dragMode === 'add' &&
+                isCellSelected(index) &&
+                canSelectCell(day) &&
+                'ring-2 ring-yellow-500 bg-yellow-100 dark:bg-yellow-900/30',
+              // Rectangle selection style - remove mode (red)
+              isDragging &&
+                dragMode === 'remove' &&
+                isCellSelected(index) &&
+                canSelectCell(day) &&
+                cellHasAvailability(day) &&
+                'ring-2 ring-red-500 bg-red-100 dark:bg-red-900/30',
+            ]"
+            :title="day.holidayName || undefined"
+            @mousedown="handlePointerDown(index, day, $event)"
+            @mousemove="handlePointerMove(index)"
+            @mouseup="handlePointerUp"
+            @touchstart="handlePointerDown(index, day, $event)"
           >
-            <div
-              :class="[
-                'flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-white',
-                day.meetsThreshold ? 'bg-green-500' : 'bg-blue-500',
-              ]"
-            >
-              <span class="flex-1">
-                {{ formatTimeRange(day.recurrenceStartTime, day.recurrenceEndTime) }}
-              </span>
-              <button
-                v-if="day.recurrenceId && !day.isPast"
-                data-no-drag
-                :class="[
-                  'rounded p-0.5 transition-colors',
-                  day.meetsThreshold ? 'hover:bg-green-600' : 'hover:bg-blue-600',
-                ]"
-                :title="t('availability.addException', 'Add exception')"
-                @click.stop="handleAddException(day.recurrenceId!, day.dateString)"
-                @mousedown.stop
-              >
-                <svg
-                  class="h-3 w-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+            <!-- Only show content for current month days -->
+            <template v-if="day.isCurrentMonth">
+              <!-- Day Number and Participant Count -->
+              <div class="mb-1 flex flex-col gap-0.5">
+                <span
+                  :class="[
+                    'text-lg md:text-base font-semibold',
+                    day.isCurrentMonth
+                      ? day.isToday
+                        ? 'text-primary-600 dark:text-primary-400'
+                        : 'text-gray-900 dark:text-white'
+                      : 'text-gray-400 dark:text-gray-600',
+                  ]"
                 >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-              </button>
-            </div>
+                  {{ day.date }}
+                </span>
+                <span
+                  v-if="getParticipantCount(day.dateString) >= 1"
+                  data-no-drag
+                  :class="[
+                    'text-sm md:text-xs font-normal cursor-pointer hover:underline',
+                    day.isCurrentMonth
+                      ? 'text-gray-600 dark:text-gray-400'
+                      : 'text-gray-400 dark:text-gray-600',
+                  ]"
+                  @click.stop="handleParticipantCountClick(day.dateString, $event)"
+                  @mousedown.stop
+                  @mouseenter="handleParticipantCountHoverStart(day.dateString, $event)"
+                  @mouseleave="handleParticipantCountHoverEnd"
+                >
+                  <span class="lg:hidden"
+                    >{{ getParticipantCount(day.dateString) }}
+                    {{ t('calendar.participantShort', 'part.') }}</span
+                  >
+                  <span class="hidden lg:inline"
+                    >{{ getParticipantCount(day.dateString) }}
+                    {{ t('calendar.participantCount', 'participant(s)') }}</span
+                  >
+                </span>
+              </div>
+
+              <!-- Availability Indicator -->
+              <div v-if="day.hasAvailability" class="mt-1.5 space-y-1">
+                <div
+                  v-for="(avail, idx) in day.availabilities"
+                  :key="idx"
+                  :class="[
+                    'rounded-md px-2.5 md:px-1.5 py-2 md:py-0.5 text-base md:text-xs text-white font-bold text-center leading-tight truncate',
+                    day.meetsThreshold
+                      ? 'bg-green-600 dark:bg-green-500'
+                      : 'bg-primary-600 dark:bg-primary-500',
+                  ]"
+                  :title="formatTimeRange(avail.start_time, avail.end_time)"
+                >
+                  {{ formatTimeRange(avail.start_time, avail.end_time) }}
+                </div>
+              </div>
+
+              <!-- Recurrence Indicator (only if no explicit availability) -->
+              <div v-else-if="day.hasRecurrence" class="mt-1.5 space-y-1">
+                <div
+                  :class="[
+                    'flex items-center gap-1 rounded-md px-2.5 md:px-1.5 py-2 md:py-0.5 text-base md:text-xs text-white font-bold leading-tight',
+                    day.meetsThreshold ? 'bg-green-500' : 'bg-blue-500',
+                  ]"
+                  :title="formatTimeRange(day.recurrenceStartTime, day.recurrenceEndTime)"
+                >
+                  <span class="flex-1 truncate">
+                    {{ formatTimeRange(day.recurrenceStartTime, day.recurrenceEndTime) }}
+                  </span>
+                  <button
+                    v-if="day.recurrenceId && !day.isPast"
+                    data-no-drag
+                    :class="[
+                      'rounded p-1 md:p-0.5 transition-colors shrink-0',
+                      day.meetsThreshold ? 'hover:bg-green-600' : 'hover:bg-blue-600',
+                    ]"
+                    :title="t('availability.addException', 'Add exception')"
+                    @click.stop="handleAddException(day.recurrenceId!, day.dateString)"
+                    @mousedown.stop
+                  >
+                    <svg
+                      class="h-3.5 w-3.5 md:h-3 md:w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </template>
           </div>
-        </template>
+        </div>
       </div>
     </div>
 
@@ -290,10 +278,7 @@
           t('calendar.publicHoliday', 'Public holiday')
         }}</span>
       </div>
-      <div
-        v-if="allowHolidayEves"
-        class="flex items-center gap-1"
-      >
+      <div v-if="allowHolidayEves" class="flex items-center gap-1">
         <div
           class="h-3 w-3 rounded border border-gray-300 ring-1 ring-purple-400 dark:border-gray-600 dark:ring-purple-500"
         />
@@ -307,7 +292,7 @@
     <div
       v-if="selectedDate"
       ref="tooltipRef"
-      class="absolute z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md p-6 border border-gray-200 dark:border-gray-700 pointer-events-auto"
+      class="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-[calc(100vw-2rem)] md:max-w-md p-4 md:p-6 border border-gray-200 dark:border-gray-700 pointer-events-auto"
       :style="{
         left: `${popupPosition.x}px`,
         top: `${popupPosition.y}px`,
@@ -325,12 +310,7 @@
             class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             @click="closeParticipantPopup"
           >
-            <svg
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -341,10 +321,7 @@
           </button>
         </div>
 
-        <div
-          v-if="loadingDetails"
-          class="text-center py-8"
-        >
+        <div v-if="loadingDetails" class="text-center py-8">
           <div
             class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary-600 border-r-transparent"
           />
@@ -502,12 +479,7 @@
                     startEdit(participant.note || '', participant.start_time, participant.end_time)
                   "
                 >
-                  <svg
-                    class="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -521,10 +493,7 @@
           </div>
         </div>
 
-        <div
-          v-else
-          class="text-center py-8"
-        >
+        <div v-else class="text-center py-8">
           <p class="text-sm text-gray-600 dark:text-gray-400">
             {{ t('availability.noAvailabilities', 'No availabilities') }}
           </p>
@@ -905,11 +874,11 @@ async function handleParticipantCountHoverStart(dateString: string, event: Mouse
   const count = getParticipantCount(dateString)
   if (count === 0 || !props.calendarToken) return
 
-  // Initial position near cursor (use page coordinates for absolute positioning)
+  // Initial position near cursor (use client coordinates for fixed positioning)
   const offset = 10
   popupPosition.value = {
-    x: event.pageX + offset,
-    y: event.pageY + offset,
+    x: event.clientX + offset,
+    y: event.clientY + offset,
   }
 
   // Clear any existing close timeout
@@ -994,30 +963,29 @@ function adjustTooltipPosition() {
 
   let { x, y } = popupPosition.value
 
-  // Get scroll position and viewport dimensions
-  const scrollX = window.scrollX || window.pageXOffset
-  const scrollY = window.scrollY || window.pageYOffset
+  // Get viewport dimensions
   const viewportWidth = window.innerWidth
   const viewportHeight = window.innerHeight
 
-  // Check right boundary (use page coordinates)
-  if (x + rect.width > scrollX + viewportWidth) {
-    x = scrollX + viewportWidth - rect.width - offset
+  // Since we're using position:fixed, coordinates are already relative to viewport
+  // Check right boundary - reposition to the left if overflowing
+  if (x + rect.width > viewportWidth - offset) {
+    x = viewportWidth - rect.width - offset
   }
 
-  // Check bottom boundary (use page coordinates)
-  if (y + rect.height > scrollY + viewportHeight) {
-    y = scrollY + viewportHeight - rect.height - offset
+  // Check bottom boundary - reposition above if overflowing
+  if (y + rect.height > viewportHeight - offset) {
+    y = viewportHeight - rect.height - offset
   }
 
   // Ensure tooltip doesn't go off left edge
-  if (x < scrollX + offset) {
-    x = scrollX + offset
+  if (x < offset) {
+    x = offset
   }
 
   // Ensure tooltip doesn't go off top edge
-  if (y < scrollY + offset) {
-    y = scrollY + offset
+  if (y < offset) {
+    y = offset
   }
 
   // Update position if it changed
@@ -1040,14 +1008,12 @@ function handleParticipantCountClick(dateString: string, event: MouseEvent) {
   // Load participant details and keep popup open
   loadParticipantDetails(dateString)
 
-  // Calculate position (use page coordinates for absolute positioning)
+  // Calculate position (use client coordinates for fixed positioning)
   const target = event.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
-  const scrollX = window.scrollX || window.pageXOffset
-  const scrollY = window.scrollY || window.pageYOffset
   popupPosition.value = {
-    x: rect.right + scrollX + 10,
-    y: rect.top + scrollY,
+    x: rect.right + 10,
+    y: rect.top,
   }
 }
 
@@ -1111,6 +1077,48 @@ function closeParticipantPopup() {
   editedStartTime.value = ''
   editedEndTime.value = ''
 }
+
+// Auto-close popup on outside interactions
+watch(selectedDate, newVal => {
+  if (newVal) {
+    // Add listeners when popup opens
+    const handleClickOutside = (event: Event) => {
+      if (tooltipRef.value && !tooltipRef.value.contains(event.target as Node)) {
+        // Don't close if clicking on a participant count (which would open a new popup)
+        const target = event.target as HTMLElement
+        if (!target.closest('[data-no-drag]')) {
+          closeParticipantPopup()
+        }
+      }
+    }
+
+    const handleScroll = () => {
+      closeParticipantPopup()
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeParticipantPopup()
+      }
+    }
+
+    // Add listeners
+    setTimeout(() => {
+      document.addEventListener('click', handleClickOutside)
+      document.addEventListener('touchstart', handleClickOutside)
+      window.addEventListener('scroll', handleScroll, true)
+      document.addEventListener('keydown', handleEscape)
+    }, 100)
+
+    // Cleanup function
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+      document.removeEventListener('touchstart', handleClickOutside)
+      window.removeEventListener('scroll', handleScroll, true)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }
+})
 
 // Functions for rectangle selection
 const GRID_COLUMNS = 7
