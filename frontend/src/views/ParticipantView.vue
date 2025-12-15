@@ -8,10 +8,7 @@
   <div class="min-h-screen bg-gray-50 py-8 dark:bg-gray-950">
     <div class="container-app max-w-6xl">
       <!-- Loading State -->
-      <div
-        v-if="loading"
-        class="flex items-center justify-center py-12"
-      >
+      <div v-if="loading" class="flex items-center justify-center py-12">
         <div class="text-center">
           <svg
             class="mx-auto h-12 w-12 animate-spin text-primary-600"
@@ -52,7 +49,7 @@
           </div>
           <button
             v-if="!calendar?.lock_participants"
-            class="btn btn-ghost w-full md:w-auto min-h-[44px] md:min-h-0"
+            class="btn btn-ghost w-full md:w-auto min-h-11 md:min-h-0"
             @click="handleChangeParticipant"
           >
             <svg
@@ -73,10 +70,7 @@
         </div>
 
         <!-- Email Notification Section (if notifications enabled for participants) -->
-        <div
-          v-if="notificationsEnabled"
-          class="card mb-6"
-        >
+        <div v-if="notificationsEnabled" class="card mb-6">
           <h3 class="mb-4 font-display text-lg font-semibold text-gray-900 dark:text-white">
             {{ t('notifications.emailVerification') }}
           </h3>
@@ -86,22 +80,15 @@
             <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
               {{ t('notifications.addEmail') }}
             </p>
-            <form
-              class="flex gap-2"
-              @submit.prevent="handleAddEmail"
-            >
+            <form class="flex gap-2" @submit.prevent="handleAddEmail">
               <input
                 v-model="emailInput"
                 type="email"
                 class="input flex-1"
                 :placeholder="t('notifications.emailPlaceholder')"
                 required
-              >
-              <button
-                type="submit"
-                class="btn btn-primary"
-                :disabled="addingEmail"
-              >
+              />
+              <button type="submit" class="btn btn-primary" :disabled="addingEmail">
                 <svg
                   v-if="addingEmail"
                   class="mr-2 h-4 w-4 animate-spin"
@@ -128,14 +115,8 @@
           </div>
 
           <!-- Email pending verification -->
-          <div
-            v-else-if="!participant.email_verified"
-            class="space-y-3"
-          >
-            <div
-              v-if="!changingEmail"
-              class="space-y-3"
-            >
+          <div v-else-if="!participant.email_verified" class="space-y-3">
+            <div v-if="!changingEmail" class="space-y-3">
               <div class="rounded-lg bg-orange-50 p-4 dark:bg-orange-900/20">
                 <div class="flex">
                   <svg
@@ -164,39 +145,26 @@
                 >
                   {{ resendingEmail ? t('common.sending') : t('notifications.resendVerification') }}
                 </button>
-                <button
-                  class="btn btn-ghost"
-                  @click="changingEmail = true"
-                >
+                <button class="btn btn-ghost" @click="changingEmail = true">
                   {{ t('notifications.changeEmail') }}
                 </button>
               </div>
             </div>
 
             <!-- Change email form -->
-            <div
-              v-else
-              class="space-y-3"
-            >
+            <div v-else class="space-y-3">
               <p class="text-sm text-gray-600 dark:text-gray-400">
                 {{ t('notifications.changeEmailPrompt', { currentEmail: participant.email }) }}
               </p>
-              <form
-                class="flex gap-2"
-                @submit.prevent="handleChangeEmail"
-              >
+              <form class="flex gap-2" @submit.prevent="handleChangeEmail">
                 <input
                   v-model="newEmailInput"
                   type="email"
                   class="input flex-1"
                   :placeholder="t('notifications.newEmailPlaceholder')"
                   required
-                >
-                <button
-                  type="submit"
-                  class="btn btn-primary"
-                  :disabled="addingEmail"
-                >
+                />
+                <button type="submit" class="btn btn-primary" :disabled="addingEmail">
                   {{ addingEmail ? t('common.saving') : t('common.save') }}
                 </button>
                 <button
@@ -211,14 +179,8 @@
           </div>
 
           <!-- Email verified -->
-          <div
-            v-else
-            class="space-y-3"
-          >
-            <div
-              v-if="!changingEmail"
-              class="space-y-3"
-            >
+          <div v-else class="space-y-3">
+            <div v-if="!changingEmail" class="space-y-3">
               <div class="rounded-lg bg-success-50 p-4 dark:bg-success-900/20">
                 <div class="flex">
                   <svg
@@ -239,38 +201,25 @@
                   </p>
                 </div>
               </div>
-              <button
-                class="btn btn-ghost"
-                @click="changingEmail = true"
-              >
+              <button class="btn btn-ghost" @click="changingEmail = true">
                 {{ t('notifications.changeEmail') }}
               </button>
             </div>
 
             <!-- Change email form -->
-            <div
-              v-else
-              class="space-y-3"
-            >
+            <div v-else class="space-y-3">
               <p class="text-sm text-gray-600 dark:text-gray-400">
                 {{ t('notifications.changeEmailPrompt', { currentEmail: participant.email }) }}
               </p>
-              <form
-                class="flex gap-2"
-                @submit.prevent="handleChangeEmail"
-              >
+              <form class="flex gap-2" @submit.prevent="handleChangeEmail">
                 <input
                   v-model="newEmailInput"
                   type="email"
                   class="input flex-1"
                   :placeholder="t('notifications.newEmailPlaceholder')"
                   required
-                >
-                <button
-                  type="submit"
-                  class="btn btn-primary"
-                  :disabled="addingEmail"
-                >
+                />
+                <button type="submit" class="btn btn-primary" :disabled="addingEmail">
                   {{ addingEmail ? t('common.saving') : t('common.save') }}
                 </button>
                 <button
@@ -324,7 +273,7 @@
                   <select
                     id="displayMode"
                     v-model="displayMode"
-                    class="input text-sm flex-1 md:w-32 min-h-[44px] md:min-h-0"
+                    class="input text-sm flex-1 md:w-32 min-h-11 md:min-h-0"
                   >
                     <option value="month">
                       {{ t('calendar.monthView', 'Month') }}
@@ -350,13 +299,9 @@
                   <select
                     id="periodCount"
                     v-model.number="numberOfPeriods"
-                    class="input text-sm flex-1 md:w-20 min-h-[44px] md:min-h-0"
+                    class="input text-sm flex-1 md:w-20 min-h-11 md:min-h-0"
                   >
-                    <option
-                      v-for="n in displayMode === 'week' ? 4 : 12"
-                      :key="n"
-                      :value="n"
-                    >
+                    <option v-for="n in displayMode === 'week' ? 4 : 12" :key="n" :value="n">
                       {{ n }}
                     </option>
                   </select>
@@ -376,10 +321,7 @@
           </div>
 
           <!-- Calendar grids - Display months vertically (month view) -->
-          <div
-            v-if="displayMode === 'month'"
-            class="space-y-6"
-          >
+          <div v-if="displayMode === 'month'" class="space-y-6">
             <CalendarGrid
               v-for="(monthConfig, index) in monthsToDisplay"
               :key="`${monthConfig.key}-${calendar?.id}`"
@@ -416,10 +358,7 @@
           </div>
 
           <!-- Weekly grid - Display weeks (week view) -->
-          <div
-            v-else
-            class="space-y-6"
-          >
+          <div v-else class="space-y-6">
             <WeeklyCalendarGrid
               v-for="(weekConfig, index) in weeksToDisplay"
               :key="`${weekConfig.key}-${calendar?.id}`"
@@ -471,10 +410,7 @@
         </div>
 
         <!-- Time Slot Form (only in month view) -->
-        <div
-          v-if="displayMode === 'month'"
-          class="card mb-6"
-        >
+        <div v-if="displayMode === 'month'" class="card mb-6">
           <div class="mb-4 flex items-baseline gap-2">
             <h2 class="font-display text-xl font-semibold text-gray-900 dark:text-white">
               {{ t('availability.timeSlot', 'Plage horaire') }}
@@ -495,11 +431,8 @@
                 v-model="isAllDay"
                 type="checkbox"
                 class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              >
-              <label
-                for="allDay"
-                class="ml-2 text-sm text-gray-700 dark:text-gray-300"
-              >
+              />
+              <label for="allDay" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {{ t('availability.allDay') }}
               </label>
             </div>
@@ -557,22 +490,13 @@
                 {{ t('calendar.publicLink', 'Public link') }}
               </label>
               <div class="flex gap-2">
-                <input
-                  :value="publicLink"
-                  readonly
-                  class="input flex-1 text-sm"
-                >
+                <input :value="publicLink" readonly class="input flex-1 text-sm" />
                 <button
                   class="btn btn-secondary"
                   :title="t('calendar.copyLink', 'Copy link')"
                   @click="copyToClipboard(publicLink)"
                 >
-                  <svg
-                    class="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
+                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -590,22 +514,13 @@
                 {{ t('calendar.icsLink', 'iCal subscription link') }}
               </label>
               <div class="flex gap-2">
-                <input
-                  :value="icsLink"
-                  readonly
-                  class="input flex-1 text-sm"
-                >
+                <input :value="icsLink" readonly class="input flex-1 text-sm" />
                 <button
                   class="btn btn-secondary"
                   :title="t('calendar.copyLink', 'Copy link')"
                   @click="copyToClipboard(icsLink)"
                 >
-                  <svg
-                    class="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
+                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -623,12 +538,7 @@
                 :to="`/calendars/${calendar.id}/settings`"
                 class="btn btn-ghost w-full justify-center"
               >
-                <svg
-                  class="mr-2 h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
+                <svg class="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     stroke-linecap="round"
                     stroke-linejoin="round"
@@ -650,10 +560,7 @@
 
         <div class="grid gap-6 lg:grid-cols-2 items-start">
           <!-- Recurrences Section -->
-          <CollapsibleSection
-            :title="t('availability.recurrence')"
-            :default-open="false"
-          >
+          <CollapsibleSection :title="t('availability.recurrence')" :default-open="false">
             <!-- Add Recurrence Form -->
             <div
               class="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800"
@@ -666,15 +573,8 @@
                   <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
                     {{ t('availability.dayOfWeek') }}
                   </label>
-                  <select
-                    v-model.number="newRecurrence.day_of_week"
-                    class="input text-sm"
-                  >
-                    <option
-                      v-for="day in weekDaysOptions"
-                      :key="day.value"
-                      :value="day.value"
-                    >
+                  <select v-model.number="newRecurrence.day_of_week" class="input text-sm">
+                    <option v-for="day in weekDaysOptions" :key="day.value" :value="day.value">
                       {{ day.label }}
                     </option>
                   </select>
@@ -713,17 +613,13 @@
                       type="date"
                       class="input text-sm"
                       required
-                    >
+                    />
                   </div>
                   <div>
                     <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
                       {{ t('availability.endDate') }}
                     </label>
-                    <input
-                      v-model="newRecurrence.end_date"
-                      type="date"
-                      class="input text-sm"
-                    >
+                    <input v-model="newRecurrence.end_date" type="date" class="input text-sm" />
                   </div>
                 </div>
                 <div>
@@ -747,9 +643,9 @@
                 <button
                   :disabled="
                     newRecurrence.day_of_week === null ||
-                      !newRecurrence.start_date ||
-                      addingRecurrence ||
-                      hasEqualTimesNewRecurrence
+                    !newRecurrence.start_date ||
+                    addingRecurrence ||
+                    hasEqualTimesNewRecurrence
                   "
                   class="btn btn-primary w-full text-sm"
                   @click="handleAddRecurrence"
@@ -859,7 +755,7 @@
                           type="date"
                           class="input w-full"
                           required
-                        >
+                        />
                       </div>
                       <div>
                         <label
@@ -871,7 +767,7 @@
                           v-model="editingRecurrence.end_date"
                           type="date"
                           class="input w-full"
-                        >
+                        />
                       </div>
                     </div>
 
@@ -887,7 +783,7 @@
                         type="text"
                         class="input w-full"
                         :placeholder="t('availability.note')"
-                      >
+                      />
                     </div>
 
                     <!-- Error message for equal times -->
@@ -900,10 +796,7 @@
 
                     <!-- Action Buttons -->
                     <div class="flex gap-2 justify-end">
-                      <button
-                        class="btn btn-ghost btn-sm"
-                        @click="handleCancelEdit"
-                      >
+                      <button class="btn btn-ghost btn-sm" @click="handleCancelEdit">
                         {{ t('common.cancel', 'Cancel') }}
                       </button>
                       <button
@@ -918,10 +811,7 @@
                 </div>
 
                 <!-- Display Mode -->
-                <div
-                  v-else
-                  class="flex items-start justify-between"
-                >
+                <div v-else class="flex items-start justify-between">
                   <div class="flex-1">
                     <div class="flex items-center gap-2">
                       <svg
@@ -965,12 +855,10 @@
                     <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       {{ formatDate(recurrence.start_date) }}
                       <span v-if="recurrence.end_date">
-                        - {{ formatDate(recurrence.end_date) }}</span>
+                        - {{ formatDate(recurrence.end_date) }}</span
+                      >
                     </div>
-                    <p
-                      v-if="recurrence.note"
-                      class="mt-1 text-xs text-gray-500 dark:text-gray-400"
-                    >
+                    <p v-if="recurrence.note" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       {{ recurrence.note }}
                     </p>
 
@@ -1018,7 +906,7 @@
                         type="date"
                         class="input flex-1 text-xs"
                         :placeholder="t('availability.addException')"
-                      >
+                      />
                       <button
                         :disabled="!exceptionDates[recurrence.id]"
                         class="btn btn-secondary btn-sm"
@@ -1034,12 +922,7 @@
                       :title="t('common.edit', 'Edit')"
                       @click="handleEditRecurrence(recurrence)"
                     >
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
+                      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -1053,12 +936,7 @@
                       :title="t('common.delete')"
                       @click="handleDeleteRecurrence(recurrence.id)"
                     >
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
+                      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -1096,10 +974,7 @@
             </div>
           </CollapsibleSection>
           <!-- My Availabilities List -->
-          <CollapsibleSection
-            :title="t('availability.myAvailabilities')"
-            :default-open="false"
-          >
+          <CollapsibleSection :title="t('availability.myAvailabilities')" :default-open="false">
             <!-- Availabilities List -->
             <div class="space-y-2">
               <div
@@ -1145,7 +1020,7 @@
                         </label>
                         <TimeSelect
                           v-model="editingAvailability.start_time"
-                          class="w-full"
+                          class="w-full min-h-11"
                           :max="editingAvailability.end_time || undefined"
                         />
                       </div>
@@ -1157,7 +1032,7 @@
                         </label>
                         <TimeSelect
                           v-model="editingAvailability.end_time"
-                          class="w-full"
+                          class="w-full min-h-11"
                           :min="editingAvailability.start_time || undefined"
                         />
                       </div>
@@ -1179,15 +1054,15 @@
                     </div>
 
                     <!-- Action Buttons -->
-                    <div class="flex gap-2 justify-end">
+                    <div class="flex flex-col md:flex-row gap-2 md:justify-end">
                       <button
-                        class="btn btn-ghost btn-sm"
+                        class="btn btn-ghost btn-sm w-full md:w-auto min-h-11"
                         @click="handleCancelAvailabilityEdit"
                       >
                         {{ t('common.cancel', 'Cancel') }}
                       </button>
                       <button
-                        class="btn btn-primary btn-sm"
+                        class="btn btn-primary btn-sm w-full md:w-auto min-h-11"
                         @click="handleSaveAvailability"
                       >
                         {{ t('common.save', 'Save') }}
@@ -1197,10 +1072,7 @@
                 </div>
 
                 <!-- Display Mode -->
-                <div
-                  v-else
-                  class="flex items-start justify-between"
-                >
+                <div v-else class="flex items-start justify-between">
                   <div class="flex-1">
                     <div class="flex items-center gap-2">
                       <svg
@@ -1248,21 +1120,13 @@
                       {{ availability.note }}
                     </p>
                   </div>
-                  <div
-                    v-if="isDateInFuture(availability.date)"
-                    class="flex gap-2"
-                  >
+                  <div v-if="isDateInFuture(availability.date)" class="flex gap-2 shrink-0">
                     <button
-                      class="text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                      class="p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-0 flex items-center justify-center text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                       :title="t('common.edit', 'Edit')"
                       @click="handleEditAvailability(availability)"
                     >
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
+                      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -1272,16 +1136,11 @@
                       </svg>
                     </button>
                     <button
-                      class="text-danger-600 hover:text-danger-700 dark:text-danger-400"
+                      class="p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-0 flex items-center justify-center text-danger-600 hover:text-danger-700 dark:text-danger-400"
                       :title="t('common.delete')"
                       @click="handleDeleteAvailability(availability.date)"
                     >
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
+                      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -1428,7 +1287,7 @@ const availabilityData = computed((): ParticipantAvailabilitiesResponse | null =
         end_time: participantData.end_time,
         note: participantData.note,
         created_at: '',
-        updated_at: ''
+        updated_at: '',
       })
     }
   }
@@ -1438,9 +1297,11 @@ const availabilityData = computed((): ParticipantAvailabilitiesResponse | null =
       id: participant.value.id || participantId.value,
       name: participant.value.name,
       email: participant.value.email,
-      email_verified: participant.value.email_verified || false
+      email_verified: participant.value.email_verified || false,
     },
-    availabilities: Array.from(availabilitiesMap.values()).sort((a, b) => a.date.localeCompare(b.date))
+    availabilities: Array.from(availabilitiesMap.values()).sort((a, b) =>
+      a.date.localeCompare(b.date)
+    ),
   }
 })
 
@@ -1450,13 +1311,15 @@ const availabilities = computed((): Availability[] => {
   if (!availabilityData.value) return []
 
   const participantInfo = availabilityData.value.participant
-  return availabilityData.value.availabilities.map((item): Availability => ({
-    ...item,
-    participant_id: participantInfo.id,
-    participant_name: participantInfo.name,
-    participant_email: participantInfo.email,
-    participant_email_verified: participantInfo.email_verified
-  }))
+  return availabilityData.value.availabilities.map(
+    (item): Availability => ({
+      ...item,
+      participant_id: participantInfo.id,
+      participant_name: participantInfo.name,
+      participant_email: participantInfo.email,
+      participant_email_verified: participantInfo.email_verified,
+    })
+  )
 })
 
 // Generate an array of month configurations to display
@@ -2194,10 +2057,7 @@ async function handleCalendarDaysSelect(dates: string[]) {
 
   if (datesToAdd.length === 0) {
     toastStore.info(
-      t(
-        'availability.allDatesAlreadyAdded',
-        'All selected dates already have availability'
-      )
+      t('availability.allDatesAlreadyAdded', 'All selected dates already have availability')
     )
     return
   }
@@ -2256,10 +2116,7 @@ async function handleCalendarDaysDeselect(dates: string[]) {
 
   if (datesToRemove.length === 0) {
     toastStore.info(
-      t(
-        'availability.noDatesToRemove',
-        'No availability to remove for selected dates'
-      )
+      t('availability.noDatesToRemove', 'No availability to remove for selected dates')
     )
     return
   }
@@ -2640,7 +2497,7 @@ async function handleCancelFromEmail() {
     // Remove the cancel parameter from URL
     router.replace({
       path: route.path,
-      query: {}
+      query: {},
     })
   } catch (err: any) {
     toastStore.error(err.message || 'Failed to cancel participation')

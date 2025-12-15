@@ -127,25 +127,25 @@
       @touchmove="handleContainerTouchMove"
     >
       <div
-        class="min-w-[800px]"
+        class="min-w-[600px] md:min-w-[800px]"
         @mouseup="handlePointerUp"
         @touchend="handlePointerUp"
         @touchcancel="handlePointerLeave"
       >
         <!-- Header row with days -->
         <div
-          class="sticky top-0 z-10 grid grid-cols-[80px_repeat(7,1fr)] bg-gray-50 dark:bg-gray-800"
+          class="sticky top-0 z-10 grid grid-cols-[60px_repeat(7,1fr)] md:grid-cols-[80px_repeat(7,1fr)] bg-gray-50 dark:bg-gray-800"
           @touchmove="handleHeaderGridTouchMove"
         >
           <!-- Empty corner cell -->
-          <div class="border-b border-r border-gray-200 p-2 dark:border-gray-700" />
+          <div class="border-b border-r border-gray-200 p-1 md:p-2 dark:border-gray-700" />
 
           <!-- Day headers -->
           <div
             v-for="day in weekDays"
             :key="day.dateString"
             :class="[
-              'border-b border-r border-gray-200 p-2 text-center dark:border-gray-700 last:border-r-0 select-none',
+              'border-b border-r border-gray-200 p-1 md:p-2 text-center dark:border-gray-700 last:border-r-0 select-none',
               // Cursor styles
               isDateEnabled(day.date) ? 'cursor-pointer' : 'cursor-not-allowed',
               // Full-day availability indicator
@@ -218,11 +218,11 @@
           <div
             v-for="timeSlot in timeSlots"
             :key="timeSlot.time"
-            class="grid grid-cols-[80px_repeat(7,1fr)]"
+            class="grid grid-cols-[60px_repeat(7,1fr)] md:grid-cols-[80px_repeat(7,1fr)]"
           >
             <!-- Time label -->
             <div
-              class="flex items-center justify-end border-b border-r border-gray-200 pr-2 text-xs text-gray-600 dark:border-gray-700 dark:text-gray-400"
+              class="flex items-center justify-end border-b border-r border-gray-200 pr-1 md:pr-2 text-xs text-gray-600 dark:border-gray-700 dark:text-gray-400"
               :class="{
                 'font-semibold border-t-2 border-t-gray-300 dark:border-t-gray-600':
                   timeSlot.isHourStart,
