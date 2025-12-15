@@ -92,7 +92,6 @@
     "verificationError": "An error occurred during verification. Please try again.",
     "resendVerificationEmail": "Resend verification email",
     "resending": "Sending...",
-    "backToLogin": "Back to login",
     "missingVerificationToken": "No verification token provided.",
     "verificationEmailResent": "A new verification email has been sent to your inbox.",
     "failedToResendEmail": "Failed to resend verification email. Please try again.",

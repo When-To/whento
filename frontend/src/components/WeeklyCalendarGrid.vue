@@ -149,23 +149,34 @@
               // Cursor styles
               isDateEnabled(day.date) ? 'cursor-pointer' : 'cursor-not-allowed',
               // Full-day availability indicator
-              hasFullDayAvailability(day.dateString) && !isHeaderSelected(day.dateString) &&
+              hasFullDayAvailability(day.dateString) &&
+                !isHeaderSelected(day.dateString) &&
                 'bg-primary-500 dark:bg-primary-600 text-white',
               // Hover state when no full-day availability
-              isDateEnabled(day.date) && !hasFullDayAvailability(day.dateString) && !isHeaderSelected(day.dateString) &&
+              isDateEnabled(day.date) &&
+                !hasFullDayAvailability(day.dateString) &&
+                !isHeaderSelected(day.dateString) &&
                 'hover:bg-primary-50 dark:hover:bg-primary-900/20',
               // Holiday borders
-              day.isHoliday && !isHeaderSelected(day.dateString) &&
-                'border-t-2 border-l-2 border-r-2 !border-t-orange-400 !border-l-orange-400 !border-r-orange-400 dark:!border-t-orange-500 dark:!border-l-orange-500 dark:!border-r-orange-500',
+              day.isHoliday &&
+                !isHeaderSelected(day.dateString) &&
+                'border-t-2 border-l-2 border-r-2 border-t-orange-400! border-l-orange-400! border-r-orange-400! dark:border-t-orange-500! dark:border-l-orange-500! dark:border-r-orange-500!',
               !day.isHoliday &&
                 props.allowHolidayEves &&
-                day.isHolidayEve && !isHeaderSelected(day.dateString) &&
-                'border-t-2 border-l-2 border-r-2 !border-t-purple-400 !border-l-purple-400 !border-r-purple-400 dark:!border-t-purple-500 dark:!border-l-purple-500 dark:!border-r-purple-500',
+                day.isHolidayEve &&
+                !isHeaderSelected(day.dateString) &&
+                'border-t-2 border-l-2 border-r-2 border-t-purple-400! border-l-purple-400! border-r-purple-400! dark:border-t-purple-500! dark:border-l-purple-500 dark:border-r-purple-500!',
               // Header drag selection - add mode (yellow)
-              isHeaderDragging && headerDragMode === 'add' && isHeaderSelected(day.dateString) && isDateEnabled(day.date) &&
+              isHeaderDragging &&
+                headerDragMode === 'add' &&
+                isHeaderSelected(day.dateString) &&
+                isDateEnabled(day.date) &&
                 'ring-2 ring-inset ring-yellow-500 bg-yellow-100 dark:bg-yellow-900/30',
               // Header drag selection - remove mode (red)
-              isHeaderDragging && headerDragMode === 'remove' && isHeaderSelected(day.dateString) && isDateEnabled(day.date) &&
+              isHeaderDragging &&
+                headerDragMode === 'remove' &&
+                isHeaderSelected(day.dateString) &&
+                isDateEnabled(day.date) &&
                 'ring-2 ring-inset ring-red-500 bg-red-100 dark:bg-red-900/30',
             ]"
             :title="day.holidayName || undefined"
@@ -178,7 +189,9 @@
             <div
               :class="[
                 'text-xs font-medium',
-                hasFullDayAvailability(day.dateString) && !isHeaderSelected(day.dateString) ? 'text-white' : 'text-gray-900 dark:text-white'
+                hasFullDayAvailability(day.dateString) && !isHeaderSelected(day.dateString)
+                  ? 'text-white'
+                  : 'text-gray-900 dark:text-white',
               ]"
             >
               {{ day.dayName }}
@@ -186,7 +199,9 @@
             <div
               :class="[
                 'text-xs',
-                hasFullDayAvailability(day.dateString) && !isHeaderSelected(day.dateString) ? 'text-white/80' : 'text-gray-600 dark:text-gray-400'
+                hasFullDayAvailability(day.dateString) && !isHeaderSelected(day.dateString)
+                  ? 'text-white/80'
+                  : 'text-gray-600 dark:text-gray-400',
               ]"
             >
               {{ day.dateFormatted }}
@@ -269,11 +284,15 @@
               <!-- Participant count labels (one per segment starting in this cell) -->
               <template v-if="!isSlotSelected(day.dateString, timeSlot.time)">
                 <div
-                  v-for="(fill, fillIndex) in getCellFills(day.dateString, timeSlot.time).filter(f => f.isFirst)"
+                  v-for="(fill, fillIndex) in getCellFills(day.dateString, timeSlot.time).filter(
+                    f => f.isFirst
+                  )"
                   :key="`label-${fillIndex}`"
                   :style="getLabelPositionStyleForFill(fill)"
                   class="z-30"
-                  @mouseenter="handleParticipantCountHoverStart(day.dateString, timeSlot.time, $event)"
+                  @mouseenter="
+                    handleParticipantCountHoverStart(day.dateString, timeSlot.time, $event)
+                  "
                   @mouseleave="handleParticipantCountHoverEnd"
                 >
                   <span
@@ -1250,7 +1269,10 @@ function getCellClasses(
 
     // Holiday borders (only left and right sides) - only when no fill
     'border-l-2 border-r-2 !border-l-orange-400 !border-r-orange-400 dark:!border-l-orange-500 dark:!border-r-orange-500':
-      day.isHoliday && !isDragging.value && !isSlotSelected(day.dateString, timeSlot.time) && !isFullCell,
+      day.isHoliday &&
+      !isDragging.value &&
+      !isSlotSelected(day.dateString, timeSlot.time) &&
+      !isFullCell,
     'border-l-2 border-r-2 !border-l-purple-400 !border-r-purple-400 dark:!border-l-purple-500 dark:!border-r-purple-500':
       !day.isHoliday &&
       props.allowHolidayEves &&
@@ -1275,7 +1297,6 @@ function getCellClasses(
       isDateEnabled(day.date) &&
       isTimeSlotAllowed(day.date, timeSlot.time) &&
       hasAvailability(day.dateString, timeSlot.time),
-
   }
 }
 
@@ -1746,7 +1767,12 @@ function createOrExtendAvailability(
 }
 
 // Pointer handlers for drag selection (mouse + touch)
-function handlePointerDown(dateString: string, time: string, date: Date, event: MouseEvent | TouchEvent) {
+function handlePointerDown(
+  dateString: string,
+  time: string,
+  date: Date,
+  event: MouseEvent | TouchEvent
+) {
   // Don't allow interaction on disabled dates or time slots
   if (!isDateEnabled(date) || !isTimeSlotAllowed(date, time)) {
     return
@@ -2319,8 +2345,8 @@ function handleHeaderPointerUp() {
               operations.push({
                 type: 'create',
                 date: day.dateString,
-                startTime: '',  // Empty means full day
-                endTime: '',    // Empty means full day
+                startTime: '', // Empty means full day
+                endTime: '', // Empty means full day
               })
             } else if (!hasFullDayAvailability(day.dateString)) {
               // Existing availability but not full day - extend to full day
@@ -2329,8 +2355,8 @@ function handleHeaderPointerUp() {
                 date: day.dateString,
                 oldStartTime: existingAvailability.start_time || '00:00',
                 oldEndTime: existingAvailability.end_time || '23:59',
-                startTime: '',  // Empty means full day
-                endTime: '',    // Empty means full day
+                startTime: '', // Empty means full day
+                endTime: '', // Empty means full day
               })
             }
             // If already full-day, skip

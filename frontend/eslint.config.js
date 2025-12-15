@@ -10,6 +10,7 @@ import pluginVue from 'eslint-plugin-vue'
 import tseslint from 'typescript-eslint'
 import vueParser from 'vue-eslint-parser'
 import globals from 'globals'
+import eslintConfigPrettier from 'eslint-config-prettier'
 
 export default [
   // Ignore patterns (replaces .eslintignore)
@@ -69,5 +70,9 @@ export default [
         ...globals.node
       }
     }
-  }
+  },
+
+  // Prettier config - MUST be last to disable conflicting ESLint rules
+  // @ts-expect-error - eslintConfigPrettier is used in the config array
+  eslintConfigPrettier
 ]

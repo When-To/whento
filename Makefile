@@ -86,7 +86,7 @@ test:
 # Building
 build:
 	@echo "Building WhenTo Frontend ($(BUILD_TYPE) mode)..."
-	@rm -R web/dist/*
+	@rm -R web/dist/* || mkdir -p web/dist
 	@(cd frontend && npm run build:$(BUILD_TYPE))
 	@cp -R frontend/dist/* web/dist/
 	@echo "Building WhenTo unified binary ($(BUILD_TYPE) mode)..."

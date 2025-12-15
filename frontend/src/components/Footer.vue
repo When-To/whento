@@ -12,7 +12,7 @@
         <div class="space-y-4">
           <div class="flex items-center space-x-2">
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 text-white font-bold"
+              class="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-primary-500 to-primary-600 text-white font-bold"
             >
               W
             </div>
@@ -102,10 +102,7 @@
         </div>
 
         <!-- Legal (Cloud only) -->
-        <div
-          v-if="isCloud"
-          class="space-y-4"
-        >
+        <div v-if="isCloud" class="space-y-4">
           <h3 class="font-semibold text-gray-900 dark:text-white">
             {{ t('footer.legal') }}
           </h3>
