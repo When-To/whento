@@ -92,7 +92,6 @@
     "verificationError": "Une erreur s'est produite lors de la vérification. Veuillez réessayer.",
     "resendVerificationEmail": "Renvoyer l'email de vérification",
     "resending": "Envoi en cours...",
-    "backToLogin": "Retour à la connexion",
     "missingVerificationToken": "Aucun jeton de vérification fourni.",
     "verificationEmailResent": "Un nouvel email de vérification a été envoyé à votre boîte de réception.",
     "failedToResendEmail": "Échec de l'envoi de l'email de vérification. Veuillez réessayer.",

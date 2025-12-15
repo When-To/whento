@@ -1326,6 +1326,7 @@ import { clearHolidaysCache } from '@/composables/useDateValidation'
 import { addParticipantEmail, resendVerificationEmail } from '@/api/notify'
 import type {
   Availability,
+  AvailabilityItem,
   RecurrenceWithExceptions,
   CreateAvailabilityRequest,
   CreateRecurrenceRequest,
@@ -1346,7 +1347,6 @@ const token = computed(() => route.params.token as string)
 const participantId = computed(() => route.params.participantId as string)
 
 const loading = ref(false)
-const availabilityData = ref<ParticipantAvailabilitiesResponse | null>(null)
 const recurrences = ref<RecurrenceWithExceptions[]>([])
 const participantCounts = ref<Record<string, number>>({})
 const dateSummaries = ref<DateAvailabilitySummary[]>([])
@@ -1385,22 +1385,48 @@ const notificationsEnabled = computed(() => {
 })
 
 const calendar = computed(() => calendarStore.currentCalendar)
+
+// Get participant info from calendar (includes email from API call with participant_id param)
 const participant = computed(() => {
-  // If we have availability data with participant info, use it (includes email)
-  if (availabilityData.value) {
-    const participantInfo = availabilityData.value.participant
-    return {
-      id: participantInfo.id,
-      name: participantInfo.name,
-      email: participantInfo.email,
-      email_verified: participantInfo.email_verified,
-      calendar_id: calendar.value?.id || '',
-      created_at: ''
+  return calendar.value?.participants.find(p => p.id === participantId.value)
+})
+
+// Extract current participant's availabilities from dateSummaries (all participants data)
+// This replaces the need for a separate API call to /participant/{id}
+const availabilityData = computed((): ParticipantAvailabilitiesResponse | null => {
+  if (!dateSummaries.value || !participant.value) return null
+
+  const participantName = participant.value.name
+
+  // Extract availabilities for the current participant across all dates
+  const availabilitiesMap = new Map<string, AvailabilityItem>()
+
+  for (const summary of dateSummaries.value) {
+    const participantData = summary.participants.find(p => p.participant_name === participantName)
+
+    if (participantData) {
+      // Create a unique availability entry for this date
+      availabilitiesMap.set(summary.date, {
+        id: `${participantId.value}-${summary.date}`, // Generate stable ID
+        date: summary.date,
+        start_time: participantData.start_time,
+        end_time: participantData.end_time,
+        note: participantData.note,
+        created_at: '',
+        updated_at: ''
+      })
     }
   }
 
-  // Fall back to calendar participant if availabilities not yet loaded
-  return calendar.value?.participants.find(p => p.id === participantId.value)
+  return {
+    participant: {
+      id: participant.value.id || participantId.value,
+      name: participant.value.name,
+      email: participant.value.email,
+      email_verified: participant.value.email_verified || false
+    },
+    availabilities: Array.from(availabilitiesMap.values()).sort((a, b) => a.date.localeCompare(b.date))
+  }
 })
 
 // Computed availabilities array for compatibility with existing code
@@ -1777,9 +1803,8 @@ async function loadCalendar() {
     weekStart.setHours(0, 0, 0, 0)
     currentWeekStartDate.value = weekStart
 
-    // Load availabilities, recurrences, and participant counts
+    // Load recurrences and participant counts (which includes all participants' availabilities)
     await Promise.all([
-      loadAvailabilities(),
       loadRecurrences(),
       loadParticipantCounts(displayedYear.value, displayedMonth.value),
     ])
@@ -1790,41 +1815,6 @@ async function loadCalendar() {
     router.push('/')
   } finally {
     loading.value = false
-  }
-}
-
-async function loadAvailabilities() {
-  try {
-    // Calculate date range based on display mode
-    let startDate: Date
-    let endDate: Date
-
-    if (displayMode.value === 'week') {
-      startDate = new Date(currentWeekStartDate.value)
-      endDate = new Date(currentWeekStartDate.value)
-      endDate.setDate(endDate.getDate() + numberOfPeriods.value * 7 - 1)
-    } else {
-      const now = new Date()
-      const targetYear = displayedYear.value ?? now.getFullYear()
-      const targetMonth = displayedMonth.value ?? now.getMonth()
-
-      startDate = new Date(targetYear, targetMonth, 1)
-      endDate = new Date(targetYear, targetMonth + numberOfPeriods.value, 0)
-    }
-
-    const startStr = formatDateForAPI(startDate)
-    const endStr = formatDateForAPI(endDate)
-
-    const result = await availabilitiesApi.getByParticipant(
-      token.value,
-      participantId.value,
-      startStr,
-      endStr
-    )
-    availabilityData.value = result
-  } catch (err: any) {
-    console.error('Failed to load availabilities:', err)
-    availabilityData.value = null
   }
 }
 
@@ -1890,10 +1880,7 @@ async function handleDeleteAvailability(date: string) {
 
   try {
     await availabilitiesApi.delete(token.value, participantId.value, date)
-    await Promise.all([
-      loadAvailabilities(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ])
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
   } catch (err: any) {
     toastStore.error(err.message || 'Failed to delete availability')
   }
@@ -2046,8 +2033,7 @@ async function handleSaveAvailability() {
     editingAvailability.end_time = ''
     editingAvailability.note = ''
 
-    // Reload availabilities
-    await loadAvailabilities()
+    // Participant counts will be automatically reloaded, which updates availabilityData
   } catch (err: any) {
     toastStore.error(err.message || 'Failed to update availability')
   }
@@ -2147,10 +2133,7 @@ async function handleCalendarDayClick(dateString: string) {
     // If it exists, delete it directly without confirmation
     try {
       await availabilitiesApi.delete(token.value, participantId.value, dateString)
-      await Promise.all([
-        loadAvailabilities(),
-        loadParticipantCounts(displayedYear.value, displayedMonth.value),
-      ])
+      await loadParticipantCounts(displayedYear.value, displayedMonth.value)
     } catch (err: any) {
       toastStore.error(err.message || 'Failed to delete availability')
     }
@@ -2174,11 +2157,8 @@ async function handleCalendarDayClick(dateString: string) {
 
     await availabilitiesApi.create(token.value, participantId.value, data)
 
-    // Reload availabilities and participant counts
-    await Promise.all([
-      loadAvailabilities(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ])
+    // Reload participant counts (which includes all participants' availabilities)
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
   } catch (err: any) {
     // Check for specific error codes
     if (err.code === 'CONFLICT') {
@@ -2247,11 +2227,8 @@ async function handleCalendarDaysSelect(dates: string[]) {
     toastStore.warning(`${succeeded} availability(ies) added, ${failed} failed`)
   }
 
-  // Always reload availabilities and participant counts
-  await Promise.all([
-    loadAvailabilities(),
-    loadParticipantCounts(displayedYear.value, displayedMonth.value),
-  ])
+  // Always reload participant counts (which includes all participants' availabilities)
+  await loadParticipantCounts(displayedYear.value, displayedMonth.value)
 
   addingAvailability.value = false
 }
@@ -2300,11 +2277,8 @@ async function handleCalendarDaysDeselect(dates: string[]) {
     toastStore.warning(`${succeeded} availability(ies) removed, ${failed} failed`)
   }
 
-  // Always reload availabilities and participant counts
-  await Promise.all([
-    loadAvailabilities(),
-    loadParticipantCounts(displayedYear.value, displayedMonth.value),
-  ])
+  // Always reload participant counts (which includes all participants' availabilities)
+  await loadParticipantCounts(displayedYear.value, displayedMonth.value)
 
   addingAvailability.value = false
 }
@@ -2395,11 +2369,8 @@ async function handleWeeklyAvailabilityCreate(date: string, startTime: string, e
 
     await availabilitiesApi.create(token.value, participantId.value, data)
 
-    // Reload availabilities
-    await Promise.all([
-      loadAvailabilities(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ])
+    // Reload participant counts (which includes all participants' availabilities)
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
 
     toastStore.success(t('availability.created', 'Availability created'))
   } catch (err: any) {
@@ -2416,11 +2387,8 @@ async function handleWeeklyAvailabilityDelete(date: string, _startTime: string, 
   try {
     await availabilitiesApi.delete(token.value, participantId.value, date)
 
-    // Reload availabilities
-    await Promise.all([
-      loadAvailabilities(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ])
+    // Reload participant counts (which includes all participants' availabilities)
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
 
     toastStore.success(t('availability.deleted', 'Availability deleted'))
   } catch (err: any) {
@@ -2443,11 +2411,8 @@ async function handleWeeklyAvailabilityUpdate(
 
     await availabilitiesApi.update(token.value, participantId.value, date, data)
 
-    // Reload availabilities
-    await Promise.all([
-      loadAvailabilities(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ])
+    // Reload participant counts (which includes all participants' availabilities)
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
 
     toastStore.success(t('availability.updated', 'Availability updated'))
   } catch (err: any) {
@@ -2510,19 +2475,13 @@ async function handleBatchOperations(operations: AvailabilityOperation[]) {
     )
   }
 
-  // Always reload availabilities and counts
-  await Promise.all([
-    loadAvailabilities(),
-    loadParticipantCounts(displayedYear.value, displayedMonth.value),
-  ])
+  // Always reload participant counts (which includes all participants' availabilities)
+  await loadParticipantCounts(displayedYear.value, displayedMonth.value)
 }
 
 async function handleAvailabilityUpdated() {
-  // Reload availabilities and participant counts for the displayed date range
-  await Promise.all([
-    loadAvailabilities(),
-    loadParticipantCounts(displayedYear.value, displayedMonth.value),
-  ])
+  // Reload participant counts for the displayed date range (which includes all participants' availabilities)
+  await loadParticipantCounts(displayedYear.value, displayedMonth.value)
 }
 
 // Email notification handlers
@@ -2537,8 +2496,8 @@ async function handleAddEmail() {
     await addParticipantEmail(token.value, participantId.value, emailInput.value.trim())
     toastStore.success(t('notifications.emailSent'))
     emailInput.value = ''
-    // Reload participant data to get updated email info
-    await loadAvailabilities()
+    // Reload calendar to get updated participant email info
+    await calendarStore.fetchPublicCalendar(token.value, participantId.value)
   } catch (error: any) {
     toastStore.error(error.message || t('notifications.emailError'))
   } finally {
@@ -2575,8 +2534,8 @@ async function handleChangeEmail() {
     toastStore.success(t('notifications.emailChanged'))
     newEmailInput.value = ''
     changingEmail.value = false
-    // Reload participant data
-    await loadAvailabilities()
+    // Reload calendar to get updated participant email info
+    await calendarStore.fetchPublicCalendar(token.value, participantId.value)
   } catch (error: any) {
     toastStore.error(error.message || t('notifications.emailError'))
   } finally {
@@ -2658,11 +2617,8 @@ async function handleCancelFromEmail() {
     // Delete the availability for the specified date
     await availabilitiesApi.delete(token.value, participantId.value, cancelDate)
 
-    // Reload availabilities
-    await Promise.all([
-      loadAvailabilities(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ])
+    // Reload participant counts (which includes all participants' availabilities)
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
 
     toastStore.success(`Your participation has been cancelled for ${cancelDate}`)
 

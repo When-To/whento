@@ -16,7 +16,7 @@
         ]"
       >
         <!-- Icon -->
-        <div class="flex-shrink-0">
+        <div class="shrink-0">
           <svg
             v-if="toast.type === 'success'"
             class="h-5 w-5"
@@ -74,7 +74,7 @@
 
         <!-- Close button -->
         <button
-          class="flex-shrink-0 text-current opacity-70 hover:opacity-100 transition-opacity"
+          class="shrink-0 text-current opacity-70 hover:opacity-100 transition-opacity"
           @click="toastStore.removeToast(toast.id)"
         >
           <svg
