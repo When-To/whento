@@ -41,22 +41,22 @@
       <!-- Content -->
       <template v-if="calendar && participant">
         <!-- Header -->
-        <div class="mb-8 flex items-start justify-between">
-          <div>
-            <h1 class="font-display text-3xl font-bold text-gray-900 dark:text-white">
+        <div class="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div class="flex-1">
+            <h1 class="font-display text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
               {{ calendar.name }}
             </h1>
-            <p class="mt-2 text-lg text-gray-600 dark:text-gray-400">
+            <p class="mt-2 text-base md:text-lg text-gray-600 dark:text-gray-400">
               {{ participant.name }}
             </p>
           </div>
           <button
             v-if="!calendar?.lock_participants"
-            class="btn btn-ghost"
+            class="btn btn-ghost w-full md:w-auto min-h-[44px] md:min-h-0"
             @click="handleChangeParticipant"
           >
             <svg
-              class="mr-2 h-5 w-5"
+              class="mr-2 h-5 w-5 shrink-0"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -287,77 +287,92 @@
 
         <!-- Calendar View -->
         <div class="card mb-6">
-          <div class="flex items-center justify-between mb-4">
-            <div>
-              <h2 class="font-display text-xl font-semibold text-gray-900 dark:text-white">
-                {{ t('calendar.calendar', 'Calendar') }}
-                <span
-                  v-if="calendarDateRangeText"
-                  class="text-base font-normal text-gray-600 dark:text-gray-400"
-                >
-                  {{ calendarDateRangeText }}
-                </span>
-              </h2>
-              <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                {{
-                  t(
-                    'availability.clickOrDragToAdd',
-                    'Click on a date to add your availability, or drag to select multiple days'
-                  )
-                }}
-              </p>
-            </div>
-            <!-- Display mode and count selectors -->
-            <div class="flex items-center gap-4">
-              <!-- Display mode selector -->
-              <div class="flex items-center gap-2">
-                <label
-                  for="displayMode"
-                  class="text-sm text-gray-700 dark:text-gray-300"
-                >
-                  {{ t('calendar.displayMode', 'Display') }}
-                </label>
-                <select
-                  id="displayMode"
-                  v-model="displayMode"
-                  class="input text-sm w-32"
-                >
-                  <option value="month">
-                    {{ t('calendar.monthView', 'Month') }}
-                  </option>
-                  <option value="week">
-                    {{ t('calendar.weekView', 'Week') }}
-                  </option>
-                </select>
+          <!-- Mobile: Stacked layout with collapsible controls -->
+          <div class="mb-4">
+            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <!-- Title and description -->
+              <div class="flex-1">
+                <h2 class="font-display text-xl font-semibold text-gray-900 dark:text-white">
+                  {{ t('calendar.calendar', 'Calendar') }}
+                  <span
+                    v-if="calendarDateRangeText"
+                    class="text-base font-normal text-gray-600 dark:text-gray-400 block md:inline mt-1 md:mt-0"
+                  >
+                    {{ calendarDateRangeText }}
+                  </span>
+                </h2>
+                <p class="mt-2 text-sm text-gray-600 dark:text-gray-400 hidden md:block">
+                  {{
+                    t(
+                      'availability.clickOrDragToAdd',
+                      'Click on a date to add your availability, or drag to select multiple days'
+                    )
+                  }}
+                </p>
               </div>
 
-              <!-- Period count selector -->
-              <div class="flex items-center gap-2">
-                <label
-                  for="periodCount"
-                  class="text-sm text-gray-700 dark:text-gray-300"
-                >
-                  {{
-                    displayMode === 'week'
-                      ? t('calendar.numberOfWeeks', 'Number of weeks to display')
-                      : t('calendar.numberOfMonths')
-                  }}
-                </label>
-                <select
-                  id="periodCount"
-                  v-model.number="numberOfPeriods"
-                  class="input text-sm w-20"
-                >
-                  <option
-                    v-for="n in displayMode === 'week' ? 4 : 12"
-                    :key="n"
-                    :value="n"
+              <!-- Controls: Responsive layout -->
+              <div class="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+                <!-- Display mode selector -->
+                <div class="flex items-center gap-2">
+                  <label
+                    for="displayMode"
+                    class="text-sm text-gray-700 dark:text-gray-300 shrink-0"
                   >
-                    {{ n }}
-                  </option>
-                </select>
+                    {{ t('calendar.displayMode', 'Display') }}
+                  </label>
+                  <select
+                    id="displayMode"
+                    v-model="displayMode"
+                    class="input text-sm flex-1 md:w-32 min-h-[44px] md:min-h-0"
+                  >
+                    <option value="month">
+                      {{ t('calendar.monthView', 'Month') }}
+                    </option>
+                    <option value="week">
+                      {{ t('calendar.weekView', 'Week') }}
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Period count selector -->
+                <div class="flex items-center gap-2">
+                  <label
+                    for="periodCount"
+                    class="text-sm text-gray-700 dark:text-gray-300 shrink-0"
+                  >
+                    {{
+                      displayMode === 'week'
+                        ? t('calendar.numberOfWeeks', 'Number of weeks')
+                        : t('calendar.numberOfMonths', 'Number of months')
+                    }}
+                  </label>
+                  <select
+                    id="periodCount"
+                    v-model.number="numberOfPeriods"
+                    class="input text-sm flex-1 md:w-20 min-h-[44px] md:min-h-0"
+                  >
+                    <option
+                      v-for="n in displayMode === 'week' ? 4 : 12"
+                      :key="n"
+                      :value="n"
+                    >
+                      {{ n }}
+                    </option>
+                  </select>
+                </div>
               </div>
             </div>
+
+            <!-- Mobile instruction text (below controls) -->
+            <p class="mt-3 text-sm text-gray-600 dark:text-gray-400 md:hidden">
+              {{
+                t(
+                  'availability.clickOrDragToAdd',
+                  'Click on a date to add your availability, or drag to select multiple days'
+                )
+              }}
+            </p>
           </div>
 
           <!-- Calendar grids - Display months vertically (month view) -->

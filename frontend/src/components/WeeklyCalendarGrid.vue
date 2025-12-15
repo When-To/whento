@@ -7,16 +7,16 @@
 <template>
   <div class="weekly-calendar-grid">
     <!-- Week navigation -->
-    <div class="mb-4 grid grid-cols-3 items-center">
+    <div class="mb-4 grid grid-cols-3 items-center gap-2">
       <div class="flex justify-start">
         <button
           v-if="showNavigation"
-          class="btn btn-ghost btn-sm"
+          class="btn btn-ghost btn-sm md:btn-sm min-h-[44px] md:min-h-0 px-3"
           :title="t('calendar.previousWeek', 'Previous week')"
           @click="previousWeek"
         >
           <svg
-            class="h-5 w-5"
+            class="h-6 w-6 md:h-5 md:w-5"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -31,19 +31,19 @@
         </button>
       </div>
 
-      <h3 class="text-lg font-semibold text-gray-900 dark:text-white text-center">
+      <h3 class="text-base md:text-lg font-semibold text-gray-900 dark:text-white text-center px-2">
         {{ weekRangeText }}
       </h3>
 
       <div class="flex justify-end">
         <button
           v-if="showNavigation"
-          class="btn btn-ghost btn-sm"
+          class="btn btn-ghost btn-sm md:btn-sm min-h-[44px] md:min-h-0 px-3"
           :title="t('calendar.nextWeek', 'Next week')"
           @click="nextWeek"
         >
           <svg
-            class="h-5 w-5"
+            class="h-6 w-6 md:h-5 md:w-5"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -62,19 +62,19 @@
     <!-- Time range and slot duration controls -->
     <div
       v-if="showTimeControls"
-      class="mb-4 flex items-center gap-4 flex-wrap"
+      class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3"
     >
       <div class="flex items-center gap-2">
         <label
           for="startHour"
-          class="text-sm text-gray-700 dark:text-gray-300"
+          class="text-sm text-gray-700 dark:text-gray-300 shrink-0 w-20 md:w-auto"
         >
           {{ t('calendar.startHour', 'Start hour') }}
         </label>
         <TimeSelect
           id="startHour"
           v-model="startHourTime"
-          class="input text-sm w-24"
+          class="input text-sm flex-1 md:w-24 min-h-[44px] md:min-h-0"
           :max="endHourTime"
           :round-interval="slotDuration as 15 | 30 | 60 | undefined"
         />
@@ -83,14 +83,14 @@
       <div class="flex items-center gap-2">
         <label
           for="endHour"
-          class="text-sm text-gray-700 dark:text-gray-300"
+          class="text-sm text-gray-700 dark:text-gray-300 shrink-0 w-20 md:w-auto"
         >
           {{ t('calendar.endHour', 'End hour') }}
         </label>
         <TimeSelect
           id="endHour"
           v-model="endHourTime"
-          class="input text-sm w-24"
+          class="input text-sm flex-1 md:w-24 min-h-[44px] md:min-h-0"
           :min="startHourTime"
           :round-interval="slotDuration as 15 | 30 | 60 | undefined"
         />
@@ -99,14 +99,14 @@
       <div class="flex items-center gap-2">
         <label
           for="slotDuration"
-          class="text-sm text-gray-700 dark:text-gray-300"
+          class="text-sm text-gray-700 dark:text-gray-300 shrink-0 w-20 md:w-auto"
         >
           {{ t('calendar.slotDuration', 'Slot duration') }}
         </label>
         <select
           id="slotDuration"
           v-model.number="slotDuration"
-          class="input text-sm w-28"
+          class="input text-sm flex-1 md:w-28 min-h-[44px] md:min-h-0"
         >
           <option :value="15">
             15 min
