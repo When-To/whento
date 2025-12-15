@@ -15,12 +15,7 @@
           :title="t('calendar.previousWeek', 'Previous week')"
           @click="previousWeek"
         >
-          <svg
-            class="h-6 w-6 md:h-5 md:w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
+          <svg class="h-6 w-6 md:h-5 md:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -42,12 +37,7 @@
           :title="t('calendar.nextWeek', 'Next week')"
           @click="nextWeek"
         >
-          <svg
-            class="h-6 w-6 md:h-5 md:w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
+          <svg class="h-6 w-6 md:h-5 md:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -56,68 +46,6 @@
             />
           </svg>
         </button>
-      </div>
-    </div>
-
-    <!-- Time range and slot duration controls -->
-    <div
-      v-if="showTimeControls"
-      class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3"
-    >
-      <div class="flex items-center gap-2">
-        <label
-          for="startHour"
-          class="text-sm text-gray-700 dark:text-gray-300 shrink-0 w-20 md:w-auto"
-        >
-          {{ t('calendar.startHour', 'Start hour') }}
-        </label>
-        <TimeSelect
-          id="startHour"
-          v-model="startHourTime"
-          class="input text-sm flex-1 md:w-24 min-h-[44px] md:min-h-0"
-          :max="endHourTime"
-          :round-interval="slotDuration as 15 | 30 | 60 | undefined"
-        />
-      </div>
-
-      <div class="flex items-center gap-2">
-        <label
-          for="endHour"
-          class="text-sm text-gray-700 dark:text-gray-300 shrink-0 w-20 md:w-auto"
-        >
-          {{ t('calendar.endHour', 'End hour') }}
-        </label>
-        <TimeSelect
-          id="endHour"
-          v-model="endHourTime"
-          class="input text-sm flex-1 md:w-24 min-h-[44px] md:min-h-0"
-          :min="startHourTime"
-          :round-interval="slotDuration as 15 | 30 | 60 | undefined"
-        />
-      </div>
-
-      <div class="flex items-center gap-2">
-        <label
-          for="slotDuration"
-          class="text-sm text-gray-700 dark:text-gray-300 shrink-0 w-20 md:w-auto"
-        >
-          {{ t('calendar.slotDuration', 'Slot duration') }}
-        </label>
-        <select
-          id="slotDuration"
-          v-model.number="slotDuration"
-          class="input text-sm flex-1 md:w-28 min-h-[44px] md:min-h-0"
-        >
-          <option :value="15">
-            15 min
-          </option>
-          <option :value="30">
-            30 min
-          </option>
-          <option :value="60">
-            60 min
-          </option>
-        </select>
       </div>
     </div>
 
@@ -210,10 +138,7 @@
         </div>
 
         <!-- Time slots grid -->
-        <div
-          class="relative"
-          @touchmove="handleGridTouchMove"
-        >
+        <div class="relative" @touchmove="handleGridTouchMove">
           <!-- Time labels and slots -->
           <div
             v-for="timeSlot in timeSlots"
@@ -262,9 +187,9 @@
               <div
                 v-if="
                   cellStyles[`${day.dateString}:${timeSlot.time}`]?.threshold &&
-                    !hasPartialThreshold(day.dateString, timeSlot.time) &&
-                    !isDragging &&
-                    !isSlotSelected(day.dateString, timeSlot.time)
+                  !hasPartialThreshold(day.dateString, timeSlot.time) &&
+                  !isDragging &&
+                  !isSlotSelected(day.dateString, timeSlot.time)
                 "
                 class="absolute inset-0 pointer-events-none z-20"
                 :style="getThresholdBorderStyle(day.dateString, timeSlot.time)"
@@ -274,8 +199,8 @@
               <div
                 v-if="
                   hasPartialThreshold(day.dateString, timeSlot.time) &&
-                    !isDragging &&
-                    !isSlotSelected(day.dateString, timeSlot.time)
+                  !isDragging &&
+                  !isSlotSelected(day.dateString, timeSlot.time)
                 "
                 :style="getThresholdIndicatorStyle(day.dateString, timeSlot.time)"
                 class="z-20"
@@ -300,8 +225,12 @@
                     @click.stop="handleParticipantCountClick(day.dateString, timeSlot.time, $event)"
                     @mousedown.stop
                   >
-                    <span class="lg:hidden">{{ fill.count }} {{ t('calendar.participantShort', 'part.') }}</span>
-                    <span class="hidden lg:inline">{{ fill.count }} {{ t('calendar.participantCount', 'participant(s)') }}</span>
+                    <span class="lg:hidden"
+                      >{{ fill.count }} {{ t('calendar.participantShort', 'part.') }}</span
+                    >
+                    <span class="hidden lg:inline"
+                      >{{ fill.count }} {{ t('calendar.participantCount', 'participant(s)') }}</span
+                    >
                   </span>
                 </div>
               </template>
@@ -336,14 +265,64 @@
         />
         <span>{{ t('calendar.publicHoliday', 'Public holiday') }}</span>
       </div>
-      <div
-        v-if="props.allowHolidayEves"
-        class="flex items-center gap-2"
-      >
+      <div v-if="props.allowHolidayEves" class="flex items-center gap-2">
         <div
           class="h-4 w-4 rounded border border-gray-300 ring-1 ring-purple-400 dark:border-gray-600 dark:ring-purple-500"
         />
         <span>{{ t('calendar.holidayEve', 'Holiday eve') }}</span>
+      </div>
+
+      <!-- Time range and slot duration controls -->
+      <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="flex items-center gap-2">
+          <label
+            for="startHour"
+            class="text-sm text-gray-700 dark:text-gray-300 shrink-0 w-20 md:w-auto"
+          >
+            {{ t('calendar.startHour', 'Start hour') }}
+          </label>
+          <TimeSelect
+            id="startHour"
+            v-model="startHourTime"
+            class="input text-sm flex-1 md:w-24 min-h-[44px] md:min-h-0"
+            :max="endHourTime"
+            :round-interval="slotDuration as 15 | 30 | 60 | undefined"
+          />
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label
+            for="endHour"
+            class="text-sm text-gray-700 dark:text-gray-300 shrink-0 w-20 md:w-auto"
+          >
+            {{ t('calendar.endHour', 'End hour') }}
+          </label>
+          <TimeSelect
+            id="endHour"
+            v-model="endHourTime"
+            class="input text-sm flex-1 md:w-24 min-h-[44px] md:min-h-0"
+            :min="startHourTime"
+            :round-interval="slotDuration as 15 | 30 | 60 | undefined"
+          />
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label
+            for="slotDuration"
+            class="text-sm text-gray-700 dark:text-gray-300 shrink-0 w-20 md:w-auto"
+          >
+            {{ t('calendar.slotDuration', 'Slot duration') }}
+          </label>
+          <select
+            id="slotDuration"
+            v-model.number="slotDuration"
+            class="input text-sm flex-1 md:w-28 min-h-[44px] md:min-h-0"
+          >
+            <option :value="15">15 min</option>
+            <option :value="30">30 min</option>
+            <option :value="60">60 min</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -369,12 +348,7 @@
             class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             @click="closeParticipantPopup"
           >
-            <svg
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -385,10 +359,7 @@
           </button>
         </div>
 
-        <div
-          v-if="loadingDetails"
-          class="text-center py-8"
-        >
+        <div v-if="loadingDetails" class="text-center py-8">
           <div
             class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary-600 border-r-transparent"
           />
@@ -546,12 +517,7 @@
                     startEdit(participant.note || '', participant.start_time, participant.end_time)
                   "
                 >
-                  <svg
-                    class="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -565,10 +531,7 @@
           </div>
         </div>
 
-        <div
-          v-else
-          class="text-center py-8"
-        >
+        <div v-else class="text-center py-8">
           <p class="text-sm text-gray-600 dark:text-gray-400">
             {{ t('availability.noAvailabilities', 'No availabilities') }}
           </p>
@@ -730,6 +693,36 @@ watch(endHourTime, newValue => {
 watch(slotDuration, newValue => {
   emit('settings-change', { slotDuration: newValue })
 })
+
+// Watch props to sync local state when parent updates (for multiple grid instances)
+watch(
+  () => props.initialStartHour,
+  newValue => {
+    const newTimeString = decimalHourToTimeString(newValue)
+    if (startHourTime.value !== newTimeString) {
+      startHourTime.value = newTimeString
+    }
+  }
+)
+
+watch(
+  () => props.initialEndHour,
+  newValue => {
+    const newTimeString = newValue === 24 ? '00:00' : decimalHourToTimeString(newValue)
+    if (endHourTime.value !== newTimeString) {
+      endHourTime.value = newTimeString
+    }
+  }
+)
+
+watch(
+  () => props.initialSlotDuration,
+  newValue => {
+    if (slotDuration.value !== newValue) {
+      slotDuration.value = newValue
+    }
+  }
+)
 
 // Calculate initial week start date
 function getWeekStartDate(year: number, month: number, week: number): Date {
