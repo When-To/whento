@@ -7,15 +7,15 @@
 <template>
   <div class="calendar-grid">
     <!-- Month Navigation -->
-    <div class="mb-4 flex items-center justify-between">
+    <div class="mb-4 flex items-center justify-between gap-2">
       <button
         v-if="props.showNavigation !== false"
-        class="btn btn-ghost p-2"
+        class="btn btn-ghost p-2 md:p-2 min-h-[44px] md:min-h-0 min-w-[44px] md:min-w-0"
         :title="t('calendar.previousMonth', 'Previous month')"
         @click="previousMonth"
       >
         <svg
-          class="h-5 w-5"
+          class="h-6 w-6 md:h-5 md:w-5"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -30,21 +30,21 @@
       </button>
       <div
         v-else
-        class="w-10"
+        class="w-11 md:w-10"
       />
 
-      <h3 class="font-display text-lg font-semibold text-gray-900 dark:text-white">
+      <h3 class="font-display text-base md:text-lg font-semibold text-gray-900 dark:text-white text-center flex-1 px-2">
         {{ currentMonthLabel }}
       </h3>
 
       <button
         v-if="props.showNavigation !== false"
-        class="btn btn-ghost p-2"
+        class="btn btn-ghost p-2 md:p-2 min-h-[44px] md:min-h-0 min-w-[44px] md:min-w-0"
         :title="t('calendar.nextMonth', 'Next month')"
         @click="nextMonth"
       >
         <svg
-          class="h-5 w-5"
+          class="h-6 w-6 md:h-5 md:w-5"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -59,7 +59,7 @@
       </button>
       <div
         v-else
-        class="w-10"
+        class="w-11 md:w-10"
       />
     </div>
 
