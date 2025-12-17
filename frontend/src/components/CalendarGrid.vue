@@ -77,20 +77,6 @@
                 class="calendar-cell"
                 :data-cell-index="(weekIndex - 1) * 7 + dayOfWeekIndex"
                 :style="{ width: compactCellWidth, minWidth: compactCellWidth, maxWidth: compactCellWidth }"
-                v-memo="[
-                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.hasAvailability,
-                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.hasRecurrence,
-                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.meetsThreshold,
-                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isToday,
-                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isPast,
-                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isAllowed,
-                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isHoliday,
-                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isHolidayEve,
-                  isCellSelected((weekIndex - 1) * 7 + dayOfWeekIndex),
-                  isDragging,
-                  dragMode,
-                  getParticipantCount(calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.dateString || ''),
-                ]"
                 :class="[
                   'relative min-h-24 md:min-h-20 rounded-lg border p-3 md:p-2 transition-all',
                   !calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth
@@ -343,24 +329,10 @@
           @touchcancel="handlePointerLeave"
         >
           <div
-            class="calendar-cell"
-            :data-cell-index="index"
             v-for="(day, index) in calendarDays"
             :key="`${day.date}-${day.isCurrentMonth}`"
-            v-memo="[
-              day.hasAvailability,
-              day.hasRecurrence,
-              day.meetsThreshold,
-              day.isToday,
-              day.isPast,
-              day.isAllowed,
-              day.isHoliday,
-              day.isHolidayEve,
-              isCellSelected(index),
-              isDragging,
-              dragMode,
-              getParticipantCount(day.dateString),
-            ]"
+            class="calendar-cell"
+            :data-cell-index="index"
             :class="[
               'relative min-h-24 md:min-h-20 rounded-lg border p-3 md:p-2 transition-all',
               !day.isCurrentMonth
