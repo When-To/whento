@@ -25,11 +25,22 @@
       </button>
       <div v-else class="w-11 md:w-10" />
 
-      <h3
-        class="font-display text-base md:text-lg font-semibold text-gray-900 dark:text-white text-center flex-1 px-2"
-      >
-        {{ currentMonthLabel }}
-      </h3>
+      <div class="flex flex-col items-center gap-1 flex-1 px-2">
+        <h3
+          class="font-display text-base md:text-lg font-semibold text-gray-900 dark:text-white text-center"
+        >
+          {{ currentMonthLabel }}
+        </h3>
+        <!-- View mode selector (only shown for first month) -->
+        <select
+          v-if="props.showNavigation !== false"
+          v-model="viewMode"
+          class="text-xs md:text-sm px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
+        >
+          <option value="classic">{{ t('calendar.viewClassic') }}</option>
+          <option value="compact">{{ t('calendar.viewCompact') }}</option>
+        </select>
+      </div>
 
       <button
         v-if="props.showNavigation !== false"
@@ -45,22 +56,286 @@
     </div>
 
     <!-- Calendar wrapper with horizontal scroll on mobile -->
-    <div class="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
-      <div class="min-w-[525px] md:min-w-0">
-        <!-- Weekday Headers -->
-        <div class="mb-2 grid grid-cols-7 gap-1.5 md:gap-1">
-          <div
-            v-for="day in weekDays"
-            :key="day"
-            class="text-center text-xs md:text-xs font-medium text-gray-600 dark:text-gray-400 py-1"
-          >
-            {{ day }}
-          </div>
+    <div :class="isCompactMode ? 'overflow-x-auto' : 'overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0'">
+      <div :class="isCompactMode ? 'min-w-fit' : 'min-w-[525px] md:min-w-0'">
+        <!-- Compact Mode Layout: N columns (weeks) × 7 rows (days) -->
+        <div
+          v-if="isCompactMode"
+          ref="compactGridContainer"
+          class="calendar-grid-container grid gap-1.5"
+          :style="{ gridTemplateColumns: `repeat(${numWeeks}, 1fr)` }"
+          @mouseleave="handlePointerLeave"
+          @mouseup="handlePointerUp"
+          @touchend="handlePointerUp"
+          @touchmove="handleGridTouchMove"
+          @touchcancel="handlePointerLeave"
+        >
+          <template v-for="(_dayOfWeekLabel, dayOfWeekIndex) in weekDays" :key="dayOfWeekIndex">
+            <!-- Week cells for this day of week -->
+            <template v-for="weekIndex in numWeeks" :key="`${dayOfWeekIndex}-${weekIndex}`">
+              <div
+                class="calendar-cell"
+                :data-cell-index="(weekIndex - 1) * 7 + dayOfWeekIndex"
+                :style="{ width: compactCellWidth, minWidth: compactCellWidth, maxWidth: compactCellWidth }"
+                v-memo="[
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.hasAvailability,
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.hasRecurrence,
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.meetsThreshold,
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isToday,
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isPast,
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isAllowed,
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isHoliday,
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isHolidayEve,
+                  isCellSelected((weekIndex - 1) * 7 + dayOfWeekIndex),
+                  isDragging,
+                  dragMode,
+                  getParticipantCount(calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.dateString || ''),
+                ]"
+                :class="[
+                  'relative min-h-24 md:min-h-20 rounded-lg border p-3 md:p-2 transition-all',
+                  !calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth
+                    ? 'border-transparent'
+                    : calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth &&
+                        !calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isPast &&
+                        calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isAllowed
+                      ? 'cursor-pointer border-gray-200 bg-white hover:border-primary-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-primary-600'
+                      : calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth &&
+                          (calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isPast ||
+                            !calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isAllowed)
+                        ? 'cursor-not-allowed border-gray-200 bg-gray-100 dark:border-gray-700 dark:bg-gray-900 opacity-50'
+                        : 'border-transparent',
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth &&
+                    calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isToday &&
+                    'ring-2 ring-primary-500 ring-offset-1',
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth &&
+                    !calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isPast &&
+                    calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isAllowed &&
+                    calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.meetsThreshold &&
+                    'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700',
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth &&
+                    !calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isPast &&
+                    calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isAllowed &&
+                    !calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.meetsThreshold &&
+                    calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.hasAvailability &&
+                    'bg-primary-50 border-primary-200 dark:bg-primary-900/20 dark:border-primary-700',
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth &&
+                    !calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isPast &&
+                    calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isAllowed &&
+                    !calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.meetsThreshold &&
+                    calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.hasRecurrence &&
+                    !calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.hasAvailability &&
+                    'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700',
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth &&
+                    calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isHoliday &&
+                    'ring-1 ring-orange-400 dark:ring-orange-500',
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth &&
+                    allowHolidayEves &&
+                    calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isHolidayEve &&
+                    'ring-1 ring-purple-400 dark:ring-purple-500',
+                  // Rectangle selection style - add mode (yellow)
+                  isDragging &&
+                    dragMode === 'add' &&
+                    isCellSelected((weekIndex - 1) * 7 + dayOfWeekIndex) &&
+                    canSelectCell(calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]) &&
+                    'ring-2 ring-yellow-500 bg-yellow-100 dark:bg-yellow-900/30',
+                  // Rectangle selection style - remove mode (red)
+                  isDragging &&
+                    dragMode === 'remove' &&
+                    isCellSelected((weekIndex - 1) * 7 + dayOfWeekIndex) &&
+                    canSelectCell(calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]) &&
+                    cellHasAvailability(calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]) &&
+                    'ring-2 ring-red-500 bg-red-100 dark:bg-red-900/30',
+                ]"
+                :title="calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.holidayName || undefined"
+                @mousedown="
+                  handlePointerDown(
+                    (weekIndex - 1) * 7 + dayOfWeekIndex,
+                    calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex],
+                    $event
+                  )
+                "
+                @mousemove="handlePointerMove((weekIndex - 1) * 7 + dayOfWeekIndex)"
+                @mouseup="handlePointerUp"
+                @touchstart="
+                  handlePointerDown(
+                    (weekIndex - 1) * 7 + dayOfWeekIndex,
+                    calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex],
+                    $event
+                  )
+                "
+              >
+                <!-- Only show content for current month days -->
+                <template v-if="calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth">
+                  <!-- Day Number and Participant Count -->
+                  <div class="mb-1 flex flex-col gap-0.5">
+                    <div class="flex items-baseline gap-1">
+                      <span
+                        :class="[
+                          'text-lg md:text-base font-semibold',
+                          calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth
+                            ? calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isToday
+                              ? 'text-primary-600 dark:text-primary-400'
+                              : 'text-gray-900 dark:text-white'
+                            : 'text-gray-400 dark:text-gray-600',
+                        ]"
+                      >
+                        {{ calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.date }}
+                      </span>
+                      <span
+                        :class="[
+                          'text-xs font-normal',
+                          calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth
+                            ? calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isToday
+                              ? 'text-primary-500 dark:text-primary-400'
+                              : 'text-gray-500 dark:text-gray-400'
+                            : 'text-gray-400 dark:text-gray-600',
+                        ]"
+                      >
+                        {{ getDayOfWeek(calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.dateString || '') }}
+                      </span>
+                    </div>
+                    <span
+                      v-if="
+                        getParticipantCount(
+                          calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.dateString || ''
+                        ) >= 1
+                      "
+                      data-no-drag
+                      :class="[
+                        'text-sm md:text-xs font-normal cursor-pointer hover:underline',
+                        calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth
+                          ? 'text-gray-600 dark:text-gray-400'
+                          : 'text-gray-400 dark:text-gray-600',
+                      ]"
+                      @click.stop="
+                        handleParticipantCountClick(
+                          calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.dateString || '',
+                          $event
+                        )
+                      "
+                      @mousedown.stop
+                      @mouseenter="
+                        handleParticipantCountHoverStart(
+                          calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.dateString || '',
+                          $event
+                        )
+                      "
+                      @mouseleave="handleParticipantCountHoverEnd"
+                    >
+                      <span class="lg:hidden"
+                        >{{
+                          getParticipantCount(
+                            calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.dateString || ''
+                          )
+                        }}
+                        {{ t('calendar.participantShort', 'part.') }}</span
+                      >
+                      <span class="hidden lg:inline"
+                        >{{
+                          getParticipantCount(
+                            calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.dateString || ''
+                          )
+                        }}
+                        {{ t('calendar.participantCount', 'participant(s)') }}</span
+                      >
+                    </span>
+                  </div>
+
+                  <!-- Availability Indicator -->
+                  <div
+                    v-if="calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.hasAvailability"
+                    class="mt-1.5 space-y-1"
+                  >
+                    <div
+                      v-for="(avail, idx) in calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]
+                        ?.availabilities"
+                      :key="idx"
+                      :class="[
+                        'rounded-md px-2.5 md:px-1.5 py-2 md:py-0.5 text-base md:text-xs text-white font-bold text-center leading-tight truncate',
+                        calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.meetsThreshold
+                          ? 'bg-green-600 dark:bg-green-500'
+                          : 'bg-primary-600 dark:bg-primary-500',
+                      ]"
+                      :title="formatTimeRange(avail.start_time, avail.end_time)"
+                    >
+                      {{ formatTimeRange(avail.start_time, avail.end_time) }}
+                    </div>
+                  </div>
+
+                  <!-- Recurrence Indicator (only if no explicit availability) -->
+                  <div
+                    v-else-if="calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.hasRecurrence"
+                    class="mt-1.5 space-y-1"
+                  >
+                    <div
+                      :class="[
+                        'flex items-center gap-1 rounded-md px-2.5 md:px-1.5 py-2 md:py-0.5 text-base md:text-xs text-white font-bold leading-tight',
+                        calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.meetsThreshold
+                          ? 'bg-green-500'
+                          : 'bg-blue-500',
+                      ]"
+                      :title="
+                        formatTimeRange(
+                          calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.recurrenceStartTime,
+                          calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.recurrenceEndTime
+                        )
+                      "
+                    >
+                      <span class="flex-1 truncate">
+                        {{
+                          formatTimeRange(
+                            calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.recurrenceStartTime,
+                            calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.recurrenceEndTime
+                          )
+                        }}
+                      </span>
+                      <button
+                        v-if="
+                          calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.recurrenceId &&
+                          !calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isPast
+                        "
+                        data-no-drag
+                        :class="[
+                          'rounded p-1 md:p-0.5 transition-colors shrink-0',
+                          calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.meetsThreshold
+                            ? 'hover:bg-green-600'
+                            : 'hover:bg-blue-600',
+                        ]"
+                        :title="t('availability.addException', 'Add exception')"
+                        @click.stop="
+                          handleAddException(
+                            calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.recurrenceId!,
+                            calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.dateString || ''
+                          )
+                        "
+                        @mousedown.stop
+                      >
+                        <svg
+                          class="h-3.5 w-3.5 md:h-3 md:w-3"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </template>
         </div>
 
-        <!-- Days Grid -->
+        <!-- Classic Mode Layout: 7 columns (days) × N rows (weeks) -->
         <div
-          class="grid grid-cols-7 gap-1.5 md:gap-1"
+          v-else
+          class="calendar-grid-container grid grid-cols-7 gap-1.5 md:gap-1"
           @mouseleave="handlePointerLeave"
           @mouseup="handlePointerUp"
           @touchend="handlePointerUp"
@@ -68,6 +343,8 @@
           @touchcancel="handlePointerLeave"
         >
           <div
+            class="calendar-cell"
+            :data-cell-index="index"
             v-for="(day, index) in calendarDays"
             :key="`${day.date}-${day.isCurrentMonth}`"
             v-memo="[
@@ -141,18 +418,32 @@
             <template v-if="day.isCurrentMonth">
               <!-- Day Number and Participant Count -->
               <div class="mb-1 flex flex-col gap-0.5">
-                <span
-                  :class="[
-                    'text-lg md:text-base font-semibold',
-                    day.isCurrentMonth
-                      ? day.isToday
-                        ? 'text-primary-600 dark:text-primary-400'
-                        : 'text-gray-900 dark:text-white'
-                      : 'text-gray-400 dark:text-gray-600',
-                  ]"
-                >
-                  {{ day.date }}
-                </span>
+                <div class="flex items-baseline gap-1">
+                  <span
+                    :class="[
+                      'text-lg md:text-base font-semibold',
+                      day.isCurrentMonth
+                        ? day.isToday
+                          ? 'text-primary-600 dark:text-primary-400'
+                          : 'text-gray-900 dark:text-white'
+                        : 'text-gray-400 dark:text-gray-600',
+                    ]"
+                  >
+                    {{ day.date }}
+                  </span>
+                  <span
+                    :class="[
+                      'text-xs font-normal',
+                      day.isCurrentMonth
+                        ? day.isToday
+                          ? 'text-primary-500 dark:text-primary-400'
+                          : 'text-gray-500 dark:text-gray-400'
+                        : 'text-gray-400 dark:text-gray-600',
+                    ]"
+                  >
+                    {{ getDayOfWeek(day.dateString) }}
+                  </span>
+                </div>
                 <span
                   v-if="getParticipantCount(day.dateString) >= 1"
                   data-no-drag
@@ -504,7 +795,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { availabilitiesApi } from '@/api/availabilities'
 import type { Availability, RecurrenceWithExceptions } from '@/types'
@@ -586,6 +877,57 @@ const dragStartIndex = ref<number | null>(null)
 const dragCurrentIndex = ref<number | null>(null)
 const dragMode = ref<'add' | 'remove'>('add') // Drag mode: add or remove
 
+// Container ref for observing width
+const compactGridContainer = ref<HTMLElement | null>(null)
+
+// Container width tracking for responsive layout
+const containerWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
+
+// View mode: 'classic' or 'compact'
+// Default to 'compact' on mobile (screen width < 768px), 'classic' on desktop
+const getDefaultViewMode = (): 'classic' | 'compact' => {
+  if (typeof window === 'undefined') return 'classic'
+
+  // Check if user has a saved preference
+  const savedMode = localStorage.getItem('calendar-view-mode') as 'classic' | 'compact' | null
+  if (savedMode) return savedMode
+
+  // Default based on screen size (768px is Tailwind's md breakpoint)
+  return window.innerWidth < 768 ? 'compact' : 'classic'
+}
+
+const viewMode = ref<'classic' | 'compact'>(getDefaultViewMode())
+
+// Save view mode to localStorage when it changes and notify other CalendarGrid instances
+watch(viewMode, newMode => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    localStorage.setItem('calendar-view-mode', newMode)
+    // Dispatch custom event to notify other CalendarGrid instances in the same page
+    window.dispatchEvent(new CustomEvent('calendar-view-mode-change', { detail: newMode }))
+  }
+})
+
+const isCompactMode = computed(() => viewMode.value === 'compact')
+
+// Watch for compact mode changes to update container width
+watch(isCompactMode, async () => {
+  await nextTick()
+  if (compactGridContainer.value) {
+    containerWidth.value = compactGridContainer.value.clientWidth
+
+    // Update ResizeObserver
+    if (resizeObserver) {
+      resizeObserver.disconnect()
+    }
+    resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        containerWidth.value = entry.contentRect.width
+      }
+    })
+    resizeObserver.observe(compactGridContainer.value)
+  }
+})
+
 const weekDays = computed(() => {
   const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US'
   // For fr-FR, week starts on Monday (day 1)
@@ -601,6 +943,26 @@ const weekDays = computed(() => {
     date.setDate(startDate.getDate() + i)
     return date.toLocaleDateString(localeCode, { weekday: 'short' })
   })
+})
+
+const numWeeks = computed(() => Math.ceil(calendarDays.value.length / 7))
+
+// Dynamic cell width for compact mode (to fit all columns without horizontal scroll)
+const compactCellWidth = computed(() => {
+  if (!isCompactMode.value) return 'auto'
+
+  // Container padding and gaps
+  const gapSize = 6 // gap-1.5 = 0.375rem = 6px
+  // Number of gaps = number of spaces between columns (numWeeks - 1 gaps)
+  const totalGaps = (numWeeks.value - 1) * gapSize
+
+  // Available width for cells (container width - gaps)
+  const availableWidth = containerWidth.value - totalGaps
+
+  // Width per cell (ensure minimum of 70px for readability)
+  const cellWidth = Math.max(70, Math.floor(availableWidth / numWeeks.value) - 2)
+
+  return `${cellWidth}px`
 })
 
 const currentMonthLabel = computed(() => {
@@ -868,6 +1230,13 @@ function formatTimeRange(startTime?: string, endTime?: string): string {
     return t('availability.allDay', 'All day')
   }
   return `${startTime ?? '00:00'}-${endTime ?? '23:59'}`
+}
+
+function getDayOfWeek(dateString: string): string {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US'
+  return date.toLocaleDateString(localeCode, { weekday: 'short' })
 }
 
 async function handleParticipantCountHoverStart(dateString: string, event: MouseEvent) {
@@ -1141,40 +1510,62 @@ const selectedCellIndices = computed((): Set<number> => {
   const startIdx = dragStartIndex.value
   const endIdx = dragCurrentIndex.value
 
-  // Convert indices to coordinates (row, col)
-  const startRow = Math.floor(startIdx / GRID_COLUMNS)
-  const startCol = startIdx % GRID_COLUMNS
-  const endRow = Math.floor(endIdx / GRID_COLUMNS)
-  const endCol = endIdx % GRID_COLUMNS
-
-  // Find rectangle boundaries
-  const minRow = Math.min(startRow, endRow)
-  const maxRow = Math.max(startRow, endRow)
-  const minCol = Math.min(startCol, endCol)
-  const maxCol = Math.max(startCol, endCol)
-
-  // Collect all indices in the rectangle
   const indices = new Set<number>()
-  for (let row = minRow; row <= maxRow; row++) {
-    for (let col = minCol; col <= maxCol; col++) {
-      indices.add(row * GRID_COLUMNS + col)
+
+  if (isCompactMode.value) {
+    // Compact mode: N columns (weeks) × 7 rows (days)
+    // Index calculation: (weekIndex - 1) * 7 + dayOfWeekIndex
+    // Convert index to week/day: weekIndex = floor(index / 7), dayOfWeekIndex = index % 7
+
+    const startWeek = Math.floor(startIdx / GRID_COLUMNS)
+    const startDay = startIdx % GRID_COLUMNS
+    const endWeek = Math.floor(endIdx / GRID_COLUMNS)
+    const endDay = endIdx % GRID_COLUMNS
+
+    const minWeek = Math.min(startWeek, endWeek)
+    const maxWeek = Math.max(startWeek, endWeek)
+    const minDay = Math.min(startDay, endDay)
+    const maxDay = Math.max(startDay, endDay)
+
+    // Collect all indices in the rectangle
+    for (let week = minWeek; week <= maxWeek; week++) {
+      for (let day = minDay; day <= maxDay; day++) {
+        indices.add(week * GRID_COLUMNS + day)
+      }
+    }
+  } else {
+    // Classic mode: 7 columns (days) × N rows (weeks)
+    // Convert indices to coordinates (row, col)
+    const startRow = Math.floor(startIdx / GRID_COLUMNS)
+    const startCol = startIdx % GRID_COLUMNS
+    const endRow = Math.floor(endIdx / GRID_COLUMNS)
+    const endCol = endIdx % GRID_COLUMNS
+
+    // Find rectangle boundaries
+    const minRow = Math.min(startRow, endRow)
+    const maxRow = Math.max(startRow, endRow)
+    const minCol = Math.min(startCol, endCol)
+    const maxCol = Math.max(startCol, endCol)
+
+    // Collect all indices in the rectangle
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        indices.add(row * GRID_COLUMNS + col)
+      }
     }
   }
 
   return indices
 })
 
-// Check if a cell is selected
 function isCellSelected(index: number): boolean {
   return selectedCellIndices.value.has(index)
 }
 
-// Check if a cell can be selected
 function canSelectCell(day: CalendarDay): boolean {
   return day.isCurrentMonth && !day.isPast && day.isAllowed
 }
 
-// Check if a cell has availability (explicit or recurrence)
 function cellHasAvailability(day: CalendarDay): boolean {
   return day.hasAvailability || day.hasRecurrence
 }
@@ -1184,15 +1575,17 @@ function getCellIndexFromPoint(x: number, y: number): number | null {
   const element = document.elementFromPoint(x, y)
   if (!element) return null
 
-  // Find the calendar cell element - try multiple selectors
-  let cell = element.closest('.calendar-grid .grid.grid-cols-7 > div')
+  // Find the calendar cell element using the calendar-cell class
+  let cell = element.closest('.calendar-cell')
 
   // If we're inside a cell's child element, find the parent cell
   if (!cell && element.closest('.calendar-grid')) {
     const parent = element.parentElement
-    if (parent && parent.classList.contains('grid-cols-7')) {
+    if (parent && parent.classList.contains('calendar-grid-container')) {
       // We might be a child of the grid, find which cell
-      const allCells = parent.children
+      const allCells = Array.from(parent.children).filter(child =>
+        child.classList.contains('calendar-cell')
+      )
       for (let i = 0; i < allCells.length; i++) {
         if (allCells[i].contains(element)) {
           cell = allCells[i]
@@ -1201,18 +1594,16 @@ function getCellIndexFromPoint(x: number, y: number): number | null {
       }
     } else if (parent) {
       // Try going up one more level
-      cell = parent.closest('.calendar-grid .grid.grid-cols-7 > div')
+      cell = parent.closest('.calendar-cell')
     }
   }
 
   if (!cell) return null
 
-  // Find the index by looking at all cells
-  const allCells = cell.parentElement?.children
-  if (!allCells) return null
-
-  for (let i = 0; i < allCells.length; i++) {
-    if (allCells[i] === cell) return i
+  // Read the data-cell-index attribute to get the actual index in calendarDays
+  const cellIndex = (cell as HTMLElement).dataset.cellIndex
+  if (cellIndex !== undefined) {
+    return parseInt(cellIndex, 10)
   }
 
   return null
@@ -1420,6 +1811,56 @@ function handlePointerLeave() {
     isDragConfirmed.value = false
   }
 }
+
+// Container resize observer
+let resizeObserver: ResizeObserver | null = null
+
+// Handle view mode changes from other CalendarGrid instances
+const handleViewModeChange = (event: Event) => {
+  const customEvent = event as CustomEvent<'classic' | 'compact'>
+  if (customEvent.detail) {
+    viewMode.value = customEvent.detail
+  }
+}
+
+// Handle window resize to update container width
+const handleResize = () => {
+  if (compactGridContainer.value) {
+    containerWidth.value = compactGridContainer.value.clientWidth
+  }
+}
+
+onMounted(() => {
+  // Observe container width changes with ResizeObserver
+  if (compactGridContainer.value) {
+    resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        containerWidth.value = entry.contentRect.width
+      }
+    })
+    resizeObserver.observe(compactGridContainer.value)
+  }
+
+  // Listen for window resize and view mode changes
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('calendar-view-mode-change', handleViewModeChange)
+
+  // Set initial width
+  nextTick(() => {
+    if (compactGridContainer.value) {
+      containerWidth.value = compactGridContainer.value.clientWidth
+    }
+  })
+})
+
+onUnmounted(() => {
+  // Clean up observers and event listeners
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+  }
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('calendar-view-mode-change', handleViewModeChange)
+})
 </script>
 
 <style scoped>
@@ -1431,6 +1872,21 @@ function handlePointerLeave() {
 .calendar-grid .grid.grid-cols-7 {
   -webkit-user-select: none;
   user-select: none;
+}
+
+/* Compact mode cell dimensions - width is set dynamically via inline style */
+.calendar-grid-container:not(.grid-cols-7) .calendar-cell {
+  /* Width is set via inline style for responsive sizing */
+  height: auto;
+  min-height: 80px;
+  overflow: hidden;
+}
+
+/* Classic mode cell dimensions */
+.calendar-grid-container.grid-cols-7 .calendar-cell {
+  width: 100%;
+  height: auto;
+  min-height: 96px;
 }
 
 /* Mobile optimizations */
@@ -1449,6 +1905,22 @@ function handlePointerLeave() {
   /* Improve touch target size on mobile */
   .calendar-grid .grid > div {
     min-height: 5rem;
+  }
+
+  /* Compact mode: smaller minimum height on mobile */
+  .calendar-grid-container:not(.grid-cols-7) .calendar-cell {
+    min-height: 70px;
+  }
+}
+
+/* Desktop optimizations */
+@media (min-width: 769px) {
+  .calendar-grid-container.grid-cols-7 .calendar-cell {
+    min-height: 80px;
+  }
+
+  .calendar-grid-container:not(.grid-cols-7) .calendar-cell {
+    min-height: 90px;
   }
 }
 

@@ -350,7 +350,9 @@
     "dateNotAllowed": "Cette date n'est pas autorisée",
     "previousWeek": "Semaine précédente",
     "nextWeek": "Semaine suivante",
-    "thresholdMet": "Événement (seuil atteint)"
+    "thresholdMet": "Événement (seuil atteint)",
+    "viewClassic": "Classique",
+    "viewCompact": "Compact"
   },
   "weekdays": {
     "short": {

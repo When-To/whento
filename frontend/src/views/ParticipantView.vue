@@ -235,9 +235,9 @@
         </div>
 
         <!-- Calendar View -->
-        <div class="card mb-6">
+        <div class="card mb-6 px-0.5 py-0 md:p-6">
           <!-- Mobile: Stacked layout with collapsible controls -->
-          <div class="mb-4">
+          <div class="mb-4 p-6">
             <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <!-- Title and description -->
               <div class="flex-1">
