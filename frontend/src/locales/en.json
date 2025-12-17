@@ -347,7 +347,9 @@
     "dateNotAllowed": "This date is not allowed",
     "previousWeek": "Previous week",
     "nextWeek": "Next week",
-    "thresholdMet": "Event (threshold met)"
+    "thresholdMet": "Event (threshold met)",
+    "viewClassic": "Classic",
+    "viewCompact": "Compact"
   },
   "weekdays": {
     "short": {
