@@ -25,16 +25,8 @@
             <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('accounting.year') }}
             </label>
-            <select
-              v-model="selectedYear"
-              class="input w-full"
-              @change="loadData"
-            >
-              <option
-                v-for="year in availableYears"
-                :key="year"
-                :value="year"
-              >
+            <select v-model="selectedYear" class="input w-full" @change="loadData">
+              <option v-for="year in availableYears" :key="year" :value="year">
                 {{ year }}
               </option>
             </select>
@@ -45,19 +37,11 @@
             <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('accounting.month') }}
             </label>
-            <select
-              v-model="selectedMonth"
-              class="input w-full"
-              @change="loadData"
-            >
+            <select v-model="selectedMonth" class="input w-full" @change="loadData">
               <option :value="0">
                 {{ t('accounting.wholeYear') }}
               </option>
-              <option
-                v-for="month in 12"
-                :key="month"
-                :value="month"
-              >
+              <option v-for="month in 12" :key="month" :value="month">
                 {{ getMonthName(month) }}
               </option>
             </select>
@@ -65,17 +49,8 @@
 
           <!-- Export button -->
           <div>
-            <button
-              :disabled="loading || !data"
-              class="btn btn-secondary"
-              @click="exportToCSV"
-            >
-              <svg
-                class="mr-2 h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+            <button :disabled="loading || !data" class="btn btn-secondary" @click="exportToCSV">
+              <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -90,10 +65,7 @@
       </div>
 
       <!-- Loading state -->
-      <div
-        v-if="loading"
-        class="card"
-      >
+      <div v-if="loading" class="card">
         <div class="flex items-center justify-center py-12">
           <div
             class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"
@@ -103,10 +75,7 @@
       </div>
 
       <!-- Data table -->
-      <div
-        v-else-if="data"
-        class="card overflow-hidden p-0"
-      >
+      <div v-else-if="data" class="card overflow-hidden p-0">
         <div class="overflow-x-auto">
           <table class="w-full">
             <thead
@@ -160,16 +129,24 @@
                     </div>
                   </div>
                 </td>
-                <td class="whitespace-nowrap px-6 py-4 text-right text-sm text-gray-500 dark:text-gray-400">
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-right text-sm text-gray-500 dark:text-gray-400"
+                >
                   {{ row.invoice_count }}
                 </td>
-                <td class="whitespace-nowrap px-6 py-4 text-right font-mono text-sm text-gray-900 dark:text-white">
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-right font-mono text-sm text-gray-900 dark:text-white"
+                >
                   {{ formatAmount(row.revenue_ht) }}
                 </td>
-                <td class="whitespace-nowrap px-6 py-4 text-right font-mono text-sm text-gray-900 dark:text-white">
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-right font-mono text-sm text-gray-900 dark:text-white"
+                >
                   {{ formatAmount(row.vat) }}
                 </td>
-                <td class="whitespace-nowrap px-6 py-4 text-right font-mono text-sm font-medium text-gray-900 dark:text-white">
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-right font-mono text-sm font-medium text-gray-900 dark:text-white"
+                >
                   {{ formatAmount(row.revenue_ttc) }}
                 </td>
               </tr>
@@ -182,13 +159,19 @@
                 <td class="whitespace-nowrap px-6 py-4 text-right text-gray-900 dark:text-white">
                   {{ totalInvoiceCount }}
                 </td>
-                <td class="whitespace-nowrap px-6 py-4 text-right font-mono text-gray-900 dark:text-white">
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-right font-mono text-gray-900 dark:text-white"
+                >
                   {{ formatAmount(data.total_ht) }}
                 </td>
-                <td class="whitespace-nowrap px-6 py-4 text-right font-mono text-gray-900 dark:text-white">
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-right font-mono text-gray-900 dark:text-white"
+                >
                   {{ formatAmount(data.total_vat) }}
                 </td>
-                <td class="whitespace-nowrap px-6 py-4 text-right font-mono text-gray-900 dark:text-white">
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-right font-mono text-gray-900 dark:text-white"
+                >
                   {{ formatAmount(data.total_ttc) }}
                 </td>
               </tr>
@@ -198,10 +181,7 @@
       </div>
 
       <!-- Empty state -->
-      <div
-        v-else
-        class="card"
-      >
+      <div v-else class="card">
         <div class="text-center py-12">
           <svg
             class="mx-auto h-12 w-12 text-gray-400"
@@ -229,48 +209,48 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
-import { useToastStore } from '@/stores/toast'
-import { getAccountingData, type AccountingResponse } from '@/api/billing'
+import { ref, onMounted, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
+import { getAccountingData, type AccountingResponse } from '@/api/billing';
 
-const { t } = useI18n()
-const authStore = useAuthStore()
-const toastStore = useToastStore()
+const { t } = useI18n();
+const authStore = useAuthStore();
+const toastStore = useToastStore();
 
-const loading = ref(false)
-const data = ref<AccountingResponse | null>(null)
+const loading = ref(false);
+const data = ref<AccountingResponse | null>(null);
 
 // Current year and available years
-const currentYear = new Date().getFullYear()
-const availableYears = Array.from({ length: 10 }, (_, i) => currentYear - i)
+const currentYear = new Date().getFullYear();
+const availableYears = Array.from({ length: 10 }, (_, i) => currentYear - i);
 
 // Selected filters
-const selectedYear = ref(currentYear)
-const selectedMonth = ref(0) // 0 = whole year
+const selectedYear = ref(currentYear);
+const selectedMonth = ref(0); // 0 = whole year
 
 const totalInvoiceCount = computed(() => {
-  if (!data.value) return 0
-  return data.value.rows.reduce((sum, row) => sum + row.invoice_count, 0)
-})
+  if (!data.value) return 0;
+  return data.value.rows.reduce((sum, row) => sum + row.invoice_count, 0);
+});
 
 onMounted(() => {
-  loadData()
-})
+  loadData();
+});
 
 async function loadData() {
-  loading.value = true
+  loading.value = true;
 
   try {
-    const month = selectedMonth.value === 0 ? undefined : selectedMonth.value
-    data.value = await getAccountingData(selectedYear.value, month)
+    const month = selectedMonth.value === 0 ? undefined : selectedMonth.value;
+    data.value = await getAccountingData(selectedYear.value, month);
   } catch (err: any) {
-    console.error('Failed to load accounting data:', err)
-    toastStore.error(err.message || t('errors.generic'))
-    data.value = null
+    console.error('Failed to load accounting data:', err);
+    toastStore.error(err.message || t('errors.generic'));
+    data.value = null;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
@@ -279,26 +259,26 @@ function formatAmount(amount: number): string {
     style: 'currency',
     currency: 'EUR',
     minimumFractionDigits: 2,
-  }).format(amount)
+  }).format(amount);
 }
 
 function getMonthName(month: number): string {
-  const date = new Date(2000, month - 1, 1)
-  return date.toLocaleDateString(authStore.user?.locale || 'fr', { month: 'long' })
+  const date = new Date(2000, month - 1, 1);
+  return date.toLocaleDateString(authStore.user?.locale || 'fr', { month: 'long' });
 }
 
 function getCountryFlag(countryCode: string): string {
   // Convert ISO country code to flag emoji
-  const offset = 127397
+  const offset = 127397;
   return countryCode
     .toUpperCase()
     .split('')
     .map(char => String.fromCodePoint(char.charCodeAt(0) + offset))
-    .join('')
+    .join('');
 }
 
 function exportToCSV() {
-  if (!data.value) return
+  if (!data.value) return;
 
   // Build CSV content
   const headers = [
@@ -307,7 +287,7 @@ function exportToCSV() {
     t('accounting.revenueHT'),
     t('accounting.vat'),
     t('accounting.revenueTTC'),
-  ]
+  ];
 
   const rows = data.value.rows.map(row => [
     `"${row.country_name} (${row.country})"`,
@@ -315,7 +295,7 @@ function exportToCSV() {
     row.revenue_ht.toFixed(2),
     row.vat.toFixed(2),
     row.revenue_ttc.toFixed(2),
-  ])
+  ]);
 
   // Add total row
   rows.push([
@@ -324,29 +304,26 @@ function exportToCSV() {
     data.value.total_ht.toFixed(2),
     data.value.total_vat.toFixed(2),
     data.value.total_ttc.toFixed(2),
-  ])
+  ]);
 
-  const csv = [
-    headers.join(','),
-    ...rows.map(row => row.join(',')),
-  ].join('\n')
+  const csv = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
 
   // Create download link
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-  const link = document.createElement('a')
-  const url = URL.createObjectURL(blob)
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
 
-  const monthStr = selectedMonth.value === 0 ? 'all' : String(selectedMonth.value).padStart(2, '0')
-  const filename = `accounting_${selectedYear.value}_${monthStr}.csv`
+  const monthStr = selectedMonth.value === 0 ? 'all' : String(selectedMonth.value).padStart(2, '0');
+  const filename = `accounting_${selectedYear.value}_${monthStr}.csv`;
 
-  link.setAttribute('href', url)
-  link.setAttribute('download', filename)
-  link.style.visibility = 'hidden'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 
-  toastStore.success(t('accounting.exportSuccess'))
+  toastStore.success(t('accounting.exportSuccess'));
 }
 </script>
 

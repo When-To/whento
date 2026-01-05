@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: BSL-1.1
  */
 
-import { apiClient as client } from './client'
+import { apiClient as client } from './client';
 
 export interface QuotaStatus {
-  user_limit?: number
-  user_usage?: number
-  server_limit?: number
-  server_usage?: number
-  can_create: boolean
-  limitation_type: 'per_user' | 'per_server' | 'none'
-  upgrade_url: string
+  user_limit?: number;
+  user_usage?: number;
+  server_limit?: number;
+  server_usage?: number;
+  can_create: boolean;
+  limitation_type: 'per_user' | 'per_server' | 'none';
+  upgrade_url: string;
 }
 
 /**
@@ -22,5 +22,5 @@ export interface QuotaStatus {
  * - Self-hosted mode: returns server_limit, server_usage
  */
 export async function getQuotaStatus(): Promise<QuotaStatus> {
-  return await client.get<QuotaStatus>('/quota/limits')
+  return await client.get<QuotaStatus>('/quota/limits');
 }

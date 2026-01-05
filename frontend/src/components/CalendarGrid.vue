@@ -76,7 +76,11 @@
               <div
                 class="calendar-cell"
                 :data-cell-index="(weekIndex - 1) * 7 + dayOfWeekIndex"
-                :style="{ width: compactCellWidth, minWidth: compactCellWidth, maxWidth: compactCellWidth }"
+                :style="{
+                  width: compactCellWidth,
+                  minWidth: compactCellWidth,
+                  maxWidth: compactCellWidth,
+                }"
                 :class="[
                   'relative min-h-24 md:min-h-20 rounded-lg border p-3 md:p-2 transition-all',
                   !calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isCurrentMonth
@@ -132,7 +136,9 @@
                     cellHasAvailability(calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]) &&
                     'ring-2 ring-red-500 bg-red-100 dark:bg-red-900/30',
                 ]"
-                :title="calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.holidayName || undefined"
+                :title="
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.holidayName || undefined
+                "
                 @mousedown="
                   handlePointerDown(
                     (weekIndex - 1) * 7 + dayOfWeekIndex,
@@ -177,7 +183,11 @@
                             : 'text-gray-400 dark:text-gray-600',
                         ]"
                       >
-                        {{ getDayOfWeek(calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.dateString || '') }}
+                        {{
+                          getDayOfWeek(
+                            calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.dateString || ''
+                          )
+                        }}
                       </span>
                     </div>
                     <span
@@ -767,274 +777,274 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { availabilitiesApi } from '@/api/availabilities'
-import type { Availability, RecurrenceWithExceptions } from '@/types'
-import { useDateValidation, clearHolidaysCache } from '@/composables/useDateValidation'
-import TimeSelect from '@/components/TimeSelect.vue'
+import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { availabilitiesApi } from '@/api/availabilities';
+import type { Availability, RecurrenceWithExceptions } from '@/types';
+import { useDateValidation, clearHolidaysCache } from '@/composables/useDateValidation';
+import TimeSelect from '@/components/TimeSelect.vue';
 
 interface Props {
-  availabilities?: Availability[]
-  recurrences?: RecurrenceWithExceptions[]
-  participantCounts?: Record<string, number>
-  threshold?: number
-  calendarToken?: string
-  allowedWeekdays?: number[]
-  timezone?: string
-  holidaysPolicy?: 'ignore' | 'allow' | 'block'
-  allowHolidayEves?: boolean
-  currentParticipantId?: string // ID of the connected participant (for API calls)
-  currentParticipantName?: string // Name of the connected participant (for visual comparison)
-  initialYear?: number // Initial year to display
-  initialMonth?: number // Initial month to display (0-11)
-  showNavigation?: boolean // Show month navigation buttons (default true)
-  startDate?: string // Calendar start date (YYYY-MM-DD format)
-  endDate?: string // Calendar end date (YYYY-MM-DD format)
+  availabilities?: Availability[];
+  recurrences?: RecurrenceWithExceptions[];
+  participantCounts?: Record<string, number>;
+  threshold?: number;
+  calendarToken?: string;
+  allowedWeekdays?: number[];
+  timezone?: string;
+  holidaysPolicy?: 'ignore' | 'allow' | 'block';
+  allowHolidayEves?: boolean;
+  currentParticipantId?: string; // ID of the connected participant (for API calls)
+  currentParticipantName?: string; // Name of the connected participant (for visual comparison)
+  initialYear?: number; // Initial year to display
+  initialMonth?: number; // Initial month to display (0-11)
+  showNavigation?: boolean; // Show month navigation buttons (default true)
+  startDate?: string; // Calendar start date (YYYY-MM-DD format)
+  endDate?: string; // Calendar end date (YYYY-MM-DD format)
 }
 
 interface Emits {
-  (e: 'day-click', date: string): void
-  (e: 'days-select', dates: string[]): void
-  (e: 'days-deselect', dates: string[]): void
-  (e: 'add-exception', recurrenceId: string, date: string): void
-  (e: 'month-change', year: number, month: number): void
-  (e: 'availability-updated'): void
+  (e: 'day-click', date: string): void;
+  (e: 'days-select', dates: string[]): void;
+  (e: 'days-deselect', dates: string[]): void;
+  (e: 'add-exception', recurrenceId: string, date: string): void;
+  (e: 'month-change', year: number, month: number): void;
+  (e: 'availability-updated'): void;
 }
 
-const props = defineProps<Props>()
-const emit = defineEmits<Emits>()
-const { t, locale } = useI18n()
+const props = defineProps<Props>();
+const emit = defineEmits<Emits>();
+const { t, locale } = useI18n();
 
 // IMPORTANT: Clear holidays cache on each component creation
 // to ensure computed properties use the correct data
-clearHolidaysCache()
+clearHolidaysCache();
 
-const { isDateAllowed, checkIsHoliday, checkIsHolidayEve, getHolidayName } = useDateValidation()
+const { isDateAllowed, checkIsHoliday, checkIsHolidayEve, getHolidayName } = useDateValidation();
 
 // Initialize currentDate with props or default to current date
 const initDate =
   props.initialYear !== undefined && props.initialMonth !== undefined
     ? new Date(props.initialYear, props.initialMonth, 1)
-    : new Date()
-const currentDate = ref(initDate)
-const selectedDate = ref<string | null>(null)
+    : new Date();
+const currentDate = ref(initDate);
+const selectedDate = ref<string | null>(null);
 
 // Watch for prop changes to keep currentDate in sync
 watch(
   () => [props.initialYear, props.initialMonth],
   ([year, month]) => {
     if (year !== undefined && month !== undefined) {
-      currentDate.value = new Date(year, month, 1)
+      currentDate.value = new Date(year, month, 1);
     }
   }
-)
-const participantDetails = ref<any>(null)
-const loadingDetails = ref(false)
-const hoverTimeout = ref<number | null>(null)
-const closeTimeout = ref<number | null>(null)
-const popupPosition = ref({ x: 0, y: 0 })
-const tooltipRef = ref<HTMLElement | null>(null)
+);
+const participantDetails = ref<any>(null);
+const loadingDetails = ref(false);
+const hoverTimeout = ref<number | null>(null);
+const closeTimeout = ref<number | null>(null);
+const popupPosition = ref({ x: 0, y: 0 });
+const tooltipRef = ref<HTMLElement | null>(null);
 
 // States for note editing
-const editingNote = ref(false)
-const editedNote = ref('')
-const editedStartTime = ref('')
-const editedEndTime = ref('')
-const savingNote = ref(false)
+const editingNote = ref(false);
+const editedNote = ref('');
+const editedStartTime = ref('');
+const editedEndTime = ref('');
+const savingNote = ref(false);
 
 // States for rectangle selection (drag-select)
-const isDragging = ref(false)
-const dragStartIndex = ref<number | null>(null)
-const dragCurrentIndex = ref<number | null>(null)
-const dragMode = ref<'add' | 'remove'>('add') // Drag mode: add or remove
+const isDragging = ref(false);
+const dragStartIndex = ref<number | null>(null);
+const dragCurrentIndex = ref<number | null>(null);
+const dragMode = ref<'add' | 'remove'>('add'); // Drag mode: add or remove
 
 // Container ref for observing width
-const compactGridContainer = ref<HTMLElement | null>(null)
+const compactGridContainer = ref<HTMLElement | null>(null);
 
 // Container width tracking for responsive layout
-const containerWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
+const containerWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024);
 
 // View mode: 'classic' or 'compact'
 // Default to 'compact' on mobile (screen width < 768px), 'classic' on desktop
 const getDefaultViewMode = (): 'classic' | 'compact' => {
-  if (typeof window === 'undefined') return 'classic'
+  if (typeof window === 'undefined') return 'classic';
 
   // Check if user has a saved preference
-  const savedMode = localStorage.getItem('calendar-view-mode') as 'classic' | 'compact' | null
-  if (savedMode) return savedMode
+  const savedMode = localStorage.getItem('calendar-view-mode') as 'classic' | 'compact' | null;
+  if (savedMode) return savedMode;
 
   // Default based on screen size (768px is Tailwind's md breakpoint)
-  return window.innerWidth < 768 ? 'compact' : 'classic'
-}
+  return window.innerWidth < 768 ? 'compact' : 'classic';
+};
 
-const viewMode = ref<'classic' | 'compact'>(getDefaultViewMode())
+const viewMode = ref<'classic' | 'compact'>(getDefaultViewMode());
 
 // Save view mode to localStorage when it changes and notify other CalendarGrid instances
 watch(viewMode, newMode => {
   if (typeof window !== 'undefined' && window.localStorage) {
-    localStorage.setItem('calendar-view-mode', newMode)
+    localStorage.setItem('calendar-view-mode', newMode);
     // Dispatch custom event to notify other CalendarGrid instances in the same page
-    window.dispatchEvent(new CustomEvent('calendar-view-mode-change', { detail: newMode }))
+    window.dispatchEvent(new CustomEvent('calendar-view-mode-change', { detail: newMode }));
   }
-})
+});
 
-const isCompactMode = computed(() => viewMode.value === 'compact')
+const isCompactMode = computed(() => viewMode.value === 'compact');
 
 // Watch for compact mode changes to update container width
 watch(isCompactMode, async () => {
-  await nextTick()
+  await nextTick();
   if (compactGridContainer.value) {
-    containerWidth.value = compactGridContainer.value.clientWidth
+    containerWidth.value = compactGridContainer.value.clientWidth;
 
     // Update ResizeObserver
     if (resizeObserver) {
-      resizeObserver.disconnect()
+      resizeObserver.disconnect();
     }
-    resizeObserver = new ResizeObserver((entries) => {
+    resizeObserver = new ResizeObserver(entries => {
       for (const entry of entries) {
-        containerWidth.value = entry.contentRect.width
+        containerWidth.value = entry.contentRect.width;
       }
-    })
-    resizeObserver.observe(compactGridContainer.value)
+    });
+    resizeObserver.observe(compactGridContainer.value);
   }
-})
+});
 
 const weekDays = computed(() => {
-  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US'
+  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US';
   // For fr-FR, week starts on Monday (day 1)
   // For en-US, week starts on Sunday (day 0)
-  const firstDayOfWeek = localeCode === 'fr-FR' ? 1 : 0
+  const firstDayOfWeek = localeCode === 'fr-FR' ? 1 : 0;
 
-  const baseDate = new Date(2025, 0, 6) // A Monday
-  const startDate = new Date(baseDate)
-  startDate.setDate(baseDate.getDate() - baseDate.getDay() + firstDayOfWeek)
+  const baseDate = new Date(2025, 0, 6); // A Monday
+  const startDate = new Date(baseDate);
+  startDate.setDate(baseDate.getDate() - baseDate.getDay() + firstDayOfWeek);
 
   return Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(startDate)
-    date.setDate(startDate.getDate() + i)
-    return date.toLocaleDateString(localeCode, { weekday: 'short' })
-  })
-})
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + i);
+    return date.toLocaleDateString(localeCode, { weekday: 'short' });
+  });
+});
 
-const numWeeks = computed(() => Math.ceil(calendarDays.value.length / 7))
+const numWeeks = computed(() => Math.ceil(calendarDays.value.length / 7));
 
 // Dynamic cell width for compact mode (to fit all columns without horizontal scroll)
 const compactCellWidth = computed(() => {
-  if (!isCompactMode.value) return 'auto'
+  if (!isCompactMode.value) return 'auto';
 
   // Container padding and gaps
-  const gapSize = 6 // gap-1.5 = 0.375rem = 6px
+  const gapSize = 6; // gap-1.5 = 0.375rem = 6px
   // Number of gaps = number of spaces between columns (numWeeks - 1 gaps)
-  const totalGaps = (numWeeks.value - 1) * gapSize
+  const totalGaps = (numWeeks.value - 1) * gapSize;
 
   // Available width for cells (container width - gaps)
-  const availableWidth = containerWidth.value - totalGaps
+  const availableWidth = containerWidth.value - totalGaps;
 
   // Width per cell (ensure minimum of 70px for readability)
-  const cellWidth = Math.max(70, Math.floor(availableWidth / numWeeks.value) - 2)
+  const cellWidth = Math.max(70, Math.floor(availableWidth / numWeeks.value) - 2);
 
-  return `${cellWidth}px`
-})
+  return `${cellWidth}px`;
+});
 
 const currentMonthLabel = computed(() => {
-  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US'
+  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US';
   return currentDate.value.toLocaleDateString(localeCode, {
     month: 'long',
     year: 'numeric',
-  })
-})
+  });
+});
 
 const formatSelectedDate = computed(() => {
-  if (!selectedDate.value) return ''
-  const date = new Date(selectedDate.value)
-  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US'
+  if (!selectedDate.value) return '';
+  const date = new Date(selectedDate.value);
+  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US';
   return date.toLocaleDateString(localeCode, {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-  })
-})
+  });
+});
 
 interface CalendarDay {
-  date: number
-  dateString: string
-  isCurrentMonth: boolean
-  isToday: boolean
-  isPast: boolean
-  isAllowed: boolean
-  isHoliday: boolean
-  isHolidayEve: boolean
-  holidayName?: string
-  hasAvailability: boolean
-  hasRecurrence: boolean
-  meetsThreshold: boolean
-  availabilities: Availability[]
-  dayOfWeek: number
-  recurrenceId?: string
-  recurrenceStartTime?: string
-  recurrenceEndTime?: string
+  date: number;
+  dateString: string;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  isPast: boolean;
+  isAllowed: boolean;
+  isHoliday: boolean;
+  isHolidayEve: boolean;
+  holidayName?: string;
+  hasAvailability: boolean;
+  hasRecurrence: boolean;
+  meetsThreshold: boolean;
+  availabilities: Availability[];
+  dayOfWeek: number;
+  recurrenceId?: string;
+  recurrenceStartTime?: string;
+  recurrenceEndTime?: string;
 }
 
 // Helper function to check if a date is allowed for availability
 const checkDateAllowed = (dateObj: Date): boolean => {
-  const timezone = props.timezone || 'Europe/Paris'
-  const allowedWeekdays = props.allowedWeekdays || [0, 1, 2, 3, 4, 5, 6]
-  const holidaysPolicy = props.holidaysPolicy || 'ignore'
-  const allowHolidayEves = props.allowHolidayEves || false
+  const timezone = props.timezone || 'Europe/Paris';
+  const allowedWeekdays = props.allowedWeekdays || [0, 1, 2, 3, 4, 5, 6];
+  const holidaysPolicy = props.holidaysPolicy || 'ignore';
+  const allowHolidayEves = props.allowHolidayEves || false;
 
   // Check if date is within calendar's date range
   if (props.startDate) {
-    const startDate = new Date(props.startDate)
-    startDate.setHours(0, 0, 0, 0)
+    const startDate = new Date(props.startDate);
+    startDate.setHours(0, 0, 0, 0);
     if (dateObj < startDate) {
-      return false
+      return false;
     }
   }
 
   if (props.endDate) {
-    const endDate = new Date(props.endDate)
-    endDate.setHours(0, 0, 0, 0)
+    const endDate = new Date(props.endDate);
+    endDate.setHours(0, 0, 0, 0);
     if (dateObj > endDate) {
-      return false
+      return false;
     }
   }
 
-  return isDateAllowed(dateObj, timezone, allowedWeekdays, holidaysPolicy, allowHolidayEves)
-}
+  return isDateAllowed(dateObj, timezone, allowedWeekdays, holidaysPolicy, allowHolidayEves);
+};
 
 const calendarDays = computed((): CalendarDay[] => {
-  const year = currentDate.value.getFullYear()
-  const month = currentDate.value.getMonth()
+  const year = currentDate.value.getFullYear();
+  const month = currentDate.value.getMonth();
 
   // First day of the month
-  const firstDay = new Date(year, month, 1)
+  const firstDay = new Date(year, month, 1);
   // Adjust for Monday as first day of week (fr-FR)
   // getDay() returns 0 for Sunday, 1 for Monday, etc.
   // For Monday-first week, we need to adjust: (getDay() - 1 + 7) % 7
-  const firstDayOfWeek = (firstDay.getDay() - 1 + 7) % 7
+  const firstDayOfWeek = (firstDay.getDay() - 1 + 7) % 7;
 
   // Last day of the month
-  const lastDay = new Date(year, month + 1, 0)
-  const daysInMonth = lastDay.getDate()
+  const lastDay = new Date(year, month + 1, 0);
+  const daysInMonth = lastDay.getDate();
 
   // Previous month
-  const prevMonthLastDay = new Date(year, month, 0)
-  const daysInPrevMonth = prevMonthLastDay.getDate()
+  const prevMonthLastDay = new Date(year, month, 0);
+  const daysInPrevMonth = prevMonthLastDay.getDate();
 
-  const days: CalendarDay[] = []
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const days: CalendarDay[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   // Previous month days
   for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-    const date = daysInPrevMonth - i
-    const dateObj = new Date(year, month - 1, date)
-    dateObj.setHours(0, 0, 0, 0)
-    const dateString = formatDateString(dateObj)
-    const isPast = dateObj < today
-    const timezone = props.timezone || 'Europe/Paris'
+    const date = daysInPrevMonth - i;
+    const dateObj = new Date(year, month - 1, date);
+    dateObj.setHours(0, 0, 0, 0);
+    const dateString = formatDateString(dateObj);
+    const isPast = dateObj < today;
+    const timezone = props.timezone || 'Europe/Paris';
 
     days.push({
       date,
@@ -1050,47 +1060,47 @@ const calendarDays = computed((): CalendarDay[] => {
       meetsThreshold: false,
       availabilities: [],
       dayOfWeek: dateObj.getDay(),
-    })
+    });
   }
 
   // Current month days
   for (let date = 1; date <= daysInMonth; date++) {
-    const dateObj = new Date(year, month, date)
-    dateObj.setHours(0, 0, 0, 0)
-    const dateString = formatDateString(dateObj)
-    const dayOfWeek = dateObj.getDay()
-    const isPast = dateObj < today
+    const dateObj = new Date(year, month, date);
+    dateObj.setHours(0, 0, 0, 0);
+    const dateString = formatDateString(dateObj);
+    const dayOfWeek = dateObj.getDay();
+    const isPast = dateObj < today;
 
     // Check if this date has an availability
-    const dateAvailabilities = (props.availabilities || []).filter(a => a.date === dateString)
+    const dateAvailabilities = (props.availabilities || []).filter(a => a.date === dateString);
 
     // Check if this date matches any recurrence (and is not an exception)
-    let recurrenceId: string | undefined
-    let recurrenceStartTime: string | undefined
-    let recurrenceEndTime: string | undefined
+    let recurrenceId: string | undefined;
+    let recurrenceStartTime: string | undefined;
+    let recurrenceEndTime: string | undefined;
     const hasRecurrence = (props.recurrences || []).some(rec => {
-      if (rec.day_of_week !== dayOfWeek) return false
+      if (rec.day_of_week !== dayOfWeek) return false;
 
       // Compare dates as strings to avoid timezone issues
-      if (dateString < rec.start_date) return false
-      if (rec.end_date && dateString > rec.end_date) return false
+      if (dateString < rec.start_date) return false;
+      if (rec.end_date && dateString > rec.end_date) return false;
 
       // Check if this date is in the exceptions
-      const isException = rec.exceptions?.some(ex => ex.excluded_date === dateString)
+      const isException = rec.exceptions?.some(ex => ex.excluded_date === dateString);
 
       if (!isException) {
-        recurrenceId = rec.id
-        recurrenceStartTime = rec.start_time
-        recurrenceEndTime = rec.end_time
-        return true
+        recurrenceId = rec.id;
+        recurrenceStartTime = rec.start_time;
+        recurrenceEndTime = rec.end_time;
+        return true;
       }
-      return false
-    })
+      return false;
+    });
 
     // Check if this day meets the threshold
-    const participantCount = props.participantCounts?.[dateString] || 0
-    const meetsThreshold = participantCount >= (props.threshold || 1)
-    const timezone = props.timezone || 'Europe/Paris'
+    const participantCount = props.participantCounts?.[dateString] || 0;
+    const meetsThreshold = participantCount >= (props.threshold || 1);
+    const timezone = props.timezone || 'Europe/Paris';
 
     days.push({
       date,
@@ -1110,19 +1120,19 @@ const calendarDays = computed((): CalendarDay[] => {
       recurrenceId,
       recurrenceStartTime,
       recurrenceEndTime,
-    })
+    });
   }
 
   // Next month days to fill the grid
   // Only add enough days to complete the last row (multiple of 7)
-  const currentDaysCount = days.length
-  const remainingDays = currentDaysCount % 7 === 0 ? 0 : 7 - (currentDaysCount % 7)
+  const currentDaysCount = days.length;
+  const remainingDays = currentDaysCount % 7 === 0 ? 0 : 7 - (currentDaysCount % 7);
   for (let date = 1; date <= remainingDays; date++) {
-    const dateObj = new Date(year, month + 1, date)
-    dateObj.setHours(0, 0, 0, 0)
-    const dateString = formatDateString(dateObj)
-    const isPast = dateObj < today
-    const timezone = props.timezone || 'Europe/Paris'
+    const dateObj = new Date(year, month + 1, date);
+    dateObj.setHours(0, 0, 0, 0);
+    const dateString = formatDateString(dateObj);
+    const isPast = dateObj < today;
+    const timezone = props.timezone || 'Europe/Paris';
 
     days.push({
       date,
@@ -1138,246 +1148,246 @@ const calendarDays = computed((): CalendarDay[] => {
       meetsThreshold: false,
       availabilities: [],
       dayOfWeek: dateObj.getDay(),
-    })
+    });
   }
 
-  return days
-})
+  return days;
+});
 
 function formatDateString(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function previousMonth() {
-  const newDate = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() - 1, 1)
+  const newDate = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() - 1, 1);
 
   // If we have controlled props, only emit the event and let parent update us
   if (props.initialYear !== undefined && props.initialMonth !== undefined) {
-    emit('month-change', newDate.getFullYear(), newDate.getMonth())
+    emit('month-change', newDate.getFullYear(), newDate.getMonth());
   } else {
     // Otherwise, update local state and emit
-    currentDate.value = newDate
-    emit('month-change', newDate.getFullYear(), newDate.getMonth())
+    currentDate.value = newDate;
+    emit('month-change', newDate.getFullYear(), newDate.getMonth());
   }
 }
 
 function nextMonth() {
-  const newDate = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() + 1, 1)
+  const newDate = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() + 1, 1);
 
   // If we have controlled props, only emit the event and let parent update us
   if (props.initialYear !== undefined && props.initialMonth !== undefined) {
-    emit('month-change', newDate.getFullYear(), newDate.getMonth())
+    emit('month-change', newDate.getFullYear(), newDate.getMonth());
   } else {
     // Otherwise, update local state and emit
-    currentDate.value = newDate
-    emit('month-change', newDate.getFullYear(), newDate.getMonth())
+    currentDate.value = newDate;
+    emit('month-change', newDate.getFullYear(), newDate.getMonth());
   }
 }
 
 function handleAddException(recurrenceId: string, dateString: string) {
-  emit('add-exception', recurrenceId, dateString)
+  emit('add-exception', recurrenceId, dateString);
 }
 
 function getParticipantCount(dateString: string): number {
-  return props.participantCounts?.[dateString] || 0
+  return props.participantCounts?.[dateString] || 0;
 }
 
 function isFullDayTime(startTime?: string, endTime?: string): boolean {
   // Consider as full day if:
   // - Both times are null/undefined
   // - Times are "00:00" and "23:59"
-  if (!startTime && !endTime) return true
+  if (!startTime && !endTime) return true;
 
-  const start = startTime ?? '00:00'
-  const end = endTime ?? '23:59'
+  const start = startTime ?? '00:00';
+  const end = endTime ?? '23:59';
 
-  return start === '00:00' && end === '23:59'
+  return start === '00:00' && end === '23:59';
 }
 
 function formatTimeRange(startTime?: string, endTime?: string): string {
   if (isFullDayTime(startTime, endTime)) {
-    return t('availability.allDay', 'All day')
+    return t('availability.allDay', 'All day');
   }
-  return `${startTime ?? '00:00'}-${endTime ?? '23:59'}`
+  return `${startTime ?? '00:00'}-${endTime ?? '23:59'}`;
 }
 
 function getDayOfWeek(dateString: string): string {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US'
-  return date.toLocaleDateString(localeCode, { weekday: 'short' })
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US';
+  return date.toLocaleDateString(localeCode, { weekday: 'short' });
 }
 
 async function handleParticipantCountHoverStart(dateString: string, event: MouseEvent) {
-  const count = getParticipantCount(dateString)
-  if (count === 0 || !props.calendarToken) return
+  const count = getParticipantCount(dateString);
+  if (count === 0 || !props.calendarToken) return;
 
   // Initial position near cursor (use client coordinates for fixed positioning)
-  const offset = 10
+  const offset = 10;
   popupPosition.value = {
     x: event.clientX + offset,
     y: event.clientY + offset,
-  }
+  };
 
   // Clear any existing close timeout
   if (closeTimeout.value !== null) {
-    window.clearTimeout(closeTimeout.value)
-    closeTimeout.value = null
+    window.clearTimeout(closeTimeout.value);
+    closeTimeout.value = null;
   }
 
   // Clear any existing hover timeout
   if (hoverTimeout.value !== null) {
-    window.clearTimeout(hoverTimeout.value)
+    window.clearTimeout(hoverTimeout.value);
   }
 
   // Set a timeout to show the popup after 300ms
   hoverTimeout.value = window.setTimeout(() => {
-    loadParticipantDetails(dateString)
-  }, 300)
+    loadParticipantDetails(dateString);
+  }, 300);
 }
 
 function handleParticipantCountHoverEnd() {
   // Clear the timeout if mouse leaves before it triggers
   if (hoverTimeout.value !== null) {
-    window.clearTimeout(hoverTimeout.value)
-    hoverTimeout.value = null
+    window.clearTimeout(hoverTimeout.value);
+    hoverTimeout.value = null;
   }
 
   // Schedule popup close after a delay
-  schedulePopupClose()
+  schedulePopupClose();
 }
 
 function handlePopupHoverStart() {
   // Cancel any scheduled close when mouse enters popup
   if (closeTimeout.value !== null) {
-    window.clearTimeout(closeTimeout.value)
-    closeTimeout.value = null
+    window.clearTimeout(closeTimeout.value);
+    closeTimeout.value = null;
   }
 }
 
 function handlePopupHoverEnd() {
   // Don't close if we're in edit mode (TimeSelect dropdown is teleported to body)
-  if (editingNote.value) return
+  if (editingNote.value) return;
 
   // Schedule popup close when mouse leaves popup
-  schedulePopupClose()
+  schedulePopupClose();
 }
 
 function schedulePopupClose() {
   if (closeTimeout.value !== null) {
-    window.clearTimeout(closeTimeout.value)
+    window.clearTimeout(closeTimeout.value);
   }
 
   closeTimeout.value = window.setTimeout(() => {
-    closeParticipantPopup()
-  }, 200)
+    closeParticipantPopup();
+  }, 200);
 }
 
 async function loadParticipantDetails(dateString: string) {
-  selectedDate.value = dateString
-  loadingDetails.value = true
+  selectedDate.value = dateString;
+  loadingDetails.value = true;
 
   try {
-    const details = await availabilitiesApi.getDateSummary(props.calendarToken!, dateString)
-    participantDetails.value = details
+    const details = await availabilitiesApi.getDateSummary(props.calendarToken!, dateString);
+    participantDetails.value = details;
   } catch (err) {
-    console.error('Failed to load participant details:', err)
-    participantDetails.value = null
+    console.error('Failed to load participant details:', err);
+    participantDetails.value = null;
   } finally {
-    loadingDetails.value = false
+    loadingDetails.value = false;
 
     // Adjust tooltip position after content is loaded and rendered
-    await nextTick()
-    adjustTooltipPosition()
+    await nextTick();
+    adjustTooltipPosition();
   }
 }
 
 function adjustTooltipPosition() {
-  if (!tooltipRef.value) return
+  if (!tooltipRef.value) return;
 
-  const tooltip = tooltipRef.value
-  const rect = tooltip.getBoundingClientRect()
-  const offset = 10
+  const tooltip = tooltipRef.value;
+  const rect = tooltip.getBoundingClientRect();
+  const offset = 10;
 
-  let { x, y } = popupPosition.value
+  let { x, y } = popupPosition.value;
 
   // Get viewport dimensions
-  const viewportWidth = window.innerWidth
-  const viewportHeight = window.innerHeight
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
 
   // Since we're using position:fixed, coordinates are already relative to viewport
   // Check right boundary - reposition to the left if overflowing
   if (x + rect.width > viewportWidth - offset) {
-    x = viewportWidth - rect.width - offset
+    x = viewportWidth - rect.width - offset;
   }
 
   // Check bottom boundary - reposition above if overflowing
   if (y + rect.height > viewportHeight - offset) {
-    y = viewportHeight - rect.height - offset
+    y = viewportHeight - rect.height - offset;
   }
 
   // Ensure tooltip doesn't go off left edge
   if (x < offset) {
-    x = offset
+    x = offset;
   }
 
   // Ensure tooltip doesn't go off top edge
   if (y < offset) {
-    y = offset
+    y = offset;
   }
 
   // Update position if it changed
   if (x !== popupPosition.value.x || y !== popupPosition.value.y) {
-    popupPosition.value = { x, y }
+    popupPosition.value = { x, y };
   }
 }
 
 function handleParticipantCountClick(dateString: string, event: MouseEvent) {
   // Clear any pending timeouts
   if (hoverTimeout.value !== null) {
-    window.clearTimeout(hoverTimeout.value)
-    hoverTimeout.value = null
+    window.clearTimeout(hoverTimeout.value);
+    hoverTimeout.value = null;
   }
   if (closeTimeout.value !== null) {
-    window.clearTimeout(closeTimeout.value)
-    closeTimeout.value = null
+    window.clearTimeout(closeTimeout.value);
+    closeTimeout.value = null;
   }
 
   // Load participant details and keep popup open
-  loadParticipantDetails(dateString)
+  loadParticipantDetails(dateString);
 
   // Calculate position (use client coordinates for fixed positioning)
-  const target = event.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
+  const target = event.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
   popupPosition.value = {
     x: rect.right + 10,
     y: rect.top,
-  }
+  };
 }
 
 function startEdit(currentNote: string, startTime?: string, endTime?: string) {
-  editedNote.value = currentNote
-  editedStartTime.value = startTime || ''
-  editedEndTime.value = endTime || ''
-  editingNote.value = true
+  editedNote.value = currentNote;
+  editedStartTime.value = startTime || '';
+  editedEndTime.value = endTime || '';
+  editingNote.value = true;
 }
 
 function cancelEdit() {
-  editingNote.value = false
-  editedNote.value = ''
-  editedStartTime.value = ''
-  editedEndTime.value = ''
+  editingNote.value = false;
+  editedNote.value = '';
+  editedStartTime.value = '';
+  editedEndTime.value = '';
 }
 
 async function saveNote() {
   if (!props.calendarToken || !props.currentParticipantId || !selectedDate.value) {
-    return
+    return;
   }
 
-  savingNote.value = true
+  savingNote.value = true;
 
   try {
     // Update the availability with the new note and times
@@ -1390,33 +1400,33 @@ async function saveNote() {
         start_time: editedStartTime.value || undefined,
         end_time: editedEndTime.value || undefined,
       }
-    )
+    );
 
     // Reload participant details to show updated note
-    await loadParticipantDetails(selectedDate.value)
+    await loadParticipantDetails(selectedDate.value);
 
     // Close edit mode
-    editingNote.value = false
-    editedNote.value = ''
-    editedStartTime.value = ''
-    editedEndTime.value = ''
+    editingNote.value = false;
+    editedNote.value = '';
+    editedStartTime.value = '';
+    editedEndTime.value = '';
 
     // Notify parent to reload availabilities
-    emit('availability-updated')
+    emit('availability-updated');
   } catch (err) {
-    console.error('Failed to update availability:', err)
+    console.error('Failed to update availability:', err);
   } finally {
-    savingNote.value = false
+    savingNote.value = false;
   }
 }
 
 function closeParticipantPopup() {
-  selectedDate.value = null
-  participantDetails.value = null
-  editingNote.value = false
-  editedNote.value = ''
-  editedStartTime.value = ''
-  editedEndTime.value = ''
+  selectedDate.value = null;
+  participantDetails.value = null;
+  editingNote.value = false;
+  editedNote.value = '';
+  editedStartTime.value = '';
+  editedEndTime.value = '';
 }
 
 // Auto-close popup on outside interactions
@@ -1426,212 +1436,212 @@ watch(selectedDate, newVal => {
     const handleClickOutside = (event: Event) => {
       if (tooltipRef.value && !tooltipRef.value.contains(event.target as Node)) {
         // Don't close if clicking on a participant count (which would open a new popup)
-        const target = event.target as HTMLElement
+        const target = event.target as HTMLElement;
         if (!target.closest('[data-no-drag]')) {
-          closeParticipantPopup()
+          closeParticipantPopup();
         }
       }
-    }
+    };
 
     const handleScroll = () => {
-      closeParticipantPopup()
-    }
+      closeParticipantPopup();
+    };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        closeParticipantPopup()
+        closeParticipantPopup();
       }
-    }
+    };
 
     // Add listeners
     setTimeout(() => {
-      document.addEventListener('click', handleClickOutside)
-      document.addEventListener('touchstart', handleClickOutside)
-      window.addEventListener('scroll', handleScroll, true)
-      document.addEventListener('keydown', handleEscape)
-    }, 100)
+      document.addEventListener('click', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+      window.addEventListener('scroll', handleScroll, true);
+      document.addEventListener('keydown', handleEscape);
+    }, 100);
 
     // Cleanup function
     return () => {
-      document.removeEventListener('click', handleClickOutside)
-      document.removeEventListener('touchstart', handleClickOutside)
-      window.removeEventListener('scroll', handleScroll, true)
-      document.removeEventListener('keydown', handleEscape)
-    }
+      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      document.removeEventListener('keydown', handleEscape);
+    };
   }
-})
+});
 
 // Functions for rectangle selection
-const GRID_COLUMNS = 7
-const lastMoveTime = ref(0)
-const THROTTLE_DELAY = 16 // ~60fps
+const GRID_COLUMNS = 7;
+const lastMoveTime = ref(0);
+const THROTTLE_DELAY = 16; // ~60fps
 
 // Touch gesture detection (to distinguish drag from scroll)
-const touchStartTime = ref<number | null>(null)
-const touchHoldTimer = ref<number | null>(null)
-const touchIsHolding = ref(false) // True if user held for 100ms without moving
-const TOUCH_DELAY_THRESHOLD = 100 // ms - minimum delay before drag is confirmed
-const isDragConfirmed = ref(false)
+const touchStartTime = ref<number | null>(null);
+const touchHoldTimer = ref<number | null>(null);
+const touchIsHolding = ref(false); // True if user held for 100ms without moving
+const TOUCH_DELAY_THRESHOLD = 100; // ms - minimum delay before drag is confirmed
+const isDragConfirmed = ref(false);
 
 // Calculate selected cells in the rectangle
 const selectedCellIndices = computed((): Set<number> => {
   if (dragStartIndex.value === null || dragCurrentIndex.value === null) {
-    return new Set()
+    return new Set();
   }
 
-  const startIdx = dragStartIndex.value
-  const endIdx = dragCurrentIndex.value
+  const startIdx = dragStartIndex.value;
+  const endIdx = dragCurrentIndex.value;
 
-  const indices = new Set<number>()
+  const indices = new Set<number>();
 
   if (isCompactMode.value) {
     // Compact mode: N columns (weeks) × 7 rows (days)
     // Index calculation: (weekIndex - 1) * 7 + dayOfWeekIndex
     // Convert index to week/day: weekIndex = floor(index / 7), dayOfWeekIndex = index % 7
 
-    const startWeek = Math.floor(startIdx / GRID_COLUMNS)
-    const startDay = startIdx % GRID_COLUMNS
-    const endWeek = Math.floor(endIdx / GRID_COLUMNS)
-    const endDay = endIdx % GRID_COLUMNS
+    const startWeek = Math.floor(startIdx / GRID_COLUMNS);
+    const startDay = startIdx % GRID_COLUMNS;
+    const endWeek = Math.floor(endIdx / GRID_COLUMNS);
+    const endDay = endIdx % GRID_COLUMNS;
 
-    const minWeek = Math.min(startWeek, endWeek)
-    const maxWeek = Math.max(startWeek, endWeek)
-    const minDay = Math.min(startDay, endDay)
-    const maxDay = Math.max(startDay, endDay)
+    const minWeek = Math.min(startWeek, endWeek);
+    const maxWeek = Math.max(startWeek, endWeek);
+    const minDay = Math.min(startDay, endDay);
+    const maxDay = Math.max(startDay, endDay);
 
     // Collect all indices in the rectangle
     for (let week = minWeek; week <= maxWeek; week++) {
       for (let day = minDay; day <= maxDay; day++) {
-        indices.add(week * GRID_COLUMNS + day)
+        indices.add(week * GRID_COLUMNS + day);
       }
     }
   } else {
     // Classic mode: 7 columns (days) × N rows (weeks)
     // Convert indices to coordinates (row, col)
-    const startRow = Math.floor(startIdx / GRID_COLUMNS)
-    const startCol = startIdx % GRID_COLUMNS
-    const endRow = Math.floor(endIdx / GRID_COLUMNS)
-    const endCol = endIdx % GRID_COLUMNS
+    const startRow = Math.floor(startIdx / GRID_COLUMNS);
+    const startCol = startIdx % GRID_COLUMNS;
+    const endRow = Math.floor(endIdx / GRID_COLUMNS);
+    const endCol = endIdx % GRID_COLUMNS;
 
     // Find rectangle boundaries
-    const minRow = Math.min(startRow, endRow)
-    const maxRow = Math.max(startRow, endRow)
-    const minCol = Math.min(startCol, endCol)
-    const maxCol = Math.max(startCol, endCol)
+    const minRow = Math.min(startRow, endRow);
+    const maxRow = Math.max(startRow, endRow);
+    const minCol = Math.min(startCol, endCol);
+    const maxCol = Math.max(startCol, endCol);
 
     // Collect all indices in the rectangle
     for (let row = minRow; row <= maxRow; row++) {
       for (let col = minCol; col <= maxCol; col++) {
-        indices.add(row * GRID_COLUMNS + col)
+        indices.add(row * GRID_COLUMNS + col);
       }
     }
   }
 
-  return indices
-})
+  return indices;
+});
 
 function isCellSelected(index: number): boolean {
-  return selectedCellIndices.value.has(index)
+  return selectedCellIndices.value.has(index);
 }
 
 function canSelectCell(day: CalendarDay): boolean {
-  return day.isCurrentMonth && !day.isPast && day.isAllowed
+  return day.isCurrentMonth && !day.isPast && day.isAllowed;
 }
 
 function cellHasAvailability(day: CalendarDay): boolean {
-  return day.hasAvailability || day.hasRecurrence
+  return day.hasAvailability || day.hasRecurrence;
 }
 
 // Get cell index from touch/mouse coordinates
 function getCellIndexFromPoint(x: number, y: number): number | null {
-  const element = document.elementFromPoint(x, y)
-  if (!element) return null
+  const element = document.elementFromPoint(x, y);
+  if (!element) return null;
 
   // Find the calendar cell element using the calendar-cell class
-  let cell = element.closest('.calendar-cell')
+  let cell = element.closest('.calendar-cell');
 
   // If we're inside a cell's child element, find the parent cell
   if (!cell && element.closest('.calendar-grid')) {
-    const parent = element.parentElement
+    const parent = element.parentElement;
     if (parent && parent.classList.contains('calendar-grid-container')) {
       // We might be a child of the grid, find which cell
       const allCells = Array.from(parent.children).filter(child =>
         child.classList.contains('calendar-cell')
-      )
+      );
       for (let i = 0; i < allCells.length; i++) {
         if (allCells[i].contains(element)) {
-          cell = allCells[i]
-          break
+          cell = allCells[i];
+          break;
         }
       }
     } else if (parent) {
       // Try going up one more level
-      cell = parent.closest('.calendar-cell')
+      cell = parent.closest('.calendar-cell');
     }
   }
 
-  if (!cell) return null
+  if (!cell) return null;
 
   // Read the data-cell-index attribute to get the actual index in calendarDays
-  const cellIndex = (cell as HTMLElement).dataset.cellIndex
+  const cellIndex = (cell as HTMLElement).dataset.cellIndex;
   if (cellIndex !== undefined) {
-    return parseInt(cellIndex, 10)
+    return parseInt(cellIndex, 10);
   }
 
-  return null
+  return null;
 }
 
 // Unified pointer down handler (mouse + touch)
 function handlePointerDown(index: number, day: CalendarDay, event: MouseEvent | TouchEvent) {
   // Ignore if it's a click on participant counter or other interactive element
-  const target = event.target as HTMLElement
+  const target = event.target as HTMLElement;
   if (target.closest('[data-no-drag]')) {
-    return
+    return;
   }
 
-  if (!canSelectCell(day)) return
+  if (!canSelectCell(day)) return;
 
   // For mouse events, start dragging immediately
   if (event.type === 'mousedown') {
-    isDragging.value = true
-    dragStartIndex.value = index
-    dragCurrentIndex.value = index
-    dragMode.value = cellHasAvailability(day) ? 'remove' : 'add'
-    isDragConfirmed.value = true
-    event.preventDefault()
+    isDragging.value = true;
+    dragStartIndex.value = index;
+    dragCurrentIndex.value = index;
+    dragMode.value = cellHasAvailability(day) ? 'remove' : 'add';
+    isDragConfirmed.value = true;
+    event.preventDefault();
   }
   // For touch events, start a timer to detect if user holds without moving
   else if (event.type === 'touchstart' && 'touches' in event) {
-    touchStartTime.value = Date.now()
-    touchIsHolding.value = false
-    isDragConfirmed.value = false
+    touchStartTime.value = Date.now();
+    touchIsHolding.value = false;
+    isDragConfirmed.value = false;
 
     // Start timer - if it expires without touchmove, user is holding
     touchHoldTimer.value = window.setTimeout(() => {
-      touchIsHolding.value = true
+      touchIsHolding.value = true;
       // Activate drag mode immediately when timer expires
-      isDragging.value = true
-      isDragConfirmed.value = true
-    }, TOUCH_DELAY_THRESHOLD)
+      isDragging.value = true;
+      isDragConfirmed.value = true;
+    }, TOUCH_DELAY_THRESHOLD);
 
-    dragStartIndex.value = index
-    dragCurrentIndex.value = index
-    dragMode.value = cellHasAvailability(day) ? 'remove' : 'add'
+    dragStartIndex.value = index;
+    dragCurrentIndex.value = index;
+    dragMode.value = cellHasAvailability(day) ? 'remove' : 'add';
     // Don't prevent default yet - allow scroll to work
   }
 }
 
 // Unified pointer move handler (mouse only) with throttling
 function handlePointerMove(index: number) {
-  if (!isDragging.value) return
+  if (!isDragging.value) return;
 
   // Throttle for performance
-  const now = Date.now()
-  if (now - lastMoveTime.value < THROTTLE_DELAY) return
-  lastMoveTime.value = now
+  const now = Date.now();
+  if (now - lastMoveTime.value < THROTTLE_DELAY) return;
+  lastMoveTime.value = now;
 
   // For mouse events, we can use the index directly
-  dragCurrentIndex.value = index
+  dragCurrentIndex.value = index;
 }
 
 // Grid-level touch move handler (for touch drag selection)
@@ -1642,41 +1652,41 @@ function handleGridTouchMove(event: TouchEvent) {
     if (!touchIsHolding.value) {
       // Cancel the hold timer
       if (touchHoldTimer.value !== null) {
-        window.clearTimeout(touchHoldTimer.value)
-        touchHoldTimer.value = null
+        window.clearTimeout(touchHoldTimer.value);
+        touchHoldTimer.value = null;
       }
       // Reset touch tracking - allow scroll to proceed
-      touchStartTime.value = null
-      touchIsHolding.value = false
-      dragStartIndex.value = null
-      dragCurrentIndex.value = null
-      return
+      touchStartTime.value = null;
+      touchIsHolding.value = false;
+      dragStartIndex.value = null;
+      dragCurrentIndex.value = null;
+      return;
     }
     // If user held for 100ms WITHOUT moving, then moved → this is intentional drag
     else {
-      isDragging.value = true
-      isDragConfirmed.value = true
+      isDragging.value = true;
+      isDragConfirmed.value = true;
       // Now prevent default to block scrolling during drag
-      event.preventDefault()
+      event.preventDefault();
     }
   }
 
-  if (!isDragging.value || !isDragConfirmed.value) return
+  if (!isDragging.value || !isDragConfirmed.value) return;
 
   // IMPORTANT: Prevent scrolling IMMEDIATELY on ALL touchmove events once drag is confirmed
   // This must happen BEFORE throttle check to avoid scroll jank
-  event.preventDefault()
+  event.preventDefault();
 
   // Throttle for performance (only for updating drag position)
-  const now = Date.now()
-  if (now - lastMoveTime.value < THROTTLE_DELAY) return
-  lastMoveTime.value = now
+  const now = Date.now();
+  if (now - lastMoveTime.value < THROTTLE_DELAY) return;
+  lastMoveTime.value = now;
 
   if (event.touches.length > 0) {
-    const touch = event.touches[0]
-    const cellIndex = getCellIndexFromPoint(touch.clientX, touch.clientY)
+    const touch = event.touches[0];
+    const cellIndex = getCellIndexFromPoint(touch.clientX, touch.clientY);
     if (cellIndex !== null) {
-      dragCurrentIndex.value = cellIndex
+      dragCurrentIndex.value = cellIndex;
     }
   }
 }
@@ -1685,154 +1695,154 @@ function handleGridTouchMove(event: TouchEvent) {
 function handlePointerUp() {
   // Clean up timer if still running
   if (touchHoldTimer.value !== null) {
-    window.clearTimeout(touchHoldTimer.value)
-    touchHoldTimer.value = null
+    window.clearTimeout(touchHoldTimer.value);
+    touchHoldTimer.value = null;
   }
 
   // Only process if drag was confirmed (for touch) or if it was a mouse drag
   if (!isDragging.value && !isDragConfirmed.value) {
     // Reset touch tracking
-    touchStartTime.value = null
-    touchIsHolding.value = false
-    dragStartIndex.value = null
-    dragCurrentIndex.value = null
-    isDragConfirmed.value = false
-    return
+    touchStartTime.value = null;
+    touchIsHolding.value = false;
+    dragStartIndex.value = null;
+    dragCurrentIndex.value = null;
+    isDragConfirmed.value = false;
+    return;
   }
 
   // If touch wasn't confirmed as drag (just a tap), treat as single click
   if (!isDragConfirmed.value && dragStartIndex.value !== null) {
-    const day = calendarDays.value[dragStartIndex.value]
+    const day = calendarDays.value[dragStartIndex.value];
     if (day && canSelectCell(day)) {
-      emit('day-click', day.dateString)
+      emit('day-click', day.dateString);
     }
     // Reset state
-    isDragging.value = false
-    dragStartIndex.value = null
-    dragCurrentIndex.value = null
-    dragMode.value = 'add'
-    touchStartTime.value = null
-    touchIsHolding.value = false
-    isDragConfirmed.value = false
-    return
+    isDragging.value = false;
+    dragStartIndex.value = null;
+    dragCurrentIndex.value = null;
+    dragMode.value = 'add';
+    touchStartTime.value = null;
+    touchIsHolding.value = false;
+    isDragConfirmed.value = false;
+    return;
   }
 
-  const currentMode = dragMode.value
+  const currentMode = dragMode.value;
 
   // Collect valid selected dates
-  const selectedDates: string[] = []
+  const selectedDates: string[] = [];
 
   selectedCellIndices.value.forEach(index => {
-    const day = calendarDays.value[index]
+    const day = calendarDays.value[index];
     if (day && canSelectCell(day)) {
       // In remove mode, only keep cells with availability
       // In add mode, keep all valid cells
       if (currentMode === 'remove') {
         if (cellHasAvailability(day)) {
-          selectedDates.push(day.dateString)
+          selectedDates.push(day.dateString);
         }
       } else {
-        selectedDates.push(day.dateString)
+        selectedDates.push(day.dateString);
       }
     }
-  })
+  });
 
   // Emit event if dates were selected
   if (selectedDates.length > 0) {
     // Sort dates chronologically
-    selectedDates.sort()
+    selectedDates.sort();
 
     // If single date, emit day-click for compatibility (toggle)
     if (selectedDates.length === 1) {
-      emit('day-click', selectedDates[0])
+      emit('day-click', selectedDates[0]);
     } else {
       // Emit appropriate event based on mode
       if (currentMode === 'remove') {
-        emit('days-deselect', selectedDates)
+        emit('days-deselect', selectedDates);
       } else {
-        emit('days-select', selectedDates)
+        emit('days-select', selectedDates);
       }
     }
   }
 
   // Reset drag state
-  isDragging.value = false
-  dragStartIndex.value = null
-  dragCurrentIndex.value = null
-  dragMode.value = 'add'
-  touchStartTime.value = null
-  touchIsHolding.value = false
-  isDragConfirmed.value = false
+  isDragging.value = false;
+  dragStartIndex.value = null;
+  dragCurrentIndex.value = null;
+  dragMode.value = 'add';
+  touchStartTime.value = null;
+  touchIsHolding.value = false;
+  isDragConfirmed.value = false;
 }
 
 // Cancel drag if pointer leaves the grid
 function handlePointerLeave() {
   // Clean up timer if still running
   if (touchHoldTimer.value !== null) {
-    window.clearTimeout(touchHoldTimer.value)
-    touchHoldTimer.value = null
+    window.clearTimeout(touchHoldTimer.value);
+    touchHoldTimer.value = null;
   }
 
   if (isDragging.value) {
-    isDragging.value = false
-    dragStartIndex.value = null
-    dragCurrentIndex.value = null
-    dragMode.value = 'add'
-    touchStartTime.value = null
-    touchIsHolding.value = false
-    isDragConfirmed.value = false
+    isDragging.value = false;
+    dragStartIndex.value = null;
+    dragCurrentIndex.value = null;
+    dragMode.value = 'add';
+    touchStartTime.value = null;
+    touchIsHolding.value = false;
+    isDragConfirmed.value = false;
   }
 }
 
 // Container resize observer
-let resizeObserver: ResizeObserver | null = null
+let resizeObserver: ResizeObserver | null = null;
 
 // Handle view mode changes from other CalendarGrid instances
 const handleViewModeChange = (event: Event) => {
-  const customEvent = event as CustomEvent<'classic' | 'compact'>
+  const customEvent = event as CustomEvent<'classic' | 'compact'>;
   if (customEvent.detail) {
-    viewMode.value = customEvent.detail
+    viewMode.value = customEvent.detail;
   }
-}
+};
 
 // Handle window resize to update container width
 const handleResize = () => {
   if (compactGridContainer.value) {
-    containerWidth.value = compactGridContainer.value.clientWidth
+    containerWidth.value = compactGridContainer.value.clientWidth;
   }
-}
+};
 
 onMounted(() => {
   // Observe container width changes with ResizeObserver
   if (compactGridContainer.value) {
-    resizeObserver = new ResizeObserver((entries) => {
+    resizeObserver = new ResizeObserver(entries => {
       for (const entry of entries) {
-        containerWidth.value = entry.contentRect.width
+        containerWidth.value = entry.contentRect.width;
       }
-    })
-    resizeObserver.observe(compactGridContainer.value)
+    });
+    resizeObserver.observe(compactGridContainer.value);
   }
 
   // Listen for window resize and view mode changes
-  window.addEventListener('resize', handleResize)
-  window.addEventListener('calendar-view-mode-change', handleViewModeChange)
+  window.addEventListener('resize', handleResize);
+  window.addEventListener('calendar-view-mode-change', handleViewModeChange);
 
   // Set initial width
   nextTick(() => {
     if (compactGridContainer.value) {
-      containerWidth.value = compactGridContainer.value.clientWidth
+      containerWidth.value = compactGridContainer.value.clientWidth;
     }
-  })
-})
+  });
+});
 
 onUnmounted(() => {
   // Clean up observers and event listeners
   if (resizeObserver) {
-    resizeObserver.disconnect()
+    resizeObserver.disconnect();
   }
-  window.removeEventListener('resize', handleResize)
-  window.removeEventListener('calendar-view-mode-change', handleViewModeChange)
-})
+  window.removeEventListener('resize', handleResize);
+  window.removeEventListener('calendar-view-mode-change', handleViewModeChange);
+});
 </script>
 
 <style scoped>

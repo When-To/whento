@@ -20,11 +20,7 @@
         </div>
 
         <!-- Form -->
-        <form
-          v-if="!success"
-          class="space-y-6"
-          @submit.prevent="handleSubmit"
-        >
+        <form v-if="!success" class="space-y-6" @submit.prevent="handleSubmit">
           <!-- New Password -->
           <div>
             <label
@@ -43,7 +39,7 @@
               class="input"
               :class="{ 'input-error': error }"
               :disabled="loading"
-            >
+            />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{ t('auth.resetPassword.passwordRequirement') }}
             </p>
@@ -67,7 +63,7 @@
               class="input"
               :class="{ 'input-error': error }"
               :disabled="loading"
-            >
+            />
           </div>
 
           <!-- Error Message -->
@@ -84,15 +80,8 @@
             :disabled="loading || !isPasswordValid"
             class="btn btn-primary w-full"
           >
-            <span
-              v-if="loading"
-              class="flex items-center justify-center"
-            >
-              <svg
-                class="mr-2 h-4 w-4 animate-spin"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
+            <span v-if="loading" class="flex items-center justify-center">
+              <svg class="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle
                   class="opacity-25"
                   cx="12"
@@ -114,11 +103,10 @@
         </form>
 
         <!-- Success State -->
-        <div
-          v-else
-          class="py-6 text-center"
-        >
-          <div class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-success-100 dark:bg-success-900/20">
+        <div v-else class="py-6 text-center">
+          <div
+            class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-success-100 dark:bg-success-900/20"
+          >
             <svg
               class="h-10 w-10 text-success-600 dark:text-success-400"
               fill="none"
@@ -159,64 +147,64 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
-import { useToastStore } from '@/stores/toast'
+import { ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
 
-const { t } = useI18n()
-const route = useRoute()
-const router = useRouter()
-const authStore = useAuthStore()
-const toastStore = useToastStore()
+const { t } = useI18n();
+const route = useRoute();
+const router = useRouter();
+const authStore = useAuthStore();
+const toastStore = useToastStore();
 
-const token = ref('')
-const newPassword = ref('')
-const confirmPassword = ref('')
-const loading = ref(false)
-const error = ref('')
-const success = ref(false)
+const token = ref('');
+const newPassword = ref('');
+const confirmPassword = ref('');
+const loading = ref(false);
+const error = ref('');
+const success = ref(false);
 
 const isPasswordValid = computed(() => {
   return (
     newPassword.value.length >= 8 &&
     confirmPassword.value.length >= 8 &&
     newPassword.value === confirmPassword.value
-  )
-})
+  );
+});
 
 onMounted(() => {
-  token.value = route.params.token as string
+  token.value = route.params.token as string;
   if (!token.value || token.value.length !== 64) {
-    error.value = t('auth.resetPassword.invalidToken')
+    error.value = t('auth.resetPassword.invalidToken');
   }
-})
+});
 
 const handleSubmit = async () => {
   if (!isPasswordValid.value) {
-    error.value = t('auth.resetPassword.passwordMismatch')
-    return
+    error.value = t('auth.resetPassword.passwordMismatch');
+    return;
   }
 
-  loading.value = true
-  error.value = ''
+  loading.value = true;
+  error.value = '';
 
   try {
-    await authStore.resetPassword(token.value, newPassword.value)
-    success.value = true
-    toastStore.success(t('auth.resetPassword.successToast'))
+    await authStore.resetPassword(token.value, newPassword.value);
+    success.value = true;
+    toastStore.success(t('auth.resetPassword.successToast'));
 
     // Auto-redirect to dashboard after 2 seconds
     setTimeout(() => {
-      router.push('/dashboard')
-    }, 2000)
+      router.push('/dashboard');
+    }, 2000);
   } catch (err: any) {
-    error.value = err.message || t('auth.resetPassword.error')
+    error.value = err.message || t('auth.resetPassword.error');
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 </script>
 
 <style scoped>

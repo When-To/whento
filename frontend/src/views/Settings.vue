@@ -78,7 +78,7 @@
               'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
               activeTab === 'profile'
                 ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300',
             ]"
             @click="activeTab = 'profile'"
           >
@@ -89,7 +89,7 @@
               'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
               activeTab === 'security'
                 ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300',
             ]"
             @click="activeTab = 'security'"
           >
@@ -106,20 +106,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
-import { useToastStore } from '@/stores/toast'
-import { apiClient } from '@/api/client'
-import ProfileTab from '@/components/settings/ProfileTab.vue'
-import SecurityTab from '@/components/settings/SecurityTab.vue'
+import { ref, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
+import { apiClient } from '@/api/client';
+import ProfileTab from '@/components/settings/ProfileTab.vue';
+import SecurityTab from '@/components/settings/SecurityTab.vue';
 
-const { t } = useI18n()
-const authStore = useAuthStore()
-const toast = useToastStore()
+const { t } = useI18n();
+const authStore = useAuthStore();
+const toast = useToastStore();
 
-const activeTab = ref('profile')
-const resending = ref(false)
+const activeTab = ref('profile');
+const resending = ref(false);
 
 const user = computed(
   () =>
@@ -130,18 +130,18 @@ const user = computed(
       locale: 'fr',
       email_verified: false,
     }
-)
+);
 
 async function resendVerificationEmail() {
-  resending.value = true
+  resending.value = true;
 
   try {
-    await apiClient.post('/auth/send-verification')
-    toast.success(t('auth.verificationEmailResent'))
+    await apiClient.post('/auth/send-verification');
+    toast.success(t('auth.verificationEmailResent'));
   } catch (error: any) {
-    toast.error(error.message || t('auth.failedToResendEmail'))
+    toast.error(error.message || t('auth.failedToResendEmail'));
   } finally {
-    resending.value = false
+    resending.value = false;
   }
 }
 </script>

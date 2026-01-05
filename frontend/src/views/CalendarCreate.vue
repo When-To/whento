@@ -13,12 +13,7 @@
           to="/dashboard"
           class="mb-4 inline-flex items-center text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
         >
-          <svg
-            class="mr-2 h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
+          <svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -34,10 +29,7 @@
       </div>
 
       <!-- Form -->
-      <form
-        class="space-y-6"
-        @submit.prevent="handleSubmit"
-      >
+      <form class="space-y-6" @submit.prevent="handleSubmit">
         <!-- Calendar Info Card -->
         <div class="card">
           <h2 class="mb-4 font-display text-xl font-semibold text-gray-900 dark:text-white">
@@ -58,11 +50,8 @@
                 :class="{ 'border-danger-500': errors.name }"
                 :placeholder="t('calendar.calendarNamePlaceholder')"
                 required
-              >
-              <p
-                v-if="errors.name"
-                class="mt-1 text-sm text-danger-600"
-              >
+              />
+              <p v-if="errors.name" class="mt-1 text-sm text-danger-600">
                 {{ errors.name }}
               </p>
             </div>
@@ -92,15 +81,9 @@
         </div>
 
         <!-- Participants -->
-        <CollapsibleSection
-          :title="t('calendar.participants')"
-          :default-open="true"
-        >
+        <CollapsibleSection :title="t('calendar.participants')" :default-open="true">
           <!-- Participants List -->
-          <div
-            v-if="participants.length > 0"
-            class="mb-4 space-y-2"
-          >
+          <div v-if="participants.length > 0" class="mb-4 space-y-2">
             <div
               v-for="(_participant, index) in participants"
               :key="index"
@@ -112,7 +95,7 @@
                 class="input flex-1"
                 :placeholder="t('calendar.participantName')"
                 required
-              >
+              />
               <button
                 v-if="participants.length > 1"
                 type="button"
@@ -120,12 +103,7 @@
                 :title="t('common.delete')"
                 @click="removeParticipant(index)"
               >
-                <svg
-                  class="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     stroke-linecap="round"
                     stroke-linejoin="round"
@@ -168,18 +146,9 @@
               class="input flex-1"
               :placeholder="t('calendar.participantNamePlaceholder')"
               @keyup.enter.prevent="addParticipant"
-            >
-            <button
-              type="button"
-              class="btn btn-secondary"
-              @click="addParticipant"
-            >
-              <svg
-                class="mr-2 h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+            />
+            <button type="button" class="btn btn-secondary" @click="addParticipant">
+              <svg class="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -191,10 +160,7 @@
             </button>
           </div>
 
-          <p
-            v-if="errors.participants"
-            class="mb-4 text-sm text-danger-600"
-          >
+          <p v-if="errors.participants" class="mb-4 text-sm text-danger-600">
             {{ errors.participants }}
           </p>
 
@@ -208,7 +174,7 @@
                 v-model="form.lock_participants"
                 type="checkbox"
                 class="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
-              >
+              />
               <label
                 for="lock-participants-create"
                 class="ml-2 text-sm text-gray-700 dark:text-gray-300"
@@ -245,16 +211,14 @@
               class="input"
               :class="{ 'border-danger-500': errors.threshold }"
               required
-            >
+            />
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {{ t('calendar.thresholdHelp') }}
               <span v-if="participants.length > 0">
-                ({{ t('common.max') }}: {{ participants.length }})</span>
+                ({{ t('common.max') }}: {{ participants.length }})</span
+              >
             </p>
-            <p
-              v-if="errors.threshold"
-              class="mt-1 text-sm text-danger-600"
-            >
+            <p v-if="errors.threshold" class="mt-1 text-sm text-danger-600">
               {{ errors.threshold }}
             </p>
           </div>
@@ -264,12 +228,7 @@
             <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('calendar.minDurationHours') }}
             </label>
-            <input
-              v-model.number="form.min_duration_hours"
-              type="number"
-              min="0"
-              class="input"
-            >
+            <input v-model.number="form.min_duration_hours" type="number" min="0" class="input" />
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {{ t('calendar.minDurationHelp') }}
             </p>
@@ -278,9 +237,7 @@
 
         <!-- Allow/block days/hours -->
         <CollapsibleSection
-          :title="
-            locale === 'fr' ? 'Autoriser/bloquer des jours/heures' : 'Allow/block days/hours'
-          "
+          :title="locale === 'fr' ? 'Autoriser/bloquer des jours/heures' : 'Allow/block days/hours'"
           :default-open="false"
         >
           <!-- Date Range -->
@@ -295,7 +252,7 @@
                   type="date"
                   class="input"
                   :placeholder="t('calendar.calendarStartDatePlaceholder')"
-                >
+                />
               </div>
               <div>
                 <input
@@ -303,7 +260,7 @@
                   type="date"
                   class="input"
                   :placeholder="t('calendar.calendarEndDatePlaceholder')"
-                >
+                />
               </div>
             </div>
             <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
@@ -396,11 +353,7 @@
                   >
                     {{ t('calendar.holidaysPolicy') }}
                   </label>
-                  <select
-                    id="holidays-policy"
-                    v-model="form.holidays_policy"
-                    class="input w-48"
-                  >
+                  <select id="holidays-policy" v-model="form.holidays_policy" class="input w-48">
                     <option value="ignore">
                       {{ t('calendar.holidaysPolicyIgnore') }}
                     </option>
@@ -450,7 +403,7 @@
                   type="checkbox"
                   :disabled="allWeekdaysSelected"
                   class="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-700"
-                >
+                />
                 <label
                   for="allow-holiday-eves"
                   class="ml-2 text-sm text-gray-700 dark:text-gray-300"
@@ -524,10 +477,7 @@
         </div>
 
         <!-- Error Message -->
-        <div
-          v-if="errorMessage"
-          class="rounded-lg bg-danger-50 p-4 dark:bg-danger-900/20"
-        >
+        <div v-if="errorMessage" class="rounded-lg bg-danger-50 p-4 dark:bg-danger-900/20">
           <div class="flex">
             <svg
               class="h-5 w-5 text-danger-600 dark:text-danger-400"
@@ -550,10 +500,7 @@
 
         <!-- Actions -->
         <div class="flex items-center justify-end gap-4">
-          <router-link
-            to="/dashboard"
-            class="btn btn-ghost"
-          >
+          <router-link to="/dashboard" class="btn btn-ghost">
             {{ t('common.cancel') }}
           </router-link>
           <button
@@ -561,12 +508,7 @@
             :disabled="loading || participants.length === 0"
             class="btn btn-primary"
           >
-            <svg
-              v-if="loading"
-              class="mr-2 h-5 w-5 animate-spin"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
+            <svg v-if="loading" class="mr-2 h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle
                 class="opacity-25"
                 cx="12"
@@ -590,21 +532,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useCalendarStore } from '@/stores/calendar'
-import { useAuthStore } from '@/stores/auth'
-import TimezoneSelector from '@/components/TimezoneSelector.vue'
-import TimeSelect from '@/components/TimeSelect.vue'
-import CollapsibleSection from '@/components/CollapsibleSection.vue'
-import NotificationSettings from '@/components/NotificationSettings.vue'
-import { getDefaultNotifyConfig, type NotifyConfig } from '@/api/notify'
+import { ref, reactive, onMounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useCalendarStore } from '@/stores/calendar';
+import { useAuthStore } from '@/stores/auth';
+import TimezoneSelector from '@/components/TimezoneSelector.vue';
+import TimeSelect from '@/components/TimeSelect.vue';
+import CollapsibleSection from '@/components/CollapsibleSection.vue';
+import NotificationSettings from '@/components/NotificationSettings.vue';
+import { getDefaultNotifyConfig, type NotifyConfig } from '@/api/notify';
 
-const router = useRouter()
-const { t, locale } = useI18n()
-const calendarStore = useCalendarStore()
-const authStore = useAuthStore()
+const router = useRouter();
+const { t, locale } = useI18n();
+const calendarStore = useCalendarStore();
+const authStore = useAuthStore();
 
 const form = reactive({
   name: '',
@@ -631,13 +573,13 @@ const form = reactive({
   holiday_eve_max_time: '',
   start_date: '',
   end_date: '',
-})
+});
 
 // Notification config state
-const notifyConfig = ref<NotifyConfig>(getDefaultNotifyConfig())
-const smtpConfigured = ref(true) // TODO: Fetch from backend config
+const notifyConfig = ref<NotifyConfig>(getDefaultNotifyConfig());
+const smtpConfigured = ref(true); // TODO: Fetch from backend config
 
-const participants = ref<string[]>([])
+const participants = ref<string[]>([]);
 
 // Weekdays (0=Sunday, 6=Saturday)
 // Order depends on locale: Monday-first (fr) or Sunday-first (en)
@@ -650,54 +592,54 @@ const weekdays = computed(() => {
     { value: 4, short: t('weekdays.short.thursday') },
     { value: 5, short: t('weekdays.short.friday') },
     { value: 6, short: t('weekdays.short.saturday') },
-  ]
+  ];
 
   // For locales that start the week on Monday (fr, most of Europe)
   if (locale.value === 'fr') {
     // Move Sunday to the end
-    return [...days.slice(1), days[0]]
+    return [...days.slice(1), days[0]];
   }
 
   // For locales that start on Sunday (en, US)
-  return days
-})
+  return days;
+});
 
 // Check if all weekdays are selected
 const allWeekdaysSelected = computed(() => {
-  return form.allowed_weekdays.length === 7
-})
+  return form.allowed_weekdays.length === 7;
+});
 
 // Automatically add the connected user as a default participant
 // and initialize timezone with the user's timezone
 onMounted(() => {
   if (authStore.user?.display_name) {
-    participants.value.push(authStore.user.display_name)
+    participants.value.push(authStore.user.display_name);
   }
   if (authStore.user?.timezone) {
-    form.timezone = authStore.user.timezone
+    form.timezone = authStore.user.timezone;
   }
-})
-const newParticipantName = ref('')
-const loading = ref(false)
-const errorMessage = ref('')
+});
+const newParticipantName = ref('');
+const loading = ref(false);
+const errorMessage = ref('');
 const errors = reactive({
   name: '',
   threshold: '',
   participants: '',
-})
+});
 
 function toggleWeekday(day: number) {
-  const index = form.allowed_weekdays.indexOf(day)
+  const index = form.allowed_weekdays.indexOf(day);
   if (index > -1) {
     // Remove if already selected (but keep at least one day)
     if (form.allowed_weekdays.length > 1) {
-      form.allowed_weekdays.splice(index, 1)
+      form.allowed_weekdays.splice(index, 1);
     }
   } else {
     // Add if not selected
-    form.allowed_weekdays.push(day)
+    form.allowed_weekdays.push(day);
     // Sort to keep in order
-    form.allowed_weekdays.sort((a, b) => a - b)
+    form.allowed_weekdays.sort((a, b) => a - b);
   }
 }
 
@@ -705,88 +647,88 @@ function addParticipant() {
   if (newParticipantName.value.trim()) {
     // Check for duplicates
     if (participants.value.includes(newParticipantName.value.trim())) {
-      errors.participants = t('calendar.duplicateParticipant')
-      return
+      errors.participants = t('calendar.duplicateParticipant');
+      return;
     }
 
-    participants.value.push(newParticipantName.value.trim())
-    newParticipantName.value = ''
-    errors.participants = ''
+    participants.value.push(newParticipantName.value.trim());
+    newParticipantName.value = '';
+    errors.participants = '';
   }
 }
 
 function removeParticipant(index: number) {
-  participants.value.splice(index, 1)
+  participants.value.splice(index, 1);
 }
 
 // Normalise "00:00" to empty string (00:00 is not meaningful as a time restriction)
 function normalizeTime(time: string): string {
-  return time === '00:00' ? '' : time
+  return time === '00:00' ? '' : time;
 }
 
 // Prepare weekday_times for API: normalize 00:00 to empty
 function prepareWeekdayTimes(
   weekdayTimes: Record<number, { min_time: string; max_time: string }>
 ): Record<number, { min_time?: string; max_time?: string }> {
-  const result: Record<number, { min_time?: string; max_time?: string }> = {}
+  const result: Record<number, { min_time?: string; max_time?: string }> = {};
   for (const [day, times] of Object.entries(weekdayTimes)) {
-    const minTime = normalizeTime(times.min_time)
-    const maxTime = normalizeTime(times.max_time)
+    const minTime = normalizeTime(times.min_time);
+    const maxTime = normalizeTime(times.max_time);
     result[Number(day)] = {
       ...(minTime ? { min_time: minTime } : {}),
       ...(maxTime ? { max_time: maxTime } : {}),
-    }
+    };
   }
-  return result
+  return result;
 }
 
 function validateForm(): boolean {
   // Reset errors
-  errors.name = ''
-  errors.threshold = ''
-  errors.participants = ''
+  errors.name = '';
+  errors.threshold = '';
+  errors.participants = '';
 
-  let isValid = true
+  let isValid = true;
 
   if (!form.name.trim()) {
-    errors.name = t('errors.required')
-    isValid = false
+    errors.name = t('errors.required');
+    isValid = false;
   }
 
   if (participants.value.length === 0) {
-    errors.participants = t('calendar.participantsRequired')
-    isValid = false
+    errors.participants = t('calendar.participantsRequired');
+    isValid = false;
   }
 
   if (!form.threshold || form.threshold < 1) {
-    errors.threshold = t('calendar.thresholdMinError')
-    isValid = false
+    errors.threshold = t('calendar.thresholdMinError');
+    isValid = false;
   }
 
   if (participants.value.length > 0 && form.threshold > participants.value.length) {
-    errors.threshold = t('calendar.thresholdMaxError')
-    isValid = false
+    errors.threshold = t('calendar.thresholdMaxError');
+    isValid = false;
   }
 
-  return isValid
+  return isValid;
 }
 
 async function handleSubmit() {
-  errorMessage.value = ''
+  errorMessage.value = '';
 
   if (!validateForm()) {
-    return
+    return;
   }
 
-  loading.value = true
+  loading.value = true;
 
   try {
     // Create calendar with participants in a single atomic request
     // Normalize 00:00 times to empty (not meaningful as restrictions)
-    const normalizedHolidayMinTime = normalizeTime(form.holiday_min_time)
-    const normalizedHolidayMaxTime = normalizeTime(form.holiday_max_time)
-    const normalizedHolidayEveMinTime = normalizeTime(form.holiday_eve_min_time)
-    const normalizedHolidayEveMaxTime = normalizeTime(form.holiday_eve_max_time)
+    const normalizedHolidayMinTime = normalizeTime(form.holiday_min_time);
+    const normalizedHolidayMaxTime = normalizeTime(form.holiday_max_time);
+    const normalizedHolidayEveMinTime = normalizeTime(form.holiday_eve_min_time);
+    const normalizedHolidayEveMaxTime = normalizeTime(form.holiday_eve_max_time);
 
     const calendar = await calendarStore.createCalendar({
       name: form.name.trim(),
@@ -810,15 +752,15 @@ async function handleSubmit() {
       notify_config: notifyConfig.value.enabled ? JSON.stringify(notifyConfig.value) : undefined,
       participant_locale: locale.value,
       participants: participants.value.filter(name => name.trim() !== ''),
-    } as any)
+    } as any);
 
     // Redirect to calendar management page
-    router.push(`/calendars/${calendar.id}/settings`)
+    router.push(`/calendars/${calendar.id}/settings`);
   } catch (error: any) {
-    console.error('Error creating calendar:', error)
-    errorMessage.value = error.message || t('calendar.createError')
+    console.error('Error creating calendar:', error);
+    errorMessage.value = error.message || t('calendar.createError');
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 </script>

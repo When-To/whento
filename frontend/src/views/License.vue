@@ -5,210 +5,210 @@
 -->
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { ref, computed, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   getLicenseStatus,
   activateLicense,
   deactivateLicense,
   type LicenseStatus,
-} from '../api/license'
-import { useRouter } from 'vue-router'
+} from '../api/license';
+import { useRouter } from 'vue-router';
 
-const { t } = useI18n()
-const router = useRouter()
+const { t } = useI18n();
+const router = useRouter();
 
-const license = ref<LicenseStatus | null>(null)
-const loading = ref(true)
-const activating = ref(false)
-const deactivating = ref(false)
-const error = ref<string | null>(null)
-const success = ref<string | null>(null)
+const license = ref<LicenseStatus | null>(null);
+const loading = ref(true);
+const activating = ref(false);
+const deactivating = ref(false);
+const error = ref<string | null>(null);
+const success = ref<string | null>(null);
 
-const licenseKey = ref('')
-const showActivateForm = ref(false)
-const isDragging = ref(false)
-const fileInputRef = ref<HTMLInputElement | null>(null)
+const licenseKey = ref('');
+const showActivateForm = ref(false);
+const isDragging = ref(false);
+const fileInputRef = ref<HTMLInputElement | null>(null);
 
 const fetchLicense = async () => {
   try {
-    loading.value = true
-    error.value = null
-    license.value = await getLicenseStatus()
+    loading.value = true;
+    error.value = null;
+    license.value = await getLicenseStatus();
   } catch (err: any) {
     // If 404, means no license activated (Community tier)
     if (err.response?.status === 404) {
-      license.value = null
-      showActivateForm.value = true
+      license.value = null;
+      showActivateForm.value = true;
     } else {
-      error.value = err.response?.data?.error || t('license.loadingFailed')
+      error.value = err.response?.data?.error || t('license.loadingFailed');
     }
-    console.error('Failed to fetch license:', err)
+    console.error('Failed to fetch license:', err);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const handleActivate = async () => {
   if (!licenseKey.value.trim()) {
-    error.value = t('errors.required')
-    return
+    error.value = t('errors.required');
+    return;
   }
 
   try {
-    activating.value = true
-    error.value = null
-    success.value = null
+    activating.value = true;
+    error.value = null;
+    success.value = null;
 
-    const response = await activateLicense(licenseKey.value)
+    const response = await activateLicense(licenseKey.value);
 
-    success.value = t('license.activationSuccess', { tier: response.tier })
-    licenseKey.value = ''
-    showActivateForm.value = false
+    success.value = t('license.activationSuccess', { tier: response.tier });
+    licenseKey.value = '';
+    showActivateForm.value = false;
 
     // Refresh license status
-    await fetchLicense()
+    await fetchLicense();
   } catch (err: any) {
-    error.value = err.response?.data?.error || t('license.activationFailed')
-    console.error('Activation error:', err)
+    error.value = err.response?.data?.error || t('license.activationFailed');
+    console.error('Activation error:', err);
   } finally {
-    activating.value = false
+    activating.value = false;
   }
-}
+};
 
 const handleDeactivate = async () => {
   if (!confirm(t('license.deactivateConfirm', { limit: 30 }))) {
-    return
+    return;
   }
 
   try {
-    deactivating.value = true
-    error.value = null
-    success.value = null
+    deactivating.value = true;
+    error.value = null;
+    success.value = null;
 
-    await deactivateLicense()
+    await deactivateLicense();
 
-    success.value = t('license.deactivationSuccess')
-    license.value = null
-    showActivateForm.value = true
+    success.value = t('license.deactivationSuccess');
+    license.value = null;
+    showActivateForm.value = true;
   } catch (err: any) {
-    error.value = err.response?.data?.error || t('license.deactivationFailed')
-    console.error('Deactivation error:', err)
+    error.value = err.response?.data?.error || t('license.deactivationFailed');
+    console.error('Deactivation error:', err);
   } finally {
-    deactivating.value = false
+    deactivating.value = false;
   }
-}
+};
 
 const tierColor = computed(() => {
-  if (!license.value) return 'bg-gray-100 text-gray-800'
+  if (!license.value) return 'bg-gray-100 text-gray-800';
 
   switch (license.value.license.tier.toLowerCase()) {
     case 'enterprise':
-      return 'bg-purple-100 text-purple-800'
+      return 'bg-purple-100 text-purple-800';
     case 'pro':
-      return 'bg-blue-100 text-blue-800'
+      return 'bg-blue-100 text-blue-800';
     case 'community':
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-gray-100 text-gray-800';
     default:
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-gray-100 text-gray-800';
   }
-})
+});
 
 const usagePercentage = computed(() => {
-  if (!license.value || license.value.license.calendar_limit === 0) return 0
-  return Math.round((license.value.usage / license.value.license.calendar_limit) * 100)
-})
+  if (!license.value || license.value.license.calendar_limit === 0) return 0;
+  return Math.round((license.value.usage / license.value.license.calendar_limit) * 100);
+});
 
 const usageColor = computed(() => {
-  if (usagePercentage.value >= 90) return 'text-red-600'
-  if (usagePercentage.value >= 75) return 'text-orange-600'
-  return 'text-green-600'
-})
+  if (usagePercentage.value >= 90) return 'text-red-600';
+  if (usagePercentage.value >= 75) return 'text-orange-600';
+  return 'text-green-600';
+});
 
 const barColor = computed(() => {
-  if (usagePercentage.value >= 90) return 'bg-red-500'
-  if (usagePercentage.value >= 75) return 'bg-orange-500'
-  return 'bg-green-500'
-})
+  if (usagePercentage.value >= 90) return 'bg-red-500';
+  if (usagePercentage.value >= 75) return 'bg-orange-500';
+  return 'bg-green-500';
+});
 
 const copySupportKey = async () => {
-  if (!license.value?.license.support_key) return
+  if (!license.value?.license.support_key) return;
 
   try {
-    await navigator.clipboard.writeText(license.value.license.support_key)
-    success.value = t('license.supportKeyCopied')
+    await navigator.clipboard.writeText(license.value.license.support_key);
+    success.value = t('license.supportKeyCopied');
     setTimeout(() => {
-      success.value = null
-    }, 3000)
+      success.value = null;
+    }, 3000);
   } catch (err) {
-    error.value = t('license.copyFailed')
-    console.error('Copy error:', err)
+    error.value = t('license.copyFailed');
+    console.error('Copy error:', err);
   }
-}
+};
 
 const handleFileSelect = async (event: Event) => {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
   if (file) {
-    await readLicenseFile(file)
+    await readLicenseFile(file);
   }
-}
+};
 
 const handleFileDrop = async (event: DragEvent) => {
-  event.preventDefault()
-  isDragging.value = false
+  event.preventDefault();
+  isDragging.value = false;
 
-  const file = event.dataTransfer?.files?.[0]
+  const file = event.dataTransfer?.files?.[0];
   if (file) {
-    await readLicenseFile(file)
+    await readLicenseFile(file);
   }
-}
+};
 
 const readLicenseFile = async (file: File) => {
   try {
-    error.value = null
+    error.value = null;
 
     // Check if it's a JSON file
     if (!file.name.endsWith('.json')) {
-      error.value = t('license.invalidFileType')
-      return
+      error.value = t('license.invalidFileType');
+      return;
     }
 
-    const text = await file.text()
+    const text = await file.text();
 
     // Validate JSON
     try {
-      JSON.parse(text)
-      licenseKey.value = text
-      success.value = t('license.fileLoaded')
+      JSON.parse(text);
+      licenseKey.value = text;
+      success.value = t('license.fileLoaded');
       setTimeout(() => {
-        success.value = null
-      }, 3000)
+        success.value = null;
+      }, 3000);
     } catch (_e) {
-      error.value = t('license.invalidJson')
+      error.value = t('license.invalidJson');
     }
   } catch (err) {
-    error.value = t('license.fileReadError')
-    console.error('File read error:', err)
+    error.value = t('license.fileReadError');
+    console.error('File read error:', err);
   }
-}
+};
 
 const handleDragOver = (event: DragEvent) => {
-  event.preventDefault()
-  isDragging.value = true
-}
+  event.preventDefault();
+  isDragging.value = true;
+};
 
 const handleDragLeave = () => {
-  isDragging.value = false
-}
+  isDragging.value = false;
+};
 
 const triggerFileInput = () => {
-  fileInputRef.value?.click()
-}
+  fileInputRef.value?.click();
+};
 
 onMounted(() => {
-  fetchLicense()
-})
+  fetchLicense();
+});
 </script>
 
 <template>
@@ -230,11 +230,7 @@ onMounted(() => {
         class="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800"
       >
         <div class="flex items-start">
-          <svg
-            class="w-5 h-5 mr-2 mt-0.5"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
+          <svg class="w-5 h-5 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
             <path
               fill-rule="evenodd"
               d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
@@ -246,16 +242,9 @@ onMounted(() => {
       </div>
 
       <!-- Error message -->
-      <div
-        v-if="error"
-        class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800"
-      >
+      <div v-if="error" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
         <div class="flex items-start">
-          <svg
-            class="w-5 h-5 mr-2 mt-0.5"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
+          <svg class="w-5 h-5 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
             <path
               fill-rule="evenodd"
               d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
@@ -267,15 +256,8 @@ onMounted(() => {
       </div>
 
       <!-- Loading state -->
-      <div
-        v-if="loading"
-        class="card flex items-center justify-center py-12"
-      >
-        <svg
-          class="h-8 w-8 animate-spin text-primary-600"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
+      <div v-if="loading" class="card flex items-center justify-center py-12">
+        <svg class="h-8 w-8 animate-spin text-primary-600" fill="none" viewBox="0 0 24 24">
           <circle
             class="opacity-25"
             cx="12"
@@ -293,19 +275,13 @@ onMounted(() => {
       </div>
 
       <!-- Current License Display -->
-      <div
-        v-else-if="license && !showActivateForm"
-        class="space-y-6"
-      >
+      <div v-else-if="license && !showActivateForm" class="space-y-6">
         <div class="card">
           <div class="flex items-center justify-between mb-6">
             <h2 class="font-display text-2xl font-semibold text-gray-900 dark:text-white">
               {{ t('license.currentLicense') }}
             </h2>
-            <span
-              :class="tierColor"
-              class="px-3 py-1 rounded-full text-sm font-medium"
-            >
+            <span :class="tierColor" class="px-3 py-1 rounded-full text-sm font-medium">
               {{
                 t('license.tier', {
                   tier: t('license.' + license.license.tier),
@@ -341,12 +317,7 @@ onMounted(() => {
                   :title="t('license.copy')"
                   @click="copySupportKey"
                 >
-                  <svg
-                    class="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -367,10 +338,7 @@ onMounted(() => {
                 {{ t('license.serverCalendarUsage') }}
               </label>
               <div class="flex items-center justify-between text-sm mb-2">
-                <span
-                  :class="usageColor"
-                  class="font-semibold"
-                >
+                <span :class="usageColor" class="font-semibold">
                   {{ license.usage }} /
                   {{
                     license.license.calendar_limit === 0
@@ -412,15 +380,8 @@ onMounted(() => {
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 {{ t('license.supportStatus') }}
               </label>
-              <div
-                v-if="license.support_active"
-                class="flex items-center text-green-600"
-              >
-                <svg
-                  class="w-5 h-5 mr-2"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
+              <div v-if="license.support_active" class="flex items-center text-green-600">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                   <path
                     fill-rule="evenodd"
                     d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
@@ -433,15 +394,8 @@ onMounted(() => {
                   })
                 }}</span>
               </div>
-              <div
-                v-else
-                class="flex items-center text-orange-600"
-              >
-                <svg
-                  class="w-5 h-5 mr-2"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
+              <div v-else class="flex items-center text-orange-600">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                   <path
                     fill-rule="evenodd"
                     d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
@@ -459,10 +413,7 @@ onMounted(() => {
 
           <!-- Actions -->
           <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 flex space-x-4">
-            <button
-              class="btn btn-primary"
-              @click="showActivateForm = true"
-            >
+            <button class="btn btn-primary" @click="showActivateForm = true">
               {{ t('license.updateLicense') }}
             </button>
             <button
@@ -479,25 +430,17 @@ onMounted(() => {
       </div>
 
       <!-- Activate License Form -->
-      <div
-        v-else
-        class="card"
-      >
+      <div v-else class="card">
         <h2 class="font-display text-2xl font-semibold text-gray-900 dark:text-white mb-6">
           {{ t('license.activateLicense') }}
         </h2>
 
         <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
-          <p class="font-medium mb-2">
-            ℹ️ {{ t('license.noActiveLicense') }}
-          </p>
+          <p class="font-medium mb-2">ℹ️ {{ t('license.noActiveLicense') }}</p>
           <p v-html="t('license.communityTierMessage', { limit: 30 })" />
         </div>
 
-        <form
-          class="space-y-6"
-          @submit.prevent="handleActivate"
-        >
+        <form class="space-y-6" @submit.prevent="handleActivate">
           <!-- File Upload Zone -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -520,7 +463,7 @@ onMounted(() => {
                 accept=".json"
                 class="hidden"
                 @change="handleFileSelect"
-              >
+              />
               <div class="flex flex-col items-center justify-center space-y-3">
                 <svg
                   class="w-12 h-12 text-gray-400 dark:text-gray-500"
@@ -552,10 +495,7 @@ onMounted(() => {
 
           <!-- Or Manual Paste -->
           <div class="relative">
-            <div
-              class="absolute inset-0 flex items-center"
-              aria-hidden="true"
-            >
+            <div class="absolute inset-0 flex items-center" aria-hidden="true">
               <div class="w-full border-t border-gray-300 dark:border-gray-600" />
             </div>
             <div class="relative flex justify-center text-sm">
@@ -577,7 +517,7 @@ onMounted(() => {
               v-model="licenseKey"
               rows="8"
               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              placeholder="{&quot;tier&quot;:&quot;standard&quot;,&quot;calendar_limit&quot;:100,&quot;issued_to&quot;:&quot;Your Company&quot;,...}"
+              placeholder='{"tier":"standard","calendar_limit":100,"issued_to":"Your Company",...}'
               required
             />
             <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
@@ -586,11 +526,7 @@ onMounted(() => {
           </div>
 
           <div class="flex space-x-4">
-            <button
-              type="submit"
-              :disabled="activating"
-              class="btn btn-primary"
-            >
+            <button type="submit" :disabled="activating" class="btn btn-primary">
               <span v-if="activating">{{ t('license.activating') }}</span>
               <span v-else>{{ t('license.activate') }}</span>
             </button>

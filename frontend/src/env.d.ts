@@ -7,9 +7,9 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_BUILD_TYPE: 'cloud' | 'selfhosted'
+  readonly VITE_BUILD_TYPE: 'cloud' | 'selfhosted';
 }
 
 interface ImportMeta {
-  readonly env: ImportMetaEnv
+  readonly env: ImportMetaEnv;
 }

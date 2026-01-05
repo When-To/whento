@@ -5,15 +5,11 @@
  * See LICENSE file for details
  */
 
-import { apiClient } from './client'
-import type {
-  NotifyConfig,
-  NotifyConfigResponse,
-  ParticipantEmailResponse,
-} from '@/types'
+import { apiClient } from './client';
+import type { NotifyConfig, NotifyConfigResponse, ParticipantEmailResponse } from '@/types';
 
 // Re-export types for convenience
-export type { NotifyConfig }
+export type { NotifyConfig };
 
 /**
  * Get notification configuration for a calendar
@@ -57,9 +53,7 @@ export const addParticipantEmail = async (
  * Verify participant email with verification token
  */
 export const verifyParticipantEmail = async (token: string): Promise<{ message: string }> => {
-  return await apiClient.get<{ message: string }>(
-    `/calendars/participants/verify-email/${token}`
-  );
+  return await apiClient.get<{ message: string }>(`/calendars/participants/verify-email/${token}`);
 };
 
 /**

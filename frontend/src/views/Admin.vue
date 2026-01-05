@@ -17,20 +17,9 @@
             {{ t('admin.totalUsers') }}: {{ users.length }}
           </p>
         </div>
-        <div
-          v-if="isCloud"
-          class="flex gap-3"
-        >
-          <router-link
-            :to="{ name: 'admin-accounting' }"
-            class="btn btn-primary"
-          >
-            <svg
-              class="mr-2 h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+        <div v-if="isCloud" class="flex gap-3">
+          <router-link :to="{ name: 'admin-accounting' }" class="btn btn-primary">
+            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -40,16 +29,8 @@
             </svg>
             {{ t('admin.accounting') }}
           </router-link>
-          <router-link
-            :to="{ name: 'admin-license-search' }"
-            class="btn btn-secondary"
-          >
-            <svg
-              class="mr-2 h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+          <router-link :to="{ name: 'admin-license-search' }" class="btn btn-secondary">
+            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -63,10 +44,7 @@
       </div>
 
       <!-- Loading state -->
-      <div
-        v-if="loading"
-        class="card"
-      >
+      <div v-if="loading" class="card">
         <div class="flex items-center justify-center py-12">
           <div
             class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"
@@ -76,10 +54,7 @@
       </div>
 
       <!-- Users list -->
-      <div
-        v-else
-        class="card overflow-hidden p-0"
-      >
+      <div v-else class="card overflow-hidden p-0">
         <div class="overflow-x-auto">
           <table class="w-full">
             <thead
@@ -174,20 +149,14 @@
                         :disabled="updatingRole[user.id]"
                         class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
                         @change="toggleAdminRole(user)"
-                      >
+                      />
                     </label>
                   </div>
                 </td>
 
                 <!-- Subscription (Cloud only) -->
-                <td
-                  v-if="isCloud"
-                  class="whitespace-nowrap px-6 py-4"
-                >
-                  <div
-                    v-if="user.subscription"
-                    class="text-sm"
-                  >
+                <td v-if="isCloud" class="whitespace-nowrap px-6 py-4">
+                  <div v-if="user.subscription" class="text-sm">
                     <span
                       :class="[
                         'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
@@ -212,19 +181,13 @@
                       {{ t(`admin.status.${user.subscription.status}`) }}
                     </span>
                   </div>
-                  <span
-                    v-else
-                    class="text-sm text-gray-500 dark:text-gray-400"
-                  >-</span>
+                  <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
                 </td>
 
                 <!-- Authentication -->
                 <td class="whitespace-nowrap px-6 py-4">
                   <div class="flex flex-col gap-1 text-xs">
-                    <div
-                      v-if="user.mfa_status?.totp_enabled"
-                      class="flex items-center gap-1.5"
-                    >
+                    <div v-if="user.mfa_status?.totp_enabled" class="flex items-center gap-1.5">
                       <span
                         class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300"
                       >
@@ -242,7 +205,10 @@
                       </span>
                     </div>
                     <span
-                      v-if="!user.mfa_status?.totp_enabled && (!user.mfa_status || user.mfa_status.passkey_count === 0)"
+                      v-if="
+                        !user.mfa_status?.totp_enabled &&
+                        (!user.mfa_status || user.mfa_status.passkey_count === 0)
+                      "
                       class="text-gray-500 dark:text-gray-400"
                     >
                       {{ t('admin.passwordOnly') }}
@@ -272,12 +238,7 @@
                       :title="t('admin.viewCalendars')"
                       @click="viewUserCalendars(user)"
                     >
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
+                      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -308,12 +269,7 @@
                           d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                         />
                       </svg>
-                      <svg
-                        v-else
-                        class="h-5 w-5 animate-spin"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
+                      <svg v-else class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
                         <circle
                           class="opacity-25"
                           cx="12"
@@ -351,12 +307,7 @@
                           d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                         />
                       </svg>
-                      <svg
-                        v-else
-                        class="h-5 w-5 animate-spin"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
+                      <svg v-else class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
                         <circle
                           class="opacity-25"
                           cx="12"
@@ -384,128 +335,134 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { useToastStore } from '@/stores/toast'
-import { adminApi } from '@/api/admin'
-import type { User } from '@/types'
+import { ref, onMounted, reactive, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
+import { adminApi } from '@/api/admin';
+import type { User } from '@/types';
 
-const { t } = useI18n()
-const router = useRouter()
-const authStore = useAuthStore()
-const toastStore = useToastStore()
+const { t } = useI18n();
+const router = useRouter();
+const authStore = useAuthStore();
+const toastStore = useToastStore();
 
 // Check if we're in Cloud mode
-const buildType = import.meta.env.VITE_BUILD_TYPE || 'cloud'
-const isCloud = computed(() => buildType === 'cloud')
+const buildType = import.meta.env.VITE_BUILD_TYPE || 'cloud';
+const isCloud = computed(() => buildType === 'cloud');
 
-const loading = ref(true)
-const users = ref<User[]>([])
-const updatingRole = reactive<Record<string, boolean>>({})
-const deletingUser = reactive<Record<string, boolean>>({})
-const disabling2FA = reactive<Record<string, boolean>>({})
-const userCalendarCounts = reactive<Record<string, number>>({})
+const loading = ref(true);
+const users = ref<User[]>([]);
+const updatingRole = reactive<Record<string, boolean>>({});
+const deletingUser = reactive<Record<string, boolean>>({});
+const disabling2FA = reactive<Record<string, boolean>>({});
+const userCalendarCounts = reactive<Record<string, number>>({});
 
 onMounted(() => {
-  loadUsers()
-})
+  loadUsers();
+});
 
 async function loadUsers() {
-  loading.value = true
+  loading.value = true;
 
   try {
-    const response = await adminApi.listUsers()
-    users.value = response.users
+    const response = await adminApi.listUsers();
+    users.value = response.users;
 
     // Load calendar counts for each user
     for (const user of users.value) {
-      loadUserCalendarCount(user.id)
+      loadUserCalendarCount(user.id);
     }
   } catch (err: any) {
-    console.error('Failed to load users:', err)
-    toastStore.error(err.message || t('errors.generic'))
+    console.error('Failed to load users:', err);
+    toastStore.error(err.message || t('errors.generic'));
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 async function loadUserCalendarCount(userId: string) {
   try {
-    const calendars = await adminApi.getUserCalendars(userId)
-    userCalendarCounts[userId] = calendars.length
+    const calendars = await adminApi.getUserCalendars(userId);
+    userCalendarCounts[userId] = calendars.length;
   } catch (err) {
-    console.error(`Failed to load calendar count for user ${userId}:`, err)
-    userCalendarCounts[userId] = 0
+    console.error(`Failed to load calendar count for user ${userId}:`, err);
+    userCalendarCounts[userId] = 0;
   }
 }
 
 async function toggleAdminRole(user: User) {
-  const newRole = user.role === 'admin' ? 'user' : 'admin'
+  const newRole = user.role === 'admin' ? 'user' : 'admin';
 
-  updatingRole[user.id] = true
+  updatingRole[user.id] = true;
 
   try {
-    await adminApi.updateUserRole(user.id, newRole)
-    user.role = newRole
-    toastStore.success(t('admin.roleUpdated'))
+    await adminApi.updateUserRole(user.id, newRole);
+    user.role = newRole;
+    toastStore.success(t('admin.roleUpdated'));
   } catch (err: any) {
-    console.error('Failed to update user role:', err)
-    toastStore.error(t('admin.updateRoleError'))
+    console.error('Failed to update user role:', err);
+    toastStore.error(t('admin.updateRoleError'));
   } finally {
-    updatingRole[user.id] = false
+    updatingRole[user.id] = false;
   }
 }
 
 function confirmDisable2FA(user: User) {
-  if (confirm(`${t('admin.confirmDisable2FA')}\n\n${t('admin.confirmDisable2FAMessage', { name: user.display_name })}`)) {
-    disable2FA(user)
+  if (
+    confirm(
+      `${t('admin.confirmDisable2FA')}\n\n${t('admin.confirmDisable2FAMessage', { name: user.display_name })}`
+    )
+  ) {
+    disable2FA(user);
   }
 }
 
 async function disable2FA(user: User) {
-  disabling2FA[user.id] = true
+  disabling2FA[user.id] = true;
 
   try {
-    const result = await adminApi.disable2FA(user.id)
+    const result = await adminApi.disable2FA(user.id);
 
     // Update user's MFA status in the local state
-    const userIndex = users.value.findIndex(u => u.id === user.id)
+    const userIndex = users.value.findIndex(u => u.id === user.id);
     if (userIndex !== -1 && users.value[userIndex].mfa_status) {
-      users.value[userIndex].mfa_status!.totp_enabled = false
+      users.value[userIndex].mfa_status!.totp_enabled = false;
     }
 
-    toastStore.success(t('admin.disable2FASuccess', {
-      name: user.display_name,
-      backupCodes: result.backup_codes_removed
-    }))
+    toastStore.success(
+      t('admin.disable2FASuccess', {
+        name: user.display_name,
+        backupCodes: result.backup_codes_removed,
+      })
+    );
   } catch (err: any) {
-    console.error('Failed to disable 2FA:', err)
-    toastStore.error(t('admin.disable2FAError'))
+    console.error('Failed to disable 2FA:', err);
+    toastStore.error(t('admin.disable2FAError'));
   } finally {
-    disabling2FA[user.id] = false
+    disabling2FA[user.id] = false;
   }
 }
 
 function confirmDeleteUser(user: User) {
   if (confirm(`${t('admin.confirmDeleteUser')}\n\n${t('admin.confirmDeleteUserMessage')}`)) {
-    deleteUser(user)
+    deleteUser(user);
   }
 }
 
 async function deleteUser(user: User) {
-  deletingUser[user.id] = true
+  deletingUser[user.id] = true;
 
   try {
-    await adminApi.deleteUser(user.id)
-    users.value = users.value.filter(u => u.id !== user.id)
-    toastStore.success(t('admin.userDeleted'))
+    await adminApi.deleteUser(user.id);
+    users.value = users.value.filter(u => u.id !== user.id);
+    toastStore.success(t('admin.userDeleted'));
   } catch (err: any) {
-    console.error('Failed to delete user:', err)
-    toastStore.error(t('admin.deleteUserError'))
+    console.error('Failed to delete user:', err);
+    toastStore.error(t('admin.deleteUserError'));
   } finally {
-    deletingUser[user.id] = false
+    deletingUser[user.id] = false;
   }
 }
 
@@ -514,16 +471,16 @@ function viewUserCalendars(user: User) {
     name: 'admin-user-calendars',
     params: { userId: user.id },
     query: { userName: user.display_name },
-  })
+  });
 }
 
 function formatDate(dateString: string): string {
-  const date = new Date(dateString)
+  const date = new Date(dateString);
   return date.toLocaleDateString(authStore.user?.locale || 'fr', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  })
+  });
 }
 </script>
 

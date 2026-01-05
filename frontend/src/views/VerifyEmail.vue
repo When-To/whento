@@ -5,7 +5,9 @@
 -->
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+  <div
+    class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8"
+  >
     <div class="max-w-md w-full space-y-8">
       <div>
         <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
@@ -14,22 +16,20 @@
       </div>
 
       <!-- Loading state -->
-      <div
-        v-if="loading"
-        class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 text-center"
-      >
-        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 dark:border-indigo-400 mx-auto" />
+      <div v-if="loading" class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 text-center">
+        <div
+          class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 dark:border-indigo-400 mx-auto"
+        />
         <p class="mt-4 text-gray-600 dark:text-gray-400">
           {{ $t('auth.verifyingEmail') }}
         </p>
       </div>
 
       <!-- Success state -->
-      <div
-        v-else-if="success"
-        class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6"
-      >
-        <div class="flex items-center justify-center w-12 h-12 mx-auto bg-green-100 dark:bg-green-900/20 rounded-full">
+      <div v-else-if="success" class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+        <div
+          class="flex items-center justify-center w-12 h-12 mx-auto bg-green-100 dark:bg-green-900/20 rounded-full"
+        >
           <svg
             class="w-6 h-6 text-green-600 dark:text-green-400"
             fill="none"
@@ -61,11 +61,10 @@
       </div>
 
       <!-- Error state -->
-      <div
-        v-else-if="error"
-        class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6"
-      >
-        <div class="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 dark:bg-red-900/20 rounded-full">
+      <div v-else-if="error" class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+        <div
+          class="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 dark:bg-red-900/20 rounded-full"
+        >
           <svg
             class="w-6 h-6 text-red-600 dark:text-red-400"
             fill="none"
@@ -100,68 +99,68 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
-import axios from 'axios'
+import { ref, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '@/stores/auth';
+import axios from 'axios';
 
-const route = useRoute()
-const { t } = useI18n()
-const authStore = useAuthStore()
+const route = useRoute();
+const { t } = useI18n();
+const authStore = useAuthStore();
 
-const loading = ref(true)
-const success = ref(false)
-const error = ref(false)
-const errorMessage = ref('')
+const loading = ref(true);
+const success = ref(false);
+const error = ref(false);
+const errorMessage = ref('');
 
 const verifyEmail = async (token: string) => {
   try {
-    loading.value = true
-    error.value = false
+    loading.value = true;
+    error.value = false;
 
-    const response = await axios.get(`/api/v1/auth/verify-email/${token}`)
+    const response = await axios.get(`/api/v1/auth/verify-email/${token}`);
 
     if (response.data.success) {
-      success.value = true
+      success.value = true;
 
       // Refresh user data if authenticated to update email_verified status
       if (authStore.isAuthenticated) {
         try {
-          await authStore.fetchUser()
+          await authStore.fetchUser();
         } catch (err) {
           // Ignore error - user data will be refreshed on next page load
-          console.error('Failed to refresh user data:', err)
+          console.error('Failed to refresh user data:', err);
         }
       }
     } else {
-      throw new Error(response.data.error?.message || 'Verification failed')
+      throw new Error(response.data.error?.message || 'Verification failed');
     }
   } catch (err: any) {
-    error.value = true
+    error.value = true;
 
     if (err.response?.data?.error?.message) {
-      errorMessage.value = err.response.data.error.message
+      errorMessage.value = err.response.data.error.message;
     } else if (err.response?.status === 400) {
-      errorMessage.value = t('auth.invalidOrExpiredToken')
+      errorMessage.value = t('auth.invalidOrExpiredToken');
     } else {
-      errorMessage.value = t('auth.verificationError')
+      errorMessage.value = t('auth.verificationError');
     }
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 onMounted(() => {
-  const token = route.params.token as string
+  const token = route.params.token as string;
 
   if (!token) {
-    error.value = true
-    errorMessage.value = t('auth.missingVerificationToken')
-    loading.value = false
-    return
+    error.value = true;
+    errorMessage.value = t('auth.missingVerificationToken');
+    loading.value = false;
+    return;
   }
 
-  verifyEmail(token)
-})
+  verifyEmail(token);
+});
 </script>

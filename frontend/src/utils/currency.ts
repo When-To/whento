@@ -20,12 +20,12 @@ export function formatPrice(
   if (cents === undefined || cents === null) {
     return new Intl.NumberFormat(locale, {
       style: 'currency',
-      currency
-    }).format(0)
+      currency,
+    }).format(0);
   }
 
   return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency
-  }).format(cents / 100)
+    currency,
+  }).format(cents / 100);
 }

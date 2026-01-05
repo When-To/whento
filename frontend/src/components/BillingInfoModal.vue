@@ -5,65 +5,63 @@
 -->
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { formatPrice as formatPriceUtil } from '@/utils/currency'
-import countries from 'i18n-iso-countries'
-import countriesEN from 'i18n-iso-countries/langs/en.json'
-import countriesFR from 'i18n-iso-countries/langs/fr.json'
-import worldCountries from 'world-countries'
+import { ref, computed, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { formatPrice as formatPriceUtil } from '@/utils/currency';
+import countries from 'i18n-iso-countries';
+import countriesEN from 'i18n-iso-countries/langs/en.json';
+import countriesFR from 'i18n-iso-countries/langs/fr.json';
+import worldCountries from 'world-countries';
 
 // Register languages for i18n-iso-countries
-countries.registerLocale(countriesEN)
-countries.registerLocale(countriesFR)
+countries.registerLocale(countriesEN);
+countries.registerLocale(countriesFR);
 
 // Get list of independent/sovereign countries only (excludes territories like Guadeloupe, French Guiana, etc.)
-const sovereignCountryCodes = new Set(
-  worldCountries.filter(c => c.independent).map(c => c.cca2)
-)
+const sovereignCountryCodes = new Set(worldCountries.filter(c => c.independent).map(c => c.cca2));
 
 export interface BillingInfo {
-  name: string
-  email: string
-  company?: string
-  vat_number?: string
-  address?: string
-  postal_code?: string
-  country: string
+  name: string;
+  email: string;
+  company?: string;
+  vat_number?: string;
+  address?: string;
+  postal_code?: string;
+  country: string;
 }
 
 export interface VATCalculation {
-  country_code: string
-  subtotal_cents: number
-  vat_rate: number
-  vat_amount_cents: number
-  total_cents: number
+  country_code: string;
+  subtotal_cents: number;
+  vat_rate: number;
+  vat_amount_cents: number;
+  total_cents: number;
 }
 
 export interface VATValidationResponse {
-  valid: boolean
-  country_code: string
-  name: string
-  address: string
-  error?: string
+  valid: boolean;
+  country_code: string;
+  name: string;
+  address: string;
+  error?: string;
 }
 
 interface Props {
-  show: boolean
-  subtotalCents: number
-  productName: string
-  userName?: string
-  userEmail?: string
-  emailVerified?: boolean
+  show: boolean;
+  subtotalCents: number;
+  productName: string;
+  userName?: string;
+  userEmail?: string;
+  emailVerified?: boolean;
 }
 
-const props = defineProps<Props>()
+const props = defineProps<Props>();
 const emit = defineEmits<{
-  close: []
-  submit: [billingInfo: BillingInfo, vatCalculation: VATCalculation | null]
-}>()
+  close: [];
+  submit: [billingInfo: BillingInfo, vatCalculation: VATCalculation | null];
+}>();
 
-const { t, locale } = useI18n()
+const { t, locale } = useI18n();
 
 const form = ref<BillingInfo>({
   name: props.userName || '',
@@ -73,31 +71,31 @@ const form = ref<BillingInfo>({
   address: '',
   postal_code: '',
   country: '',
-})
+});
 
-const errors = ref<Record<string, string>>({})
-const submitting = ref(false)
-const vatCalculating = ref(false)
-const vatCalculation = ref<VATCalculation | null>(null)
-const vatValidating = ref(false)
-const vatValidation = ref<VATValidationResponse | null>(null)
+const errors = ref<Record<string, string>>({});
+const submitting = ref(false);
+const vatCalculating = ref(false);
+const vatCalculation = ref<VATCalculation | null>(null);
+const vatValidating = ref(false);
+const vatValidation = ref<VATValidationResponse | null>(null);
 
 // Get sovereign countries only with localized names based on current locale
 const countryList = computed(() => {
-  const lang = locale.value.substring(0, 2) // 'en' or 'fr'
-  const countryNames = countries.getNames(lang, { select: 'official' })
+  const lang = locale.value.substring(0, 2); // 'en' or 'fr'
+  const countryNames = countries.getNames(lang, { select: 'official' });
   return Object.entries(countryNames)
     .filter(([code]) => sovereignCountryCodes.has(code)) // Only include sovereign countries
     .map(([code, name]) => ({ code, name }))
-    .sort((a, b) => a.name.localeCompare(b.name, lang))
-})
+    .sort((a, b) => a.name.localeCompare(b.name, lang));
+});
 
 const totalCents = computed(() => {
   if (vatCalculation.value) {
-    return vatCalculation.value.total_cents
+    return vatCalculation.value.total_cents;
   }
-  return props.subtotalCents
-})
+  return props.subtotalCents;
+});
 
 // Reset form when modal opens
 watch(
@@ -105,72 +103,72 @@ watch(
   newShow => {
     if (newShow) {
       // Reset form with user data when modal opens
-      form.value.name = props.userName || ''
-      form.value.email = props.userEmail || ''
-      form.value.company = ''
-      form.value.vat_number = ''
-      form.value.address = ''
-      form.value.postal_code = ''
-      form.value.country = ''
+      form.value.name = props.userName || '';
+      form.value.email = props.userEmail || '';
+      form.value.company = '';
+      form.value.vat_number = '';
+      form.value.address = '';
+      form.value.postal_code = '';
+      form.value.country = '';
 
       // Reset validation state
-      errors.value = {}
-      vatValidation.value = null
-      vatCalculation.value = null
+      errors.value = {};
+      vatValidation.value = null;
+      vatCalculation.value = null;
     }
   }
-)
+);
 
 watch(
   () => form.value.country,
   () => {
     if (form.value.country) {
-      calculateVAT()
+      calculateVAT();
     }
   }
-)
+);
 
 // Recalculate VAT when postal code changes (for regional exceptions like French DOM-TOM)
 watch(
   () => form.value.postal_code,
   () => {
     if (form.value.country) {
-      calculateVAT()
+      calculateVAT();
     }
   }
-)
+);
 
 watch(
   () => form.value.vat_number,
   (newValue, oldValue) => {
     // Reset validation when VAT number changes
-    vatValidation.value = null
-    errors.value.vat_number = ''
+    vatValidation.value = null;
+    errors.value.vat_number = '';
 
     // If VAT number is removed or changed, recalculate VAT with standard rate
     if (oldValue && (!newValue || newValue !== oldValue)) {
-      calculateVAT()
+      calculateVAT();
     }
   }
-)
+);
 
 async function validateVATNumber() {
   if (!form.value.vat_number) {
-    vatValidation.value = null
-    return
+    vatValidation.value = null;
+    return;
   }
 
   // Clean up VAT number (remove spaces)
-  form.value.vat_number = form.value.vat_number.replace(/\s/g, '').toUpperCase()
+  form.value.vat_number = form.value.vat_number.replace(/\s/g, '').toUpperCase();
 
   if (form.value.vat_number.length < 4) {
-    errors.value.vat_number = t('checkout.vatTooShort')
-    return
+    errors.value.vat_number = t('checkout.vatTooShort');
+    return;
   }
 
   try {
-    vatValidating.value = true
-    errors.value.vat_number = ''
+    vatValidating.value = true;
+    errors.value.vat_number = '';
 
     // Call VAT validation API
     const response = await fetch('/api/v1/shop/validate-vat', {
@@ -179,43 +177,43 @@ async function validateVATNumber() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ vat_number: form.value.vat_number }),
-    })
+    });
 
     if (!response.ok) {
-      throw new Error('VAT validation failed')
+      throw new Error('VAT validation failed');
     }
 
-    const result = await response.json()
+    const result = await response.json();
     // Extract data from the API response wrapper
-    vatValidation.value = result.data || result
+    vatValidation.value = result.data || result;
 
     if (vatValidation.value && vatValidation.value.valid) {
       // Auto-select country based on VAT number
-      const countryCode = vatValidation.value.country_code
+      const countryCode = vatValidation.value.country_code;
       if (countryCode && countryList.value.find(c => c.code === countryCode)) {
-        form.value.country = countryCode
+        form.value.country = countryCode;
         // Recalculate VAT with valid VAT number (will be 0%)
-        await calculateVAT()
+        await calculateVAT();
       }
     } else {
-      errors.value.vat_number = vatValidation.value?.error || t('checkout.vatInvalid')
+      errors.value.vat_number = vatValidation.value?.error || t('checkout.vatInvalid');
       // Recalculate VAT with standard rate when validation fails
       if (form.value.country) {
-        await calculateVAT()
+        await calculateVAT();
       }
     }
   } catch (error: any) {
-    console.error('Failed to validate VAT number:', error)
-    errors.value.vat_number = t('checkout.vatValidationFailed')
+    console.error('Failed to validate VAT number:', error);
+    errors.value.vat_number = t('checkout.vatValidationFailed');
   } finally {
-    vatValidating.value = false
+    vatValidating.value = false;
   }
 }
 
 async function calculateVAT() {
   if (!form.value.country) {
-    vatCalculation.value = null
-    return
+    vatCalculation.value = null;
+    return;
   }
 
   // If VAT number is valid, apply 0% VAT except for France (reverse charge)
@@ -226,12 +224,12 @@ async function calculateVAT() {
       vat_rate: 0.0,
       vat_amount_cents: 0,
       total_cents: props.subtotalCents,
-    }
-    return
+    };
+    return;
   }
 
   try {
-    vatCalculating.value = true
+    vatCalculating.value = true;
     const response = await fetch('/api/v1/shop/vat/calculate', {
       method: 'POST',
       headers: {
@@ -242,58 +240,58 @@ async function calculateVAT() {
         country_code: form.value.country,
         postal_code: form.value.postal_code || '',
       }),
-    })
+    });
 
     if (!response.ok) {
-      throw new Error('VAT calculation failed')
+      throw new Error('VAT calculation failed');
     }
 
-    const result = await response.json()
+    const result = await response.json();
     // Extract data from the API response wrapper
-    vatCalculation.value = result.data || result
+    vatCalculation.value = result.data || result;
   } catch (error: any) {
-    console.error('Failed to calculate VAT:', error)
+    console.error('Failed to calculate VAT:', error);
   } finally {
-    vatCalculating.value = false
+    vatCalculating.value = false;
   }
 }
 
 function formatPrice(cents: number): string {
-  return formatPriceUtil(cents, locale.value)
+  return formatPriceUtil(cents, locale.value);
 }
 
 function handleSubmit() {
-  errors.value = {}
+  errors.value = {};
 
   // Validation
   if (!form.value.name) {
-    errors.value.name = t('checkout.nameRequired')
-    return
+    errors.value.name = t('checkout.nameRequired');
+    return;
   }
 
   if (!form.value.email) {
-    errors.value.email = t('checkout.emailRequired')
-    return
+    errors.value.email = t('checkout.emailRequired');
+    return;
   }
 
   if (!form.value.country) {
-    errors.value.country = t('checkout.countryRequired')
-    return
+    errors.value.country = t('checkout.countryRequired');
+    return;
   }
 
   // If VAT number is provided, company is required
   if (form.value.vat_number && !form.value.company) {
-    errors.value.company = t('checkout.companyRequiredWithVAT')
-    return
+    errors.value.company = t('checkout.companyRequiredWithVAT');
+    return;
   }
 
   // If VAT number is provided, it must be valid
   if (form.value.vat_number && (!vatValidation.value || !vatValidation.value.valid)) {
-    errors.value.vat_number = t('checkout.vatMustBeValid')
-    return
+    errors.value.vat_number = t('checkout.vatMustBeValid');
+    return;
   }
 
-  emit('submit', form.value, vatCalculation.value)
+  emit('submit', form.value, vatCalculation.value);
 }
 
 function handleClose() {
@@ -306,11 +304,11 @@ function handleClose() {
     address: '',
     postal_code: '',
     country: '',
-  }
-  errors.value = {}
-  vatCalculation.value = null
-  vatValidation.value = null
-  emit('close')
+  };
+  errors.value = {};
+  vatCalculation.value = null;
+  vatValidation.value = null;
+  emit('close');
 }
 </script>
 
@@ -335,12 +333,7 @@ function handleClose() {
           class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           @click="handleClose"
         >
-          <svg
-            class="w-6 h-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -353,10 +346,7 @@ function handleClose() {
 
       <!-- Body -->
       <div class="p-6">
-        <form
-          class="space-y-4"
-          @submit.prevent="handleSubmit"
-        >
+        <form class="space-y-4" @submit.prevent="handleSubmit">
           <!-- Name -->
           <div>
             <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -369,11 +359,8 @@ function handleClose() {
               class="input"
               :class="{ 'border-danger-500': errors.name }"
               required
-            >
-            <p
-              v-if="errors.name"
-              class="mt-1 text-sm text-danger-600"
-            >
+            />
+            <p v-if="errors.name" class="mt-1 text-sm text-danger-600">
               {{ errors.name }}
             </p>
           </div>
@@ -391,11 +378,8 @@ function handleClose() {
               :class="{ 'border-danger-500': errors.email }"
               :readonly="emailVerified"
               required
-            >
-            <p
-              v-if="errors.email"
-              class="mt-1 text-sm text-danger-600"
-            >
+            />
+            <p v-if="errors.email" class="mt-1 text-sm text-danger-600">
               {{ errors.email }}
             </p>
           </div>
@@ -416,18 +400,11 @@ function handleClose() {
               <option value="">
                 {{ t('checkout.selectCountry') }}
               </option>
-              <option
-                v-for="country in countryList"
-                :key="country.code"
-                :value="country.code"
-              >
+              <option v-for="country in countryList" :key="country.code" :value="country.code">
                 {{ country.name }}
               </option>
             </select>
-            <p
-              v-if="errors.country"
-              class="mt-1 text-sm text-danger-600"
-            >
+            <p v-if="errors.country" class="mt-1 text-sm text-danger-600">
               {{ errors.country }}
             </p>
           </div>
@@ -442,7 +419,7 @@ function handleClose() {
               type="text"
               class="input"
               :placeholder="t('checkout.postalCodePlaceholder')"
-            >
+            />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{ t('checkout.postalCodeHint') }}
             </p>
@@ -465,7 +442,7 @@ function handleClose() {
                 }"
                 placeholder="FRXX123456789"
                 @blur="validateVATNumber"
-              >
+              />
               <!-- Validation Icons -->
               <div class="absolute right-3 top-1/2 -translate-y-1/2">
                 <svg
@@ -514,10 +491,7 @@ function handleClose() {
                 </svg>
               </div>
             </div>
-            <p
-              v-if="errors.vat_number"
-              class="mt-1 text-sm text-danger-600"
-            >
+            <p v-if="errors.vat_number" class="mt-1 text-sm text-danger-600">
               {{ errors.vat_number }}
             </p>
             <p
@@ -539,10 +513,7 @@ function handleClose() {
           <div>
             <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('checkout.company') }}
-              <span
-                v-if="form.vat_number"
-                class="text-danger-600"
-              >*</span>
+              <span v-if="form.vat_number" class="text-danger-600">*</span>
             </label>
             <input
               v-model="form.company"
@@ -550,11 +521,8 @@ function handleClose() {
               class="input"
               :class="{ 'border-danger-500': errors.company }"
               :required="!!form.vat_number"
-            >
-            <p
-              v-if="errors.company"
-              class="mt-1 text-sm text-danger-600"
-            >
+            />
+            <p v-if="errors.company" class="mt-1 text-sm text-danger-600">
               {{ errors.company }}
             </p>
           </div>
@@ -564,11 +532,7 @@ function handleClose() {
             <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('checkout.address') }}
             </label>
-            <textarea
-              v-model="form.address"
-              class="input"
-              rows="2"
-            />
+            <textarea v-model="form.address" class="input" rows="2" />
           </div>
 
           <!-- Summary -->
@@ -609,11 +573,7 @@ function handleClose() {
 
           <!-- Actions -->
           <div class="flex gap-3">
-            <button
-              type="button"
-              class="btn btn-ghost flex-1"
-              @click="handleClose"
-            >
+            <button type="button" class="btn btn-ghost flex-1" @click="handleClose">
               {{ t('common.cancel') }}
             </button>
             <button
@@ -621,15 +581,8 @@ function handleClose() {
               :disabled="submitting || !form.country"
               class="btn btn-primary flex-1"
             >
-              <span
-                v-if="submitting"
-                class="flex items-center justify-center"
-              >
-                <svg
-                  class="mr-2 h-4 w-4 animate-spin"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
+              <span v-if="submitting" class="flex items-center justify-center">
+                <svg class="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle
                     class="opacity-25"
                     cx="12"

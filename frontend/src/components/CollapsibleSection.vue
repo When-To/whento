@@ -41,37 +41,29 @@
         viewBox="0 0 24 24"
         stroke="currentColor"
       >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M19 9l-7 7-7-7"
-        />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
       </svg>
     </button>
-    <div
-      v-show="isOpen"
-      class="p-4 space-y-4"
-    >
+    <div v-show="isOpen" class="p-4 space-y-4">
       <slot />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref } from 'vue';
 
 const props = withDefaults(
   defineProps<{
-    title: string
-    defaultOpen?: boolean
-    variant?: 'default' | 'danger'
+    title: string;
+    defaultOpen?: boolean;
+    variant?: 'default' | 'danger';
   }>(),
   {
     defaultOpen: true,
     variant: 'default',
   }
-)
+);
 
-const isOpen = ref(props.defaultOpen ?? true)
+const isOpen = ref(props.defaultOpen ?? true);
 </script>

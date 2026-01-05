@@ -20,10 +20,7 @@
         </div>
 
         <!-- Error State -->
-        <div
-          v-else-if="error"
-          class="text-center"
-        >
+        <div v-else-if="error" class="text-center">
           <div
             class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-danger-100 dark:bg-danger-900/20"
           >
@@ -47,10 +44,7 @@
           <p class="mb-6 text-gray-600 dark:text-gray-400">
             {{ error }}
           </p>
-          <router-link
-            to="/login"
-            class="btn btn-primary"
-          >
+          <router-link to="/login" class="btn btn-primary">
             {{ t('auth.backToLogin') }}
           </router-link>
         </div>
@@ -84,51 +78,51 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
-import { authApi } from '@/api/auth'
-import { apiClient } from '@/api/client'
+import { ref, onMounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '@/stores/auth';
+import { authApi } from '@/api/auth';
+import { apiClient } from '@/api/client';
 
-const router = useRouter()
-const route = useRoute()
-const { t } = useI18n()
-const authStore = useAuthStore()
+const router = useRouter();
+const route = useRoute();
+const { t } = useI18n();
+const authStore = useAuthStore();
 
-const loading = ref(true)
-const error = ref('')
+const loading = ref(true);
+const error = ref('');
 
 onMounted(async () => {
-  const token = route.params.token as string
+  const token = route.params.token as string;
 
   if (!token) {
-    error.value = t('auth.magicLink.missingToken')
-    loading.value = false
-    return
+    error.value = t('auth.magicLink.missingToken');
+    loading.value = false;
+    return;
   }
 
   try {
     // Verify magic link
-    const response = await authApi.verifyMagicLink(token)
+    const response = await authApi.verifyMagicLink(token);
 
     // Set auth tokens in store
-    authStore.user = response.user
-    apiClient.setToken(response.access_token)
+    authStore.user = response.user;
+    apiClient.setToken(response.access_token);
 
     // Redirect to dashboard
-    await router.push('/dashboard')
+    await router.push('/dashboard');
   } catch (err: any) {
-    loading.value = false
+    loading.value = false;
 
     // Translate error messages
     if (err.message?.includes('expired')) {
-      error.value = t('auth.magicLink.expired')
+      error.value = t('auth.magicLink.expired');
     } else if (err.message?.includes('invalid')) {
-      error.value = t('auth.magicLink.invalid')
+      error.value = t('auth.magicLink.invalid');
     } else {
-      error.value = t('auth.magicLink.verifyError')
+      error.value = t('auth.magicLink.verifyError');
     }
   }
-})
+});
 </script>

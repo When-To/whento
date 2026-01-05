@@ -8,10 +8,7 @@
   <div class="min-h-screen bg-gray-50 py-8 dark:bg-gray-950">
     <div class="container-app max-w-4xl">
       <!-- Loading State -->
-      <div
-        v-if="loading"
-        class="flex items-center justify-center py-12"
-      >
+      <div v-if="loading" class="flex items-center justify-center py-12">
         <div class="text-center">
           <svg
             class="mx-auto h-12 w-12 animate-spin text-primary-600"
@@ -45,20 +42,12 @@
           <h1 class="font-display text-3xl font-bold text-gray-900 dark:text-white">
             {{ calendar.name }}
           </h1>
-          <p
-            v-if="calendar.description"
-            class="mt-2 text-gray-600 dark:text-gray-400"
-          >
+          <p v-if="calendar.description" class="mt-2 text-gray-600 dark:text-gray-400">
             {{ calendar.description }}
           </p>
           <div class="mt-4 flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
             <span class="flex items-center gap-1">
-              <svg
-                class="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -70,12 +59,7 @@
               {{ t('calendar.participantCount', 'participant(s)') }}
             </span>
             <span class="flex items-center gap-1">
-              <svg
-                class="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -115,10 +99,20 @@
                 {{ t('calendar.noParticipants', 'No participants') }}
               </h3>
               <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                {{ t('calendar.noParticipantsDescription', 'This calendar has no participants yet. No availability can be entered at this time.') }}
+                {{
+                  t(
+                    'calendar.noParticipantsDescription',
+                    'This calendar has no participants yet. No availability can be entered at this time.'
+                  )
+                }}
               </p>
               <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                {{ t('calendar.contactOwnerToAddParticipants', 'Contact the calendar owner to add participants.') }}
+                {{
+                  t(
+                    'calendar.contactOwnerToAddParticipants',
+                    'Contact the calendar owner to add participants.'
+                  )
+                }}
               </p>
             </div>
           </div>
@@ -159,10 +153,7 @@
               </div>
             </div>
 
-            <p
-              v-else
-              class="mb-6 text-sm text-gray-600 dark:text-gray-400"
-            >
+            <p v-else class="mb-6 text-sm text-gray-600 dark:text-gray-400">
               {{ t('participant.selectYourName') }}
             </p>
 
@@ -192,7 +183,9 @@
                       />
                     </svg>
                   </div>
-                  <span class="flex-1 text-gray-600 dark:text-gray-400">{{ participant.name }}</span>
+                  <span class="flex-1 text-gray-600 dark:text-gray-400">{{
+                    participant.name
+                  }}</span>
                   <svg
                     class="h-5 w-5 text-gray-400"
                     fill="none"
@@ -259,61 +252,61 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useCalendarStore } from '@/stores/calendar'
-import { useCalendarHistoryStore } from '@/stores/calendarHistory'
-import { useToastStore } from '@/stores/toast'
+import { ref, onMounted, computed } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useCalendarStore } from '@/stores/calendar';
+import { useCalendarHistoryStore } from '@/stores/calendarHistory';
+import { useToastStore } from '@/stores/toast';
 
-const route = useRoute()
-const router = useRouter()
-const { t } = useI18n()
-const calendarStore = useCalendarStore()
-const historyStore = useCalendarHistoryStore()
-const toastStore = useToastStore()
+const route = useRoute();
+const router = useRouter();
+const { t } = useI18n();
+const calendarStore = useCalendarStore();
+const historyStore = useCalendarHistoryStore();
+const toastStore = useToastStore();
 
-const token = route.params.token as string
-const loading = ref(false)
+const token = route.params.token as string;
+const loading = ref(false);
 
-const calendar = computed(() => calendarStore.currentCalendar)
+const calendar = computed(() => calendarStore.currentCalendar);
 
 async function loadCalendar() {
-  loading.value = true
+  loading.value = true;
 
   try {
-    await calendarStore.fetchPublicCalendar(token)
+    await calendarStore.fetchPublicCalendar(token);
 
     // Add calendar to history
     if (calendar.value) {
-      historyStore.addCalendar(token, calendar.value.name)
+      historyStore.addCalendar(token, calendar.value.name);
     }
 
     // Check if there's a saved participant for this calendar
-    const savedParticipantId = historyStore.getParticipantId(token)
+    const savedParticipantId = historyStore.getParticipantId(token);
     if (savedParticipantId && calendar.value && calendar.value.participants) {
       // Verify the participant still exists
-      const participantExists = calendar.value.participants.some(p => p.id === savedParticipantId)
+      const participantExists = calendar.value.participants.some(p => p.id === savedParticipantId);
       if (participantExists) {
         // Redirect to the saved participant
-        router.replace(`/c/${token}/p/${savedParticipantId}`)
-        return
+        router.replace(`/c/${token}/p/${savedParticipantId}`);
+        return;
       } else {
         // Remove invalid saved participant
-        historyStore.updateParticipantId(token, undefined)
+        historyStore.updateParticipantId(token, undefined);
       }
     }
   } catch (err: any) {
-    toastStore.error(err.message || t('calendar.fetchError', 'Failed to load calendar'))
+    toastStore.error(err.message || t('calendar.fetchError', 'Failed to load calendar'));
     // Remove invalid calendar from history and redirect to home
-    historyStore.removeCalendar(token)
-    router.push('/')
+    historyStore.removeCalendar(token);
+    router.push('/');
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 onMounted(() => {
-  loadCalendar()
-})
+  loadCalendar();
+});
 </script>

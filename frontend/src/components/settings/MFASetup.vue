@@ -12,11 +12,7 @@
       <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
         {{ t('settings.mfa.description') }}
       </p>
-      <button
-        :disabled="settingUp"
-        class="btn btn-primary"
-        @click="beginSetup"
-      >
+      <button :disabled="settingUp" class="btn btn-primary" @click="beginSetup">
         {{ settingUp ? t('common.loading') : t('settings.mfa.enable') }}
       </button>
     </div>
@@ -43,18 +39,10 @@
       </div>
 
       <div class="flex flex-wrap gap-2">
-        <button
-          :disabled="regenerating"
-          class="btn btn-secondary"
-          @click="regenerateBackupCodes"
-        >
+        <button :disabled="regenerating" class="btn btn-secondary" @click="regenerateBackupCodes">
           {{ regenerating ? t('common.loading') : t('settings.mfa.regenerateBackupCodes') }}
         </button>
-        <button
-          :disabled="disabling"
-          class="btn btn-danger"
-          @click="disable2FA"
-        >
+        <button :disabled="disabling" class="btn btn-danger" @click="disable2FA">
           {{ disabling ? t('common.loading') : t('settings.mfa.disable') }}
         </button>
       </div>
@@ -81,114 +69,114 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { mfaApi } from '@/api/mfa'
-import { useToastStore } from '@/stores/toast'
-import MFAQRCodeModal from './MFAQRCodeModal.vue'
-import BackupCodesModal from './BackupCodesModal.vue'
+import { ref, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { mfaApi } from '@/api/mfa';
+import { useToastStore } from '@/stores/toast';
+import MFAQRCodeModal from './MFAQRCodeModal.vue';
+import BackupCodesModal from './BackupCodesModal.vue';
 
-const { t } = useI18n()
-const toast = useToastStore()
+const { t } = useI18n();
+const toast = useToastStore();
 
-const mfaStatus = ref({ enabled: false })
+const mfaStatus = ref({ enabled: false });
 const setupData = ref({
   secret: '',
   qr_code_url: '',
-  backup_codes: [] as string[]
-})
-const showQRModal = ref(false)
-const showBackupCodesModal = ref(false)
-const backupCodes = ref<string[]>([])
-const settingUp = ref(false)
-const disabling = ref(false)
-const regenerating = ref(false)
+  backup_codes: [] as string[],
+});
+const showQRModal = ref(false);
+const showBackupCodesModal = ref(false);
+const backupCodes = ref<string[]>([]);
+const settingUp = ref(false);
+const disabling = ref(false);
+const regenerating = ref(false);
 
 onMounted(() => {
-  loadStatus()
-})
+  loadStatus();
+});
 
 async function loadStatus() {
   try {
-    mfaStatus.value = await mfaApi.getStatus()
+    mfaStatus.value = await mfaApi.getStatus();
   } catch (error) {
-    console.error('Failed to load MFA status:', error)
+    console.error('Failed to load MFA status:', error);
   }
 }
 
 async function beginSetup() {
-  settingUp.value = true
+  settingUp.value = true;
   try {
-    setupData.value = await mfaApi.beginSetup()
-    showQRModal.value = true
+    setupData.value = await mfaApi.beginSetup();
+    showQRModal.value = true;
   } catch (error) {
-    console.error('Failed to begin MFA setup:', error)
-    toast.error(t('settings.mfa.setupError'))
+    console.error('Failed to begin MFA setup:', error);
+    toast.error(t('settings.mfa.setupError'));
   } finally {
-    settingUp.value = false
+    settingUp.value = false;
   }
 }
 
 async function verifySetup(code: string) {
   try {
-    await mfaApi.finishSetup(code)
-    mfaStatus.value.enabled = true
-    showQRModal.value = false
+    await mfaApi.finishSetup(code);
+    mfaStatus.value.enabled = true;
+    showQRModal.value = false;
 
     // Show backup codes
-    backupCodes.value = setupData.value.backup_codes
-    showBackupCodesModal.value = true
+    backupCodes.value = setupData.value.backup_codes;
+    showBackupCodesModal.value = true;
 
-    toast.success(t('settings.mfa.enableSuccess'))
+    toast.success(t('settings.mfa.enableSuccess'));
   } catch (error) {
-    console.error('Failed to verify MFA code:', error)
-    toast.error(t('settings.mfa.invalidCode'))
+    console.error('Failed to verify MFA code:', error);
+    toast.error(t('settings.mfa.invalidCode'));
   }
 }
 
 function closeSetupModal() {
-  showQRModal.value = false
+  showQRModal.value = false;
   setupData.value = {
     secret: '',
     qr_code_url: '',
-    backup_codes: []
-  }
+    backup_codes: [],
+  };
 }
 
 async function disable2FA() {
   // Confirm the action
   if (!confirm(t('settings.mfa.confirmDisable'))) {
-    return
+    return;
   }
 
-  disabling.value = true
+  disabling.value = true;
   try {
-    await mfaApi.disable()
-    mfaStatus.value.enabled = false
-    toast.success(t('settings.mfa.disableSuccess'))
+    await mfaApi.disable();
+    mfaStatus.value.enabled = false;
+    toast.success(t('settings.mfa.disableSuccess'));
   } catch (error: any) {
-    console.error('Failed to disable 2FA:', error)
-    toast.error(t('settings.mfa.disableError'))
+    console.error('Failed to disable 2FA:', error);
+    toast.error(t('settings.mfa.disableError'));
   } finally {
-    disabling.value = false
+    disabling.value = false;
   }
 }
 
 async function regenerateBackupCodes() {
   if (!confirm(t('settings.mfa.backupCodesWarning'))) {
-    return
+    return;
   }
 
-  regenerating.value = true
+  regenerating.value = true;
   try {
-    backupCodes.value = await mfaApi.regenerateBackupCodes()
-    showBackupCodesModal.value = true
-    toast.success(t('settings.mfa.regenerateSuccess'))
+    backupCodes.value = await mfaApi.regenerateBackupCodes();
+    showBackupCodesModal.value = true;
+    toast.success(t('settings.mfa.regenerateSuccess'));
   } catch (error) {
-    console.error('Failed to regenerate backup codes:', error)
-    toast.error(t('settings.mfa.regenerateError'))
+    console.error('Failed to regenerate backup codes:', error);
+    toast.error(t('settings.mfa.regenerateError'));
   } finally {
-    regenerating.value = false
+    regenerating.value = false;
   }
 }
 </script>
