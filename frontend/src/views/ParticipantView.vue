@@ -170,7 +170,7 @@
                 <button
                   type="button"
                   class="btn btn-ghost"
-                  @click="changingEmail = false; newEmailInput = ''"
+                  @click="handleCancelChangeEmail"
                 >
                   {{ t('common.cancel') }}
                 </button>
@@ -225,7 +225,7 @@
                 <button
                   type="button"
                   class="btn btn-ghost"
-                  @click="changingEmail = false; newEmailInput = ''"
+                  @click="handleCancelChangeEmail"
                 >
                   {{ t('common.cancel') }}
                 </button>
@@ -409,152 +409,181 @@
           </div>
         </div>
 
-        <!-- Time Slot Form (only in month view) -->
-        <div v-if="displayMode === 'month'" class="card mb-6">
-          <div class="mb-4 flex items-baseline gap-2">
-            <h2 class="font-display text-xl font-semibold text-gray-900 dark:text-white">
-              {{ t('availability.timeSlot', 'Plage horaire') }}
-            </h2>
-            <span
-              v-if="calendar?.min_duration_hours && calendar.min_duration_hours > 0"
-              class="text-sm text-gray-600 dark:text-gray-400"
-            >
-              ({{ t('calendar.minDurationHours') }}: {{ calendar.min_duration_hours }}h)
-            </span>
+        <!-- Time Slot Form (only in month view) & Calendar Links - Side by side -->
+        <div class="grid gap-6 mb-6" :class="{ 'lg:grid-cols-2': displayMode === 'month' }">
+          <!-- Time Slot Form (only in month view) -->
+          <div v-if="displayMode === 'month'" class="card">
+            <div class="mb-4 flex items-baseline gap-2">
+              <h2 class="font-display text-xl font-semibold text-gray-900 dark:text-white">
+                {{ t('availability.timeSlot', 'Plage horaire') }}
+              </h2>
+              <span
+                v-if="calendar?.min_duration_hours && calendar.min_duration_hours > 0"
+                class="text-sm text-gray-600 dark:text-gray-400"
+              >
+                ({{ t('calendar.minDurationHours') }}: {{ calendar.min_duration_hours }}h)
+              </span>
+            </div>
+
+            <div class="space-y-3">
+              <!-- All Day Checkbox -->
+              <div class="flex items-center">
+                <input
+                  id="allDay"
+                  v-model="isAllDay"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <label for="allDay" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                  {{ t('availability.allDay') }}
+                </label>
+              </div>
+
+              <!-- Time Range -->
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+                    {{ t('availability.startTime') }}
+                  </label>
+                  <TimeSelect
+                    v-model="newAvailability.start_time"
+                    class="text-sm"
+                    :disabled="isAllDay"
+                    :max="newAvailability.end_time || undefined"
+                  />
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+                    {{ t('availability.endTime') }}
+                  </label>
+                  <TimeSelect
+                    v-model="newAvailability.end_time"
+                    class="text-sm"
+                    :disabled="isAllDay"
+                    :min="newAvailability.start_time || undefined"
+                  />
+                </div>
+              </div>
+
+              <!-- Note -->
+              <div>
+                <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+                  {{ t('availability.note') }}
+                </label>
+                <textarea
+                  v-model="newAvailability.note"
+                  rows="2"
+                  class="input text-sm"
+                  :placeholder="t('availability.note')"
+                />
+              </div>
+            </div>
           </div>
 
-          <div class="space-y-3">
-            <!-- All Day Checkbox -->
-            <div class="flex items-center">
-              <input
-                id="allDay"
-                v-model="isAllDay"
-                type="checkbox"
-                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              />
-              <label for="allDay" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                {{ t('availability.allDay') }}
-              </label>
-            </div>
-
-            <!-- Time Range -->
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                  {{ t('availability.startTime') }}
+          <!-- Calendar Links -->
+          <div class="card">
+            <h2 class="mb-4 font-display text-xl font-semibold text-gray-900 dark:text-white">
+              {{ t('calendar.sharingLinks', 'Sharing Links') }}
+            </h2>
+            <div class="space-y-3">
+              <!-- Public Link -->
+              <div v-if="!calendar?.lock_participants">
+                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                  {{ t('calendar.publicLink', 'Public link') }}
                 </label>
-                <TimeSelect
-                  v-model="newAvailability.start_time"
-                  class="text-sm"
-                  :disabled="isAllDay"
-                  :max="newAvailability.end_time || undefined"
-                />
+                <div class="flex gap-2">
+                  <input :value="publicLink" readonly class="input flex-1 text-sm" />
+                  <button
+                    class="btn btn-secondary"
+                    :title="t('calendar.copyLink', 'Copy link')"
+                    @click="copyToClipboard(publicLink)"
+                  >
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                      />
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <div>
-                <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                  {{ t('availability.endTime') }}
-                </label>
-                <TimeSelect
-                  v-model="newAvailability.end_time"
-                  class="text-sm"
-                  :disabled="isAllDay"
-                  :min="newAvailability.start_time || undefined"
-                />
-              </div>
-            </div>
 
-            <!-- Note -->
-            <div>
-              <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                {{ t('availability.note') }}
-              </label>
-              <textarea
-                v-model="newAvailability.note"
-                rows="2"
-                class="input text-sm"
-                :placeholder="t('availability.note')"
-              />
+              <!-- ICS Link -->
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                  {{ t('calendar.icsLink', 'iCal subscription link') }}
+                </label>
+                <div class="flex gap-2">
+                  <input :value="icsLink" readonly class="input flex-1 text-sm" />
+                  <button
+                    class="btn btn-secondary"
+                    :title="t('calendar.copyLink', 'Copy link')"
+                    @click="copyToClipboard(icsLink)"
+                  >
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Settings Link (Owner/Admin only) -->
+              <div v-if="canManageCalendar">
+                <router-link
+                  :to="`/calendars/${calendar.id}/settings`"
+                  class="btn btn-ghost w-full justify-center"
+                >
+                  <svg class="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                    />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                  </svg>
+                  {{ t('calendar.editCalendar', 'Edit calendar') }}
+                </router-link>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Calendar Links -->
+        <!-- Participants List -->
         <div class="card mb-6">
           <h2 class="mb-4 font-display text-xl font-semibold text-gray-900 dark:text-white">
-            {{ t('calendar.sharingLinks', 'Sharing Links') }}
+            Participants
           </h2>
-          <div class="space-y-3">
-            <!-- Public Link -->
-            <div v-if="!calendar?.lock_participants">
-              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                {{ t('calendar.publicLink', 'Public link') }}
-              </label>
-              <div class="flex gap-2">
-                <input :value="publicLink" readonly class="input flex-1 text-sm" />
-                <button
-                  class="btn btn-secondary"
-                  :title="t('calendar.copyLink', 'Copy link')"
-                  @click="copyToClipboard(publicLink)"
-                >
-                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <!-- ICS Link -->
-            <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                {{ t('calendar.icsLink', 'iCal subscription link') }}
-              </label>
-              <div class="flex gap-2">
-                <input :value="icsLink" readonly class="input flex-1 text-sm" />
-                <button
-                  class="btn btn-secondary"
-                  :title="t('calendar.copyLink', 'Copy link')"
-                  @click="copyToClipboard(icsLink)"
-                >
-                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <!-- Settings Link (Owner/Admin only) -->
-            <div v-if="canManageCalendar">
-              <router-link
-                :to="`/calendars/${calendar.id}/settings`"
-                class="btn btn-ghost w-full justify-center"
+          <div v-if="participantsStats.length > 0" class="space-y-2">
+            <div
+              v-for="stat in participantsStats"
+              :key="stat.name"
+              class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
+            >
+              <span class="text-sm font-medium text-gray-900 dark:text-white">
+                {{ stat.name }}
+              </span>
+              <span
+                class="rounded-full bg-primary-100 px-3 py-1 text-sm font-semibold text-primary-800 dark:bg-primary-900 dark:text-primary-200"
               >
-                <svg class="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                  />
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-                {{ t('calendar.editCalendar', 'Edit calendar') }}
-              </router-link>
+                {{ stat.count }} {{ stat.count > 1 ? 'disponibilités' : 'disponibilité' }}
+              </span>
             </div>
+          </div>
+          <div v-else class="text-sm text-gray-600 dark:text-gray-400">
+            Aucun participant disponible
           </div>
         </div>
 
@@ -1237,7 +1266,7 @@ const displayedMonth = ref(now.getMonth())
 const currentWeekStartDate = ref<Date>(new Date())
 
 // Display mode: 'month' or 'week'
-const displayMode = ref<'month' | 'week'>('week')
+const displayMode = ref<'month' | 'week'>('month')
 
 // Number of periods (months or weeks) to display (1-4 for weeks, 1-12 for months)
 const numberOfPeriods = ref(1)
@@ -1412,6 +1441,41 @@ const icsLink = computed(() => {
   if (!calendar.value) return ''
   const baseUrl = window.location.origin
   return `${baseUrl}/api/v1/ics/feed/${calendar.value.ics_token}.ics`
+})
+
+// Compute participants stats (availability count for each participant on displayed date range)
+const participantsStats = computed(() => {
+  if (!calendar.value) return []
+
+  const statsMap = new Map<string, { name: string; count: number }>()
+
+  // Initialize all participants from calendar with count = 0
+  for (const participant of calendar.value.participants) {
+    statsMap.set(participant.name, { name: participant.name, count: 0 })
+  }
+
+  // Count availabilities from dateSummaries if available
+  if (dateSummaries.value) {
+    for (const summary of dateSummaries.value) {
+      for (const participantData of summary.participants) {
+        const name = participantData.participant_name
+
+        // Increment count - if participant is in the list, they have availability for this date
+        // (either all-day or with specific time slots)
+        if (statsMap.has(name)) {
+          statsMap.get(name)!.count++
+        }
+      }
+    }
+  }
+
+  // Convert to array and sort by count (descending), then by name
+  return Array.from(statsMap.values()).sort((a, b) => {
+    if (b.count !== a.count) {
+      return b.count - a.count
+    }
+    return a.name.localeCompare(b.name)
+  })
 })
 
 const canManageCalendar = computed(() => {
@@ -2395,6 +2459,11 @@ async function handleResendVerification() {
   } finally {
     resendingEmail.value = false
   }
+}
+
+function handleCancelChangeEmail() {
+  changingEmail.value = false
+  newEmailInput.value = ''
 }
 
 async function handleChangeEmail() {
