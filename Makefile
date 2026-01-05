@@ -45,6 +45,15 @@ help:
 	@echo "  make format-check     - Check Go file formatting without modifying"
 
 # Development
+ensure-dist-placeholder:
+	@if [ ! -f web/dist/index.html ]; then \
+		echo "Creating placeholder dist files for development..."; \
+		mkdir -p web/dist/assets; \
+		echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Dev Mode</title></head><body><h1>Development Mode</h1><p>Use make dev-frontend for the real frontend.</p></body></html>' > web/dist/index.html; \
+		echo '/* placeholder */' > web/dist/assets/placeholder.css; \
+		echo "✓ Placeholder files created"; \
+	fi
+
 dev-db:
 	docker compose -f docker-compose.dev.yml up -d postgres redis
 	@echo "Waiting for services to be healthy..."
@@ -59,7 +68,7 @@ dev-app:
 
 dev: dev-app
 
-dev-fullstack:
+dev-fullstack: ensure-dist-placeholder
 	@echo "Starting Full Stack Development ($(BUILD_TYPE) mode):"
 	@echo "  - Backend API on :5173"
 	@echo "  - Frontend on :8080 (proxies /api to :5173)"
@@ -70,7 +79,7 @@ dev-fullstack:
 	PORT=5173 go run -tags $(BUILD_TYPE) ./cmd/ & \
 	cd frontend && npm run dev:$(BUILD_TYPE)
 
-dev-backend:
+dev-backend: ensure-dist-placeholder
 	@echo "Starting backend on :5173 ($(BUILD_TYPE) mode, for use with frontend dev server)..."
 	PORT=5173 go run -tags $(BUILD_TYPE) ./cmd/
 
@@ -84,10 +93,10 @@ test:
 	go test -tags $(BUILD_TYPE) ./... -v
 
 # Building
-build:
+build: swagger-generate
 	@echo "Building WhenTo Frontend ($(BUILD_TYPE) mode)..."
 	@rm -R web/dist/* || mkdir -p web/dist
-	@(cd frontend && npm run build:$(BUILD_TYPE))
+	@(cd frontend && npm install && npm run build:$(BUILD_TYPE))
 	@cp -R frontend/dist/* web/dist/
 	@echo "Building WhenTo unified binary ($(BUILD_TYPE) mode)..."
 	@mkdir -p bin
