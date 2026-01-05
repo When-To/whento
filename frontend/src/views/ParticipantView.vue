@@ -1731,12 +1731,15 @@ async function loadParticipantCounts(year?: number, month?: number) {
 
     const summaries = await availabilitiesApi.getRangeSummary(token.value, startStr, endStr)
 
+    // Ensure summaries is an array (handle null/undefined responses)
+    const summariesArray = Array.isArray(summaries) ? summaries : []
+
     // Store full summaries for weekly view
-    dateSummaries.value = summaries
+    dateSummaries.value = summariesArray
 
     // Convert array to map for easy lookup (for monthly view)
     const counts: Record<string, number> = {}
-    for (const summary of summaries) {
+    for (const summary of summariesArray) {
       counts[summary.date] = summary.total_count
     }
     participantCounts.value = counts
@@ -2436,7 +2439,7 @@ watch(
 )
 
 // Save display settings to localStorage when they change
-watch(displayMode, newMode => {
+watch(displayMode, async newMode => {
   // Adjust numberOfPeriods if it exceeds the max for the new mode
   // Month mode: max 12, Week mode: max 4
   const maxPeriods = newMode === 'month' ? 12 : 4
@@ -2446,6 +2449,8 @@ watch(displayMode, newMode => {
 
   if (calendar.value) {
     historyStore.updateDisplaySettings(token.value, { displayMode: newMode })
+    // Reload participant counts with appropriate date range for the new mode
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
   }
 })
 
