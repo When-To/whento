@@ -11,11 +11,7 @@
       <div class="card">
         <!-- Header -->
         <div class="mb-8 text-center">
-          <img
-            src="/logo.png"
-            alt="WhenTo"
-            class="mx-auto mb-4 h-16 w-16"
-          >
+          <img src="/logo.png" alt="WhenTo" class="mx-auto mb-4 h-16 w-16" />
           <h1 class="font-display text-3xl font-bold text-gray-900 dark:text-white">
             {{ t('auth.login') }}
           </h1>
@@ -31,10 +27,7 @@
         </div>
 
         <!-- Passkey Login Button (if supported) - Direct login without email -->
-        <div
-          v-if="isWebAuthnSupported"
-          class="mb-6"
-        >
+        <div v-if="isWebAuthnSupported" class="mb-6">
           <button
             type="button"
             :disabled="loading || passkeyLoading"
@@ -61,13 +54,7 @@
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
-            <svg
-              v-else
-              class="mr-2 h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
+            <svg v-else class="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -84,7 +71,9 @@
               <div class="w-full border-t border-gray-300 dark:border-gray-600" />
             </div>
             <div class="relative flex justify-center text-xs">
-              <span class="bg-white dark:bg-gray-800 px-4 py-1 rounded-full text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wide">
+              <span
+                class="bg-white dark:bg-gray-800 px-4 py-1 rounded-full text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wide"
+              >
                 {{ t('auth.orLoginWithEmail') }}
               </span>
             </div>
@@ -100,10 +89,7 @@
         </div>
 
         <!-- Form -->
-        <form
-          class="space-y-6"
-          @submit.prevent="handleSubmit"
-        >
+        <form class="space-y-6" @submit.prevent="handleSubmit">
           <!-- Email -->
           <div>
             <label
@@ -121,11 +107,8 @@
               class="input"
               :class="{ 'input-error': errors.email }"
               :placeholder="t('auth.email')"
-            >
-            <p
-              v-if="errors.email"
-              class="mt-1 text-sm text-danger-600 dark:text-danger-400"
-            >
+            />
+            <p v-if="errors.email" class="mt-1 text-sm text-danger-600 dark:text-danger-400">
               {{ errors.email }}
             </p>
           </div>
@@ -138,15 +121,8 @@
               class="btn btn-secondary w-full"
               @click="handleMagicLinkRequest"
             >
-              <span
-                v-if="magicLinkLoading"
-                class="flex items-center justify-center"
-              >
-                <svg
-                  class="mr-2 h-4 w-4 animate-spin"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
+              <span v-if="magicLinkLoading" class="flex items-center justify-center">
+                <svg class="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle
                     class="opacity-25"
                     cx="12"
@@ -168,15 +144,14 @@
           </div>
 
           <!-- Separator -->
-          <div
-            v-if="magicLinkAvailable && !magicLinkSuccess"
-            class="relative"
-          >
+          <div v-if="magicLinkAvailable && !magicLinkSuccess" class="relative">
             <div class="absolute inset-0 flex items-center">
               <div class="w-full border-t border-gray-300 dark:border-gray-600" />
             </div>
             <div class="relative flex justify-center text-xs">
-              <span class="bg-white dark:bg-gray-800 px-4 py-1 rounded-full text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wide">
+              <span
+                class="bg-white dark:bg-gray-800 px-4 py-1 rounded-full text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wide"
+              >
                 {{ t('common.or') }}
               </span>
             </div>
@@ -216,11 +191,8 @@
               class="input"
               :class="{ 'input-error': errors.password }"
               :placeholder="t('auth.password')"
-            >
-            <p
-              v-if="errors.password"
-              class="mt-1 text-sm text-danger-600 dark:text-danger-400"
-            >
+            />
+            <p v-if="errors.password" class="mt-1 text-sm text-danger-600 dark:text-danger-400">
               {{ errors.password }}
             </p>
           </div>
@@ -231,15 +203,8 @@
             :disabled="loading || passkeyLoading"
             class="btn btn-primary w-full"
           >
-            <span
-              v-if="loading"
-              class="flex items-center justify-center"
-            >
-              <svg
-                class="mr-2 h-4 w-4 animate-spin"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
+            <span v-if="loading" class="flex items-center justify-center">
+              <svg class="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle
                   class="opacity-25"
                   cx="12"
@@ -271,215 +236,215 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
-import type { LoginRequest } from '@/types'
-import { translateValidationError, translateErrorMessage } from '@/utils/errorTranslator'
-import { passkeyApi } from '@/api/passkey'
-import { authApi } from '@/api/auth'
-import ForgotPasswordModal from '@/components/ForgotPasswordModal.vue'
+import { ref, reactive, computed, onMounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '@/stores/auth';
+import type { LoginRequest } from '@/types';
+import { translateValidationError, translateErrorMessage } from '@/utils/errorTranslator';
+import { passkeyApi } from '@/api/passkey';
+import { authApi } from '@/api/auth';
+import ForgotPasswordModal from '@/components/ForgotPasswordModal.vue';
 
-const router = useRouter()
-const route = useRoute()
-const { t } = useI18n()
-const authStore = useAuthStore()
+const router = useRouter();
+const route = useRoute();
+const { t } = useI18n();
+const authStore = useAuthStore();
 
 // Check if WebAuthn is supported in the browser
 const isWebAuthnSupported = computed(() => {
-  return typeof window !== 'undefined' && window.PublicKeyCredential !== undefined
-})
+  return typeof window !== 'undefined' && window.PublicKeyCredential !== undefined;
+});
 
 const form = reactive<LoginRequest>({
   email: '',
   password: '',
-})
+});
 
 const errors = reactive({
   email: '',
   password: '',
-})
+});
 
-const error = ref('')
-const loading = ref(false)
-const passkeyLoading = ref(false)
-const showForgotPasswordModal = ref(false)
+const error = ref('');
+const loading = ref(false);
+const passkeyLoading = ref(false);
+const showForgotPasswordModal = ref(false);
 
 // Magic link
-const magicLinkAvailable = ref(false)
-const magicLinkLoading = ref(false)
-const magicLinkSuccess = ref(false)
-const magicLinkMessage = ref('')
+const magicLinkAvailable = ref(false);
+const magicLinkLoading = ref(false);
+const magicLinkSuccess = ref(false);
+const magicLinkMessage = ref('');
 
 // Check magic link availability on mount
 onMounted(async () => {
   try {
-    const response = await authApi.checkMagicLinkAvailable()
-    magicLinkAvailable.value = response.available
+    const response = await authApi.checkMagicLinkAvailable();
+    magicLinkAvailable.value = response.available;
   } catch (_err) {
     // Silently fail - button won't show
   }
-})
+});
 
 function validateForm(): boolean {
-  errors.email = ''
-  errors.password = ''
-  let isValid = true
+  errors.email = '';
+  errors.password = '';
+  let isValid = true;
 
   if (!form.email) {
-    errors.email = t('errors.required')
-    isValid = false
+    errors.email = t('errors.required');
+    isValid = false;
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-    errors.email = t('errors.invalidEmail')
-    isValid = false
+    errors.email = t('errors.invalidEmail');
+    isValid = false;
   }
 
   if (!form.password) {
-    errors.password = t('errors.required')
-    isValid = false
+    errors.password = t('errors.required');
+    isValid = false;
   } else if (form.password.length < 8) {
-    errors.password = t('errors.passwordTooShort')
-    isValid = false
+    errors.password = t('errors.passwordTooShort');
+    isValid = false;
   }
 
-  return isValid
+  return isValid;
 }
 
 async function handleSubmit() {
-  error.value = ''
-  errors.email = ''
-  errors.password = ''
+  error.value = '';
+  errors.email = '';
+  errors.password = '';
 
   if (!validateForm()) {
-    return
+    return;
   }
 
-  loading.value = true
+  loading.value = true;
 
   try {
-    const response = await authStore.login(form)
+    const response = await authStore.login(form);
 
     // Check if 2FA is required
     if (response?.require_mfa && response?.temp_token) {
-      localStorage.setItem('temp_token', response.temp_token)
-      router.push('/verify-mfa')
-      return
+      localStorage.setItem('temp_token', response.temp_token);
+      router.push('/verify-mfa');
+      return;
     }
 
     // Normal login - redirect to dashboard
-    const redirect = (route.query.redirect as string) || '/dashboard'
-    router.push(redirect)
+    const redirect = (route.query.redirect as string) || '/dashboard';
+    router.push(redirect);
   } catch (err: any) {
     // Handle validation errors from backend
     if (err.code === 'VALIDATION_ERROR' && err.details) {
       err.details.forEach((detail: { field: string; message: string }) => {
-        const { key, params } = translateValidationError(detail.field, detail.message)
-        const translatedMessage = t(key, params || {})
+        const { key, params } = translateValidationError(detail.field, detail.message);
+        const translatedMessage = t(key, params || {});
 
         if (detail.field === 'email') {
-          errors.email = translatedMessage
+          errors.email = translatedMessage;
         } else if (detail.field === 'password') {
-          errors.password = translatedMessage
+          errors.password = translatedMessage;
         }
-      })
+      });
     } else {
       // Show generic error message (translate if possible)
-      const errorKey = translateErrorMessage(err.message || '')
-      error.value = errorKey === err.message ? err.message : t(errorKey)
+      const errorKey = translateErrorMessage(err.message || '');
+      error.value = errorKey === err.message ? err.message : t(errorKey);
 
       // If no error message, use fallback
       if (!error.value) {
-        error.value = t('auth.loginError')
+        error.value = t('auth.loginError');
       }
     }
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 async function handleMagicLinkRequest() {
   // Validate email only
-  errors.email = ''
+  errors.email = '';
   if (!form.email) {
-    errors.email = t('errors.required')
-    return
+    errors.email = t('errors.required');
+    return;
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-    errors.email = t('errors.invalidEmail')
-    return
+    errors.email = t('errors.invalidEmail');
+    return;
   }
 
-  magicLinkLoading.value = true
-  error.value = ''
+  magicLinkLoading.value = true;
+  error.value = '';
 
   try {
-    const response = await authApi.requestMagicLink(form.email)
-    magicLinkSuccess.value = true
-    magicLinkMessage.value = response.message
+    const response = await authApi.requestMagicLink(form.email);
+    magicLinkSuccess.value = true;
+    magicLinkMessage.value = response.message;
   } catch (err: any) {
-    error.value = err.message || t('auth.magicLink.requestError')
+    error.value = err.message || t('auth.magicLink.requestError');
   } finally {
-    magicLinkLoading.value = false
+    magicLinkLoading.value = false;
   }
 }
 
 async function loginWithDiscoverablePasskey() {
-  error.value = ''
-  passkeyLoading.value = true
+  error.value = '';
+  passkeyLoading.value = true;
 
   try {
     // Begin passkey authentication (usernameless/passwordless)
-    const { options, challengeId } = await passkeyApi.beginAuthentication()
+    const { options, challengeId } = await passkeyApi.beginAuthentication();
 
     // Prompt user for passkey (biometric/PIN)
     const credential = (await navigator.credentials.get({
       publicKey: options,
-    })) as PublicKeyCredential
+    })) as PublicKeyCredential;
 
     if (!credential) {
-      error.value = t('auth.passkeyError')
-      return
+      error.value = t('auth.passkeyError');
+      return;
     }
 
     // Finish authentication with backend (requires challengeId)
-    const response = await passkeyApi.finishAuthentication(credential, challengeId)
+    const response = await passkeyApi.finishAuthentication(credential, challengeId);
 
     // Store tokens in auth store
     if (response.access_token) {
-      authStore.setTokens(response.access_token)
-      authStore.user = response.user
+      authStore.setTokens(response.access_token);
+      authStore.user = response.user;
     }
 
     // Check if 2FA is required
     if (response.require_mfa && response.temp_token) {
-      localStorage.setItem('temp_token', response.temp_token)
-      router.push('/verify-mfa')
-      return
+      localStorage.setItem('temp_token', response.temp_token);
+      router.push('/verify-mfa');
+      return;
     }
 
     // Normal login - redirect to dashboard
-    const redirect = (route.query.redirect as string) || '/dashboard'
-    router.push(redirect)
+    const redirect = (route.query.redirect as string) || '/dashboard';
+    router.push(redirect);
   } catch (err: any) {
-    console.error('Passkey login error:', err)
+    console.error('Passkey login error:', err);
 
     // Handle specific error cases
     if (err.name === 'NotAllowedError') {
-      error.value = t('auth.passkeyDenied')
+      error.value = t('auth.passkeyDenied');
     } else if (err.name === 'InvalidStateError') {
-      error.value = t('auth.passkeyInvalidState')
+      error.value = t('auth.passkeyInvalidState');
     } else {
       // Generic error
-      const errorKey = translateErrorMessage(err.message || '')
-      error.value = errorKey === err.message ? err.message : t(errorKey)
+      const errorKey = translateErrorMessage(err.message || '');
+      error.value = errorKey === err.message ? err.message : t(errorKey);
 
       if (!error.value) {
-        error.value = t('auth.passkeyError')
+        error.value = t('auth.passkeyError');
       }
     }
   } finally {
-    passkeyLoading.value = false
+    passkeyLoading.value = false;
   }
 }
 </script>

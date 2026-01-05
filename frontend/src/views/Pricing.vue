@@ -48,10 +48,7 @@
       </div>
 
       <!-- Cloud Subscriptions -->
-      <div
-        v-if="activeTab === 'cloud'"
-        class="grid gap-8 md:grid-cols-3"
-      >
+      <div v-if="activeTab === 'cloud'" class="grid gap-8 md:grid-cols-3">
         <!-- Free Tier -->
         <div class="card flex flex-col">
           <div class="mb-4">
@@ -130,7 +127,9 @@
               {{ t('pricing.cloud.pro.name') }}
             </h3>
             <div class="mt-4 flex items-baseline">
-              <span class="text-5xl font-bold text-gray-900 dark:text-white">{{ formatPrice(proPlan?.price_yearly) }}</span>
+              <span class="text-5xl font-bold text-gray-900 dark:text-white">{{
+                formatPrice(proPlan?.price_yearly)
+              }}</span>
               <span class="ml-2 text-gray-600 dark:text-gray-400">/{{ t('pricing.perYear') }}</span>
             </div>
           </div>
@@ -202,10 +201,7 @@
             </li>
           </ul>
 
-          <router-link
-            to="/billing"
-            class="btn btn-primary w-full mt-auto"
-          >
+          <router-link to="/billing" class="btn btn-primary w-full mt-auto">
             {{ t('pricing.upgrade') }}
           </router-link>
         </div>
@@ -217,7 +213,9 @@
               {{ t('pricing.cloud.power.name') }}
             </h3>
             <div class="mt-4 flex items-baseline">
-              <span class="text-5xl font-bold text-gray-900 dark:text-white">{{ formatPrice(powerPlan?.price_yearly) }}</span>
+              <span class="text-5xl font-bold text-gray-900 dark:text-white">{{
+                formatPrice(powerPlan?.price_yearly)
+              }}</span>
               <span class="ml-2 text-gray-600 dark:text-gray-400">/{{ t('pricing.perYear') }}</span>
             </div>
           </div>
@@ -305,20 +303,14 @@
             </li>
           </ul>
 
-          <router-link
-            to="/billing"
-            class="btn btn-primary w-full mt-auto"
-          >
+          <router-link to="/billing" class="btn btn-primary w-full mt-auto">
             {{ t('pricing.upgrade') }}
           </router-link>
         </div>
       </div>
 
       <!-- Self-hosted Licenses -->
-      <div
-        v-else
-        class="grid gap-8 md:grid-cols-3"
-      >
+      <div v-else class="grid gap-8 md:grid-cols-3">
         <!-- Free Tier -->
         <div class="card flex flex-col">
           <div class="mb-4">
@@ -397,7 +389,9 @@
               {{ t('pricing.selfhosted.pro.name') }}
             </h3>
             <div class="mt-4 flex items-baseline">
-              <span class="text-5xl font-bold text-gray-900 dark:text-white">{{ formatPrice(proProduct?.price) }}</span>
+              <span class="text-5xl font-bold text-gray-900 dark:text-white">{{
+                formatPrice(proProduct?.price)
+              }}</span>
               <span class="ml-2 text-gray-600 dark:text-gray-400">{{ t('pricing.oneTime') }}</span>
             </div>
             <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
@@ -488,7 +482,9 @@
               {{ t('pricing.selfhosted.enterprise.name') }}
             </h3>
             <div class="mt-4 flex items-baseline">
-              <span class="text-5xl font-bold text-gray-900 dark:text-white">{{ formatPrice(enterpriseProduct?.price) }}</span>
+              <span class="text-5xl font-bold text-gray-900 dark:text-white">{{
+                formatPrice(enterpriseProduct?.price)
+              }}</span>
               <span class="ml-2 text-gray-600 dark:text-gray-400">{{ t('pricing.oneTime') }}</span>
             </div>
             <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
@@ -593,71 +589,68 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
-import { useCartStore } from '@/stores/cart'
-import { useToastStore } from '@/stores/toast'
-import { getPlans, type PlanConfig } from '@/api/pricing'
-import { shopAPI, type Product } from '@/api/shop'
-import { formatPrice as formatPriceUtil } from '@/utils/currency'
+import { ref, computed, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
+import { useCartStore } from '@/stores/cart';
+import { useToastStore } from '@/stores/toast';
+import { getPlans, type PlanConfig } from '@/api/pricing';
+import { shopAPI, type Product } from '@/api/shop';
+import { formatPrice as formatPriceUtil } from '@/utils/currency';
 
-const { t, locale } = useI18n()
-const router = useRouter()
-const cartStore = useCartStore()
-const toastStore = useToastStore()
+const { t, locale } = useI18n();
+const router = useRouter();
+const cartStore = useCartStore();
+const toastStore = useToastStore();
 
-const activeTab = ref<'cloud' | 'selfhosted'>('cloud')
-const adding = ref(false)
-const loading = ref(true)
+const activeTab = ref<'cloud' | 'selfhosted'>('cloud');
+const adding = ref(false);
+const loading = ref(true);
 
 // Dynamic pricing data from API
-const cloudPlans = ref<Record<string, PlanConfig>>({})
-const shopProducts = ref<Product[]>([])
+const cloudPlans = ref<Record<string, PlanConfig>>({});
+const shopProducts = ref<Product[]>([]);
 
 // Computed prices for cloud plans
-const proPlan = computed(() => cloudPlans.value['pro'])
-const powerPlan = computed(() => cloudPlans.value['power'])
+const proPlan = computed(() => cloudPlans.value['pro']);
+const powerPlan = computed(() => cloudPlans.value['power']);
 
 // Computed prices for self-hosted products
-const proProduct = computed(() => shopProducts.value.find(p => p.tier === 'pro'))
-const enterpriseProduct = computed(() => shopProducts.value.find(p => p.tier === 'enterprise'))
+const proProduct = computed(() => shopProducts.value.find(p => p.tier === 'pro'));
+const enterpriseProduct = computed(() => shopProducts.value.find(p => p.tier === 'enterprise'));
 
 // Format price from cents to euros
 function formatPrice(cents: number | undefined): string {
-  if (cents === undefined) return '...'
-  return formatPriceUtil(cents, locale.value)
+  if (cents === undefined) return '...';
+  return formatPriceUtil(cents, locale.value);
 }
 
 // Fetch pricing data on mount
 onMounted(async () => {
   try {
-    const [plansResponse, products] = await Promise.all([
-      getPlans(),
-      shopAPI.getProducts()
-    ])
-    cloudPlans.value = plansResponse.plans
-    shopProducts.value = products
+    const [plansResponse, products] = await Promise.all([getPlans(), shopAPI.getProducts()]);
+    cloudPlans.value = plansResponse.plans;
+    shopProducts.value = products;
   } catch (error) {
-    console.error('Failed to fetch pricing data:', error)
+    console.error('Failed to fetch pricing data:', error);
     // Fall back to showing loading state
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-})
+});
 
 async function handleAddToCart(tier: 'pro' | 'enterprise') {
   try {
-    adding.value = true
-    await cartStore.addToCart(tier, 1)
-    toastStore.success(t('shop.addToCartSuccess'))
+    adding.value = true;
+    await cartStore.addToCart(tier, 1);
+    toastStore.success(t('shop.addToCartSuccess'));
     // Redirect to cart after successful add
-    router.push('/cart')
+    router.push('/cart');
   } catch (error) {
-    console.error('Failed to add to cart:', error)
-    toastStore.error(t('shop.addToCartFailed'))
+    console.error('Failed to add to cart:', error);
+    toastStore.error(t('shop.addToCartFailed'));
   } finally {
-    adding.value = false
+    adding.value = false;
   }
 }
 </script>

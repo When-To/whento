@@ -167,11 +167,7 @@
                 <button type="submit" class="btn btn-primary" :disabled="addingEmail">
                   {{ addingEmail ? t('common.saving') : t('common.save') }}
                 </button>
-                <button
-                  type="button"
-                  class="btn btn-ghost"
-                  @click="handleCancelChangeEmail"
-                >
+                <button type="button" class="btn btn-ghost" @click="handleCancelChangeEmail">
                   {{ t('common.cancel') }}
                 </button>
               </form>
@@ -222,11 +218,7 @@
                 <button type="submit" class="btn btn-primary" :disabled="addingEmail">
                   {{ addingEmail ? t('common.saving') : t('common.save') }}
                 </button>
-                <button
-                  type="button"
-                  class="btn btn-ghost"
-                  @click="handleCancelChangeEmail"
-                >
+                <button type="button" class="btn btn-ghost" @click="handleCancelChangeEmail">
                   {{ t('common.cancel') }}
                 </button>
               </form>
@@ -1213,20 +1205,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watchEffect, watch, onActivated } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useCalendarStore } from '@/stores/calendar'
-import { useAuthStore } from '@/stores/auth'
-import { useCalendarHistoryStore } from '@/stores/calendarHistory'
-import { useToastStore } from '@/stores/toast'
-import { availabilitiesApi } from '@/api/availabilities'
-import CalendarGrid from '@/components/CalendarGrid.vue'
-import WeeklyCalendarGrid, { type AvailabilityOperation } from '@/components/WeeklyCalendarGrid.vue'
-import TimeSelect from '@/components/TimeSelect.vue'
-import CollapsibleSection from '@/components/CollapsibleSection.vue'
-import { clearHolidaysCache } from '@/composables/useDateValidation'
-import { addParticipantEmail, resendVerificationEmail } from '@/api/notify'
+import { ref, reactive, computed, onMounted, watchEffect, watch, onActivated } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useCalendarStore } from '@/stores/calendar';
+import { useAuthStore } from '@/stores/auth';
+import { useCalendarHistoryStore } from '@/stores/calendarHistory';
+import { useToastStore } from '@/stores/toast';
+import { availabilitiesApi } from '@/api/availabilities';
+import CalendarGrid from '@/components/CalendarGrid.vue';
+import WeeklyCalendarGrid, {
+  type AvailabilityOperation,
+} from '@/components/WeeklyCalendarGrid.vue';
+import TimeSelect from '@/components/TimeSelect.vue';
+import CollapsibleSection from '@/components/CollapsibleSection.vue';
+import { clearHolidaysCache } from '@/composables/useDateValidation';
+import { addParticipantEmail, resendVerificationEmail } from '@/api/notify';
 import type {
   Availability,
   AvailabilityItem,
@@ -1235,77 +1229,77 @@ import type {
   CreateRecurrenceRequest,
   DateAvailabilitySummary,
   ParticipantAvailabilitiesResponse,
-} from '@/types'
+} from '@/types';
 
-const route = useRoute()
-const router = useRouter()
-const { t, locale } = useI18n()
-const calendarStore = useCalendarStore()
-const authStore = useAuthStore()
-const historyStore = useCalendarHistoryStore()
-const toastStore = useToastStore()
+const route = useRoute();
+const router = useRouter();
+const { t, locale } = useI18n();
+const calendarStore = useCalendarStore();
+const authStore = useAuthStore();
+const historyStore = useCalendarHistoryStore();
+const toastStore = useToastStore();
 
 // Use computed to make route params reactive
-const token = computed(() => route.params.token as string)
-const participantId = computed(() => route.params.participantId as string)
+const token = computed(() => route.params.token as string);
+const participantId = computed(() => route.params.participantId as string);
 
-const loading = ref(false)
-const recurrences = ref<RecurrenceWithExceptions[]>([])
-const participantCounts = ref<Record<string, number>>({})
-const dateSummaries = ref<DateAvailabilitySummary[]>([])
-const addingAvailability = ref(false)
-const addingRecurrence = ref(false)
-const isAllDay = ref(true)
+const loading = ref(false);
+const recurrences = ref<RecurrenceWithExceptions[]>([]);
+const participantCounts = ref<Record<string, number>>({});
+const dateSummaries = ref<DateAvailabilitySummary[]>([]);
+const addingAvailability = ref(false);
+const addingRecurrence = ref(false);
+const isAllDay = ref(true);
 
 // Track currently displayed month in calendar
-const now = new Date()
-const displayedYear = ref(now.getFullYear())
-const displayedMonth = ref(now.getMonth())
+const now = new Date();
+const displayedYear = ref(now.getFullYear());
+const displayedMonth = ref(now.getMonth());
 
 // Track current week start date for weekly view
-const currentWeekStartDate = ref<Date>(new Date())
+const currentWeekStartDate = ref<Date>(new Date());
 
 // Display mode: 'month' or 'week'
-const displayMode = ref<'month' | 'week'>('month')
+const displayMode = ref<'month' | 'week'>('month');
 
 // Number of periods (months or weeks) to display (1-4 for weeks, 1-12 for months)
-const numberOfPeriods = ref(1)
+const numberOfPeriods = ref(1);
 
 // Weekly view settings
-const startHour = ref(8)
-const endHour = ref(20)
-const slotDuration = ref(30)
+const startHour = ref(8);
+const endHour = ref(20);
+const slotDuration = ref(30);
 
 // Email notification state
-const emailInput = ref('')
-const addingEmail = ref(false)
-const resendingEmail = ref(false)
-const changingEmail = ref(false)
-const newEmailInput = ref('')
+const emailInput = ref('');
+const addingEmail = ref(false);
+const resendingEmail = ref(false);
+const changingEmail = ref(false);
+const newEmailInput = ref('');
 const notificationsEnabled = computed(() => {
   // Check if calendar has notify_participants enabled
-  return calendar.value?.notify_participants === true
-})
+  return calendar.value?.notify_participants === true;
+});
 
-const calendar = computed(() => calendarStore.currentCalendar)
+const calendar = computed(() => calendarStore.currentCalendar);
 
 // Get participant info from calendar (includes email from API call with participant_id param)
 const participant = computed(() => {
-  return calendar.value?.participants.find(p => p.id === participantId.value)
-})
+  return calendar.value?.participants.find(p => p.id === participantId.value);
+});
 
 // Extract current participant's availabilities from dateSummaries (all participants data)
 // This replaces the need for a separate API call to /participant/{id}
 const availabilityData = computed((): ParticipantAvailabilitiesResponse | null => {
-  if (!dateSummaries.value || !participant.value) return null
+  if (!dateSummaries.value || !participant.value) return null;
 
-  const participantName = participant.value.name
+  const participantName = participant.value.name;
 
   // Extract availabilities for the current participant across all dates
-  const availabilitiesMap = new Map<string, AvailabilityItem>()
+  const availabilitiesMap = new Map<string, AvailabilityItem>();
 
   for (const summary of dateSummaries.value) {
-    const participantData = summary.participants.find(p => p.participant_name === participantName)
+    const participantData = summary.participants.find(p => p.participant_name === participantName);
 
     if (participantData) {
       // Create a unique availability entry for this date
@@ -1317,7 +1311,7 @@ const availabilityData = computed((): ParticipantAvailabilitiesResponse | null =
         note: participantData.note,
         created_at: '',
         updated_at: '',
-      })
+      });
     }
   }
 
@@ -1331,15 +1325,15 @@ const availabilityData = computed((): ParticipantAvailabilitiesResponse | null =
     availabilities: Array.from(availabilitiesMap.values()).sort((a, b) =>
       a.date.localeCompare(b.date)
     ),
-  }
-})
+  };
+});
 
 // Computed availabilities array for compatibility with existing code
 // Enriches availability items with participant info
 const availabilities = computed((): Availability[] => {
-  if (!availabilityData.value) return []
+  if (!availabilityData.value) return [];
 
-  const participantInfo = availabilityData.value.participant
+  const participantInfo = availabilityData.value.participant;
   return availabilityData.value.availabilities.map(
     (item): Availability => ({
       ...item,
@@ -1348,38 +1342,38 @@ const availabilities = computed((): Availability[] => {
       participant_email: participantInfo.email,
       participant_email_verified: participantInfo.email_verified,
     })
-  )
-})
+  );
+});
 
 // Generate an array of month configurations to display
 const monthsToDisplay = computed(() => {
-  const months = []
+  const months = [];
   for (let i = 0; i < numberOfPeriods.value; i++) {
-    const date = new Date(displayedYear.value, displayedMonth.value + i, 1)
+    const date = new Date(displayedYear.value, displayedMonth.value + i, 1);
     months.push({
       year: date.getFullYear(),
       month: date.getMonth(),
       key: `${date.getFullYear()}-${date.getMonth()}`,
-    })
+    });
   }
-  return months
-})
+  return months;
+});
 
 // Generate an array of week configurations to display
 const weeksToDisplay = computed(() => {
-  const weeks = []
+  const weeks = [];
 
   // Start from the current week start date
   for (let i = 0; i < numberOfPeriods.value; i++) {
-    const weekStart = new Date(currentWeekStartDate.value)
-    weekStart.setDate(currentWeekStartDate.value.getDate() + i * 7)
+    const weekStart = new Date(currentWeekStartDate.value);
+    weekStart.setDate(currentWeekStartDate.value.getDate() + i * 7);
 
     // Calculate week number within the month (for compatibility with WeeklyCalendarGrid)
-    const firstDayOfMonth = new Date(weekStart.getFullYear(), weekStart.getMonth(), 1)
+    const firstDayOfMonth = new Date(weekStart.getFullYear(), weekStart.getMonth(), 1);
     const diff = Math.floor(
       (weekStart.getTime() - firstDayOfMonth.getTime()) / (7 * 24 * 60 * 60 * 1000)
-    )
-    const weekNumber = diff + 1
+    );
+    const weekNumber = diff + 1;
 
     weeks.push({
       year: weekStart.getFullYear(),
@@ -1387,18 +1381,18 @@ const weeksToDisplay = computed(() => {
       week: weekNumber,
       weekStartDate: weekStart, // Pass the actual date
       key: `${weekStart.getTime()}-${i}`, // Use timestamp for unique key
-    })
+    });
   }
 
-  return weeks
-})
+  return weeks;
+});
 
 const weekDaysOptions = computed(() => {
-  const firstDayOfWeek = locale.value === 'fr' ? 1 : 0 // Monday for fr, Sunday for en
+  const firstDayOfWeek = locale.value === 'fr' ? 1 : 0; // Monday for fr, Sunday for en
 
-  const daysOrder = []
+  const daysOrder = [];
   for (let i = 0; i < 7; i++) {
-    const dayValue = (firstDayOfWeek + i) % 7
+    const dayValue = (firstDayOfWeek + i) % 7;
     const dayKey = [
       'availability.sunday',
       'availability.monday',
@@ -1407,63 +1401,63 @@ const weekDaysOptions = computed(() => {
       'availability.thursday',
       'availability.friday',
       'availability.saturday',
-    ][dayValue]
+    ][dayValue];
 
     daysOrder.push({
       value: dayValue,
       label: t(dayKey),
-    })
+    });
   }
 
   // Filter days based on calendar's allowed weekdays
-  const allowedWeekdays = calendar.value?.allowed_weekdays
+  const allowedWeekdays = calendar.value?.allowed_weekdays;
   if (allowedWeekdays && allowedWeekdays.length > 0) {
-    return daysOrder.filter(day => allowedWeekdays.includes(day.value))
+    return daysOrder.filter(day => allowedWeekdays.includes(day.value));
   }
 
-  return daysOrder
-})
+  return daysOrder;
+});
 
 const sortedAvailabilities = computed(() => {
   if (!availabilities.value || !Array.isArray(availabilities.value)) {
-    return []
+    return [];
   }
-  return [...availabilities.value].sort((a, b) => a.date.localeCompare(b.date))
-})
+  return [...availabilities.value].sort((a, b) => a.date.localeCompare(b.date));
+});
 
 const publicLink = computed(() => {
-  if (!calendar.value) return ''
-  const baseUrl = window.location.origin
-  return `${baseUrl}/c/${token.value}`
-})
+  if (!calendar.value) return '';
+  const baseUrl = window.location.origin;
+  return `${baseUrl}/c/${token.value}`;
+});
 
 const icsLink = computed(() => {
-  if (!calendar.value) return ''
-  const baseUrl = window.location.origin
-  return `${baseUrl}/api/v1/ics/feed/${calendar.value.ics_token}.ics`
-})
+  if (!calendar.value) return '';
+  const baseUrl = window.location.origin;
+  return `${baseUrl}/api/v1/ics/feed/${calendar.value.ics_token}.ics`;
+});
 
 // Compute participants stats (availability count for each participant on displayed date range)
 const participantsStats = computed(() => {
-  if (!calendar.value) return []
+  if (!calendar.value) return [];
 
-  const statsMap = new Map<string, { name: string; count: number }>()
+  const statsMap = new Map<string, { name: string; count: number }>();
 
   // Initialize all participants from calendar with count = 0
   for (const participant of calendar.value.participants) {
-    statsMap.set(participant.name, { name: participant.name, count: 0 })
+    statsMap.set(participant.name, { name: participant.name, count: 0 });
   }
 
   // Count availabilities from dateSummaries if available
   if (dateSummaries.value) {
     for (const summary of dateSummaries.value) {
       for (const participantData of summary.participants) {
-        const name = participantData.participant_name
+        const name = participantData.participant_name;
 
         // Increment count - if participant is in the list, they have availability for this date
         // (either all-day or with specific time slots)
         if (statsMap.has(name)) {
-          statsMap.get(name)!.count++
+          statsMap.get(name)!.count++;
         }
       }
     }
@@ -1472,62 +1466,62 @@ const participantsStats = computed(() => {
   // Convert to array and sort by count (descending), then by name
   return Array.from(statsMap.values()).sort((a, b) => {
     if (b.count !== a.count) {
-      return b.count - a.count
+      return b.count - a.count;
     }
-    return a.name.localeCompare(b.name)
-  })
-})
+    return a.name.localeCompare(b.name);
+  });
+});
 
 const canManageCalendar = computed(() => {
-  if (!calendar.value || !authStore.user) return false
-  return calendar.value.owner_id === authStore.user.id || authStore.user.role === 'admin'
-})
+  if (!calendar.value || !authStore.user) return false;
+  return calendar.value.owner_id === authStore.user.id || authStore.user.role === 'admin';
+});
 
 const calendarDateRangeText = computed(() => {
-  if (!calendar.value) return ''
+  if (!calendar.value) return '';
 
-  const startDate = calendar.value.start_date
-  const endDate = calendar.value.end_date
+  const startDate = calendar.value.start_date;
+  const endDate = calendar.value.end_date;
 
   // Helper function to format date
   const formatDateShort = (dateStr: string): string => {
-    const date = new Date(dateStr)
-    const locale = authStore.user?.locale || 'en'
-    const localeCode = locale === 'fr' ? 'fr-FR' : 'en-US'
+    const date = new Date(dateStr);
+    const locale = authStore.user?.locale || 'en';
+    const localeCode = locale === 'fr' ? 'fr-FR' : 'en-US';
     return new Intl.DateTimeFormat(localeCode, {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
-    }).format(date)
-  }
+    }).format(date);
+  };
 
   if (startDate && endDate) {
     // Both dates: "from ... to ..."
     return t('calendar.calendarDateRangeFromTo', {
       startDate: formatDateShort(startDate),
       endDate: formatDateShort(endDate),
-    })
+    });
   } else if (endDate) {
     // Only end date: "until ..."
     return t('calendar.calendarDateRangeTo', {
       date: formatDateShort(endDate),
-    })
+    });
   } else if (startDate) {
     // Only start date: "from ..."
     return t('calendar.calendarDateRangeFrom', {
       date: formatDateShort(startDate),
-    })
+    });
   }
 
-  return ''
-})
+  return '';
+});
 
 const newAvailability = reactive<CreateAvailabilityRequest>({
   date: '',
   start_time: '',
   end_time: '',
   note: '',
-})
+});
 
 const newRecurrence = reactive<CreateRecurrenceRequest>({
   day_of_week: 1, // Monday by default
@@ -1536,7 +1530,7 @@ const newRecurrence = reactive<CreateRecurrenceRequest>({
   note: '',
   start_date: '',
   end_date: '',
-})
+});
 
 // Automatically set the default day_of_week to the first allowed weekday
 watchEffect(() => {
@@ -1544,20 +1538,20 @@ watchEffect(() => {
     // Only update if the current value is not in the allowed list
     const isCurrentAllowed = weekDaysOptions.value.some(
       day => day.value === newRecurrence.day_of_week
-    )
+    );
     if (!isCurrentAllowed) {
-      newRecurrence.day_of_week = weekDaysOptions.value[0].value
+      newRecurrence.day_of_week = weekDaysOptions.value[0].value;
     }
   } else if (weekDaysOptions.value.length > 0) {
     // Initialize with first value if day_of_week is null
-    newRecurrence.day_of_week = weekDaysOptions.value[0].value
+    newRecurrence.day_of_week = weekDaysOptions.value[0].value;
   }
-})
+});
 
-const exceptionDates = reactive<Record<string, string>>({})
+const exceptionDates = reactive<Record<string, string>>({});
 
 // Recurrence editing state
-const editingRecurrenceId = ref<string | null>(null)
+const editingRecurrenceId = ref<string | null>(null);
 const editingRecurrence = reactive<CreateRecurrenceRequest>({
   day_of_week: 1,
   start_time: '',
@@ -1565,331 +1559,331 @@ const editingRecurrence = reactive<CreateRecurrenceRequest>({
   note: '',
   start_date: '',
   end_date: '',
-})
+});
 
 // Availability editing state
-const editingAvailabilityDate = ref<string | null>(null)
+const editingAvailabilityDate = ref<string | null>(null);
 const editingAvailability = reactive({
   start_time: '',
   end_time: '',
   note: '',
-})
+});
 
 // Computed properties for weekday time restrictions
 const newRecurrenceTimeRestrictions = computed(() => {
   if (!calendar.value?.weekday_times || newRecurrence.day_of_week === null) {
-    return {}
+    return {};
   }
-  return calendar.value.weekday_times[newRecurrence.day_of_week] || {}
-})
+  return calendar.value.weekday_times[newRecurrence.day_of_week] || {};
+});
 
 const editingRecurrenceTimeRestrictions = computed(() => {
   if (!calendar.value?.weekday_times || editingRecurrence.day_of_week === null) {
-    return {}
+    return {};
   }
-  return calendar.value.weekday_times[editingRecurrence.day_of_week] || {}
-})
+  return calendar.value.weekday_times[editingRecurrence.day_of_week] || {};
+});
 
 // Helper to compare time strings (HH:MM format)
 function minTime(a: string | undefined, b: string | undefined): string | undefined {
-  if (!a) return b
-  if (!b) return a
-  return a < b ? a : b
+  if (!a) return b;
+  if (!b) return a;
+  return a < b ? a : b;
 }
 
 function maxTime(a: string | undefined, b: string | undefined): string | undefined {
-  if (!a) return b
-  if (!b) return a
-  return a > b ? a : b
+  if (!a) return b;
+  if (!b) return a;
+  return a > b ? a : b;
 }
 
 // Computed properties for corrected min/max constraints for new recurrence
 const newRecurrenceStartTimeMax = computed(() => {
-  const restrictions = newRecurrenceTimeRestrictions.value
-  return minTime(restrictions.max_time, newRecurrence.end_time || undefined)
-})
+  const restrictions = newRecurrenceTimeRestrictions.value;
+  return minTime(restrictions.max_time, newRecurrence.end_time || undefined);
+});
 
 const newRecurrenceEndTimeMin = computed(() => {
-  const restrictions = newRecurrenceTimeRestrictions.value
-  return maxTime(newRecurrence.start_time || undefined, restrictions.min_time)
-})
+  const restrictions = newRecurrenceTimeRestrictions.value;
+  return maxTime(newRecurrence.start_time || undefined, restrictions.min_time);
+});
 
 // Computed properties for corrected min/max constraints for editing recurrence
 const editingRecurrenceStartTimeMax = computed(() => {
-  const restrictions = editingRecurrenceTimeRestrictions.value
-  return minTime(restrictions.max_time, editingRecurrence.end_time || undefined)
-})
+  const restrictions = editingRecurrenceTimeRestrictions.value;
+  return minTime(restrictions.max_time, editingRecurrence.end_time || undefined);
+});
 
 const editingRecurrenceEndTimeMin = computed(() => {
-  const restrictions = editingRecurrenceTimeRestrictions.value
-  return maxTime(editingRecurrence.start_time || undefined, restrictions.min_time)
-})
+  const restrictions = editingRecurrenceTimeRestrictions.value;
+  return maxTime(editingRecurrence.start_time || undefined, restrictions.min_time);
+});
 
 // Validation: check if start_time equals end_time (both must be defined and non-empty)
 const hasEqualTimesNewRecurrence = computed(() => {
-  const start = newRecurrence.start_time
-  const end = newRecurrence.end_time
-  return Boolean(start && end && start === end)
-})
+  const start = newRecurrence.start_time;
+  const end = newRecurrence.end_time;
+  return Boolean(start && end && start === end);
+});
 
 const hasEqualTimesEditingRecurrence = computed(() => {
-  const start = editingRecurrence.start_time
-  const end = editingRecurrence.end_time
-  return Boolean(start && end && start === end)
-})
+  const start = editingRecurrence.start_time;
+  const end = editingRecurrence.end_time;
+  return Boolean(start && end && start === end);
+});
 
 // Watch for day_of_week changes and apply time restrictions for new recurrence
 watch(
   () => newRecurrence.day_of_week,
   newDay => {
     if (newDay !== null && calendar.value?.weekday_times) {
-      const restrictions = calendar.value.weekday_times[newDay] || {}
+      const restrictions = calendar.value.weekday_times[newDay] || {};
 
       // Clear fields first, then auto-fill with new restrictions
-      newRecurrence.start_time = restrictions.min_time || ''
-      newRecurrence.end_time = restrictions.max_time || ''
+      newRecurrence.start_time = restrictions.min_time || '';
+      newRecurrence.end_time = restrictions.max_time || '';
     }
   }
-)
+);
 
 // Watch for calendar loading to initialize new recurrence time fields
 watch(
   () => calendar.value?.weekday_times,
   weekdayTimes => {
     if (weekdayTimes && newRecurrence.day_of_week !== null) {
-      const restrictions = weekdayTimes[newRecurrence.day_of_week] || {}
+      const restrictions = weekdayTimes[newRecurrence.day_of_week] || {};
       // Only initialize if fields are empty (don't override user input)
       if (!newRecurrence.start_time) {
-        newRecurrence.start_time = restrictions.min_time || ''
+        newRecurrence.start_time = restrictions.min_time || '';
       }
       if (!newRecurrence.end_time) {
-        newRecurrence.end_time = restrictions.max_time || ''
+        newRecurrence.end_time = restrictions.max_time || '';
       }
     }
   }
-)
+);
 
 // Watch for day_of_week changes and apply time restrictions for editing recurrence
 watch(
   () => editingRecurrence.day_of_week,
   newDay => {
     if (newDay !== null && calendar.value?.weekday_times && editingRecurrenceId.value) {
-      const restrictions = calendar.value.weekday_times[newDay] || {}
+      const restrictions = calendar.value.weekday_times[newDay] || {};
 
       // Only auto-fill if the times are empty
       if (restrictions.min_time && !editingRecurrence.start_time) {
-        editingRecurrence.start_time = restrictions.min_time
+        editingRecurrence.start_time = restrictions.min_time;
       }
 
       if (restrictions.max_time && !editingRecurrence.end_time) {
-        editingRecurrence.end_time = restrictions.max_time
+        editingRecurrence.end_time = restrictions.max_time;
       }
     }
   }
-)
+);
 
 // Save participant selection to history store
 function saveParticipantSelection() {
-  historyStore.updateParticipantId(token.value, participantId.value)
+  historyStore.updateParticipantId(token.value, participantId.value);
 }
 
 async function loadCalendar() {
-  loading.value = true
+  loading.value = true;
 
   try {
-    await calendarStore.fetchPublicCalendar(token.value, participantId.value)
+    await calendarStore.fetchPublicCalendar(token.value, participantId.value);
 
     if (!participant.value) {
-      toastStore.error(t('errors.notFound', 'Participant not found'))
+      toastStore.error(t('errors.notFound', 'Participant not found'));
       // Remove invalid calendar from history and redirect
-      historyStore.removeCalendar(token.value)
-      router.push('/')
-      return
+      historyStore.removeCalendar(token.value);
+      router.push('/');
+      return;
     }
 
     // Add calendar to history with participant ID
     if (calendar.value) {
-      historyStore.addCalendar(token.value, calendar.value.name, participantId.value)
+      historyStore.addCalendar(token.value, calendar.value.name, participantId.value);
 
       // Restore display settings from history if available
-      const savedSettings = historyStore.getDisplaySettings(token.value)
+      const savedSettings = historyStore.getDisplaySettings(token.value);
       if (savedSettings) {
         if (savedSettings.displayMode !== undefined) {
-          displayMode.value = savedSettings.displayMode
+          displayMode.value = savedSettings.displayMode;
         }
         if (savedSettings.periodCount !== undefined) {
-          numberOfPeriods.value = savedSettings.periodCount
+          numberOfPeriods.value = savedSettings.periodCount;
         }
         if (savedSettings.startHour !== undefined) {
-          startHour.value = savedSettings.startHour
+          startHour.value = savedSettings.startHour;
         }
         if (savedSettings.endHour !== undefined) {
-          endHour.value = savedSettings.endHour
+          endHour.value = savedSettings.endHour;
         }
         if (savedSettings.slotDuration !== undefined) {
-          slotDuration.value = savedSettings.slotDuration
+          slotDuration.value = savedSettings.slotDuration;
         }
       }
     }
 
     // Save participant selection
-    saveParticipantSelection()
+    saveParticipantSelection();
 
     // Initialize current week start date
-    const today = new Date()
-    const firstDayOfWeek = locale.value === 'fr' ? 1 : 0 // Monday for fr, Sunday for en
-    const dayOfWeek = today.getDay()
-    const diff = (dayOfWeek - firstDayOfWeek + 7) % 7
-    const weekStart = new Date(today)
-    weekStart.setDate(today.getDate() - diff)
-    weekStart.setHours(0, 0, 0, 0)
-    currentWeekStartDate.value = weekStart
+    const today = new Date();
+    const firstDayOfWeek = locale.value === 'fr' ? 1 : 0; // Monday for fr, Sunday for en
+    const dayOfWeek = today.getDay();
+    const diff = (dayOfWeek - firstDayOfWeek + 7) % 7;
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - diff);
+    weekStart.setHours(0, 0, 0, 0);
+    currentWeekStartDate.value = weekStart;
 
     // Load recurrences and participant counts (which includes all participants' availabilities)
     await Promise.all([
       loadRecurrences(),
       loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ])
+    ]);
   } catch (err: any) {
-    toastStore.error(err.message || t('calendar.fetchError', 'Failed to load calendar'))
+    toastStore.error(err.message || t('calendar.fetchError', 'Failed to load calendar'));
     // Remove invalid calendar from history and redirect to home
-    historyStore.removeCalendar(token.value)
-    router.push('/')
+    historyStore.removeCalendar(token.value);
+    router.push('/');
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 async function loadRecurrences() {
   try {
-    const result = await availabilitiesApi.getRecurrences(token.value, participantId.value)
-    recurrences.value = result || []
+    const result = await availabilitiesApi.getRecurrences(token.value, participantId.value);
+    recurrences.value = result || [];
   } catch (err: any) {
-    console.error('Failed to load recurrences:', err)
-    recurrences.value = []
+    console.error('Failed to load recurrences:', err);
+    recurrences.value = [];
   }
 }
 
 async function loadParticipantCounts(year?: number, month?: number) {
   try {
-    let startDate: Date
-    let endDate: Date
+    let startDate: Date;
+    let endDate: Date;
 
     if (displayMode.value === 'week') {
       // For week mode, calculate based on current week start date and number of weeks
-      startDate = new Date(currentWeekStartDate.value)
-      endDate = new Date(currentWeekStartDate.value)
-      endDate.setDate(endDate.getDate() + numberOfPeriods.value * 7 - 1) // Last day of last displayed week
+      startDate = new Date(currentWeekStartDate.value);
+      endDate = new Date(currentWeekStartDate.value);
+      endDate.setDate(endDate.getDate() + numberOfPeriods.value * 7 - 1); // Last day of last displayed week
     } else {
       // For month mode, calculate based on year/month and number of months
-      const now = new Date()
-      const targetYear = year ?? now.getFullYear()
-      const targetMonth = month ?? now.getMonth()
+      const now = new Date();
+      const targetYear = year ?? now.getFullYear();
+      const targetMonth = month ?? now.getMonth();
 
-      startDate = new Date(targetYear, targetMonth, 1)
-      endDate = new Date(targetYear, targetMonth + numberOfPeriods.value, 0) // Last day of last displayed month
+      startDate = new Date(targetYear, targetMonth, 1);
+      endDate = new Date(targetYear, targetMonth + numberOfPeriods.value, 0); // Last day of last displayed month
     }
 
-    const startStr = formatDateForAPI(startDate)
-    const endStr = formatDateForAPI(endDate)
+    const startStr = formatDateForAPI(startDate);
+    const endStr = formatDateForAPI(endDate);
 
-    const summaries = await availabilitiesApi.getRangeSummary(token.value, startStr, endStr)
+    const summaries = await availabilitiesApi.getRangeSummary(token.value, startStr, endStr);
 
     // Ensure summaries is an array (handle null/undefined responses)
-    const summariesArray = Array.isArray(summaries) ? summaries : []
+    const summariesArray = Array.isArray(summaries) ? summaries : [];
 
     // Store full summaries for weekly view
-    dateSummaries.value = summariesArray
+    dateSummaries.value = summariesArray;
 
     // Convert array to map for easy lookup (for monthly view)
-    const counts: Record<string, number> = {}
+    const counts: Record<string, number> = {};
     for (const summary of summariesArray) {
-      counts[summary.date] = summary.total_count
+      counts[summary.date] = summary.total_count;
     }
-    participantCounts.value = counts
+    participantCounts.value = counts;
   } catch (err: any) {
-    console.error('Failed to load participant counts:', err)
-    participantCounts.value = {}
+    console.error('Failed to load participant counts:', err);
+    participantCounts.value = {};
   }
 }
 
 function formatDateForAPI(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 async function handleDeleteAvailability(date: string) {
-  if (!confirm(t('common.delete', 'Delete this availability?'))) return
+  if (!confirm(t('common.delete', 'Delete this availability?'))) return;
 
   try {
-    await availabilitiesApi.delete(token.value, participantId.value, date)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
+    await availabilitiesApi.delete(token.value, participantId.value, date);
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to delete availability')
+    toastStore.error(err.message || 'Failed to delete availability');
   }
 }
 
 async function handleAddRecurrence() {
-  if (newRecurrence.day_of_week === null || !newRecurrence.start_date) return
+  if (newRecurrence.day_of_week === null || !newRecurrence.start_date) return;
 
-  addingRecurrence.value = true
+  addingRecurrence.value = true;
   try {
     const data: CreateRecurrenceRequest = {
       day_of_week: newRecurrence.day_of_week,
       start_date: newRecurrence.start_date,
-    }
+    };
 
-    if (newRecurrence.start_time) data.start_time = newRecurrence.start_time
-    if (newRecurrence.end_time) data.end_time = newRecurrence.end_time
-    if (newRecurrence.end_date) data.end_date = newRecurrence.end_date
-    if (newRecurrence.note) data.note = newRecurrence.note
+    if (newRecurrence.start_time) data.start_time = newRecurrence.start_time;
+    if (newRecurrence.end_time) data.end_time = newRecurrence.end_time;
+    if (newRecurrence.end_date) data.end_date = newRecurrence.end_date;
+    if (newRecurrence.note) data.note = newRecurrence.note;
 
-    await availabilitiesApi.createRecurrence(token.value, participantId.value, data)
+    await availabilitiesApi.createRecurrence(token.value, participantId.value, data);
 
     // Reset form
-    newRecurrence.day_of_week = 1
-    newRecurrence.start_time = ''
-    newRecurrence.end_time = ''
-    newRecurrence.start_date = ''
-    newRecurrence.end_date = ''
-    newRecurrence.note = ''
+    newRecurrence.day_of_week = 1;
+    newRecurrence.start_time = '';
+    newRecurrence.end_time = '';
+    newRecurrence.start_date = '';
+    newRecurrence.end_date = '';
+    newRecurrence.note = '';
 
     // Reload recurrences and participant counts
     await Promise.all([
       loadRecurrences(),
       loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ])
+    ]);
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to add recurrence')
+    toastStore.error(err.message || 'Failed to add recurrence');
   } finally {
-    addingRecurrence.value = false
+    addingRecurrence.value = false;
   }
 }
 
 async function handleDeleteRecurrence(recurrenceId: string) {
-  if (!confirm(t('common.delete', 'Delete this recurrence?'))) return
+  if (!confirm(t('common.delete', 'Delete this recurrence?'))) return;
 
   try {
-    await availabilitiesApi.deleteRecurrence(token.value, participantId.value, recurrenceId)
+    await availabilitiesApi.deleteRecurrence(token.value, participantId.value, recurrenceId);
     await Promise.all([
       loadRecurrences(),
       loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ])
+    ]);
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to delete recurrence')
+    toastStore.error(err.message || 'Failed to delete recurrence');
   }
 }
 
 function handleEditRecurrence(recurrence: RecurrenceWithExceptions) {
-  editingRecurrenceId.value = recurrence.id
-  editingRecurrence.day_of_week = recurrence.day_of_week
-  editingRecurrence.start_time = recurrence.start_time || ''
-  editingRecurrence.end_time = recurrence.end_time || ''
-  editingRecurrence.note = recurrence.note || ''
-  editingRecurrence.start_date = recurrence.start_date
-  editingRecurrence.end_date = recurrence.end_date || ''
+  editingRecurrenceId.value = recurrence.id;
+  editingRecurrence.day_of_week = recurrence.day_of_week;
+  editingRecurrence.start_time = recurrence.start_time || '';
+  editingRecurrence.end_time = recurrence.end_time || '';
+  editingRecurrence.note = recurrence.note || '';
+  editingRecurrence.start_date = recurrence.start_date;
+  editingRecurrence.end_date = recurrence.end_date || '';
 }
 
 async function handleSaveRecurrence() {
@@ -1898,156 +1892,156 @@ async function handleSaveRecurrence() {
     !editingRecurrence.start_date ||
     !editingRecurrenceId.value
   )
-    return
+    return;
 
   try {
     const data: CreateRecurrenceRequest = {
       day_of_week: editingRecurrence.day_of_week,
       start_date: editingRecurrence.start_date,
-    }
+    };
 
-    if (editingRecurrence.start_time) data.start_time = editingRecurrence.start_time
-    if (editingRecurrence.end_time) data.end_time = editingRecurrence.end_time
-    if (editingRecurrence.end_date) data.end_date = editingRecurrence.end_date
-    if (editingRecurrence.note) data.note = editingRecurrence.note
+    if (editingRecurrence.start_time) data.start_time = editingRecurrence.start_time;
+    if (editingRecurrence.end_time) data.end_time = editingRecurrence.end_time;
+    if (editingRecurrence.end_date) data.end_date = editingRecurrence.end_date;
+    if (editingRecurrence.note) data.note = editingRecurrence.note;
 
     await availabilitiesApi.updateRecurrence(
       token.value,
       participantId.value,
       editingRecurrenceId.value,
       data
-    )
+    );
 
     // Reset editing state
-    editingRecurrenceId.value = null
-    editingRecurrence.day_of_week = 1
-    editingRecurrence.start_time = ''
-    editingRecurrence.end_time = ''
-    editingRecurrence.start_date = ''
-    editingRecurrence.end_date = ''
-    editingRecurrence.note = ''
+    editingRecurrenceId.value = null;
+    editingRecurrence.day_of_week = 1;
+    editingRecurrence.start_time = '';
+    editingRecurrence.end_time = '';
+    editingRecurrence.start_date = '';
+    editingRecurrence.end_date = '';
+    editingRecurrence.note = '';
 
     // Reload recurrences and participant counts
     await Promise.all([
       loadRecurrences(),
       loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ])
+    ]);
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to update recurrence')
+    toastStore.error(err.message || 'Failed to update recurrence');
   }
 }
 
 function handleCancelEdit() {
-  editingRecurrenceId.value = null
-  editingRecurrence.day_of_week = 1
-  editingRecurrence.start_time = ''
-  editingRecurrence.end_time = ''
-  editingRecurrence.start_date = ''
-  editingRecurrence.end_date = ''
-  editingRecurrence.note = ''
+  editingRecurrenceId.value = null;
+  editingRecurrence.day_of_week = 1;
+  editingRecurrence.start_time = '';
+  editingRecurrence.end_time = '';
+  editingRecurrence.start_date = '';
+  editingRecurrence.end_date = '';
+  editingRecurrence.note = '';
 }
 
 function handleEditAvailability(availability: Availability) {
-  editingAvailabilityDate.value = availability.date
-  editingAvailability.start_time = availability.start_time || ''
-  editingAvailability.end_time = availability.end_time || ''
-  editingAvailability.note = availability.note || ''
+  editingAvailabilityDate.value = availability.date;
+  editingAvailability.start_time = availability.start_time || '';
+  editingAvailability.end_time = availability.end_time || '';
+  editingAvailability.note = availability.note || '';
 }
 
 async function handleSaveAvailability() {
-  if (!editingAvailabilityDate.value) return
+  if (!editingAvailabilityDate.value) return;
 
   try {
-    const data: Partial<CreateAvailabilityRequest> = {}
+    const data: Partial<CreateAvailabilityRequest> = {};
 
     // Include times even if empty (to allow clearing them)
-    data.start_time = editingAvailability.start_time || undefined
-    data.end_time = editingAvailability.end_time || undefined
-    data.note = editingAvailability.note || undefined
+    data.start_time = editingAvailability.start_time || undefined;
+    data.end_time = editingAvailability.end_time || undefined;
+    data.note = editingAvailability.note || undefined;
 
     await availabilitiesApi.update(
       token.value,
       participantId.value,
       editingAvailabilityDate.value,
       data
-    )
+    );
 
     // Reset editing state
-    editingAvailabilityDate.value = null
-    editingAvailability.start_time = ''
-    editingAvailability.end_time = ''
-    editingAvailability.note = ''
+    editingAvailabilityDate.value = null;
+    editingAvailability.start_time = '';
+    editingAvailability.end_time = '';
+    editingAvailability.note = '';
 
     // Participant counts will be automatically reloaded, which updates availabilityData
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to update availability')
+    toastStore.error(err.message || 'Failed to update availability');
   }
 }
 
 function handleCancelAvailabilityEdit() {
-  editingAvailabilityDate.value = null
-  editingAvailability.start_time = ''
-  editingAvailability.end_time = ''
-  editingAvailability.note = ''
+  editingAvailabilityDate.value = null;
+  editingAvailability.start_time = '';
+  editingAvailability.end_time = '';
+  editingAvailability.note = '';
 }
 
 async function handleAddException(recurrenceId: string) {
-  const date = exceptionDates[recurrenceId]
-  if (!date) return
+  const date = exceptionDates[recurrenceId];
+  if (!date) return;
 
   try {
-    await availabilitiesApi.createException(token.value, participantId.value, recurrenceId, date)
-    exceptionDates[recurrenceId] = ''
+    await availabilitiesApi.createException(token.value, participantId.value, recurrenceId, date);
+    exceptionDates[recurrenceId] = '';
     await Promise.all([
       loadRecurrences(),
       loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ])
+    ]);
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to add exception')
+    toastStore.error(err.message || 'Failed to add exception');
   }
 }
 
 async function handleRemoveException(recurrenceId: string, date: string) {
   try {
-    await availabilitiesApi.deleteException(token.value, participantId.value, recurrenceId, date)
+    await availabilitiesApi.deleteException(token.value, participantId.value, recurrenceId, date);
     await Promise.all([
       loadRecurrences(),
       loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ])
+    ]);
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to remove exception')
+    toastStore.error(err.message || 'Failed to remove exception');
   }
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  const locale = authStore.user?.locale || 'en'
-  const localeCode = locale === 'fr' ? 'fr-FR' : 'en-US'
+  const date = new Date(dateStr);
+  const locale = authStore.user?.locale || 'en';
+  const localeCode = locale === 'fr' ? 'fr-FR' : 'en-US';
   return new Intl.DateTimeFormat(localeCode, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
-  }).format(date)
+  }).format(date);
 }
 
 function formatTimeRange(startTime?: string, endTime?: string): string {
   // Check if it's a full day range (00:00-23:59 or no times)
-  const start = startTime || '00:00'
-  const end = endTime || '23:59'
+  const start = startTime || '00:00';
+  const end = endTime || '23:59';
 
   if (start === '00:00' && end === '23:59') {
-    return t('availability.allDay', 'All day')
+    return t('availability.allDay', 'All day');
   }
 
   if (startTime && endTime) {
-    return `${startTime} - ${endTime}`
+    return `${startTime} - ${endTime}`;
   } else if (startTime) {
-    return `${t('availability.startTime')}: ${startTime}`
+    return `${t('availability.startTime')}: ${startTime}`;
   } else if (endTime) {
-    return `${t('availability.endTime')}: ${endTime}`
+    return `${t('availability.endTime')}: ${endTime}`;
   }
-  return t('availability.allDay', 'All day')
+  return t('availability.allDay', 'All day');
 }
 
 function getDayName(dayOfWeek: number): string {
@@ -2059,60 +2053,60 @@ function getDayName(dayOfWeek: number): string {
     'availability.thursday',
     'availability.friday',
     'availability.saturday',
-  ]
-  return t(days[dayOfWeek])
+  ];
+  return t(days[dayOfWeek]);
 }
 
 function isDateInFuture(dateStr: string): boolean {
-  const date = new Date(dateStr)
-  date.setHours(0, 0, 0, 0)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return date >= today
+  const date = new Date(dateStr);
+  date.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date >= today;
 }
 
 async function handleCalendarDayClick(dateString: string) {
   // Check if availability already exists for this date
-  const existingAvailability = availabilities.value.find(a => a.date === dateString)
+  const existingAvailability = availabilities.value.find(a => a.date === dateString);
   if (existingAvailability) {
     // If it exists, delete it directly without confirmation
     try {
-      await availabilitiesApi.delete(token.value, participantId.value, dateString)
-      await loadParticipantCounts(displayedYear.value, displayedMonth.value)
+      await availabilitiesApi.delete(token.value, participantId.value, dateString);
+      await loadParticipantCounts(displayedYear.value, displayedMonth.value);
     } catch (err: any) {
-      toastStore.error(err.message || 'Failed to delete availability')
+      toastStore.error(err.message || 'Failed to delete availability');
     }
-    return
+    return;
   }
 
   // Add availability directly with the current time slot settings
-  addingAvailability.value = true
+  addingAvailability.value = true;
   try {
     const data: CreateAvailabilityRequest = {
       date: dateString,
-    }
+    };
 
     // Only add times if not all day
     if (!isAllDay.value) {
-      if (newAvailability.start_time) data.start_time = newAvailability.start_time
-      if (newAvailability.end_time) data.end_time = newAvailability.end_time
+      if (newAvailability.start_time) data.start_time = newAvailability.start_time;
+      if (newAvailability.end_time) data.end_time = newAvailability.end_time;
     }
 
-    if (newAvailability.note) data.note = newAvailability.note
+    if (newAvailability.note) data.note = newAvailability.note;
 
-    await availabilitiesApi.create(token.value, participantId.value, data)
+    await availabilitiesApi.create(token.value, participantId.value, data);
 
     // Reload participant counts (which includes all participants' availabilities)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
   } catch (err: any) {
     // Check for specific error codes
     if (err.code === 'CONFLICT') {
-      toastStore.error(t('errors.availabilityConflict'))
+      toastStore.error(t('errors.availabilityConflict'));
     } else {
-      toastStore.error(err.message || 'Failed to add availability')
+      toastStore.error(err.message || 'Failed to add availability');
     }
   } finally {
-    addingAvailability.value = false
+    addingAvailability.value = false;
   }
 }
 
@@ -2120,40 +2114,40 @@ async function handleCalendarDaysSelect(dates: string[]) {
   // Filter out dates that already have availability
   const datesToAdd = dates.filter(
     dateString => !availabilities.value.find(a => a.date === dateString)
-  )
+  );
 
   if (datesToAdd.length === 0) {
     toastStore.info(
       t('availability.allDatesAlreadyAdded', 'All selected dates already have availability')
-    )
-    return
+    );
+    return;
   }
 
-  addingAvailability.value = true
+  addingAvailability.value = true;
 
   // Create availabilities for all selected dates in parallel using allSettled
   // to continue even if some fail
   const promises = datesToAdd.map(dateString => {
     const data: CreateAvailabilityRequest = {
       date: dateString,
-    }
+    };
 
     // Only add times if not all day
     if (!isAllDay.value) {
-      if (newAvailability.start_time) data.start_time = newAvailability.start_time
-      if (newAvailability.end_time) data.end_time = newAvailability.end_time
+      if (newAvailability.start_time) data.start_time = newAvailability.start_time;
+      if (newAvailability.end_time) data.end_time = newAvailability.end_time;
     }
 
-    if (newAvailability.note) data.note = newAvailability.note
+    if (newAvailability.note) data.note = newAvailability.note;
 
-    return availabilitiesApi.create(token.value, participantId.value, data)
-  })
+    return availabilitiesApi.create(token.value, participantId.value, data);
+  });
 
-  const results = await Promise.allSettled(promises)
+  const results = await Promise.allSettled(promises);
 
   // Count successes and failures
-  const succeeded = results.filter(r => r.status === 'fulfilled').length
-  const failed = results.filter(r => r.status === 'rejected').length
+  const succeeded = results.filter(r => r.status === 'fulfilled').length;
+  const failed = results.filter(r => r.status === 'rejected').length;
 
   // Show appropriate messages
   if (failed === 0) {
@@ -2162,45 +2156,45 @@ async function handleCalendarDaysSelect(dates: string[]) {
         count: succeeded,
         defaultValue: `${succeeded} availability(ies) added`,
       })
-    )
+    );
   } else if (succeeded === 0) {
-    toastStore.error(t('errors.availabilityConflict'))
+    toastStore.error(t('errors.availabilityConflict'));
   } else {
-    toastStore.warning(`${succeeded} availability(ies) added, ${failed} failed`)
+    toastStore.warning(`${succeeded} availability(ies) added, ${failed} failed`);
   }
 
   // Always reload participant counts (which includes all participants' availabilities)
-  await loadParticipantCounts(displayedYear.value, displayedMonth.value)
+  await loadParticipantCounts(displayedYear.value, displayedMonth.value);
 
-  addingAvailability.value = false
+  addingAvailability.value = false;
 }
 
 async function handleCalendarDaysDeselect(dates: string[]) {
   // Filter to only dates that have availability
   const datesToRemove = dates.filter(dateString =>
     availabilities.value.find(a => a.date === dateString)
-  )
+  );
 
   if (datesToRemove.length === 0) {
     toastStore.info(
       t('availability.noDatesToRemove', 'No availability to remove for selected dates')
-    )
-    return
+    );
+    return;
   }
 
-  addingAvailability.value = true
+  addingAvailability.value = true;
 
   // Delete availabilities for all selected dates in parallel using allSettled
   // to continue even if some fail
   const promises = datesToRemove.map(dateString =>
     availabilitiesApi.delete(token.value, participantId.value, dateString)
-  )
+  );
 
-  const results = await Promise.allSettled(promises)
+  const results = await Promise.allSettled(promises);
 
   // Count successes and failures
-  const succeeded = results.filter(r => r.status === 'fulfilled').length
-  const failed = results.filter(r => r.status === 'rejected').length
+  const succeeded = results.filter(r => r.status === 'fulfilled').length;
+  const failed = results.filter(r => r.status === 'rejected').length;
 
   // Show appropriate messages
   if (failed === 0) {
@@ -2209,17 +2203,17 @@ async function handleCalendarDaysDeselect(dates: string[]) {
         count: succeeded,
         defaultValue: `${succeeded} availability(ies) removed`,
       })
-    )
+    );
   } else if (succeeded === 0) {
-    toastStore.error(t('errors.deleteFailed', 'Failed to delete'))
+    toastStore.error(t('errors.deleteFailed', 'Failed to delete'));
   } else {
-    toastStore.warning(`${succeeded} availability(ies) removed, ${failed} failed`)
+    toastStore.warning(`${succeeded} availability(ies) removed, ${failed} failed`);
   }
 
   // Always reload participant counts (which includes all participants' availabilities)
-  await loadParticipantCounts(displayedYear.value, displayedMonth.value)
+  await loadParticipantCounts(displayedYear.value, displayedMonth.value);
 
-  addingAvailability.value = false
+  addingAvailability.value = false;
 }
 
 async function handleCalendarAddException(recurrenceId: string, dateString: string) {
@@ -2229,73 +2223,73 @@ async function handleCalendarAddException(recurrenceId: string, dateString: stri
       participantId.value,
       recurrenceId,
       dateString
-    )
+    );
     await Promise.all([
       loadRecurrences(),
       loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ])
+    ]);
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to add exception')
+    toastStore.error(err.message || 'Failed to add exception');
   }
 }
 
 function handleChangeParticipant() {
   // Remove participant selection from history store
-  historyStore.updateParticipantId(token.value, undefined)
+  historyStore.updateParticipantId(token.value, undefined);
   // Navigate to calendar selection page
-  router.push(`/c/${token.value}`)
+  router.push(`/c/${token.value}`);
 }
 
 async function copyToClipboard(text: string) {
   try {
-    await navigator.clipboard.writeText(text)
-    toastStore.success(t('common.linkCopied'))
+    await navigator.clipboard.writeText(text);
+    toastStore.success(t('common.linkCopied'));
   } catch (err) {
-    console.error('Failed to copy to clipboard:', err)
+    console.error('Failed to copy to clipboard:', err);
   }
 }
 
 async function handleMonthChange(year: number, month: number) {
   // Update the tracked displayed month
-  displayedYear.value = year
-  displayedMonth.value = month
+  displayedYear.value = year;
+  displayedMonth.value = month;
 
   // Reload participant counts for the new month
-  await loadParticipantCounts(year, month)
+  await loadParticipantCounts(year, month);
 }
 
 async function handleWeekChange(weekStartDate: Date) {
   // Update the current week start date
-  currentWeekStartDate.value = weekStartDate
+  currentWeekStartDate.value = weekStartDate;
 
   // Calculate year and month for participant counts loading
-  const year = weekStartDate.getFullYear()
-  const month = weekStartDate.getMonth()
-  displayedYear.value = year
-  displayedMonth.value = month
+  const year = weekStartDate.getFullYear();
+  const month = weekStartDate.getMonth();
+  displayedYear.value = year;
+  displayedMonth.value = month;
 
   // Reload participant counts
-  await loadParticipantCounts(year, month)
+  await loadParticipantCounts(year, month);
 }
 
 function handleWeeklySettingsChange(settings: {
-  startHour?: number
-  endHour?: number
-  slotDuration?: number
+  startHour?: number;
+  endHour?: number;
+  slotDuration?: number;
 }) {
   // Update local refs
   if (settings.startHour !== undefined) {
-    startHour.value = settings.startHour
+    startHour.value = settings.startHour;
   }
   if (settings.endHour !== undefined) {
-    endHour.value = settings.endHour
+    endHour.value = settings.endHour;
   }
   if (settings.slotDuration !== undefined) {
-    slotDuration.value = settings.slotDuration
+    slotDuration.value = settings.slotDuration;
   }
 
   // Save to history
-  historyStore.updateDisplaySettings(token.value, settings)
+  historyStore.updateDisplaySettings(token.value, settings);
 }
 
 async function handleWeeklyAvailabilityCreate(date: string, startTime: string, endTime: string) {
@@ -2304,34 +2298,34 @@ async function handleWeeklyAvailabilityCreate(date: string, startTime: string, e
       date,
       start_time: startTime,
       end_time: endTime,
-    }
+    };
 
-    await availabilitiesApi.create(token.value, participantId.value, data)
+    await availabilitiesApi.create(token.value, participantId.value, data);
 
     // Reload participant counts (which includes all participants' availabilities)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
 
-    toastStore.success(t('availability.created', 'Availability created'))
+    toastStore.success(t('availability.created', 'Availability created'));
   } catch (err: any) {
     // Check for specific error codes
     if (err.code === 'CONFLICT') {
-      toastStore.error(t('errors.availabilityConflict'))
+      toastStore.error(t('errors.availabilityConflict'));
     } else {
-      toastStore.error(err.message || 'Failed to create availability')
+      toastStore.error(err.message || 'Failed to create availability');
     }
   }
 }
 
 async function handleWeeklyAvailabilityDelete(date: string, _startTime: string, _endTime: string) {
   try {
-    await availabilitiesApi.delete(token.value, participantId.value, date)
+    await availabilitiesApi.delete(token.value, participantId.value, date);
 
     // Reload participant counts (which includes all participants' availabilities)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
 
-    toastStore.success(t('availability.deleted', 'Availability deleted'))
+    toastStore.success(t('availability.deleted', 'Availability deleted'));
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to delete availability')
+    toastStore.error(err.message || 'Failed to delete availability');
   }
 }
 
@@ -2346,144 +2340,144 @@ async function handleWeeklyAvailabilityUpdate(
     const data: Partial<CreateAvailabilityRequest> = {
       start_time: newStartTime,
       end_time: newEndTime,
-    }
+    };
 
-    await availabilitiesApi.update(token.value, participantId.value, date, data)
+    await availabilitiesApi.update(token.value, participantId.value, date, data);
 
     // Reload participant counts (which includes all participants' availabilities)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
 
-    toastStore.success(t('availability.updated', 'Availability updated'))
+    toastStore.success(t('availability.updated', 'Availability updated'));
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to update availability')
+    toastStore.error(err.message || 'Failed to update availability');
   }
 }
 
 async function handleBatchOperations(operations: AvailabilityOperation[]) {
-  console.log('[handleBatchOperations] Received operations:', operations)
+  console.log('[handleBatchOperations] Received operations:', operations);
 
   // Execute all operations in parallel using allSettled to continue even if some fail
   const promises = operations.map(op => {
-    console.log(`[handleBatchOperations] Processing ${op.type} operation for ${op.date}`, op)
+    console.log(`[handleBatchOperations] Processing ${op.type} operation for ${op.date}`, op);
     switch (op.type) {
       case 'create':
         return availabilitiesApi.create(token.value, participantId.value, {
           date: op.date,
           start_time: op.startTime,
           end_time: op.endTime,
-        })
+        });
       case 'delete':
-        return availabilitiesApi.delete(token.value, participantId.value, op.date)
+        return availabilitiesApi.delete(token.value, participantId.value, op.date);
       case 'update':
         return availabilitiesApi.update(token.value, participantId.value, op.date, {
           start_time: op.startTime,
           end_time: op.endTime,
-        })
+        });
     }
-  })
+  });
 
-  const results = await Promise.allSettled(promises)
-  console.log('[handleBatchOperations] Results:', results)
+  const results = await Promise.allSettled(promises);
+  console.log('[handleBatchOperations] Results:', results);
 
   // Count successes and failures
-  const succeeded = results.filter(r => r.status === 'fulfilled').length
-  const failed = results.filter(r => r.status === 'rejected').length
+  const succeeded = results.filter(r => r.status === 'fulfilled').length;
+  const failed = results.filter(r => r.status === 'rejected').length;
 
   // Show appropriate messages
   if (failed === 0) {
     // All operations succeeded
     if (operations.length === 1) {
-      const op = operations[0]
+      const op = operations[0];
       if (op.type === 'create') {
-        toastStore.success(t('availability.created', 'Availability created'))
+        toastStore.success(t('availability.created', 'Availability created'));
       } else if (op.type === 'delete') {
-        toastStore.success(t('availability.deleted', 'Availability deleted'))
+        toastStore.success(t('availability.deleted', 'Availability deleted'));
       } else {
-        toastStore.success(t('availability.updated', 'Availability updated'))
+        toastStore.success(t('availability.updated', 'Availability updated'));
       }
     } else {
-      toastStore.success(t('availability.batchSuccess', { count: succeeded }))
+      toastStore.success(t('availability.batchSuccess', { count: succeeded }));
     }
   } else if (succeeded === 0) {
     // All operations failed
-    toastStore.error(t('errors.availabilityConflict'))
+    toastStore.error(t('errors.availabilityConflict'));
   } else {
     // Some succeeded, some failed
     toastStore.warning(
       `${succeeded} availabilities updated, ${failed} failed (non-adjacent availabilities ignored)`
-    )
+    );
   }
 
   // Always reload participant counts (which includes all participants' availabilities)
-  await loadParticipantCounts(displayedYear.value, displayedMonth.value)
+  await loadParticipantCounts(displayedYear.value, displayedMonth.value);
 }
 
 async function handleAvailabilityUpdated() {
   // Reload participant counts for the displayed date range (which includes all participants' availabilities)
-  await loadParticipantCounts(displayedYear.value, displayedMonth.value)
+  await loadParticipantCounts(displayedYear.value, displayedMonth.value);
 }
 
 // Email notification handlers
 async function handleAddEmail() {
   if (!emailInput.value.trim() || !token.value || !participantId.value) {
-    return
+    return;
   }
 
-  addingEmail.value = true
+  addingEmail.value = true;
 
   try {
-    await addParticipantEmail(token.value, participantId.value, emailInput.value.trim())
-    toastStore.success(t('notifications.emailSent'))
-    emailInput.value = ''
+    await addParticipantEmail(token.value, participantId.value, emailInput.value.trim());
+    toastStore.success(t('notifications.emailSent'));
+    emailInput.value = '';
     // Reload calendar to get updated participant email info
-    await calendarStore.fetchPublicCalendar(token.value, participantId.value)
+    await calendarStore.fetchPublicCalendar(token.value, participantId.value);
   } catch (error: any) {
-    toastStore.error(error.message || t('notifications.emailError'))
+    toastStore.error(error.message || t('notifications.emailError'));
   } finally {
-    addingEmail.value = false
+    addingEmail.value = false;
   }
 }
 
 async function handleResendVerification() {
   if (!token.value || !participantId.value) {
-    return
+    return;
   }
 
-  resendingEmail.value = true
+  resendingEmail.value = true;
 
   try {
-    await resendVerificationEmail(token.value, participantId.value)
-    toastStore.success(t('notifications.emailSent'))
+    await resendVerificationEmail(token.value, participantId.value);
+    toastStore.success(t('notifications.emailSent'));
   } catch (error: any) {
-    toastStore.error(error.message || t('notifications.emailError'))
+    toastStore.error(error.message || t('notifications.emailError'));
   } finally {
-    resendingEmail.value = false
+    resendingEmail.value = false;
   }
 }
 
 function handleCancelChangeEmail() {
-  changingEmail.value = false
-  newEmailInput.value = ''
+  changingEmail.value = false;
+  newEmailInput.value = '';
 }
 
 async function handleChangeEmail() {
   if (!newEmailInput.value.trim() || !token.value || !participantId.value) {
-    return
+    return;
   }
 
-  addingEmail.value = true
+  addingEmail.value = true;
 
   try {
-    await addParticipantEmail(token.value, participantId.value, newEmailInput.value.trim())
-    toastStore.success(t('notifications.emailChanged'))
-    newEmailInput.value = ''
-    changingEmail.value = false
+    await addParticipantEmail(token.value, participantId.value, newEmailInput.value.trim());
+    toastStore.success(t('notifications.emailChanged'));
+    newEmailInput.value = '';
+    changingEmail.value = false;
     // Reload calendar to get updated participant email info
-    await calendarStore.fetchPublicCalendar(token.value, participantId.value)
+    await calendarStore.fetchPublicCalendar(token.value, participantId.value);
   } catch (error: any) {
-    toastStore.error(error.message || t('notifications.emailError'))
+    toastStore.error(error.message || t('notifications.emailError'));
   } finally {
-    addingEmail.value = false
+    addingEmail.value = false;
   }
 }
 
@@ -2499,44 +2493,44 @@ watch(
     // Only reload if values actually changed (not initial load)
     if (oldVal && newVal && JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
       // Clear the holidays cache to force fresh data
-      clearHolidaysCache()
+      clearHolidaysCache();
 
       // Reload the calendar to ensure we have the latest settings
-      await calendarStore.fetchPublicCalendar(token.value, participantId.value)
+      await calendarStore.fetchPublicCalendar(token.value, participantId.value);
     }
   }
-)
+);
 
 // Save display settings to localStorage when they change
 watch(displayMode, async newMode => {
   // Adjust numberOfPeriods if it exceeds the max for the new mode
   // Month mode: max 12, Week mode: max 4
-  const maxPeriods = newMode === 'month' ? 12 : 4
+  const maxPeriods = newMode === 'month' ? 12 : 4;
   if (numberOfPeriods.value > maxPeriods) {
-    numberOfPeriods.value = maxPeriods
+    numberOfPeriods.value = maxPeriods;
   }
 
   if (calendar.value) {
-    historyStore.updateDisplaySettings(token.value, { displayMode: newMode })
+    historyStore.updateDisplaySettings(token.value, { displayMode: newMode });
     // Reload participant counts with appropriate date range for the new mode
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
   }
-})
+});
 
 watch(numberOfPeriods, async newCount => {
   if (calendar.value) {
-    historyStore.updateDisplaySettings(token.value, { periodCount: newCount })
+    historyStore.updateDisplaySettings(token.value, { periodCount: newCount });
     // Reload participant counts to include all displayed periods
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
   }
-})
+});
 
 // Reload calendar when navigating back to this page
 onActivated(async () => {
   // Clear holidays cache to ensure fresh data when navigating back
-  clearHolidaysCache()
-  await calendarStore.fetchPublicCalendar(token.value, participantId.value)
-})
+  clearHolidaysCache();
+  await calendarStore.fetchPublicCalendar(token.value, participantId.value);
+});
 
 // Watch for route changes to reload the calendar when navigating between calendars
 watch(
@@ -2545,42 +2539,42 @@ watch(
     // Only reload if route params actually changed
     if (newToken !== oldToken || newParticipantId !== oldParticipantId) {
       // Clear holidays cache and reload calendar
-      clearHolidaysCache()
-      await loadCalendar()
+      clearHolidaysCache();
+      await loadCalendar();
     }
   }
-)
+);
 
 // Handle auto-delete from email notification
 async function handleCancelFromEmail() {
-  const cancelDate = route.query.cancel as string | undefined
+  const cancelDate = route.query.cancel as string | undefined;
 
   if (!cancelDate || !token.value || !participantId.value) {
-    return
+    return;
   }
 
   try {
     // Delete the availability for the specified date
-    await availabilitiesApi.delete(token.value, participantId.value, cancelDate)
+    await availabilitiesApi.delete(token.value, participantId.value, cancelDate);
 
     // Reload participant counts (which includes all participants' availabilities)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value)
+    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
 
-    toastStore.success(`Your participation has been cancelled for ${cancelDate}`)
+    toastStore.success(`Your participation has been cancelled for ${cancelDate}`);
 
     // Remove the cancel parameter from URL
     router.replace({
       path: route.path,
       query: {},
-    })
+    });
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to cancel participation')
+    toastStore.error(err.message || 'Failed to cancel participation');
   }
 }
 
 onMounted(async () => {
-  await loadCalendar()
+  await loadCalendar();
   // Handle cancel from email notification after calendar is loaded
-  await handleCancelFromEmail()
-})
+  await handleCancelFromEmail();
+});
 </script>

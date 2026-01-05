@@ -19,10 +19,7 @@
 
       <!-- Search Form -->
       <div class="card mb-8">
-        <form
-          class="flex gap-4"
-          @submit.prevent="searchLicense"
-        >
+        <form class="flex gap-4" @submit.prevent="searchLicense">
           <div class="flex-1">
             <label
               for="supportKey"
@@ -37,7 +34,7 @@
               :placeholder="t('adminLicense.supportKeyPlaceholder')"
               class="input w-full"
               pattern="SUPP-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}"
-            >
+            />
           </div>
           <div class="flex items-end">
             <button
@@ -91,12 +88,7 @@
         class="card bg-yellow-50 dark:bg-yellow-900/20"
       >
         <div class="flex items-center gap-3 text-yellow-800 dark:text-yellow-300">
-          <svg
-            class="h-6 w-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -109,10 +101,7 @@
       </div>
 
       <!-- License Details -->
-      <div
-        v-if="license"
-        class="space-y-6"
-      >
+      <div v-if="license" class="space-y-6">
         <!-- License Info Card -->
         <div class="card">
           <h2 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
@@ -191,10 +180,7 @@
                       : ''
                   }}
                 </span>
-                <span
-                  v-else
-                  class="text-gray-500 dark:text-gray-400"
-                >
+                <span v-else class="text-gray-500 dark:text-gray-400">
                   {{ t('adminLicense.noSupport') }}
                 </span>
               </p>
@@ -203,10 +189,7 @@
         </div>
 
         <!-- Client Info Card -->
-        <div
-          v-if="license.client"
-          class="card"
-        >
+        <div v-if="license.client" class="card">
           <h2 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
             {{ t('adminLicense.clientInfo') }}
           </h2>
@@ -247,10 +230,7 @@
         </div>
 
         <!-- Order Info Card -->
-        <div
-          v-if="license.order"
-          class="card"
-        >
+        <div v-if="license.order" class="card">
           <h2 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
             {{ t('adminLicense.orderInfo') }}
           </h2>
@@ -318,82 +298,82 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useToastStore } from '@/stores/toast'
-import { useAuthStore } from '@/stores/auth'
-import { ecommerceApi, type SoldLicenseWithDetails } from '@/api/ecommerce'
+import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useToastStore } from '@/stores/toast';
+import { useAuthStore } from '@/stores/auth';
+import { ecommerceApi, type SoldLicenseWithDetails } from '@/api/ecommerce';
 
-const { t } = useI18n()
-const toastStore = useToastStore()
-const authStore = useAuthStore()
+const { t } = useI18n();
+const toastStore = useToastStore();
+const authStore = useAuthStore();
 
-const supportKey = ref('')
-const searching = ref(false)
-const searched = ref(false)
-const license = ref<SoldLicenseWithDetails | null>(null)
+const supportKey = ref('');
+const searching = ref(false);
+const searched = ref(false);
+const license = ref<SoldLicenseWithDetails | null>(null);
 
 async function searchLicense() {
-  if (!supportKey.value.trim()) return
+  if (!supportKey.value.trim()) return;
 
-  searching.value = true
-  searched.value = false
-  license.value = null
+  searching.value = true;
+  searched.value = false;
+  license.value = null;
 
   try {
-    license.value = await ecommerceApi.searchLicense(supportKey.value.trim())
-    searched.value = true
+    license.value = await ecommerceApi.searchLicense(supportKey.value.trim());
+    searched.value = true;
   } catch (err: any) {
-    console.error('Failed to search license:', err)
-    toastStore.error(err.message || t('errors.generic'))
+    console.error('Failed to search license:', err);
+    toastStore.error(err.message || t('errors.generic'));
   } finally {
-    searching.value = false
+    searching.value = false;
   }
 }
 
 function formatDate(dateString: string): string {
-  const date = new Date(dateString)
+  const date = new Date(dateString);
   return date.toLocaleDateString(authStore.user?.locale || 'fr', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  })
+  });
 }
 
 function formatAmount(cents: number): string {
   return new Intl.NumberFormat(authStore.user?.locale || 'fr', {
     style: 'currency',
     currency: 'EUR',
-  }).format(cents / 100)
+  }).format(cents / 100);
 }
 
 function isSupportExpired(expiresAt: string): boolean {
-  return new Date(expiresAt) < new Date()
+  return new Date(expiresAt) < new Date();
 }
 
 function getTierClass(tier: string): string {
   switch (tier) {
     case 'enterprise':
-      return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+      return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
     case 'pro':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
     default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
   }
 }
 
 function getStatusClass(status: string): string {
   switch (status) {
     case 'completed':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
     case 'pending':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
     case 'refunded':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
     case 'failed':
-      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
     default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
   }
 }
 </script>

@@ -23,12 +23,7 @@
           :title="t('common.close', 'Close')"
           @click="close"
         >
-          <svg
-            class="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -40,10 +35,7 @@
       </div>
 
       <!-- Calendar List -->
-      <div
-        class="overflow-y-auto p-4"
-        style="max-height: calc(100vh - 140px)"
-      >
+      <div class="overflow-y-auto p-4" style="max-height: calc(100vh - 140px)">
         <div class="space-y-2">
           <router-link
             v-for="calendar in calendars"
@@ -70,12 +62,7 @@
                 :title="t('common.remove', 'Remove')"
                 @click.prevent.stop="handleRemove(calendar.token)"
               >
-                <svg
-                  class="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     stroke-linecap="round"
                     stroke-linejoin="round"
@@ -116,12 +103,7 @@
       :title="t('calendar.showCalendars', 'Show calendars')"
       @click="toggle"
     >
-      <svg
-        class="h-6 w-6"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
+      <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path
           stroke-linecap="round"
           stroke-linejoin="round"
@@ -140,76 +122,76 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useCalendarHistoryStore, type CalendarHistoryItem } from '@/stores/calendarHistory'
+import { computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useCalendarHistoryStore, type CalendarHistoryItem } from '@/stores/calendarHistory';
 
-const { t } = useI18n()
-const route = useRoute()
-const historyStore = useCalendarHistoryStore()
+const { t } = useI18n();
+const route = useRoute();
+const historyStore = useCalendarHistoryStore();
 
 const currentToken = computed(() => {
-  return route.params.token as string
-})
+  return route.params.token as string;
+});
 
-const calendars = computed(() => historyStore.calendars)
-const isOpen = computed(() => historyStore.isOpen)
+const calendars = computed(() => historyStore.calendars);
+const isOpen = computed(() => historyStore.isOpen);
 
 const shouldShowButton = computed(() => {
-  return calendars.value.length > 0
-})
+  return calendars.value.length > 0;
+});
 
 function getCalendarLink(calendar: CalendarHistoryItem): string {
   if (calendar.participantId) {
-    return `/c/${calendar.token}/p/${calendar.participantId}`
+    return `/c/${calendar.token}/p/${calendar.participantId}`;
   }
-  return `/c/${calendar.token}`
+  return `/c/${calendar.token}`;
 }
 
 function toggle() {
-  historyStore.toggle()
+  historyStore.toggle();
 }
 
 function close() {
-  historyStore.close()
+  historyStore.close();
 }
 
 function handleRemove(token: string) {
   if (confirm(t('calendar.confirmRemoveHistory', 'Remove this calendar from history?'))) {
-    historyStore.removeCalendar(token)
+    historyStore.removeCalendar(token);
   }
 }
 
 function handleClearAll() {
   if (confirm(t('calendar.confirmClearHistory', 'Clear all history?'))) {
-    historyStore.clearHistory()
-    close()
+    historyStore.clearHistory();
+    close();
   }
 }
 
 function formatLastVisited(timestamp: number): string {
-  const now = Date.now()
-  const diff = now - timestamp
+  const now = Date.now();
+  const diff = now - timestamp;
 
-  const seconds = Math.floor(diff / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
 
   if (days > 0) {
-    return t('calendar.daysAgo', { days })
+    return t('calendar.daysAgo', { days });
   } else if (hours > 0) {
-    return t('calendar.hoursAgo', { hours })
+    return t('calendar.hoursAgo', { hours });
   } else if (minutes > 0) {
-    return t('calendar.minutesAgo', { minutes })
+    return t('calendar.minutesAgo', { minutes });
   } else {
-    return t('calendar.justNow')
+    return t('calendar.justNow');
   }
 }
 
 // Initialize calendar history when component is mounted
 onMounted(() => {
-  historyStore.init()
-})
+  historyStore.init();
+});
 </script>

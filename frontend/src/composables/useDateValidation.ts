@@ -4,28 +4,28 @@
  * SPDX-License-Identifier: BSL-1.1
  */
 
-import Holidays from 'date-holidays'
+import Holidays from 'date-holidays';
 
 // Type for holidays returned by date-holidays
 interface Holiday {
-  date: string
-  start: Date
-  end: Date
-  name: string
-  type: string
-  rule?: string
+  date: string;
+  start: Date;
+  end: Date;
+  name: string;
+  type: string;
+  rule?: string;
 }
 
 // Cache for Holidays instances by country
-const holidaysCache = new Map<string, Holidays>()
+const holidaysCache = new Map<string, Holidays>();
 
 // Cache for timezone → country code mapping (generated from date-holidays)
-let timezoneToCountryMap: Record<string, string> | null = null
+let timezoneToCountryMap: Record<string, string> | null = null;
 
 // Function to invalidate cache (useful for forcing a reload)
 export function clearHolidaysCache() {
-  holidaysCache.clear()
-  timezoneToCountryMap = null
+  holidaysCache.clear();
+  timezoneToCountryMap = null;
 }
 
 /**
@@ -34,38 +34,38 @@ export function clearHolidaysCache() {
  */
 function buildTimezoneToCountryMap(): Record<string, string> {
   if (timezoneToCountryMap !== null) {
-    return timezoneToCountryMap
+    return timezoneToCountryMap;
   }
 
-  const hd = new Holidays()
-  const mapping: Record<string, string> = {}
+  const hd = new Holidays();
+  const mapping: Record<string, string> = {};
 
   // Get all countries from date-holidays
-  const countries = hd.getCountries()
+  const countries = hd.getCountries();
 
   // For each country, get its zones and build the reverse mapping
   for (const countryCode of Object.keys(countries)) {
     try {
-      const countryHd = new Holidays(countryCode)
-      const zones = countryHd.getTimezones()
+      const countryHd = new Holidays(countryCode);
+      const zones = countryHd.getTimezones();
 
       // Associate each zone with this country
       if (zones && Array.isArray(zones)) {
         for (const zone of zones) {
           // Don't overwrite if already defined (priority to first country found)
           if (!mapping[zone]) {
-            mapping[zone] = countryCode
+            mapping[zone] = countryCode;
           }
         }
       }
     } catch (_error) {
       // Ignore unsupported countries
-      continue
+      continue;
     }
   }
 
-  timezoneToCountryMap = mapping
-  return mapping
+  timezoneToCountryMap = mapping;
+  return mapping;
 }
 
 /**
@@ -73,8 +73,8 @@ function buildTimezoneToCountryMap(): Record<string, string> {
  * Uses internal date-holidays data (zones defined in YAML files)
  */
 function getCountryFromTimezone(timezone: string): string | null {
-  const mapping = buildTimezoneToCountryMap()
-  return mapping[timezone] || null
+  const mapping = buildTimezoneToCountryMap();
+  return mapping[timezone] || null;
 }
 
 /**
@@ -82,9 +82,9 @@ function getCountryFromTimezone(timezone: string): string | null {
  */
 function getHolidaysInstance(countryCode: string): Holidays {
   if (!holidaysCache.has(countryCode)) {
-    holidaysCache.set(countryCode, new Holidays(countryCode))
+    holidaysCache.set(countryCode, new Holidays(countryCode));
   }
-  return holidaysCache.get(countryCode)!
+  return holidaysCache.get(countryCode)!;
 }
 
 /**
@@ -93,20 +93,20 @@ function getHolidaysInstance(countryCode: string): Holidays {
  */
 function isHoliday(date: Date, countryCode: string): boolean {
   try {
-    const hd = getHolidaysInstance(countryCode)
-    const holidays = hd.isHoliday(date) as Holiday[] | Holiday | false
-    if (!holidays) return false
+    const hd = getHolidaysInstance(countryCode);
+    const holidays = hd.isHoliday(date) as Holiday[] | Holiday | false;
+    if (!holidays) return false;
 
     // Filter only public holidays
     if (Array.isArray(holidays)) {
-      return holidays.some(h => h.type === 'public')
+      return holidays.some(h => h.type === 'public');
     }
 
     // If it's a single object, check its type
-    return holidays.type === 'public'
+    return holidays.type === 'public';
   } catch (_error) {
     // If country is not supported, return false
-    return false
+    return false;
   }
 }
 
@@ -114,9 +114,9 @@ function isHoliday(date: Date, countryCode: string): boolean {
  * Checks if a date is the day before a holiday
  */
 function isHolidayEve(date: Date, countryCode: string): boolean {
-  const nextDay = new Date(date)
-  nextDay.setDate(nextDay.getDate() + 1)
-  return isHoliday(nextDay, countryCode)
+  const nextDay = new Date(date);
+  nextDay.setDate(nextDay.getDate() + 1);
+  return isHoliday(nextDay, countryCode);
 }
 
 /**
@@ -135,72 +135,72 @@ export function useDateValidation() {
     allowHolidayEves: boolean
   ): boolean => {
     // Get country code to check holidays
-    const countryCode = getCountryFromTimezone(timezone)
+    const countryCode = getCountryFromTimezone(timezone);
 
     // Check if it's a holiday (if we have the country code)
-    const isHolidayDate = countryCode ? isHoliday(date, countryCode) : false
+    const isHolidayDate = countryCode ? isHoliday(date, countryCode) : false;
 
     // Apply holiday policy
     if (holidaysPolicy === 'block' && isHolidayDate) {
       // If it's a holiday and policy is "block", reject
-      return false
+      return false;
     }
 
     if (holidaysPolicy === 'allow' && isHolidayDate) {
       // If it's a holiday and policy is "allow", accept
-      return true
+      return true;
     }
 
     // For "ignore" or non-holidays, check day of week
-    const weekday = date.getDay()
+    const weekday = date.getDay();
     if (!allowedWeekdays || allowedWeekdays.length === 0 || allowedWeekdays.includes(weekday)) {
-      return true
+      return true;
     }
 
     // If day of week is not allowed, check holiday eve exception
     if (countryCode && allowHolidayEves && isHolidayEve(date, countryCode)) {
-      return true
+      return true;
     }
 
-    return false
-  }
+    return false;
+  };
 
   /**
    * Checks if a date is a holiday
    * Useful for visual display
    */
   const checkIsHoliday = (date: Date, timezone: string): boolean => {
-    const countryCode = getCountryFromTimezone(timezone)
-    if (!countryCode) return false
-    return isHoliday(date, countryCode)
-  }
+    const countryCode = getCountryFromTimezone(timezone);
+    if (!countryCode) return false;
+    return isHoliday(date, countryCode);
+  };
 
   /**
    * Checks if a date is a holiday eve
    * Useful for visual display
    */
   const checkIsHolidayEve = (date: Date, timezone: string): boolean => {
-    const countryCode = getCountryFromTimezone(timezone)
-    if (!countryCode) return false
-    return isHolidayEve(date, countryCode)
-  }
+    const countryCode = getCountryFromTimezone(timezone);
+    if (!countryCode) return false;
+    return isHolidayEve(date, countryCode);
+  };
 
   /**
    * Gets the name of an official holiday (type "public" only)
    */
   const getHolidayName = (date: Date, timezone: string, locale: string = 'fr'): string | null => {
-    const countryCode = getCountryFromTimezone(timezone)
-    if (!countryCode) return null
+    const countryCode = getCountryFromTimezone(timezone);
+    if (!countryCode) return null;
 
     try {
       // For getHolidayName, we can't use cache because we need the locale
       // Create a temporary instance with the locale
-      const hd = new Holidays(countryCode, { languages: [locale] })
-      const holidays = hd.isHoliday(date) as Holiday[] | Holiday | false
+      const hd = new Holidays(countryCode, { languages: [locale] });
+      const holidays = hd.isHoliday(date) as Holiday[] | Holiday | false;
       if (holidays && Array.isArray(holidays) && holidays.length > 0) {
         // Return only public holidays
-        const publicHoliday = holidays.find(h => h.type === 'public')
-        return publicHoliday ? publicHoliday.name : null
+        const publicHoliday = holidays.find(h => h.type === 'public');
+        return publicHoliday ? publicHoliday.name : null;
       }
       // If it's a single object, check its type
       if (
@@ -209,19 +209,19 @@ export function useDateValidation() {
         !Array.isArray(holidays) &&
         holidays.type === 'public'
       ) {
-        return holidays.name
+        return holidays.name;
       }
     } catch (_error) {
-      return null
+      return null;
     }
 
-    return null
-  }
+    return null;
+  };
 
   return {
     isDateAllowed,
     checkIsHoliday,
     checkIsHolidayEve,
     getHolidayName,
-  }
+  };
 }

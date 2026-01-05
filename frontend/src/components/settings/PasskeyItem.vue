@@ -6,7 +6,9 @@
 -->
 
 <template>
-  <div class="flex items-center justify-between rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+  <div
+    class="flex items-center justify-between rounded-lg border border-gray-200 p-4 dark:border-gray-700"
+  >
     <div class="flex items-center">
       <div class="mr-3 rounded-full bg-primary-100 p-2 dark:bg-primary-900">
         <svg
@@ -24,10 +26,7 @@
         </svg>
       </div>
       <div>
-        <p
-          v-if="!editing"
-          class="font-medium text-gray-900 dark:text-white"
-        >
+        <p v-if="!editing" class="font-medium text-gray-900 dark:text-white">
           {{ passkey.name }}
         </p>
         <input
@@ -38,7 +37,7 @@
           @blur="saveRename"
           @keyup.enter="saveRename"
           @keyup.esc="cancelEdit"
-        >
+        />
         <p class="text-sm text-gray-500 dark:text-gray-400">
           {{ t('settings.passkeys.createdAt') }}: {{ formatDate(passkey.created_at) }}
         </p>
@@ -65,48 +64,48 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import type { Passkey } from '@/api/passkey'
+import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
+import type { Passkey } from '@/api/passkey';
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 const props = defineProps<{
-  passkey: Passkey
-}>()
+  passkey: Passkey;
+}>();
 
 const emit = defineEmits<{
-  rename: [id: string, newName: string]
-  delete: [id: string]
-}>()
+  rename: [id: string, newName: string];
+  delete: [id: string];
+}>();
 
-const editing = ref(false)
-const editName = ref(props.passkey.name)
+const editing = ref(false);
+const editName = ref(props.passkey.name);
 
 function startEdit() {
-  editing.value = true
-  editName.value = props.passkey.name
+  editing.value = true;
+  editName.value = props.passkey.name;
 }
 
 function cancelEdit() {
-  editing.value = false
-  editName.value = props.passkey.name
+  editing.value = false;
+  editName.value = props.passkey.name;
 }
 
 function saveRename() {
   if (editName.value && editName.value !== props.passkey.name) {
-    emit('rename', props.passkey.id, editName.value)
+    emit('rename', props.passkey.id, editName.value);
   }
-  editing.value = false
+  editing.value = false;
 }
 
 function handleDelete() {
   if (confirm(t('settings.passkeys.confirmDelete'))) {
-    emit('delete', props.passkey.id)
+    emit('delete', props.passkey.id);
   }
 }
 
 function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString()
+  return new Date(dateString).toLocaleDateString();
 }
 </script>

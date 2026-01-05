@@ -6,10 +6,7 @@
 -->
 
 <template>
-  <CollapsibleSection
-    :title="t('notifications.title')"
-    :default-open="false"
-  >
+  <CollapsibleSection :title="t('notifications.title')" :default-open="false">
     <div class="space-y-6">
       <!-- Enable notifications toggle -->
       <div class="flex items-center">
@@ -19,7 +16,7 @@
           type="checkbox"
           class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
           @change="handleEnabledToggle"
-        >
+        />
         <label
           for="enable-notifications"
           class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300"
@@ -45,11 +42,8 @@
                 v-model="localConfig.notify_owner"
                 type="checkbox"
                 class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              >
-              <label
-                for="notify-owner"
-                class="ml-2 text-sm text-gray-700 dark:text-gray-300"
-              >
+              />
+              <label for="notify-owner" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {{ t('notifications.notifyOwner') }}
               </label>
             </div>
@@ -59,7 +53,7 @@
                 v-model="localConfig.notify_participants"
                 type="checkbox"
                 class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              >
+              />
               <label
                 for="notify-participants"
                 class="ml-2 text-sm text-gray-700 dark:text-gray-300"
@@ -84,11 +78,8 @@
                   v-model="localConfig.channels.email.enabled"
                   type="checkbox"
                   class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                >
-                <label
-                  for="channel-email"
-                  class="ml-2 text-sm text-gray-700 dark:text-gray-300"
-                >
+                />
+                <label for="channel-email" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                   {{ t('notifications.channelEmail') }}
                 </label>
               </div>
@@ -108,24 +99,18 @@
                   v-model="localConfig.channels.discord.enabled"
                   type="checkbox"
                   class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                >
-                <label
-                  for="channel-discord"
-                  class="ml-2 text-sm text-gray-700 dark:text-gray-300"
-                >
+                />
+                <label for="channel-discord" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                   {{ t('notifications.channelDiscord') }}
                 </label>
               </div>
-              <div
-                v-if="localConfig.channels.discord.enabled"
-                class="mt-2 ml-6"
-              >
+              <div v-if="localConfig.channels.discord.enabled" class="mt-2 ml-6">
                 <input
                   v-model="localConfig.channels.discord.webhook_url"
                   type="url"
                   class="input"
                   :placeholder="t('notifications.discordWebhookPlaceholder')"
-                >
+                />
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {{ t('notifications.discordWebhookHelp') }}
                 </p>
@@ -140,24 +125,18 @@
                   v-model="localConfig.channels.slack.enabled"
                   type="checkbox"
                   class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                >
-                <label
-                  for="channel-slack"
-                  class="ml-2 text-sm text-gray-700 dark:text-gray-300"
-                >
+                />
+                <label for="channel-slack" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                   {{ t('notifications.channelSlack') }}
                 </label>
               </div>
-              <div
-                v-if="localConfig.channels.slack.enabled"
-                class="mt-2 ml-6"
-              >
+              <div v-if="localConfig.channels.slack.enabled" class="mt-2 ml-6">
                 <input
                   v-model="localConfig.channels.slack.webhook_url"
                   type="url"
                   class="input"
                   :placeholder="t('notifications.slackWebhookPlaceholder')"
-                >
+                />
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {{ t('notifications.slackWebhookHelp') }}
                 </p>
@@ -172,25 +151,19 @@
                   v-model="localConfig.channels.telegram.enabled"
                   type="checkbox"
                   class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                >
-                <label
-                  for="channel-telegram"
-                  class="ml-2 text-sm text-gray-700 dark:text-gray-300"
-                >
+                />
+                <label for="channel-telegram" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                   {{ t('notifications.channelTelegram') }}
                 </label>
               </div>
-              <div
-                v-if="localConfig.channels.telegram.enabled"
-                class="mt-2 ml-6 space-y-3"
-              >
+              <div v-if="localConfig.channels.telegram.enabled" class="mt-2 ml-6 space-y-3">
                 <div>
                   <input
                     v-model="localConfig.channels.telegram.bot_token"
                     type="text"
                     class="input"
                     :placeholder="t('notifications.telegramTokenPlaceholder')"
-                  >
+                  />
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {{ t('notifications.telegramTokenHelp') }}
                   </p>
@@ -201,7 +174,7 @@
                     type="text"
                     class="input"
                     :placeholder="t('notifications.telegramChatIdPlaceholder')"
-                  >
+                  />
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {{ t('notifications.telegramChatIdHelp') }}
                   </p>
@@ -223,18 +196,12 @@
                 v-model="localConfig.reminders.enabled"
                 type="checkbox"
                 class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              >
-              <label
-                for="enable-reminders"
-                class="ml-2 text-sm text-gray-700 dark:text-gray-300"
-              >
+              />
+              <label for="enable-reminders" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {{ t('notifications.enableReminders') }}
               </label>
             </div>
-            <div
-              v-if="localConfig.reminders.enabled"
-              class="ml-6"
-            >
+            <div v-if="localConfig.reminders.enabled" class="ml-6">
               <label class="mb-1 block text-sm text-gray-700 dark:text-gray-300">
                 {{ t('notifications.hoursBefore') }}
               </label>
@@ -244,7 +211,7 @@
                 min="1"
                 max="168"
                 class="input max-w-32"
-              >
+              />
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 {{ t('notifications.hoursBeforeHelp') }}
               </p>
@@ -258,18 +225,8 @@
         v-if="localConfig.enabled && showSaveButton"
         class="flex justify-end border-t border-gray-200 pt-4 dark:border-gray-700"
       >
-        <button
-          type="button"
-          class="btn btn-primary"
-          :disabled="saving"
-          @click="saveConfig"
-        >
-          <svg
-            v-if="saving"
-            class="mr-2 h-4 w-4 animate-spin"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
+        <button type="button" class="btn btn-primary" :disabled="saving" @click="saveConfig">
+          <svg v-if="saving" class="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle
               class="opacity-25"
               cx="12"
@@ -292,69 +249,69 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { getDefaultNotifyConfig, type NotifyConfig } from '@/api/notify'
-import CollapsibleSection from '@/components/CollapsibleSection.vue'
+import { ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { getDefaultNotifyConfig, type NotifyConfig } from '@/api/notify';
+import CollapsibleSection from '@/components/CollapsibleSection.vue';
 
 const props = withDefaults(
   defineProps<{
-    modelValue: NotifyConfig
-    smtpConfigured?: boolean
-    showSaveButton?: boolean
+    modelValue: NotifyConfig;
+    smtpConfigured?: boolean;
+    showSaveButton?: boolean;
   }>(),
   {
-    showSaveButton: true
+    showSaveButton: true,
   }
-)
+);
 
 const emit = defineEmits<{
-  'update:modelValue': [value: NotifyConfig]
-  save: [value: NotifyConfig]
-}>()
+  'update:modelValue': [value: NotifyConfig];
+  save: [value: NotifyConfig];
+}>();
 
-const { t } = useI18n()
-const localConfig = ref<NotifyConfig>(getDefaultNotifyConfig())
-const saving = ref(false)
+const { t } = useI18n();
+const localConfig = ref<NotifyConfig>(getDefaultNotifyConfig());
+const saving = ref(false);
 
 // Initialize local config from props - only on mount and when prop changes externally
-let isInternalUpdate = false
+let isInternalUpdate = false;
 watch(
   () => props.modelValue,
-  (newValue) => {
+  newValue => {
     if (newValue && !isInternalUpdate) {
       // Deep clone to ensure nested reactivity works properly
-      localConfig.value = JSON.parse(JSON.stringify(newValue))
+      localConfig.value = JSON.parse(JSON.stringify(newValue));
     }
   },
   { immediate: true, deep: true }
-)
+);
 
 // Emit changes to parent
 watch(
   localConfig,
-  (newValue) => {
-    isInternalUpdate = true
-    emit('update:modelValue', newValue)
+  newValue => {
+    isInternalUpdate = true;
+    emit('update:modelValue', newValue);
     // Reset flag on next tick to allow external updates
     setTimeout(() => {
-      isInternalUpdate = false
-    }, 0)
+      isInternalUpdate = false;
+    }, 0);
   },
   { deep: true }
-)
+);
 
 const saveConfig = async () => {
-  saving.value = true
+  saving.value = true;
   try {
-    emit('save', localConfig.value)
+    emit('save', localConfig.value);
   } finally {
-    saving.value = false
+    saving.value = false;
   }
-}
+};
 
 const handleEnabledToggle = () => {
   // Just update the model value - parent component decides whether to save
   // No auto-save to allow use in creation forms
-}
+};
 </script>

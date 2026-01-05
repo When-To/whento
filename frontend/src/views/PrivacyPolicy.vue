@@ -184,9 +184,9 @@
  * SPDX-License-Identifier: BSL-1.1
  */
 
-import { useI18n } from 'vue-i18n'
+import { useI18n } from 'vue-i18n';
 
-const { t } = useI18n()
+const { t } = useI18n();
 
-const lastUpdated = '2025-12-04'
+const lastUpdated = '2025-12-04';
 </script>

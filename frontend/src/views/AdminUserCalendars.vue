@@ -13,12 +13,7 @@
           class="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
           @click="router.back()"
         >
-          <svg
-            class="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -42,10 +37,7 @@
       </div>
 
       <!-- Loading state -->
-      <div
-        v-if="loading"
-        class="card"
-      >
+      <div v-if="loading" class="card">
         <div class="flex items-center justify-center py-12">
           <div
             class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"
@@ -55,10 +47,7 @@
       </div>
 
       <!-- Empty state -->
-      <div
-        v-else-if="calendars.length === 0"
-        class="card"
-      >
+      <div v-else-if="calendars.length === 0" class="card">
         <div class="text-center py-12">
           <svg
             class="mx-auto h-12 w-12 text-gray-400"
@@ -80,10 +69,7 @@
       </div>
 
       <!-- Calendars grid -->
-      <div
-        v-else
-        class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
-      >
+      <div v-else class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         <div
           v-for="calendar in calendars"
           :key="calendar.id"
@@ -94,10 +80,7 @@
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ calendar.name }}
             </h3>
-            <p
-              v-if="calendar.description"
-              class="mt-1 text-sm text-gray-500 dark:text-gray-400"
-            >
+            <p v-if="calendar.description" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {{ calendar.description }}
             </p>
           </div>
@@ -105,7 +88,9 @@
           <!-- Calendar stats -->
           <div class="space-y-2 text-sm">
             <div class="flex items-center justify-between">
-              <span class="text-gray-600 dark:text-gray-400">{{ t('calendar.participants') }}:</span>
+              <span class="text-gray-600 dark:text-gray-400"
+                >{{ t('calendar.participants') }}:</span
+              >
               <span class="font-medium text-gray-900 dark:text-white">
                 {{ calendar.participants?.length || 0 }}
               </span>
@@ -165,12 +150,7 @@
               class="btn btn-secondary text-sm"
               :title="t('calendar.publicLink')"
             >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -187,63 +167,63 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRouter, useRoute } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { useToastStore } from '@/stores/toast'
-import { adminApi } from '@/api/admin'
-import type { CalendarWithParticipants } from '@/types'
+import { ref, onMounted, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useRouter, useRoute } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
+import { adminApi } from '@/api/admin';
+import type { CalendarWithParticipants } from '@/types';
 
-const { t } = useI18n()
-const router = useRouter()
-const route = useRoute()
-const authStore = useAuthStore()
-const toastStore = useToastStore()
+const { t } = useI18n();
+const router = useRouter();
+const route = useRoute();
+const authStore = useAuthStore();
+const toastStore = useToastStore();
 
-const loading = ref(true)
-const calendars = ref<CalendarWithParticipants[]>([])
-const userName = ref<string>('')
+const loading = ref(true);
+const calendars = ref<CalendarWithParticipants[]>([]);
+const userName = ref<string>('');
 
-const userId = computed(() => route.params.userId as string)
+const userId = computed(() => route.params.userId as string);
 
 onMounted(() => {
   // Get user name from query string
-  userName.value = (route.query.userName as string) || ''
-  loadCalendars()
-})
+  userName.value = (route.query.userName as string) || '';
+  loadCalendars();
+});
 
 async function loadCalendars() {
   if (!userId.value) {
-    toastStore.error('Invalid user ID')
-    loading.value = false
-    router.push('/admin')
-    return
+    toastStore.error('Invalid user ID');
+    loading.value = false;
+    router.push('/admin');
+    return;
   }
 
-  loading.value = true
+  loading.value = true;
 
   try {
     // Load calendars
-    calendars.value = await adminApi.getUserCalendars(userId.value)
+    calendars.value = await adminApi.getUserCalendars(userId.value);
 
     // Try to get user name from admin users list (if available)
     // Otherwise we could make an additional API call to get user details
     // For now, we'll just show the count
   } catch (err: any) {
-    console.error('Failed to load calendars:', err)
-    toastStore.error(err.message || t('errors.generic'))
+    console.error('Failed to load calendars:', err);
+    toastStore.error(err.message || t('errors.generic'));
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 function formatDate(dateString: string): string {
-  const date = new Date(dateString)
+  const date = new Date(dateString);
   return date.toLocaleDateString(authStore.user?.locale || 'fr', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  })
+  });
 }
 </script>

@@ -6,7 +6,9 @@
 -->
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 dark:bg-gray-900 sm:px-6 lg:px-8">
+  <div
+    class="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 dark:bg-gray-900 sm:px-6 lg:px-8"
+  >
     <div class="w-full max-w-md space-y-8">
       <div class="text-center">
         <h1 class="font-display text-3xl font-bold text-gray-900 dark:text-white">
@@ -16,15 +18,8 @@
 
       <div class="card">
         <!-- Loading -->
-        <div
-          v-if="loading"
-          class="flex flex-col items-center justify-center py-12"
-        >
-          <svg
-            class="h-12 w-12 animate-spin text-primary-600"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
+        <div v-if="loading" class="flex flex-col items-center justify-center py-12">
+          <svg class="h-12 w-12 animate-spin text-primary-600" fill="none" viewBox="0 0 24 24">
             <circle
               class="opacity-25"
               cx="12"
@@ -45,11 +40,10 @@
         </div>
 
         <!-- Success -->
-        <div
-          v-else-if="success"
-          class="text-center"
-        >
-          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
+        <div v-else-if="success" class="text-center">
+          <div
+            class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900"
+          >
             <svg
               class="h-10 w-10 text-green-600 dark:text-green-400"
               fill="none"
@@ -76,11 +70,10 @@
         </div>
 
         <!-- Error -->
-        <div
-          v-else-if="error"
-          class="text-center"
-        >
-          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900">
+        <div v-else-if="error" class="text-center">
+          <div
+            class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900"
+          >
             <svg
               class="h-10 w-10 text-red-600 dark:text-red-400"
               fill="none"
@@ -108,41 +101,41 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { verifyParticipantEmail } from '@/api/notify'
+import { ref, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { verifyParticipantEmail } from '@/api/notify';
 
-const route = useRoute()
-const { t } = useI18n()
+const route = useRoute();
+const { t } = useI18n();
 
-const loading = ref(true)
-const success = ref(false)
-const error = ref(false)
-const errorMessage = ref('')
+const loading = ref(true);
+const success = ref(false);
+const error = ref(false);
+const errorMessage = ref('');
 
 onMounted(async () => {
-  const token = route.params.token as string
+  const token = route.params.token as string;
 
   if (!token) {
-    error.value = true
-    errorMessage.value = t('notifications.invalidToken')
-    loading.value = false
-    return
+    error.value = true;
+    errorMessage.value = t('notifications.invalidToken');
+    loading.value = false;
+    return;
   }
 
   try {
-    await verifyParticipantEmail(token)
-    success.value = true
+    await verifyParticipantEmail(token);
+    success.value = true;
   } catch (err: any) {
-    error.value = true
+    error.value = true;
     if (err.response?.status === 400 || err.response?.status === 404) {
-      errorMessage.value = t('notifications.tokenExpired')
+      errorMessage.value = t('notifications.tokenExpired');
     } else {
-      errorMessage.value = t('notifications.verificationError')
+      errorMessage.value = t('notifications.verificationError');
     }
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-})
+});
 </script>

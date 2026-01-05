@@ -138,11 +138,11 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { useI18n } from 'vue-i18n';
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 // Get build type from environment
-const buildType = import.meta.env.VITE_BUILD_TYPE || 'cloud'
-const isCloud = buildType === 'cloud'
+const buildType = import.meta.env.VITE_BUILD_TYPE || 'cloud';
+const isCloud = buildType === 'cloud';
 </script>

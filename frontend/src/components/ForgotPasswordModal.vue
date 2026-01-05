@@ -11,7 +11,9 @@
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       @click.self="closeModal"
     >
-      <div class="mx-4 w-full max-w-md animate-modal-in rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
+      <div
+        class="mx-4 w-full max-w-md animate-modal-in rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800"
+      >
         <div class="mb-4 flex items-center justify-between">
           <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
             {{ t('auth.forgotPassword.title') }}
@@ -20,12 +22,7 @@
             class="text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
             @click="closeModal"
           >
-            <svg
-              class="h-6 w-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -58,11 +55,8 @@
                 class="input"
                 :class="{ 'input-error': error }"
                 :disabled="loading"
-              >
-              <p
-                v-if="error"
-                class="mt-1 text-sm text-danger-600 dark:text-danger-400"
-              >
+              />
+              <p v-if="error" class="mt-1 text-sm text-danger-600 dark:text-danger-400">
                 {{ error }}
               </p>
             </div>
@@ -76,11 +70,7 @@
               >
                 {{ t('common.cancel') }}
               </button>
-              <button
-                type="submit"
-                class="btn btn-primary flex-1"
-                :disabled="loading"
-              >
+              <button type="submit" class="btn btn-primary flex-1" :disabled="loading">
                 <span v-if="loading">{{ t('common.sending') }}</span>
                 <span v-else>{{ t('auth.forgotPassword.sendLink') }}</span>
               </button>
@@ -88,11 +78,10 @@
           </form>
         </div>
 
-        <div
-          v-else
-          class="py-4 text-center"
-        >
-          <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success-100 dark:bg-success-900/20">
+        <div v-else class="py-4 text-center">
+          <div
+            class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success-100 dark:bg-success-900/20"
+          >
             <svg
               class="h-8 w-8 text-success-600 dark:text-success-400"
               fill="none"
@@ -113,10 +102,7 @@
           <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
             {{ t('auth.forgotPassword.successMessage') }}
           </p>
-          <button
-            class="btn btn-primary"
-            @click="closeModal"
-          >
+          <button class="btn btn-primary" @click="closeModal">
             {{ t('common.close') }}
           </button>
         </div>
@@ -126,55 +112,58 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
+import { ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '@/stores/auth';
 
-const { t } = useI18n()
-const authStore = useAuthStore()
+const { t } = useI18n();
+const authStore = useAuthStore();
 
 const props = defineProps<{
-  isOpen: boolean
-}>()
+  isOpen: boolean;
+}>();
 
 const emit = defineEmits<{
-  close: []
-}>()
+  close: [];
+}>();
 
-const email = ref('')
-const loading = ref(false)
-const error = ref('')
-const submitted = ref(false)
+const email = ref('');
+const loading = ref(false);
+const error = ref('');
+const submitted = ref(false);
 
 // Reset form when modal opens
-watch(() => props.isOpen, (newValue) => {
-  if (newValue) {
-    email.value = ''
-    error.value = ''
-    submitted.value = false
-    loading.value = false
+watch(
+  () => props.isOpen,
+  newValue => {
+    if (newValue) {
+      email.value = '';
+      error.value = '';
+      submitted.value = false;
+      loading.value = false;
+    }
   }
-})
+);
 
 const handleSubmit = async () => {
-  if (!email.value) return
+  if (!email.value) return;
 
-  loading.value = true
-  error.value = ''
+  loading.value = true;
+  error.value = '';
 
   try {
-    await authStore.forgotPassword(email.value)
-    submitted.value = true
+    await authStore.forgotPassword(email.value);
+    submitted.value = true;
   } catch (err: any) {
-    error.value = err.message || t('auth.forgotPassword.error')
+    error.value = err.message || t('auth.forgotPassword.error');
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const closeModal = () => {
-  emit('close')
-}
+  emit('close');
+};
 </script>
 
 <style scoped>

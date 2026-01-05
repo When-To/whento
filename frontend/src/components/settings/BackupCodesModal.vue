@@ -39,16 +39,10 @@
 
       <!-- Actions -->
       <div class="flex justify-end space-x-2">
-        <button
-          class="btn btn-secondary"
-          @click="downloadCodes"
-        >
+        <button class="btn btn-secondary" @click="downloadCodes">
           {{ t('settings.mfa.downloadCodes') }}
         </button>
-        <button
-          class="btn btn-primary"
-          @click="$emit('close')"
-        >
+        <button class="btn btn-primary" @click="$emit('close')">
           {{ t('common.close') }}
         </button>
       </div>
@@ -57,30 +51,30 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { useI18n } from 'vue-i18n';
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 const props = defineProps<{
-  isOpen: boolean
-  codes: string[]
-}>()
+  isOpen: boolean;
+  codes: string[];
+}>();
 
 defineEmits<{
-  close: []
-}>()
+  close: [];
+}>();
 
 function downloadCodes() {
-  const text = `WhenTo Backup Codes\n\nThese codes can be used to access your account if you lose access to your authenticator app.\nEach code can only be used once.\n\n${props.codes.join('\n')}\n\nKeep these codes in a safe place.`
+  const text = `WhenTo Backup Codes\n\nThese codes can be used to access your account if you lose access to your authenticator app.\nEach code can only be used once.\n\n${props.codes.join('\n')}\n\nKeep these codes in a safe place.`;
 
-  const blob = new Blob([text], { type: 'text/plain' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'whento-backup-codes.txt'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'whento-backup-codes.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 </script>

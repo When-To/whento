@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: BSL-1.1
  */
 
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
 
 // Get build type from environment
-const buildType = import.meta.env.VITE_BUILD_TYPE || 'cloud'
-const isCloud = buildType === 'cloud'
-const isSelfHosted = buildType === 'selfhosted'
+const buildType = import.meta.env.VITE_BUILD_TYPE || 'cloud';
+const isCloud = buildType === 'cloud';
+const isSelfHosted = buildType === 'selfhosted';
 
 export const routes: RouteRecordRaw[] = [
   {
@@ -239,49 +239,49 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/NotFound.vue'),
     meta: { public: true },
   },
-]
+];
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
   scrollBehavior(_to, _from, savedPosition) {
     if (savedPosition) {
-      return savedPosition
+      return savedPosition;
     }
-    return { top: 0 }
+    return { top: 0 };
   },
-})
+});
 
 // Navigation guards
 router.beforeEach(async (to, _from, next) => {
-  const authStore = useAuthStore()
+  const authStore = useAuthStore();
 
   // Wait for auth initialization
   if (!authStore.initialized) {
     // Wait a bit for initialization to complete
-    let attempts = 0
+    let attempts = 0;
     while (!authStore.initialized && attempts < 50) {
-      await new Promise(resolve => setTimeout(resolve, 100))
-      attempts++
+      await new Promise(resolve => setTimeout(resolve, 100));
+      attempts++;
     }
   }
 
   // Check if route requires authentication
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    return next({ name: 'login', query: { redirect: to.fullPath } })
+    return next({ name: 'login', query: { redirect: to.fullPath } });
   }
 
   // Check if route requires admin
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
-    return next({ name: 'dashboard' })
+    return next({ name: 'dashboard' });
   }
 
   // Redirect to dashboard if authenticated user tries to access login/register
   if (to.meta.hideForAuth && authStore.isAuthenticated) {
-    return next({ name: 'dashboard' })
+    return next({ name: 'dashboard' });
   }
 
-  next()
-})
+  next();
+});
 
-export default router
+export default router;

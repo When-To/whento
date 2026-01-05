@@ -15,15 +15,8 @@
       </div>
 
       <!-- Loading -->
-      <div
-        v-if="cartStore.loading"
-        class="flex items-center justify-center py-12"
-      >
-        <svg
-          class="h-8 w-8 animate-spin text-primary-600"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
+      <div v-if="cartStore.loading" class="flex items-center justify-center py-12">
+        <svg class="h-8 w-8 animate-spin text-primary-600" fill="none" viewBox="0 0 24 24">
           <circle
             class="opacity-25"
             cx="12"
@@ -41,10 +34,7 @@
       </div>
 
       <!-- Empty Cart -->
-      <div
-        v-else-if="cartStore.isEmpty"
-        class="card text-center py-12"
-      >
+      <div v-else-if="cartStore.isEmpty" class="card text-center py-12">
         <svg
           class="mx-auto h-16 w-16 text-gray-400"
           fill="none"
@@ -64,19 +54,13 @@
         <p class="mt-2 text-gray-600 dark:text-gray-400">
           {{ t('cart.emptyDescription') }}
         </p>
-        <router-link
-          to="/pricing"
-          class="btn btn-primary mt-6 inline-flex"
-        >
+        <router-link to="/pricing" class="btn btn-primary mt-6 inline-flex">
           {{ t('cart.browseLicenses') }}
         </router-link>
       </div>
 
       <!-- Cart Items -->
-      <div
-        v-else
-        class="space-y-6"
-      >
+      <div v-else class="space-y-6">
         <!-- Items List -->
         <div class="card">
           <h2 class="mb-4 font-display text-xl font-semibold text-gray-900 dark:text-white">
@@ -156,12 +140,7 @@
                   :disabled="cartStore.loading"
                   @click="removeItem(item.tier)"
                 >
-                  <svg
-                    class="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
+                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -199,17 +178,11 @@
           </div>
 
           <div class="mt-6 space-y-3">
-            <router-link
-              to="/checkout"
-              class="btn btn-primary w-full"
-            >
+            <router-link to="/checkout" class="btn btn-primary w-full">
               {{ t('cart.proceedToCheckout') }}
             </router-link>
 
-            <router-link
-              to="/pricing"
-              class="btn btn-secondary w-full"
-            >
+            <router-link to="/pricing" class="btn btn-secondary w-full">
               {{ t('cart.continueShopping') }}
             </router-link>
           </div>
@@ -220,53 +193,53 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useCartStore } from '@/stores/cart'
-import { useToastStore } from '@/stores/toast'
-import { formatPrice as formatPriceUtil } from '@/utils/currency'
+import { onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useCartStore } from '@/stores/cart';
+import { useToastStore } from '@/stores/toast';
+import { formatPrice as formatPriceUtil } from '@/utils/currency';
 
-const { t, locale } = useI18n()
-const cartStore = useCartStore()
-const toastStore = useToastStore()
+const { t, locale } = useI18n();
+const cartStore = useCartStore();
+const toastStore = useToastStore();
 
 onMounted(async () => {
-  await cartStore.initialize()
-})
+  await cartStore.initialize();
+});
 
 function getProductName(tier: string): string {
-  const product = cartStore.getProduct(tier)
-  return product?.name || tier
+  const product = cartStore.getProduct(tier);
+  return product?.name || tier;
 }
 
 function formatPrice(cents: number): string {
-  return formatPriceUtil(cents, locale.value)
+  return formatPriceUtil(cents, locale.value);
 }
 
 async function incrementQuantity(tier: string, currentQuantity: number) {
   try {
-    await cartStore.updateQuantity(tier, currentQuantity + 1)
+    await cartStore.updateQuantity(tier, currentQuantity + 1);
   } catch (_error) {
-    toastStore.error(t('cart.updateFailed'))
+    toastStore.error(t('cart.updateFailed'));
   }
 }
 
 async function decrementQuantity(tier: string, currentQuantity: number) {
   if (currentQuantity > 1) {
     try {
-      await cartStore.updateQuantity(tier, currentQuantity - 1)
+      await cartStore.updateQuantity(tier, currentQuantity - 1);
     } catch (_error) {
-      toastStore.error(t('cart.updateFailed'))
+      toastStore.error(t('cart.updateFailed'));
     }
   }
 }
 
 async function removeItem(tier: string) {
   try {
-    await cartStore.removeItem(tier)
-    toastStore.success(t('cart.itemRemoved'))
+    await cartStore.removeItem(tier);
+    toastStore.success(t('cart.itemRemoved'));
   } catch (_error) {
-    toastStore.error(t('cart.removeFailed'))
+    toastStore.error(t('cart.removeFailed'));
   }
 }
 </script>

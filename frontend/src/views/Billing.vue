@@ -5,8 +5,8 @@
 -->
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { ref, computed, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   createCheckoutSession,
   createPortalSession,
@@ -14,57 +14,57 @@ import {
   type SubscriptionPlan,
   type SubscriptionResponse,
   type BillingInfo,
-} from '../api/billing'
-import { getQuotaStatus, type QuotaStatus } from '../api/quota'
-import { getPlans, type PlanConfig } from '../api/pricing'
-import { useRouter, useRoute } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
-import BillingInfoModal, { type VATCalculation } from '../components/BillingInfoModal.vue'
-import { formatPrice as formatPriceUtil } from '@/utils/currency'
+} from '../api/billing';
+import { getQuotaStatus, type QuotaStatus } from '../api/quota';
+import { getPlans, type PlanConfig } from '../api/pricing';
+import { useRouter, useRoute } from 'vue-router';
+import { useAuthStore } from '../stores/auth';
+import BillingInfoModal, { type VATCalculation } from '../components/BillingInfoModal.vue';
+import { formatPrice as formatPriceUtil } from '@/utils/currency';
 
-const router = useRouter()
-const route = useRoute()
-const { t, locale } = useI18n()
-const authStore = useAuthStore()
+const router = useRouter();
+const route = useRoute();
+const { t, locale } = useI18n();
+const authStore = useAuthStore();
 
-const quota = ref<QuotaStatus | null>(null)
-const subscription = ref<SubscriptionResponse | null>(null)
-const loading = ref(false)
-const error = ref<string | null>(null)
-const successMessage = ref<string | null>(null)
-const warningMessage = ref<string | null>(null)
-const showBillingModal = ref(false)
-const selectedPlan = ref<SubscriptionPlan | null>(null)
+const quota = ref<QuotaStatus | null>(null);
+const subscription = ref<SubscriptionResponse | null>(null);
+const loading = ref(false);
+const error = ref<string | null>(null);
+const successMessage = ref<string | null>(null);
+const warningMessage = ref<string | null>(null);
+const showBillingModal = ref(false);
+const selectedPlan = ref<SubscriptionPlan | null>(null);
 
 // Dynamic pricing data from API
-const pricingPlans = ref<Record<string, PlanConfig>>({})
+const pricingPlans = ref<Record<string, PlanConfig>>({});
 
 interface Plan {
-  id: SubscriptionPlan
-  name: string
-  price: string
-  priceCents: number
-  priceMonthly: string
-  calendars: number
-  featuresKeys: string[]
-  recommended?: boolean
+  id: SubscriptionPlan;
+  name: string;
+  price: string;
+  priceCents: number;
+  priceMonthly: string;
+  calendars: number;
+  featuresKeys: string[];
+  recommended?: boolean;
 }
 
 // Format price from cents to euros
 function formatPrice(cents: number): string {
-  return formatPriceUtil(cents, locale.value)
+  return formatPriceUtil(cents, locale.value);
 }
 
 // Format monthly price from yearly cents
 function formatMonthlyPrice(yearlyCents: number): string {
-  const monthly = yearlyCents / 12 / 100
-  return `${monthly.toFixed(2).replace('.', ',')}€`
+  const monthly = yearlyCents / 12 / 100;
+  return `${monthly.toFixed(2).replace('.', ',')}€`;
 }
 
 // Build plans array from API data
 const plans = computed<Plan[]>(() => {
-  const proPlan = pricingPlans.value['pro']
-  const powerPlan = pricingPlans.value['power']
+  const proPlan = pricingPlans.value['pro'];
+  const powerPlan = pricingPlans.value['power'];
 
   return [
     {
@@ -98,175 +98,175 @@ const plans = computed<Plan[]>(() => {
         'billing.features.annualBilling',
       ],
     },
-  ]
-})
+  ];
+});
 
 const selectedPlanPrice = computed(() => {
-  if (!selectedPlan.value) return 0
-  const plan = plans.value.find(p => p.id === selectedPlan.value)
-  return plan?.priceCents ?? 0
-})
+  if (!selectedPlan.value) return 0;
+  const plan = plans.value.find(p => p.id === selectedPlan.value);
+  return plan?.priceCents ?? 0;
+});
 
 const fetchQuota = async () => {
   try {
-    quota.value = await getQuotaStatus()
+    quota.value = await getQuotaStatus();
   } catch (err: any) {
-    console.error('Failed to fetch quota:', err)
+    console.error('Failed to fetch quota:', err);
   }
-}
+};
 
 const fetchSubscription = async () => {
   try {
-    subscription.value = await getSubscription()
+    subscription.value = await getSubscription();
   } catch (err: any) {
-    console.error('Failed to fetch subscription:', err)
+    console.error('Failed to fetch subscription:', err);
   }
-}
+};
 
 // Check if user already has this plan
 const hasActivePlan = (plan: SubscriptionPlan): boolean => {
-  if (!subscription.value) return false
-  const currentPlan = subscription.value.subscription.plan
-  const status = subscription.value.subscription.status
-  return currentPlan === plan && (status === 'active' || status === 'trialing')
-}
+  if (!subscription.value) return false;
+  const currentPlan = subscription.value.subscription.plan;
+  const status = subscription.value.subscription.status;
+  return currentPlan === plan && (status === 'active' || status === 'trialing');
+};
 
 // Check if this is a plan change (upgrade or downgrade)
 const isPlanChange = (targetPlan: SubscriptionPlan): boolean => {
-  if (!subscription.value) return false
-  const currentPlan = subscription.value.subscription.plan
-  return currentPlan !== 'free' && currentPlan !== targetPlan
-}
+  if (!subscription.value) return false;
+  const currentPlan = subscription.value.subscription.plan;
+  return currentPlan !== 'free' && currentPlan !== targetPlan;
+};
 
 // Get plan change info message
 const getPlanChangeInfo = (targetPlan: SubscriptionPlan): string => {
-  if (!subscription.value || !isPlanChange(targetPlan)) return ''
+  if (!subscription.value || !isPlanChange(targetPlan)) return '';
 
-  const currentPlan = subscription.value.subscription.plan
-  const isUpgrade = currentPlan === 'pro' && targetPlan === 'power'
+  const currentPlan = subscription.value.subscription.plan;
+  const isUpgrade = currentPlan === 'pro' && targetPlan === 'power';
 
   if (isUpgrade) {
-    return t('billing.upgradeInfo')
+    return t('billing.upgradeInfo');
   } else {
-    return t('billing.downgradeInfo')
+    return t('billing.downgradeInfo');
   }
-}
+};
 
 // Get current plan display name
 const currentPlanName = computed(() => {
-  if (!subscription.value) return t('billing.freePlan')
-  const plan = subscription.value.subscription.plan
-  if (plan === 'free') return t('billing.freePlan')
-  if (plan === 'pro') return t('billing.proPlan')
-  if (plan === 'power') return t('billing.powerPlan')
-  return t('billing.freePlan')
-})
+  if (!subscription.value) return t('billing.freePlan');
+  const plan = subscription.value.subscription.plan;
+  if (plan === 'free') return t('billing.freePlan');
+  if (plan === 'pro') return t('billing.proPlan');
+  if (plan === 'power') return t('billing.powerPlan');
+  return t('billing.freePlan');
+});
 
 const handleUpgrade = async (plan: SubscriptionPlan) => {
-  error.value = null
-  warningMessage.value = null
+  error.value = null;
+  warningMessage.value = null;
 
   // Check if this is a new subscription or a plan change
-  const isNewSubscription = !subscription.value || subscription.value.subscription.plan === 'free'
+  const isNewSubscription = !subscription.value || subscription.value.subscription.plan === 'free';
 
   if (isNewSubscription) {
     // Check if user's email is verified
     if (!authStore.user?.email_verified) {
-      error.value = t('billing.emailNotVerified')
-      return
+      error.value = t('billing.emailNotVerified');
+      return;
     }
 
     // Open billing info modal for new subscriptions
-    selectedPlan.value = plan
-    showBillingModal.value = true
+    selectedPlan.value = plan;
+    showBillingModal.value = true;
   } else {
     // Redirect to Customer Portal for plan changes (with proration display)
     try {
-      loading.value = true
+      loading.value = true;
 
-      const response = await createPortalSession()
+      const response = await createPortalSession();
 
       // Redirect to Stripe Customer Portal where user can change plan
-      window.location.href = response.portal_url
+      window.location.href = response.portal_url;
     } catch (err: any) {
-      error.value = err.response?.data?.error || 'Failed to open customer portal'
-      console.error('Portal error:', err)
+      error.value = err.response?.data?.error || 'Failed to open customer portal';
+      console.error('Portal error:', err);
     } finally {
-      loading.value = false
+      loading.value = false;
     }
   }
-}
+};
 
 const handleBillingSubmit = async (
   billingInfo: BillingInfo,
   _vatCalculation: VATCalculation | null
 ) => {
-  if (!selectedPlan.value) return
+  if (!selectedPlan.value) return;
 
   try {
-    loading.value = true
-    error.value = null
+    loading.value = true;
+    error.value = null;
 
-    const response = await createCheckoutSession(selectedPlan.value, billingInfo)
+    const response = await createCheckoutSession(selectedPlan.value, billingInfo);
 
     // Redirect to Stripe checkout
-    window.location.href = response.checkout_url
+    window.location.href = response.checkout_url;
   } catch (err: any) {
-    error.value = err.response?.data?.error || 'Failed to create checkout session'
-    console.error('Checkout error:', err)
-    loading.value = false
-    showBillingModal.value = false
+    error.value = err.response?.data?.error || 'Failed to create checkout session';
+    console.error('Checkout error:', err);
+    loading.value = false;
+    showBillingModal.value = false;
   }
-}
+};
 
 const handleBillingClose = () => {
-  showBillingModal.value = false
-  selectedPlan.value = null
-  loading.value = false
-}
+  showBillingModal.value = false;
+  selectedPlan.value = null;
+  loading.value = false;
+};
 
 const handleManageBilling = async () => {
   try {
-    loading.value = true
-    error.value = null
+    loading.value = true;
+    error.value = null;
 
-    const response = await createPortalSession()
+    const response = await createPortalSession();
 
     // Redirect to Stripe customer portal
-    window.location.href = response.portal_url
+    window.location.href = response.portal_url;
   } catch (err: any) {
-    error.value = err.response?.data?.error || 'Failed to create portal session'
-    console.error('Portal error:', err)
+    error.value = err.response?.data?.error || 'Failed to create portal session';
+    console.error('Portal error:', err);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 // Fetch pricing plans from API
 const fetchPricingPlans = async () => {
   try {
-    const response = await getPlans()
-    pricingPlans.value = response.plans
+    const response = await getPlans();
+    pricingPlans.value = response.plans;
   } catch (err: any) {
-    console.error('Failed to fetch pricing plans:', err)
+    console.error('Failed to fetch pricing plans:', err);
   }
-}
+};
 
 // Check for success/canceled query parameters
 onMounted(async () => {
   if (route.query.success === 'true') {
-    successMessage.value = t('billing.checkoutSuccess')
+    successMessage.value = t('billing.checkoutSuccess');
     // Clear query parameters
-    router.replace({ query: {} })
+    router.replace({ query: {} });
   } else if (route.query.canceled === 'true') {
-    error.value = t('billing.checkoutCanceled')
+    error.value = t('billing.checkoutCanceled');
     // Clear query parameters
-    router.replace({ query: {} })
+    router.replace({ query: {} });
   }
 
   // Fetch current quota, subscription and pricing on mount
-  await Promise.all([fetchQuota(), fetchSubscription(), fetchPricingPlans()])
-})
+  await Promise.all([fetchQuota(), fetchSubscription(), fetchPricingPlans()]);
+});
 </script>
 
 <template>
@@ -285,11 +285,7 @@ onMounted(async () => {
         <div
           class="mt-6 inline-flex items-center px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 text-sm dark:bg-gray-900 dark:border-gray-800 dark:text-gray-200"
         >
-          <svg
-            class="w-5 h-5 mr-2"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
+          <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
             <path
               fill-rule="evenodd"
               d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
@@ -304,11 +300,7 @@ onMounted(async () => {
           v-if="quota"
           class="mt-2 inline-flex items-center px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-200"
         >
-          <svg
-            class="w-5 h-5 mr-2"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
+          <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
             <path
               d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
             />
@@ -328,11 +320,7 @@ onMounted(async () => {
         class="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800 max-w-2xl mx-auto dark:bg-green-900/20 dark:border-green-800 dark:text-green-200"
       >
         <div class="flex items-start">
-          <svg
-            class="w-5 h-5 mr-2 mt-0.5"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
+          <svg class="w-5 h-5 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
             <path
               fill-rule="evenodd"
               d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
@@ -349,11 +337,7 @@ onMounted(async () => {
         class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 max-w-2xl mx-auto dark:bg-red-900/20 dark:border-red-800 dark:text-red-200"
       >
         <div class="flex items-start">
-          <svg
-            class="w-5 h-5 mr-2 mt-0.5"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
+          <svg class="w-5 h-5 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
             <path
               fill-rule="evenodd"
               d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
@@ -370,11 +354,7 @@ onMounted(async () => {
         class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 max-w-2xl mx-auto dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-200"
       >
         <div class="flex items-start">
-          <svg
-            class="w-5 h-5 mr-2 mt-0.5"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
+          <svg class="w-5 h-5 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
             <path
               fill-rule="evenodd"
               d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
@@ -414,9 +394,7 @@ onMounted(async () => {
                   t('billing.perYear')
                 }}</span>
               </div>
-              <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                + {{ t('billing.vat') }}
-              </p>
+              <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">+ {{ t('billing.vat') }}</p>
               <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">
                 {{ t('billing.indicativeMonthly', { price: plan.priceMonthly }) }}
               </p>
@@ -468,15 +446,8 @@ onMounted(async () => {
             ]"
             @click="handleUpgrade(plan.id)"
           >
-            <span
-              v-if="loading"
-              class="flex items-center justify-center"
-            >
-              <svg
-                class="animate-spin h-5 w-5 mr-2"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
+            <span v-if="loading" class="flex items-center justify-center">
+              <svg class="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
                 <circle
                   class="opacity-25"
                   cx="12"
@@ -500,15 +471,8 @@ onMounted(async () => {
       </div>
 
       <!-- Manage subscription -->
-      <div
-        v-if="subscription && subscription.subscription.plan !== 'free'"
-        class="text-center"
-      >
-        <button
-          :disabled="loading"
-          class="btn btn-secondary"
-          @click="handleManageBilling"
-        >
+      <div v-if="subscription && subscription.subscription.plan !== 'free'" class="text-center">
+        <button :disabled="loading" class="btn btn-secondary" @click="handleManageBilling">
           {{ t('billing.manageOrCancelSubscription') }}
         </button>
       </div>

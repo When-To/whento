@@ -11,7 +11,9 @@
       <div class="card">
         <!-- Header -->
         <div class="mb-6 text-center">
-          <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900">
+          <div
+            class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900"
+          >
             <svg
               class="h-8 w-8 text-primary-600 dark:text-primary-400"
               fill="none"
@@ -43,10 +45,7 @@
         </div>
 
         <!-- Code Input -->
-        <form
-          class="space-y-6"
-          @submit.prevent="handleVerify"
-        >
+        <form class="space-y-6" @submit.prevent="handleVerify">
           <div>
             <input
               v-model="code"
@@ -59,26 +58,15 @@
               :class="{ 'input-error': error }"
               autofocus
               autocomplete="one-time-code"
-            >
+            />
             <p class="mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
               {{ useBackupCode ? t('auth.backupCodeFormat') : t('auth.totpCodeFormat') }}
             </p>
           </div>
 
-          <button
-            type="submit"
-            :disabled="loading || !isCodeValid"
-            class="btn btn-primary w-full"
-          >
-            <span
-              v-if="loading"
-              class="flex items-center justify-center"
-            >
-              <svg
-                class="mr-2 h-4 w-4 animate-spin"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
+          <button type="submit" :disabled="loading || !isCodeValid" class="btn btn-primary w-full">
+            <span v-if="loading" class="flex items-center justify-center">
+              <svg class="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle
                   class="opacity-25"
                   cx="12"
@@ -126,90 +114,90 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
-import { mfaApi } from '@/api/mfa'
+import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '@/stores/auth';
+import { mfaApi } from '@/api/mfa';
 
-const router = useRouter()
-const { t } = useI18n()
-const authStore = useAuthStore()
+const router = useRouter();
+const { t } = useI18n();
+const authStore = useAuthStore();
 
-const code = ref('')
-const error = ref('')
-const loading = ref(false)
-const useBackupCode = ref(false)
+const code = ref('');
+const error = ref('');
+const loading = ref(false);
+const useBackupCode = ref(false);
 
 // Validate code format (6 digits or 8 alphanumeric)
 const isCodeValid = computed(() => {
   if (useBackupCode.value) {
-    return code.value.length === 8 && /^[A-Z0-9]{8}$/.test(code.value.toUpperCase())
+    return code.value.length === 8 && /^[A-Z0-9]{8}$/.test(code.value.toUpperCase());
   } else {
-    return code.value.length === 6 && /^\d{6}$/.test(code.value)
+    return code.value.length === 6 && /^\d{6}$/.test(code.value);
   }
-})
+});
 
 onMounted(() => {
   // Check if temp token exists
-  const tempToken = localStorage.getItem('temp_token')
+  const tempToken = localStorage.getItem('temp_token');
   if (!tempToken) {
     // No temp token, redirect to login
-    router.push('/login')
+    router.push('/login');
   }
-})
+});
 
 function toggleCodeType() {
-  useBackupCode.value = !useBackupCode.value
-  code.value = ''
-  error.value = ''
+  useBackupCode.value = !useBackupCode.value;
+  code.value = '';
+  error.value = '';
 }
 
 function backToLogin() {
-  localStorage.removeItem('temp_token')
-  router.push('/login')
+  localStorage.removeItem('temp_token');
+  router.push('/login');
 }
 
 async function handleVerify() {
-  const tempToken = localStorage.getItem('temp_token')
+  const tempToken = localStorage.getItem('temp_token');
   if (!tempToken) {
-    router.push('/login')
-    return
+    router.push('/login');
+    return;
   }
 
-  loading.value = true
-  error.value = ''
+  loading.value = true;
+  error.value = '';
 
   try {
     // Normalize backup code to uppercase
-    const normalizedCode = useBackupCode.value ? code.value.toUpperCase() : code.value
+    const normalizedCode = useBackupCode.value ? code.value.toUpperCase() : code.value;
 
     // Verify MFA code with backend
-    const response = await mfaApi.verify(tempToken, normalizedCode)
+    const response = await mfaApi.verify(tempToken, normalizedCode);
 
     // Clear temp token
-    localStorage.removeItem('temp_token')
+    localStorage.removeItem('temp_token');
 
     // Store real JWT tokens
-    authStore.setTokens(response.access_token)
-    authStore.user = response.user
+    authStore.setTokens(response.access_token);
+    authStore.user = response.user;
 
     // Redirect to dashboard
-    router.push('/dashboard')
+    router.push('/dashboard');
   } catch (err: any) {
-    console.error('MFA verification error:', err)
+    console.error('MFA verification error:', err);
 
     // Show error message
     if (useBackupCode.value) {
-      error.value = t('auth.invalidBackupCode')
+      error.value = t('auth.invalidBackupCode');
     } else {
-      error.value = t('auth.invalid2FACode')
+      error.value = t('auth.invalid2FACode');
     }
 
     // Clear code input
-    code.value = ''
+    code.value = '';
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 </script>

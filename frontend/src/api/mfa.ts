@@ -5,16 +5,16 @@
  * See LICENSE file for details
  */
 
-import { apiClient } from './client'
+import { apiClient } from './client';
 
 export interface MFAStatus {
-  enabled: boolean
+  enabled: boolean;
 }
 
 export interface TOTPSetup {
-  secret: string
-  qr_code_url: string
-  backup_codes: string[]
+  secret: string;
+  qr_code_url: string;
+  backup_codes: string[];
 }
 
 export const mfaApi = {
@@ -22,21 +22,21 @@ export const mfaApi = {
    * Get current MFA status for the authenticated user
    */
   async getStatus(): Promise<MFAStatus> {
-    return apiClient.get('/mfa/status')
+    return apiClient.get('/mfa/status');
   },
 
   /**
    * Begin MFA setup - generate TOTP secret and QR code
    */
   async beginSetup(): Promise<TOTPSetup> {
-    return apiClient.post('/mfa/setup/begin')
+    return apiClient.post('/mfa/setup/begin');
   },
 
   /**
    * Finish MFA setup - verify TOTP code and enable MFA
    */
   async finishSetup(code: string): Promise<void> {
-    await apiClient.post('/mfa/setup/finish', { code })
+    await apiClient.post('/mfa/setup/finish', { code });
   },
 
   /**
@@ -46,22 +46,22 @@ export const mfaApi = {
     tempToken: string,
     code: string
   ): Promise<{
-    access_token: string
-    refresh_token: string
-    expires_in: number
-    user: any
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+    user: any;
   }> {
     return apiClient.post('/auth/mfa/verify', {
       temp_token: tempToken,
       code,
-    })
+    });
   },
 
   /**
    * Disable MFA - user is already authenticated via JWT
    */
   async disable(): Promise<void> {
-    await apiClient.post('/mfa/disable', {})
+    await apiClient.post('/mfa/disable', {});
   },
 
   /**
@@ -70,7 +70,7 @@ export const mfaApi = {
   async regenerateBackupCodes(): Promise<string[]> {
     const response = await apiClient.post<{ backup_codes: string[] }>(
       '/mfa/backup-codes/regenerate'
-    )
-    return response.backup_codes
+    );
+    return response.backup_codes;
   },
-}
+};

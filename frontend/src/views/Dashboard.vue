@@ -17,16 +17,8 @@
             {{ t('common.welcome', { name: user?.display_name }) }}
           </p>
         </div>
-        <router-link
-          to="/calendars/new"
-          class="btn btn-primary"
-        >
-          <svg
-            class="mr-2 h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
+        <router-link to="/calendars/new" class="btn btn-primary">
+          <svg class="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -47,15 +39,8 @@
       </div>
 
       <!-- Loading State -->
-      <div
-        v-if="loading"
-        class="flex items-center justify-center py-12"
-      >
-        <svg
-          class="h-8 w-8 animate-spin text-primary-600"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
+      <div v-if="loading" class="flex items-center justify-center py-12">
+        <svg class="h-8 w-8 animate-spin text-primary-600" fill="none" viewBox="0 0 24 24">
           <circle
             class="opacity-25"
             cx="12"
@@ -73,10 +58,7 @@
       </div>
 
       <!-- Error State -->
-      <div
-        v-else-if="fetchError"
-        class="flex flex-col items-center justify-center py-12"
-      >
+      <div v-else-if="fetchError" class="flex flex-col items-center justify-center py-12">
         <div
           class="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-danger-100 dark:bg-danger-900"
         >
@@ -100,10 +82,7 @@
         <p class="mb-6 text-gray-600 dark:text-gray-400">
           {{ fetchError }}
         </p>
-        <button
-          class="btn btn-primary"
-          @click="loadCalendars()"
-        >
+        <button class="btn btn-primary" @click="loadCalendars()">
           {{ t('common.retry', 'Retry') }}
         </button>
       </div>
@@ -136,16 +115,8 @@
         <p class="mb-6 text-gray-600 dark:text-gray-400">
           {{ t('calendar.createFirstCalendar') }}
         </p>
-        <router-link
-          to="/calendars/new"
-          class="btn btn-primary"
-        >
-          <svg
-            class="mr-2 h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
+        <router-link to="/calendars/new" class="btn btn-primary">
+          <svg class="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -158,10 +129,7 @@
       </div>
 
       <!-- Calendar Grid -->
-      <div
-        v-else
-        class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
-      >
+      <div v-else class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         <div
           v-for="calendar in calendars"
           :key="calendar.id"
@@ -176,22 +144,14 @@
               >
                 {{ calendar.name }}
               </h3>
-              <p
-                v-if="calendar.description"
-                class="text-sm text-gray-600 dark:text-gray-400"
-              >
+              <p v-if="calendar.description" class="text-sm text-gray-600 dark:text-gray-400">
                 {{ calendar.description }}
               </p>
             </div>
             <div
               class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-600 dark:bg-primary-900 dark:text-primary-400"
             >
-              <svg
-                class="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -205,12 +165,7 @@
           <!-- Calendar Stats -->
           <div class="mb-4 flex items-center space-x-4 text-sm">
             <div class="flex items-center text-gray-600 dark:text-gray-400">
-              <svg
-                class="mr-1 h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -218,7 +173,9 @@
                   d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
                 />
               </svg>
-              <span>{{ calendar.participants?.length || 0 }} {{ t('calendar.participantCount') }}</span>
+              <span
+                >{{ calendar.participants?.length || 0 }} {{ t('calendar.participantCount') }}</span
+              >
             </div>
           </div>
 
@@ -229,12 +186,7 @@
               :title="t('calendar.copyLink')"
               @click.stop="copyPublicLink(calendar.public_token)"
             >
-              <svg
-                class="mr-1 h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -249,12 +201,7 @@
               :title="t('common.settings', 'Settings')"
               @click.stop="router.push(`/calendars/${calendar.id}/settings`)"
             >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -277,46 +224,46 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
-import { useCalendarStore } from '@/stores/calendar'
-import { useToastStore } from '@/stores/toast'
-import QuotaUsage from '@/components/QuotaUsage.vue'
-import UpgradeBanner from '@/components/UpgradeBanner.vue'
+import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '@/stores/auth';
+import { useCalendarStore } from '@/stores/calendar';
+import { useToastStore } from '@/stores/toast';
+import QuotaUsage from '@/components/QuotaUsage.vue';
+import UpgradeBanner from '@/components/UpgradeBanner.vue';
 
-const router = useRouter()
-const { t } = useI18n()
-const authStore = useAuthStore()
-const calendarStore = useCalendarStore()
-const toastStore = useToastStore()
+const router = useRouter();
+const { t } = useI18n();
+const authStore = useAuthStore();
+const calendarStore = useCalendarStore();
+const toastStore = useToastStore();
 
-const user = computed(() => authStore.user)
+const user = computed(() => authStore.user);
 const calendars = computed(() => {
-  const cals = calendarStore.calendars
-  return Array.isArray(cals) ? cals.filter(c => c != null) : []
-})
-const loading = computed(() => calendarStore.loading)
-const fetchError = ref<string | null>(null)
+  const cals = calendarStore.calendars;
+  return Array.isArray(cals) ? cals.filter(c => c != null) : [];
+});
+const loading = computed(() => calendarStore.loading);
+const fetchError = ref<string | null>(null);
 
 function copyPublicLink(token: string) {
-  const url = `${window.location.origin}/c/${token}`
-  navigator.clipboard.writeText(url)
-  toastStore.success(t('common.linkCopied'))
+  const url = `${window.location.origin}/c/${token}`;
+  navigator.clipboard.writeText(url);
+  toastStore.success(t('common.linkCopied'));
 }
 
 async function loadCalendars() {
-  fetchError.value = null
+  fetchError.value = null;
   try {
-    await calendarStore.fetchCalendars()
+    await calendarStore.fetchCalendars();
   } catch (error: any) {
-    fetchError.value = error.message || 'Failed to load calendars'
-    console.error('Error loading calendars:', error)
+    fetchError.value = error.message || 'Failed to load calendars';
+    console.error('Error loading calendars:', error);
   }
 }
 
 onMounted(() => {
-  loadCalendars()
-})
+  loadCalendars();
+});
 </script>

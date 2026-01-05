@@ -15,7 +15,7 @@
           <h1
             class="animate-fade-in font-display text-5xl font-bold leading-tight md:text-6xl lg:text-7xl"
           >
-            {{ t('home.heroTitle') }}<br>
+            {{ t('home.heroTitle') }}<br />
             <span class="text-primary-200">{{ t('home.heroSubtitle') }}</span>
           </h1>
           <p class="mt-6 animate-slide-up text-lg text-primary-100 md:text-xl">
@@ -59,12 +59,7 @@
             <div
               class="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary-100 text-primary-600 dark:bg-primary-900 dark:text-primary-400"
             >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -86,12 +81,7 @@
             <div
               class="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-success-100 text-success-600 dark:bg-success-900 dark:text-success-400"
             >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -113,12 +103,7 @@
             <div
               class="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-secondary-100 text-secondary-600 dark:bg-secondary-900 dark:text-secondary-400"
             >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -140,12 +125,7 @@
             <div
               class="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-danger-100 text-danger-600 dark:bg-danger-900 dark:text-danger-400"
             >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -167,12 +147,7 @@
             <div
               class="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary-100 text-primary-600 dark:bg-primary-900 dark:text-primary-400"
             >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -194,12 +169,7 @@
             <div
               class="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-success-100 text-success-600 dark:bg-success-900 dark:text-success-400"
             >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -229,12 +199,7 @@
             <div
               class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-secondary-100 text-secondary-600 dark:bg-secondary-900 dark:text-secondary-400"
             >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -256,12 +221,7 @@
               class="inline-flex items-center font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
             >
               {{ t('home.notConvincedLink') }}
-              <svg
-                class="ml-1 h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -279,12 +239,7 @@
               class="inline-flex items-center font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
             >
               {{ t('home.notConvincedLink') }}
-              <svg
-                class="ml-1 h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -299,10 +254,7 @@
     </section>
 
     <!-- CTA Section -->
-    <section
-      class="py-20"
-      :class="isCloud ? '' : 'bg-gray-100 dark:bg-gray-900'"
-    >
+    <section class="py-20" :class="isCloud ? '' : 'bg-gray-100 dark:bg-gray-900'">
       <div class="container-app text-center">
         <h2 class="mb-4 font-display text-3xl font-bold text-gray-900 dark:text-white md:text-4xl">
           {{ t('home.ctaTitle') }}
@@ -310,10 +262,7 @@
         <p class="mb-8 text-lg text-gray-600 dark:text-gray-400">
           {{ t('home.ctaDescription') }}
         </p>
-        <router-link
-          to="/register"
-          class="btn btn-primary btn-lg"
-        >
+        <router-link to="/register" class="btn btn-primary btn-lg">
           {{ t('home.ctaButton') }}
         </router-link>
       </div>
@@ -322,10 +271,10 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-import { useBuildType } from '@/composables/useBuildType'
-import { PUBLIC_APP_URL } from '@/config/constants'
+import { useI18n } from 'vue-i18n';
+import { useBuildType } from '@/composables/useBuildType';
+import { PUBLIC_APP_URL } from '@/config/constants';
 
-const { t } = useI18n()
-const { isCloud } = useBuildType()
+const { t } = useI18n();
+const { isCloud } = useBuildType();
 </script>

@@ -11,4 +11,4 @@
 /**
  * Public WhenTo website URL (for self-hosted instances linking to marketing pages)
  */
-export const PUBLIC_APP_URL = 'https://whento.be'
+export const PUBLIC_APP_URL = 'https://whento.be';

@@ -8,16 +8,9 @@
   <div class="min-h-[calc(100vh-4rem)] bg-gray-50 py-8 dark:bg-gray-950">
     <div class="container-app max-w-4xl">
       <!-- Loading State -->
-      <div
-        v-if="loading"
-        class="card text-center py-12"
-      >
+      <div v-if="loading" class="card text-center py-12">
         <div class="flex items-center justify-center">
-          <svg
-            class="h-8 w-8 animate-spin text-primary-600"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
+          <svg class="h-8 w-8 animate-spin text-primary-600" fill="none" viewBox="0 0 24 24">
             <circle
               class="opacity-25"
               cx="12"
@@ -37,10 +30,7 @@
       </div>
 
       <!-- Error State -->
-      <div
-        v-else-if="error"
-        class="card text-center py-12"
-      >
+      <div v-else-if="error" class="card text-center py-12">
         <div
           class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-danger-100 dark:bg-danger-900"
         >
@@ -64,19 +54,13 @@
         <p class="mb-6 text-gray-600 dark:text-gray-400">
           {{ error }}
         </p>
-        <router-link
-          to="/pricing"
-          class="btn btn-primary inline-flex"
-        >
+        <router-link to="/pricing" class="btn btn-primary inline-flex">
           {{ t('shop.backToPricing') }}
         </router-link>
       </div>
 
       <!-- Order Details -->
-      <div
-        v-else-if="order"
-        class="space-y-6"
-      >
+      <div v-else-if="order" class="space-y-6">
         <div class="grid gap-6 lg:grid-cols-3">
           <!-- Order Details -->
           <div class="space-y-6 lg:col-span-2">
@@ -146,12 +130,7 @@
                   download
                   class="inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
                 >
-                  <svg
-                    class="mr-1.5 h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
+                  <svg class="mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -185,12 +164,7 @@
                         class="inline-flex items-center rounded px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-900"
                         :title="t('shop.downloadLicense')"
                       >
-                        <svg
-                          class="h-4 w-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path
                             stroke-linecap="round"
                             stroke-linejoin="round"
@@ -302,16 +276,10 @@
 
               <!-- Actions -->
               <div class="mt-6 space-y-2">
-                <router-link
-                  to="/pricing"
-                  class="btn btn-primary w-full"
-                >
+                <router-link to="/pricing" class="btn btn-primary w-full">
                   {{ t('shop.buyMore') }}
                 </router-link>
-                <router-link
-                  to="/"
-                  class="btn btn-secondary w-full"
-                >
+                <router-link to="/" class="btn btn-secondary w-full">
                   {{ t('shop.backToHome') }}
                 </router-link>
               </div>
@@ -324,87 +292,87 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useToastStore } from '@/stores/toast'
-import { shopAPI, type OrderWithLicenses } from '@/api/shop'
-import { formatPrice as formatPriceUtil } from '@/utils/currency'
+import { ref, onMounted, computed } from 'vue';
+import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useToastStore } from '@/stores/toast';
+import { shopAPI, type OrderWithLicenses } from '@/api/shop';
+import { formatPrice as formatPriceUtil } from '@/utils/currency';
 
-const { t, locale } = useI18n()
-const route = useRoute()
-const toastStore = useToastStore()
+const { t, locale } = useI18n();
+const route = useRoute();
+const toastStore = useToastStore();
 
-const loading = ref(true)
-const error = ref<string | null>(null)
-const order = ref<OrderWithLicenses | null>(null)
+const loading = ref(true);
+const error = ref<string | null>(null);
+const order = ref<OrderWithLicenses | null>(null);
 
 const downloadUrl = computed(() => {
-  if (!order.value) return ''
-  return shopAPI.downloadLicenses(order.value.order_id)
-})
+  if (!order.value) return '';
+  return shopAPI.downloadLicenses(order.value.order_id);
+});
 
 function getSingleLicenseDownloadUrl(licenseId: string): string {
-  if (!order.value) return ''
-  return shopAPI.downloadSingleLicense(order.value.order_id, licenseId)
+  if (!order.value) return '';
+  return shopAPI.downloadSingleLicense(order.value.order_id, licenseId);
 }
 
 onMounted(async () => {
   // Get order_id from URL params
-  const orderId = route.params.orderId as string
+  const orderId = route.params.orderId as string;
 
   if (!orderId) {
-    error.value = t('shop.noOrderId')
-    loading.value = false
-    return
+    error.value = t('shop.noOrderId');
+    loading.value = false;
+    return;
   }
 
   try {
     // Fetch order with licenses using order ID
-    order.value = await shopAPI.getOrderById(orderId)
-    loading.value = false
+    order.value = await shopAPI.getOrderById(orderId);
+    loading.value = false;
   } catch (err: any) {
-    console.error('Failed to load order:', err)
-    error.value = err.response?.data?.message || t('shop.orderLoadFailed')
-    loading.value = false
+    console.error('Failed to load order:', err);
+    error.value = err.response?.data?.message || t('shop.orderLoadFailed');
+    loading.value = false;
   }
-})
+});
 
 function formatOrderId(orderId: string): string {
   // Show first 8 characters of UUID
-  return orderId.substring(0, 8).toUpperCase()
+  return orderId.substring(0, 8).toUpperCase();
 }
 
 function formatDate(dateString: string): string {
-  const date = new Date(dateString)
+  const date = new Date(dateString);
   return new Intl.DateTimeFormat('fr-FR', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(date)
+  }).format(date);
 }
 
 function formatPrice(cents: number): string {
-  return formatPriceUtil(cents, locale.value)
+  return formatPriceUtil(cents, locale.value);
 }
 
 function getLicenseTierName(tier: string): string {
   const names: Record<string, string> = {
     pro: 'WhenTo Pro License',
     enterprise: 'WhenTo Enterprise License',
-  }
-  return names[tier] || tier
+  };
+  return names[tier] || tier;
 }
 
 async function copyToClipboard(text: string) {
   try {
-    await navigator.clipboard.writeText(text)
-    toastStore.success(t('shop.copiedToClipboard'))
+    await navigator.clipboard.writeText(text);
+    toastStore.success(t('shop.copiedToClipboard'));
   } catch (err) {
-    console.error('Failed to copy:', err)
-    toastStore.error(t('shop.copyFailed'))
+    console.error('Failed to copy:', err);
+    toastStore.error(t('shop.copyFailed'));
   }
 }
 </script>

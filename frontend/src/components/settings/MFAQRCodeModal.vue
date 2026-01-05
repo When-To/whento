@@ -24,11 +24,7 @@
 
         <!-- QR Code -->
         <div class="mb-4 flex justify-center">
-          <img
-            :src="qrCodeURL"
-            alt="QR Code"
-            class="h-48 w-48 rounded"
-          >
+          <img :src="qrCodeURL" alt="QR Code" class="h-48 w-48 rounded" />
         </div>
 
         <!-- Manual Entry Secret -->
@@ -56,7 +52,7 @@
           class="input text-center text-2xl tracking-widest"
           placeholder="000000"
           @input="verificationCode = verificationCode.replace(/\D/g, '')"
-        >
+        />
       </div>
 
       <!-- Backup Codes Info -->
@@ -68,10 +64,7 @@
 
       <!-- Actions -->
       <div class="flex justify-end space-x-2">
-        <button
-          class="btn btn-secondary"
-          @click="$emit('close')"
-        >
+        <button class="btn btn-secondary" @click="$emit('close')">
           {{ t('common.cancel') }}
         </button>
         <button
@@ -79,15 +72,8 @@
           class="btn btn-primary"
           @click="verify"
         >
-          <span
-            v-if="verifying"
-            class="flex items-center"
-          >
-            <svg
-              class="mr-2 h-4 w-4 animate-spin"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
+          <span v-if="verifying" class="flex items-center">
+            <svg class="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle
                 class="opacity-25"
                 cx="12"
@@ -112,32 +98,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 defineProps<{
-  isOpen: boolean
-  secret: string
-  qrCodeURL: string
-  backupCodes: string[]
-}>()
+  isOpen: boolean;
+  secret: string;
+  qrCodeURL: string;
+  backupCodes: string[];
+}>();
 
 const emit = defineEmits<{
-  verify: [code: string]
-  close: []
-}>()
+  verify: [code: string];
+  close: [];
+}>();
 
-const verificationCode = ref('')
-const verifying = ref(false)
+const verificationCode = ref('');
+const verifying = ref(false);
 
 async function verify() {
-  verifying.value = true
+  verifying.value = true;
   try {
-    emit('verify', verificationCode.value)
+    emit('verify', verificationCode.value);
   } finally {
-    verifying.value = false
+    verifying.value = false;
   }
 }
 </script>

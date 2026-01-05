@@ -11,24 +11,9 @@
     class="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950"
   >
     <div class="text-center">
-      <img
-        src="/logo.png"
-        alt="WhenTo"
-        class="mb-4 h-16 w-16 mx-auto"
-      >
-      <svg
-        class="h-8 w-8 animate-spin text-primary-600 mx-auto"
-        fill="none"
-        viewBox="0 0 24 24"
-      >
-        <circle
-          class="opacity-25"
-          cx="12"
-          cy="12"
-          r="10"
-          stroke="currentColor"
-          stroke-width="4"
-        />
+      <img src="/logo.png" alt="WhenTo" class="mb-4 h-16 w-16 mx-auto" />
+      <svg class="h-8 w-8 animate-spin text-primary-600 mx-auto" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path
           class="opacity-75"
           fill="currentColor"
@@ -38,11 +23,7 @@
     </div>
   </div>
 
-  <div
-    v-else
-    id="app"
-    class="min-h-screen bg-gray-50 dark:bg-gray-950"
-  >
+  <div v-else id="app" class="min-h-screen bg-gray-50 dark:bg-gray-950">
     <!-- Calendar Sidebar -->
     <CalendarSidebar />
 
@@ -53,15 +34,8 @@
       <div class="container-app">
         <div class="flex h-16 items-center justify-between">
           <!-- Logo -->
-          <router-link
-            to="/"
-            class="flex items-center space-x-2"
-          >
-            <img
-              src="/logo.png"
-              alt="WhenTo"
-              class="h-8 w-8"
-            >
+          <router-link to="/" class="flex items-center space-x-2">
+            <img src="/logo.png" alt="WhenTo" class="h-8 w-8" />
             <span class="font-display text-xl font-bold text-gray-900 dark:text-white">WhenTo</span>
           </router-link>
 
@@ -124,10 +98,7 @@
           </div>
 
           <!-- Authenticated Navigation Links -->
-          <div
-            v-if="isAuthenticated"
-            class="hidden md:flex md:items-center md:space-x-4"
-          >
+          <div v-if="isAuthenticated" class="hidden md:flex md:items-center md:space-x-4">
             <router-link
               to="/dashboard"
               class="rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -183,12 +154,7 @@
               class="relative rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
               aria-label="Shopping cart"
             >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -224,13 +190,7 @@
                   d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
                 />
               </svg>
-              <svg
-                v-else
-                class="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg v-else class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -249,41 +209,24 @@
             </button>
 
             <!-- Auth Buttons -->
-            <div
-              v-if="!isAuthenticated"
-              class="flex items-center space-x-2"
-            >
-              <router-link
-                to="/login"
-                class="btn btn-ghost"
-              >
+            <div v-if="!isAuthenticated" class="flex items-center space-x-2">
+              <router-link to="/login" class="btn btn-ghost">
                 {{ t('auth.login') }}
               </router-link>
-              <router-link
-                to="/register"
-                class="btn btn-primary"
-              >
-                {{
-                  t('auth.register')
-                }}
+              <router-link to="/register" class="btn btn-primary">
+                {{ t('auth.register') }}
               </router-link>
             </div>
 
             <!-- User Menu -->
-            <div
-              v-else
-              class="flex items-center space-x-2"
-            >
+            <div v-else class="flex items-center space-x-2">
               <router-link
                 to="/settings"
                 class="rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
               >
                 {{ user?.display_name }}
               </router-link>
-              <button
-                class="btn btn-ghost"
-                @click="handleLogout"
-              >
+              <button class="btn btn-ghost" @click="handleLogout">
                 {{ t('auth.logout') }}
               </button>
             </div>
@@ -298,12 +241,7 @@
               :title="t('calendar.showCalendars', 'Show calendars')"
               @click="toggleCalendarHistory"
             >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -339,13 +277,7 @@
                   d="M4 6h16M4 12h16M4 18h16"
                 />
               </svg>
-              <svg
-                v-else
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg v-else class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -363,10 +295,7 @@
           class="md:hidden border-t border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 py-4"
         >
           <!-- Navigation Links (not authenticated) - Cloud Mode -->
-          <div
-            v-if="!isAuthenticated && isCloud"
-            class="space-y-1 pb-3"
-          >
+          <div v-if="!isAuthenticated && isCloud" class="space-y-1 pb-3">
             <router-link
               to="/"
               class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -394,10 +323,7 @@
           </div>
 
           <!-- Navigation Links (not authenticated) - Self-hosted Mode -->
-          <div
-            v-if="!isAuthenticated && isSelfHosted"
-            class="space-y-1 pb-3"
-          >
+          <div v-if="!isAuthenticated && isSelfHosted" class="space-y-1 pb-3">
             <router-link
               to="/"
               class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -427,10 +353,7 @@
           </div>
 
           <!-- Authenticated Navigation Links -->
-          <div
-            v-if="isAuthenticated"
-            class="space-y-1 pb-3"
-          >
+          <div v-if="isAuthenticated" class="space-y-1 pb-3">
             <router-link
               to="/dashboard"
               class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -480,7 +403,9 @@
           <div class="border-t border-gray-200 dark:border-gray-700 pt-3 space-y-1">
             <!-- Theme & Language Row -->
             <div class="flex items-center justify-between px-3 py-2">
-              <span class="text-sm text-gray-600 dark:text-gray-400">{{ t('settings.theme') }}</span>
+              <span class="text-sm text-gray-600 dark:text-gray-400">{{
+                t('settings.theme')
+              }}</span>
               <button
                 class="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
                 aria-label="Toggle theme"
@@ -500,13 +425,7 @@
                     d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
                   />
                 </svg>
-                <svg
-                  v-else
-                  class="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
+                <svg v-else class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     stroke-linecap="round"
                     stroke-linejoin="round"
@@ -518,7 +437,9 @@
             </div>
 
             <div class="flex items-center justify-between px-3 py-2">
-              <span class="text-sm text-gray-600 dark:text-gray-400">{{ t('settings.language') }}</span>
+              <span class="text-sm text-gray-600 dark:text-gray-400">{{
+                t('settings.language')
+              }}</span>
               <button
                 class="rounded-lg px-3 py-1 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
                 @click="toggleLocale"
@@ -561,10 +482,7 @@
 
           <!-- Auth Actions -->
           <div class="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
-            <div
-              v-if="!isAuthenticated"
-              class="space-y-2 px-3"
-            >
+            <div v-if="!isAuthenticated" class="space-y-2 px-3">
               <router-link
                 to="/login"
                 class="block w-full btn btn-ghost text-center"
@@ -581,16 +499,16 @@
               </router-link>
             </div>
 
-            <div
-              v-else
-              class="space-y-1"
-            >
+            <div v-else class="space-y-1">
               <div class="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">
                 {{ user?.display_name }}
               </div>
               <button
                 class="block w-full text-left px-3 py-2 text-sm text-danger-600 hover:bg-gray-100 dark:text-danger-400 dark:hover:bg-gray-800 rounded-lg"
-                @click="handleLogout(); closeMobileMenu()"
+                @click="
+                  handleLogout();
+                  closeMobileMenu();
+                "
               >
                 {{ t('auth.logout') }}
               </button>
@@ -603,10 +521,7 @@
     <!-- Main Content -->
     <main>
       <router-view v-slot="{ Component }">
-        <transition
-          name="page-fade"
-          mode="out-in"
-        >
+        <transition name="page-fade" mode="out-in">
           <component :is="Component" />
         </transition>
       </router-view>
@@ -621,98 +536,98 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
-import { useCalendarHistoryStore } from '@/stores/calendarHistory'
-import { useCartStore } from '@/stores/cart'
-import { useBuildType } from '@/composables/useBuildType'
-import { PUBLIC_APP_URL } from '@/config/constants'
-import Footer from '@/components/Footer.vue'
-import CalendarSidebar from '@/components/CalendarSidebar.vue'
-import ToastContainer from '@/components/ToastContainer.vue'
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '@/stores/auth';
+import { useCalendarHistoryStore } from '@/stores/calendarHistory';
+import { useCartStore } from '@/stores/cart';
+import { useBuildType } from '@/composables/useBuildType';
+import { PUBLIC_APP_URL } from '@/config/constants';
+import Footer from '@/components/Footer.vue';
+import CalendarSidebar from '@/components/CalendarSidebar.vue';
+import ToastContainer from '@/components/ToastContainer.vue';
 
-const route = useRoute()
-const router = useRouter()
-const { t, locale } = useI18n()
-const authStore = useAuthStore()
-const historyStore = useCalendarHistoryStore()
-const cartStore = useCartStore()
-const { isCloud, isSelfHosted } = useBuildType()
+const route = useRoute();
+const router = useRouter();
+const { t, locale } = useI18n();
+const authStore = useAuthStore();
+const historyStore = useCalendarHistoryStore();
+const cartStore = useCartStore();
+const { isCloud, isSelfHosted } = useBuildType();
 
-const theme = ref<'light' | 'dark'>('light')
-const mobileMenuOpen = ref(false)
+const theme = ref<'light' | 'dark'>('light');
+const mobileMenuOpen = ref(false);
 
-const isAuthenticated = computed(() => authStore.isAuthenticated)
-const isAdmin = computed(() => authStore.isAdmin)
-const user = computed(() => authStore.user)
-const cartItemCount = computed(() => cartStore.itemCount)
-const hasCalendarHistory = computed(() => historyStore.calendars.length > 0)
-const calendarHistoryCount = computed(() => historyStore.calendars.length)
+const isAuthenticated = computed(() => authStore.isAuthenticated);
+const isAdmin = computed(() => authStore.isAdmin);
+const user = computed(() => authStore.user);
+const cartItemCount = computed(() => cartStore.itemCount);
+const hasCalendarHistory = computed(() => historyStore.calendars.length > 0);
+const calendarHistoryCount = computed(() => historyStore.calendars.length);
 
 function toggleTheme() {
-  theme.value = theme.value === 'light' ? 'dark' : 'light'
-  localStorage.setItem('theme', theme.value)
-  updateTheme()
+  theme.value = theme.value === 'light' ? 'dark' : 'light';
+  localStorage.setItem('theme', theme.value);
+  updateTheme();
 }
 
 function updateTheme() {
   if (theme.value === 'dark') {
-    document.documentElement.classList.add('dark')
+    document.documentElement.classList.add('dark');
   } else {
-    document.documentElement.classList.remove('dark')
+    document.documentElement.classList.remove('dark');
   }
 }
 
 function toggleLocale() {
-  locale.value = locale.value === 'fr' ? 'en' : 'fr'
-  localStorage.setItem('locale', locale.value)
+  locale.value = locale.value === 'fr' ? 'en' : 'fr';
+  localStorage.setItem('locale', locale.value);
 }
 
 function toggleMobileMenu() {
-  mobileMenuOpen.value = !mobileMenuOpen.value
+  mobileMenuOpen.value = !mobileMenuOpen.value;
 }
 
 function closeMobileMenu() {
-  mobileMenuOpen.value = false
+  mobileMenuOpen.value = false;
 }
 
 function toggleCalendarHistory() {
-  historyStore.toggle()
+  historyStore.toggle();
 }
 
 async function handleLogout() {
-  await authStore.logout()
-  router.push('/login')
+  await authStore.logout();
+  router.push('/login');
 }
 
 onMounted(() => {
   // Initialize theme
-  const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
+  const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
   if (savedTheme) {
-    theme.value = savedTheme
+    theme.value = savedTheme;
   } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    theme.value = 'dark'
+    theme.value = 'dark';
   }
-  updateTheme()
+  updateTheme();
 
   // Initialize locale
-  const savedLocale = localStorage.getItem('locale')
+  const savedLocale = localStorage.getItem('locale');
   if (savedLocale) {
-    locale.value = savedLocale
+    locale.value = savedLocale;
   }
 
   // Initialize calendar history
-  historyStore.init()
+  historyStore.init();
 
   // Initialize cart (Cloud only, for non-authenticated users - guest checkout)
   if (isCloud.value && !authStore.isAuthenticated) {
     cartStore.initialize().catch(err => {
-      console.error('Failed to initialize cart:', err)
-    })
+      console.error('Failed to initialize cart:', err);
+    });
   }
 
   // Auth initialization is handled in main.ts
-})
+});
 </script>
