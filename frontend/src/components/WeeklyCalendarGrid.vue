@@ -271,7 +271,10 @@
         />
         <span>{{ t('calendar.holidayEve', 'Holiday eve') }}</span>
       </div>
-      <div v-if="props.highlightedDates && props.highlightedDates.size > 0" class="flex items-center gap-2">
+      <div
+        v-if="props.highlightedDates && props.highlightedDates.size > 0"
+        class="flex items-center gap-2"
+      >
         <div
           class="h-4 w-4 rounded border border-purple-500 ring-2 ring-inset ring-purple-500 bg-purple-100 dark:bg-purple-900/30"
         />
