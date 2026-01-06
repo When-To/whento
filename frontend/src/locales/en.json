@@ -412,7 +412,8 @@
     "whoAreYou": "Who are you?",
     "selectYourName": "Select your name from the list",
     "addYourAvailabilities": "Add your availabilities",
-    "participantsForDate": "Participants for"
+    "participantsForDate": "Participants for",
+    "commonDates": "Common dates"
   },
   "errors": {
     "generic": "An error occurred",

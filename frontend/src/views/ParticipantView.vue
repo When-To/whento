@@ -341,6 +341,7 @@
               :calendar-token="token"
               :current-participant-id="participantId"
               :current-participant-name="participant?.name || ''"
+              :highlighted-dates="selectedParticipantsCommonDates"
               @day-click="handleCalendarDayClick"
               @days-select="handleCalendarDaysSelect"
               @days-deselect="handleCalendarDaysDeselect"
@@ -387,6 +388,7 @@
               :calendar-token="token"
               :current-participant-id="participantId"
               :current-participant-name="participant?.name || ''"
+              :highlighted-dates="selectedParticipantsCommonDates"
               :initial-start-hour="startHour"
               :initial-end-hour="endHour"
               :initial-slot-duration="slotDuration"
@@ -559,20 +561,32 @@
             Participants
           </h2>
           <div v-if="participantsStats.length > 0" class="space-y-2">
-            <div
+            <button
               v-for="stat in participantsStats"
               :key="stat.name"
-              class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
+              type="button"
+              class="w-full flex items-center justify-between rounded-lg border p-3 transition-all cursor-pointer"
+              :class="
+                selectedParticipantNames.has(stat.name)
+                  ? 'border-purple-500 bg-purple-50 dark:border-purple-400 dark:bg-purple-900/30'
+                  : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+              "
+              @click="toggleParticipantSelection(stat.name)"
             >
               <span class="text-sm font-medium text-gray-900 dark:text-white">
                 {{ stat.name }}
               </span>
               <span
-                class="rounded-full bg-primary-100 px-3 py-1 text-sm font-semibold text-primary-800 dark:bg-primary-900 dark:text-primary-200"
+                class="rounded-full px-3 py-1 text-sm font-semibold"
+                :class="
+                  selectedParticipantNames.has(stat.name)
+                    ? 'bg-purple-200 text-purple-900 dark:bg-purple-800 dark:text-purple-100'
+                    : 'bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200'
+                "
               >
                 {{ stat.count }} {{ stat.count > 1 ? 'disponibilités' : 'disponibilité' }}
               </span>
-            </div>
+            </button>
           </div>
           <div v-else class="text-sm text-gray-600 dark:text-gray-400">
             Aucun participant disponible
@@ -1267,6 +1281,9 @@ const numberOfPeriods = ref(1);
 
 // Weekly view settings
 const startHour = ref(8);
+
+// Selected participants for highlighting common dates
+const selectedParticipantNames = ref<Set<string>>(new Set());
 const endHour = ref(20);
 const slotDuration = ref(30);
 
@@ -1470,6 +1487,34 @@ const participantsStats = computed(() => {
     }
     return a.name.localeCompare(b.name);
   });
+});
+
+// Compute common dates for selected participants
+const selectedParticipantsCommonDates = computed(() => {
+  if (selectedParticipantNames.value.size === 0 || !dateSummaries.value) {
+    return new Set<string>();
+  }
+
+  const selectedNames = Array.from(selectedParticipantNames.value);
+  const commonDates = new Set<string>();
+
+  // For each date, check if all selected participants have availability
+  for (const summary of dateSummaries.value) {
+    const participantNamesOnThisDate = new Set(
+      summary.participants.map(p => p.participant_name)
+    );
+
+    // Check if all selected participants are available on this date
+    const allSelectedAvailable = selectedNames.every(name =>
+      participantNamesOnThisDate.has(name)
+    );
+
+    if (allSelectedAvailable) {
+      commonDates.add(summary.date);
+    }
+  }
+
+  return commonDates;
 });
 
 const canManageCalendar = computed(() => {
@@ -2458,6 +2503,16 @@ async function handleResendVerification() {
 function handleCancelChangeEmail() {
   changingEmail.value = false;
   newEmailInput.value = '';
+}
+
+function toggleParticipantSelection(participantName: string) {
+  if (selectedParticipantNames.value.has(participantName)) {
+    selectedParticipantNames.value.delete(participantName);
+  } else {
+    selectedParticipantNames.value.add(participantName);
+  }
+  // Trigger reactivity for Set
+  selectedParticipantNames.value = new Set(selectedParticipantNames.value);
 }
 
 async function handleChangeEmail() {
