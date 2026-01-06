@@ -135,6 +135,9 @@
                     canSelectCell(calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]) &&
                     cellHasAvailability(calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]) &&
                     'ring-2 ring-red-500 bg-red-100 dark:bg-red-900/30',
+                  // Highlighted dates (selected participants' common dates)
+                  calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.isHighlighted &&
+                    'ring-2 ring-purple-500 bg-purple-100 dark:bg-purple-900/40',
                 ]"
                 :title="
                   calendarDays[(weekIndex - 1) * 7 + dayOfWeekIndex]?.holidayName || undefined
@@ -389,6 +392,8 @@
                 canSelectCell(day) &&
                 cellHasAvailability(day) &&
                 'ring-2 ring-red-500 bg-red-100 dark:bg-red-900/30',
+              // Highlighted dates (selected participants' common dates)
+              day.isHighlighted && 'ring-2 ring-purple-500 bg-purple-100 dark:bg-purple-900/40',
             ]"
             :title="day.holidayName || undefined"
             @mousedown="handlePointerDown(index, day, $event)"
@@ -558,6 +563,14 @@
         <span class="text-gray-600 dark:text-gray-400">{{
           t('calendar.holidayEve', 'Holiday eve')
         }}</span>
+      </div>
+      <div v-if="props.highlightedDates && props.highlightedDates.size > 0" class="flex items-center gap-1">
+        <div
+          class="h-3 w-3 rounded border border-purple-500 ring-2 ring-purple-500 bg-purple-100 dark:bg-purple-900/40"
+        />
+        <span class="text-gray-600 dark:text-gray-400">
+          {{ t('participant.commonDates', 'Common dates') }}
+        </span>
       </div>
     </div>
 
@@ -801,6 +814,7 @@ interface Props {
   showNavigation?: boolean; // Show month navigation buttons (default true)
   startDate?: string; // Calendar start date (YYYY-MM-DD format)
   endDate?: string; // Calendar end date (YYYY-MM-DD format)
+  highlightedDates?: Set<string>; // Dates to highlight (selected participants' common dates)
 }
 
 interface Emits {
@@ -985,6 +999,7 @@ interface CalendarDay {
   recurrenceId?: string;
   recurrenceStartTime?: string;
   recurrenceEndTime?: string;
+  isHighlighted?: boolean; // True if date is in selectedParticipantsCommonDates
 }
 
 // Helper function to check if a date is allowed for availability
@@ -1060,6 +1075,7 @@ const calendarDays = computed((): CalendarDay[] => {
       meetsThreshold: false,
       availabilities: [],
       dayOfWeek: dateObj.getDay(),
+      isHighlighted: props.highlightedDates?.has(dateString) || false,
     });
   }
 
@@ -1120,6 +1136,7 @@ const calendarDays = computed((): CalendarDay[] => {
       recurrenceId,
       recurrenceStartTime,
       recurrenceEndTime,
+      isHighlighted: props.highlightedDates?.has(dateString) || false,
     });
   }
 
@@ -1148,6 +1165,7 @@ const calendarDays = computed((): CalendarDay[] => {
       meetsThreshold: false,
       availabilities: [],
       dayOfWeek: dateObj.getDay(),
+      isHighlighted: props.highlightedDates?.has(dateString) || false,
     });
   }
 

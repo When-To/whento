@@ -271,6 +271,12 @@
         />
         <span>{{ t('calendar.holidayEve', 'Holiday eve') }}</span>
       </div>
+      <div v-if="props.highlightedDates && props.highlightedDates.size > 0" class="flex items-center gap-2">
+        <div
+          class="h-4 w-4 rounded border border-purple-500 ring-2 ring-inset ring-purple-500 bg-purple-100 dark:bg-purple-900/30"
+        />
+        <span>{{ t('participant.commonDates', 'Common dates') }}</span>
+      </div>
 
       <!-- Time range and slot duration controls -->
       <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -604,6 +610,9 @@ interface Props {
   initialStartHour?: number;
   initialEndHour?: number;
   initialSlotDuration?: number;
+
+  // Highlighted dates
+  highlightedDates?: Set<string>; // Dates to highlight (selected participants' common dates)
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -1293,6 +1302,10 @@ function getCellClasses(
       isDateEnabled(day.date) &&
       isTimeSlotAllowed(day.date, timeSlot.time) &&
       hasAvailability(day.dateString, timeSlot.time),
+
+    // Highlighted dates (selected participants' common dates)
+    'ring-2 ring-inset ring-purple-500 bg-purple-100/50 dark:bg-purple-900/30':
+      props.highlightedDates?.has(day.dateString) || false,
   };
 }
 

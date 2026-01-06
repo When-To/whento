@@ -415,7 +415,8 @@
     "whoAreYou": "Qui êtes-vous ?",
     "selectYourName": "Sélectionnez votre nom dans la liste",
     "addYourAvailabilities": "Ajouter vos disponibilités",
-    "participantsForDate": "Participants pour le"
+    "participantsForDate": "Participants pour le",
+    "commonDates": "Dates communes"
   },
   "errors": {
     "generic": "Une erreur est survenue",
