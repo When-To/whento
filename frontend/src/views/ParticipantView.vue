@@ -1219,7 +1219,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watchEffect, watch, onActivated } from 'vue';
+import { ref, reactive, computed, onMounted, watchEffect, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useCalendarStore } from '@/stores/calendar';
@@ -1500,14 +1500,10 @@ const selectedParticipantsCommonDates = computed(() => {
 
   // For each date, check if all selected participants have availability
   for (const summary of dateSummaries.value) {
-    const participantNamesOnThisDate = new Set(
-      summary.participants.map(p => p.participant_name)
-    );
+    const participantNamesOnThisDate = new Set(summary.participants.map(p => p.participant_name));
 
     // Check if all selected participants are available on this date
-    const allSelectedAvailable = selectedNames.every(name =>
-      participantNamesOnThisDate.has(name)
-    );
+    const allSelectedAvailable = selectedNames.every(name => participantNamesOnThisDate.has(name));
 
     if (allSelectedAvailable) {
       commonDates.add(summary.date);
@@ -2546,7 +2542,13 @@ watch(
   ],
   async (newVal, oldVal) => {
     // Only reload if values actually changed (not initial load)
-    if (oldVal && newVal && JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
+    // Check that both old and new values exist and are different
+    if (
+      oldVal &&
+      newVal &&
+      oldVal.some(val => val !== undefined) &&
+      JSON.stringify(newVal) !== JSON.stringify(oldVal)
+    ) {
       // Clear the holidays cache to force fresh data
       clearHolidaysCache();
 
@@ -2580,24 +2582,16 @@ watch(numberOfPeriods, async newCount => {
   }
 });
 
-// Reload calendar when navigating back to this page
-onActivated(async () => {
-  // Clear holidays cache to ensure fresh data when navigating back
-  clearHolidaysCache();
-  await calendarStore.fetchPublicCalendar(token.value, participantId.value);
-});
-
 // Watch for route changes to reload the calendar when navigating between calendars
+// The immediate flag ensures this runs on initial mount
 watch(
   () => [route.params.token, route.params.participantId],
-  async ([newToken, newParticipantId], [oldToken, oldParticipantId]) => {
-    // Only reload if route params actually changed
-    if (newToken !== oldToken || newParticipantId !== oldParticipantId) {
-      // Clear holidays cache and reload calendar
-      clearHolidaysCache();
-      await loadCalendar();
-    }
-  }
+  async () => {
+    // Clear holidays cache and reload calendar
+    clearHolidaysCache();
+    await loadCalendar();
+  },
+  { immediate: true }
 );
 
 // Handle auto-delete from email notification
