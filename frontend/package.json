@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:cloud": "VITE_BUILD_TYPE=cloud vite",
     "dev:selfhosted": "VITE_BUILD_TYPE=selfhosted vite",
-    "build": "vue-tsc && vite build",
+    "build": "vue-tsc && VITE_BUILD_TYPE=selfhosted vite build",
     "build:cloud": "vue-tsc && VITE_BUILD_TYPE=cloud vite build",
     "build:selfhosted": "vue-tsc && VITE_BUILD_TYPE=selfhosted vite build",
     "build:docker": "vite build",
