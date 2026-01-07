@@ -160,7 +160,7 @@ func Load() *Config {
 			SMTPUsername:        getEnv("SMTP_USERNAME", ""),
 			SMTPPassword:        getEnv("SMTP_PASSWORD", ""),
 			FromAddress:         getEnv("SMTP_FROM", "contact@whento.be"),
-			FromName:            getEnv("EMAIL_FROM_NAME", "Contact WhenTo"),
+			FromName:            getEnv("SMTP_FROM_NAME", "Contact WhenTo"),
 		},
 
 		// WebAuthn (for Passkey authentication)
