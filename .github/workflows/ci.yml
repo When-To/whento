@@ -12,7 +12,7 @@ on:
       - '.github/workflows/**'
       - '!.github/workflows/ci.yml'
   push:
-    branches: ['**']
+    branches: [main]
     paths-ignore:
       - '.github/workflows/**'
       - '!.github/workflows/ci.yml'
@@ -185,7 +185,7 @@ jobs:
   build-dev-image:
     name: Build Dev Docker Image
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+    if: github.ref != 'refs/heads/main'
     needs: [build-frontend, generate-swagger, test-backend]
     permissions:
       packages: write
