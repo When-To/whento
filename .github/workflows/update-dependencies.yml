@@ -1,0 +1,423 @@
+# WhenTo - Dependency Update Workflow
+# Copyright (C) 2025 WhenTo Contributors
+# SPDX-License-Identifier: BSL-1.1
+
+name: Update Dependencies
+
+on:
+  schedule:
+    # Run daily at 2:00 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dependencies:
+    name: Check and Update Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate date suffix
+        id: date
+        run: echo "suffix=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for existing deps/update-* branch
+        id: check-branch
+        run: |
+          EXISTING_BRANCH=$(git branch -r | grep 'origin/deps/update-' | head -1 | sed 's/origin\///' | xargs || true)
+          if [ -n "$EXISTING_BRANCH" ]; then
+            echo "branch=$EXISTING_BRANCH" >> $GITHUB_OUTPUT
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "branch=deps/update-${{ steps.date.outputs.suffix }}" >> $GITHUB_OUTPUT
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout or create branch
+        run: |
+          if [ "${{ steps.check-branch.outputs.exists }}" == "true" ]; then
+            git checkout ${{ steps.check-branch.outputs.branch }}
+            git pull origin ${{ steps.check-branch.outputs.branch }}
+          else
+            git checkout -b ${{ steps.check-branch.outputs.branch }}
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Generate Swagger docs
+        run: |
+          go install github.com/swaggo/swag/cmd/swag@latest
+          swag init -g cmd/main.go -o docs/swagger --parseInternal --generatedTime=false
+
+      - name: Check Node.js updates
+        id: node-updates
+        working-directory: frontend
+        run: |
+          npm install -g npm-check-updates
+
+          # Get current versions and available updates
+          UPDATES=$(ncu --jsonUpgraded 2>/dev/null || echo "{}")
+
+          if [ "$UPDATES" == "{}" ] || [ "$UPDATES" == "" ]; then
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+            echo "No Node.js updates available"
+          else
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            echo "$UPDATES" > /tmp/node_updates.json
+
+            # Generate markdown report
+            echo "## 📦 Node.js Dependencies (frontend/)" > /tmp/node_report.md
+            echo "" >> /tmp/node_report.md
+
+            # Parse updates and categorize
+            echo "### 🔴 Major Updates" >> /tmp/node_report.md
+            echo "" >> /tmp/node_report.md
+
+            MAJOR_FOUND=false
+            MINOR_FOUND=false
+            PATCH_FOUND=false
+
+            for pkg in $(echo "$UPDATES" | jq -r 'keys[]'); do
+              NEW_VERSION=$(echo "$UPDATES" | jq -r --arg p "$pkg" '.[$p]')
+              CURRENT_VERSION=$(jq -r --arg p "$pkg" '.dependencies[$p] // .devDependencies[$p]' package.json | sed 's/[\^~]//')
+
+              # Extract major.minor.patch
+              CURR_MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
+              CURR_MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
+              NEW_MAJOR=$(echo "$NEW_VERSION" | cut -d. -f1)
+              NEW_MINOR=$(echo "$NEW_VERSION" | cut -d. -f2)
+
+              NPM_URL="https://www.npmjs.com/package/$pkg"
+
+              if [ "$CURR_MAJOR" != "$NEW_MAJOR" ]; then
+                echo "- [\`$pkg\`]($NPM_URL): \`$CURRENT_VERSION\` → \`$NEW_VERSION\`" >> /tmp/node_major.md
+                MAJOR_FOUND=true
+              elif [ "$CURR_MINOR" != "$NEW_MINOR" ]; then
+                echo "- [\`$pkg\`]($NPM_URL): \`$CURRENT_VERSION\` → \`$NEW_VERSION\`" >> /tmp/node_minor.md
+                MINOR_FOUND=true
+              else
+                echo "- [\`$pkg\`]($NPM_URL): \`$CURRENT_VERSION\` → \`$NEW_VERSION\`" >> /tmp/node_patch.md
+                PATCH_FOUND=true
+              fi
+            done
+
+            # Append categorized updates
+            if [ "$MAJOR_FOUND" == "true" ]; then
+              cat /tmp/node_major.md >> /tmp/node_report.md
+            else
+              echo "_No major updates_" >> /tmp/node_report.md
+            fi
+
+            echo "" >> /tmp/node_report.md
+            echo "### 🟡 Minor Updates" >> /tmp/node_report.md
+            echo "" >> /tmp/node_report.md
+            if [ "$MINOR_FOUND" == "true" ]; then
+              cat /tmp/node_minor.md >> /tmp/node_report.md
+            else
+              echo "_No minor updates_" >> /tmp/node_report.md
+            fi
+
+            echo "" >> /tmp/node_report.md
+            echo "### 🟢 Patch Updates" >> /tmp/node_report.md
+            echo "" >> /tmp/node_report.md
+            if [ "$PATCH_FOUND" == "true" ]; then
+              cat /tmp/node_patch.md >> /tmp/node_report.md
+            else
+              echo "_No patch updates_" >> /tmp/node_report.md
+            fi
+          fi
+
+      - name: Apply Node.js updates
+        if: steps.node-updates.outputs.has_updates == 'true'
+        working-directory: frontend
+        run: |
+          ncu -u
+          npm install
+
+      - name: Check Go updates (root)
+        id: go-updates-root
+        run: |
+          # Get list of updates
+          UPDATES=$(go list -m -u -json all 2>/dev/null | jq -s '[.[] | select(.Update != null) | select(.Indirect != true)]')
+
+          if [ "$UPDATES" == "[]" ] || [ -z "$UPDATES" ]; then
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+            echo "No Go updates available for root module"
+          else
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            echo "$UPDATES" > /tmp/go_root_updates.json
+
+            echo "## 🐹 Go Dependencies (/go.mod)" > /tmp/go_root_report.md
+            echo "" >> /tmp/go_root_report.md
+
+            echo "### 🔴 Major Updates" >> /tmp/go_root_report.md
+            echo "" >> /tmp/go_root_report.md
+
+            MAJOR_FOUND=false
+            MINOR_FOUND=false
+            PATCH_FOUND=false
+
+            for row in $(echo "$UPDATES" | jq -c '.[]'); do
+              PKG=$(echo "$row" | jq -r '.Path')
+              CURRENT=$(echo "$row" | jq -r '.Version')
+              NEW=$(echo "$row" | jq -r '.Update.Version')
+
+              # Clean versions (remove v prefix)
+              CURR_CLEAN=$(echo "$CURRENT" | sed 's/^v//')
+              NEW_CLEAN=$(echo "$NEW" | sed 's/^v//')
+
+              CURR_MAJOR=$(echo "$CURR_CLEAN" | cut -d. -f1)
+              CURR_MINOR=$(echo "$CURR_CLEAN" | cut -d. -f2)
+              NEW_MAJOR=$(echo "$NEW_CLEAN" | cut -d. -f1)
+              NEW_MINOR=$(echo "$NEW_CLEAN" | cut -d. -f2)
+
+              # Generate pkg.go.dev URL
+              PKG_URL="https://pkg.go.dev/$PKG"
+
+              if [ "$CURR_MAJOR" != "$NEW_MAJOR" ]; then
+                echo "- [\`$PKG\`]($PKG_URL): \`$CURRENT\` → \`$NEW\`" >> /tmp/go_root_major.md
+                MAJOR_FOUND=true
+              elif [ "$CURR_MINOR" != "$NEW_MINOR" ]; then
+                echo "- [\`$PKG\`]($PKG_URL): \`$CURRENT\` → \`$NEW\`" >> /tmp/go_root_minor.md
+                MINOR_FOUND=true
+              else
+                echo "- [\`$PKG\`]($PKG_URL): \`$CURRENT\` → \`$NEW\`" >> /tmp/go_root_patch.md
+                PATCH_FOUND=true
+              fi
+            done
+
+            if [ "$MAJOR_FOUND" == "true" ]; then
+              cat /tmp/go_root_major.md >> /tmp/go_root_report.md
+            else
+              echo "_No major updates_" >> /tmp/go_root_report.md
+            fi
+
+            echo "" >> /tmp/go_root_report.md
+            echo "### 🟡 Minor Updates" >> /tmp/go_root_report.md
+            echo "" >> /tmp/go_root_report.md
+            if [ "$MINOR_FOUND" == "true" ]; then
+              cat /tmp/go_root_minor.md >> /tmp/go_root_report.md
+            else
+              echo "_No minor updates_" >> /tmp/go_root_report.md
+            fi
+
+            echo "" >> /tmp/go_root_report.md
+            echo "### 🟢 Patch Updates" >> /tmp/go_root_report.md
+            echo "" >> /tmp/go_root_report.md
+            if [ "$PATCH_FOUND" == "true" ]; then
+              cat /tmp/go_root_patch.md >> /tmp/go_root_report.md
+            else
+              echo "_No patch updates_" >> /tmp/go_root_report.md
+            fi
+          fi
+
+      - name: Apply Go updates (root)
+        if: steps.go-updates-root.outputs.has_updates == 'true'
+        run: |
+          go get -u ./...
+          go mod tidy
+
+      - name: Check Go updates (pkg)
+        id: go-updates-pkg
+        working-directory: pkg
+        run: |
+          UPDATES=$(go list -m -u -json all 2>/dev/null | jq -s '[.[] | select(.Update != null) | select(.Indirect != true)]')
+
+          if [ "$UPDATES" == "[]" ] || [ -z "$UPDATES" ]; then
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+            echo "No Go updates available for pkg module"
+          else
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            echo "$UPDATES" > /tmp/go_pkg_updates.json
+
+            echo "## 🐹 Go Dependencies (/pkg/go.mod)" > /tmp/go_pkg_report.md
+            echo "" >> /tmp/go_pkg_report.md
+
+            echo "### 🔴 Major Updates" >> /tmp/go_pkg_report.md
+            echo "" >> /tmp/go_pkg_report.md
+
+            MAJOR_FOUND=false
+            MINOR_FOUND=false
+            PATCH_FOUND=false
+
+            for row in $(echo "$UPDATES" | jq -c '.[]'); do
+              PKG=$(echo "$row" | jq -r '.Path')
+              CURRENT=$(echo "$row" | jq -r '.Version')
+              NEW=$(echo "$row" | jq -r '.Update.Version')
+
+              CURR_CLEAN=$(echo "$CURRENT" | sed 's/^v//')
+              NEW_CLEAN=$(echo "$NEW" | sed 's/^v//')
+
+              CURR_MAJOR=$(echo "$CURR_CLEAN" | cut -d. -f1)
+              CURR_MINOR=$(echo "$CURR_CLEAN" | cut -d. -f2)
+              NEW_MAJOR=$(echo "$NEW_CLEAN" | cut -d. -f1)
+              NEW_MINOR=$(echo "$NEW_CLEAN" | cut -d. -f2)
+
+              PKG_URL="https://pkg.go.dev/$PKG"
+
+              if [ "$CURR_MAJOR" != "$NEW_MAJOR" ]; then
+                echo "- [\`$PKG\`]($PKG_URL): \`$CURRENT\` → \`$NEW\`" >> /tmp/go_pkg_major.md
+                MAJOR_FOUND=true
+              elif [ "$CURR_MINOR" != "$NEW_MINOR" ]; then
+                echo "- [\`$PKG\`]($PKG_URL): \`$CURRENT\` → \`$NEW\`" >> /tmp/go_pkg_minor.md
+                MINOR_FOUND=true
+              else
+                echo "- [\`$PKG\`]($PKG_URL): \`$CURRENT\` → \`$NEW\`" >> /tmp/go_pkg_patch.md
+                PATCH_FOUND=true
+              fi
+            done
+
+            if [ "$MAJOR_FOUND" == "true" ]; then
+              cat /tmp/go_pkg_major.md >> /tmp/go_pkg_report.md
+            else
+              echo "_No major updates_" >> /tmp/go_pkg_report.md
+            fi
+
+            echo "" >> /tmp/go_pkg_report.md
+            echo "### 🟡 Minor Updates" >> /tmp/go_pkg_report.md
+            echo "" >> /tmp/go_pkg_report.md
+            if [ "$MINOR_FOUND" == "true" ]; then
+              cat /tmp/go_pkg_minor.md >> /tmp/go_pkg_report.md
+            else
+              echo "_No minor updates_" >> /tmp/go_pkg_report.md
+            fi
+
+            echo "" >> /tmp/go_pkg_report.md
+            echo "### 🟢 Patch Updates" >> /tmp/go_pkg_report.md
+            echo "" >> /tmp/go_pkg_report.md
+            if [ "$PATCH_FOUND" == "true" ]; then
+              cat /tmp/go_pkg_patch.md >> /tmp/go_pkg_report.md
+            else
+              echo "_No patch updates_" >> /tmp/go_pkg_report.md
+            fi
+          fi
+
+      - name: Apply Go updates (pkg)
+        if: steps.go-updates-pkg.outputs.has_updates == 'true'
+        working-directory: pkg
+        run: |
+          go get -u ./...
+          go mod tidy
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit changes
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          git commit -m "chore(deps): update dependencies $(date +'%Y-%m-%d')"
+          git push origin ${{ steps.check-branch.outputs.branch }}
+
+      - name: Get existing PR body
+        if: steps.changes.outputs.has_changes == 'true' && steps.check-branch.outputs.exists == 'true'
+        id: get-pr-body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=$(gh pr list --head "${{ steps.check-branch.outputs.branch }}" --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -n "$PR_NUMBER" ]; then
+            echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+            gh pr view "$PR_NUMBER" --json body --jq '.body' > /tmp/existing_pr_body.md
+          fi
+
+      - name: Generate PR body for new PR
+        if: steps.changes.outputs.has_changes == 'true' && steps.check-branch.outputs.exists == 'false'
+        run: |
+          echo "# 🔄 Dependency Updates" > /tmp/final_pr_body.md
+          echo "" >> /tmp/final_pr_body.md
+          echo "This PR contains automated dependency updates." >> /tmp/final_pr_body.md
+          echo "" >> /tmp/final_pr_body.md
+          echo "---" >> /tmp/final_pr_body.md
+          echo "" >> /tmp/final_pr_body.md
+          echo "## 📅 $(date +'%Y-%m-%d')" >> /tmp/final_pr_body.md
+          echo "" >> /tmp/final_pr_body.md
+
+          if [ -f /tmp/node_report.md ]; then
+            cat /tmp/node_report.md >> /tmp/final_pr_body.md
+            echo "" >> /tmp/final_pr_body.md
+          fi
+
+          if [ -f /tmp/go_root_report.md ]; then
+            cat /tmp/go_root_report.md >> /tmp/final_pr_body.md
+            echo "" >> /tmp/final_pr_body.md
+          fi
+
+          if [ -f /tmp/go_pkg_report.md ]; then
+            cat /tmp/go_pkg_report.md >> /tmp/final_pr_body.md
+            echo "" >> /tmp/final_pr_body.md
+          fi
+
+          echo "" >> /tmp/final_pr_body.md
+          echo "_Generated automatically by the dependency update workflow._" >> /tmp/final_pr_body.md
+
+      - name: Append to existing PR body
+        if: steps.changes.outputs.has_changes == 'true' && steps.check-branch.outputs.exists == 'true'
+        run: |
+          # Start with existing body
+          cat /tmp/existing_pr_body.md > /tmp/final_pr_body.md
+
+          echo "" >> /tmp/final_pr_body.md
+          echo "---" >> /tmp/final_pr_body.md
+          echo "" >> /tmp/final_pr_body.md
+          echo "## 📅 $(date +'%Y-%m-%d')" >> /tmp/final_pr_body.md
+          echo "" >> /tmp/final_pr_body.md
+
+          if [ -f /tmp/node_report.md ]; then
+            cat /tmp/node_report.md >> /tmp/final_pr_body.md
+            echo "" >> /tmp/final_pr_body.md
+          fi
+
+          if [ -f /tmp/go_root_report.md ]; then
+            cat /tmp/go_root_report.md >> /tmp/final_pr_body.md
+            echo "" >> /tmp/final_pr_body.md
+          fi
+
+          if [ -f /tmp/go_pkg_report.md ]; then
+            cat /tmp/go_pkg_report.md >> /tmp/final_pr_body.md
+            echo "" >> /tmp/final_pr_body.md
+          fi
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.has_changes == 'true' && steps.check-branch.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title "chore(deps): Update dependencies" \
+            --body-file /tmp/final_pr_body.md \
+            --base main \
+            --head ${{ steps.check-branch.outputs.branch }}
+
+      - name: Update Pull Request
+        if: steps.changes.outputs.has_changes == 'true' && steps.check-branch.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit ${{ steps.get-pr-body.outputs.pr_number }} \
+            --body-file /tmp/final_pr_body.md
