@@ -94,8 +94,10 @@ jobs:
             PATCH_FOUND=false
 
             for pkg in $(echo "$UPDATES" | jq -r 'keys[]'); do
-              NEW_VERSION=$(echo "$UPDATES" | jq -r --arg p "$pkg" '.[$p]')
+              NEW_VERSION_RAW=$(echo "$UPDATES" | jq -r --arg p "$pkg" '.[$p]')
               CURRENT_VERSION=$(jq -r --arg p "$pkg" '.dependencies[$p] // .devDependencies[$p]' package.json | sed 's/[\^~]//')
+              # Remove ^ or ~ prefix from new version for comparison
+              NEW_VERSION=$(echo "$NEW_VERSION_RAW" | sed 's/[\^~]//')
 
               # Extract major.minor.patch
               CURR_MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
