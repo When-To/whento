@@ -12,7 +12,7 @@ on:
       - '.github/workflows/**'
       - '!.github/workflows/ci.yml'
   push:
-    branches: ['**']
+    branches: [main]
     paths-ignore:
       - '.github/workflows/**'
       - '!.github/workflows/ci.yml'
