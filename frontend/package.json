@@ -33,7 +33,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@tailwindcss/postcss": "^4.1.18",
-    "@types/node": "^25.0.8",
+    "@types/node": "^25.0.9",
     "@vitejs/plugin-vue": "^6.0.3",
     "@vueuse/core": "^14.1.0",
     "eslint": "^9.39.2",
