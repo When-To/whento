@@ -50,7 +50,7 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/omidnikrah/go-holidays v1.0.0 // indirect
-	github.com/redis/go-redis/v9 v9.17.2 // indirect
+	github.com/redis/go-redis/v9 v9.17.3 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/swaggo/files/v2 v2.0.2 // indirect
