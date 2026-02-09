@@ -513,8 +513,8 @@
           "description": "Noms de calendriers, descriptions, participants, disponibilités et paramètres de configuration."
         },
         "usageData": {
-          "title": "Données d'utilisation :",
-          "description": "Adresse IP, type de navigateur, pages visitées et horodatages à des fins de sécurité et d'amélioration du service."
+          "title": "Données techniques :",
+          "description": "Votre adresse IP est utilisée de manière transitoire pour la limitation de débit (protection contre les abus) et n'est pas stockée en base de données. Aucun suivi de navigation, de pages visitées ou de type de navigateur n'est effectué."
         },
         "paymentData": {
           "title": "Données de paiement :",
