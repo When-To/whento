@@ -203,7 +203,7 @@ func (h *SPAHandler) getMetaForRoute(path string) PageMeta {
 			OGDescription: "Your privacy matters. Read our privacy policy to understand how we handle your data.",
 			OGImage:       h.appURL + "/og-home.png",
 			Canonical:     h.appURL + "/privacy",
-			NoIndex:       true, // Legal pages should not be indexed
+			NoIndex:       false,
 		}
 
 	case "/terms":
@@ -214,7 +214,7 @@ func (h *SPAHandler) getMetaForRoute(path string) PageMeta {
 			OGDescription: "Terms and conditions for using WhenTo's collaborative calendar platform.",
 			OGImage:       h.appURL + "/og-home.png",
 			Canonical:     h.appURL + "/terms",
-			NoIndex:       true, // Legal pages should not be indexed
+			NoIndex:       false,
 		}
 
 	default:

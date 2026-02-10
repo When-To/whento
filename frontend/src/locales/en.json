@@ -510,8 +510,8 @@
           "description": "Calendar names, descriptions, participants, availabilities, and configuration settings."
         },
         "usageData": {
-          "title": "Usage data:",
-          "description": "IP address, browser type, pages visited, and timestamps for security and service improvement purposes."
+          "title": "Technical data:",
+          "description": "Your IP address is used transiently for rate limiting (abuse protection) and is not stored in the database. No browsing activity, pages visited, or browser type is tracked."
         },
         "paymentData": {
           "title": "Payment data:",
