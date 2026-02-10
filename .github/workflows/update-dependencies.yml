@@ -274,6 +274,10 @@ jobs:
           fi
 
       # ── Switch to deps branch and apply updates ──────────────────────
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Find or create deps branch
         if: steps.any-updates.outputs.has_updates == 'true'
@@ -326,8 +330,6 @@ jobs:
       - name: Commit and push
         if: steps.changes.outputs.has_changes == 'true'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "chore(deps): update dependencies $(date +'%Y-%m-%d')"
           git push origin ${{ steps.deps-branch.outputs.branch }}
