@@ -1395,7 +1395,7 @@ function isTimeSlotAllowed(date: Date, time: string): boolean {
   const isDayAllowed = props.allowedWeekdays && props.allowedWeekdays.includes(dayOfWeek);
 
   // Determine if this day should be enabled based on holiday policy
-  let dayIsEnabled = false;
+  let dayIsEnabled: boolean;
   let minTime: string | undefined;
   let maxTime: string | undefined;
 
