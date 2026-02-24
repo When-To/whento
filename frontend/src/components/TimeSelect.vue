@@ -115,7 +115,7 @@ const handleInput = (event: Event) => {
     digits = digits.slice(0, 4);
   }
 
-  let formattedValue = '';
+  let formattedValue: string;
   let newCursorPos = oldCursorPos;
 
   // Special handling if user typed ":" manually
