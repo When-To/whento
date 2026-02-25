@@ -25,7 +25,7 @@
     "date-holidays": "^3.26.8",
     "i18n-iso-countries": "^7.14.0",
     "pinia": "^3.0.4",
-    "vue": "^3.5.28",
+    "vue": "^3.5.29",
     "vue-i18n": "^11.2.8",
     "vue-router": "^5.0.3",
     "world-countries": "^5.1.0"
