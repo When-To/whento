@@ -182,6 +182,7 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 	// Determine participant locale (use request locale or fall back to owner's locale)
 	participantLocale := req.ParticipantLocale
 	var ownerEmail string
+	var ownerDisplayName string
 	if participantLocale == "" || s.userRepo != nil {
 		// Get owner information for participant email matching and locale
 		if s.userRepo != nil {
@@ -195,6 +196,7 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 			if owner.EmailVerified {
 				ownerEmail = owner.Email
 			}
+			ownerDisplayName = owner.DisplayName
 		}
 	}
 	if participantLocale == "" {
@@ -209,8 +211,8 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 			Locale: participantLocale,
 		}
 
-		// If participant name matches owner's email is available, pre-populate email
-		if ownerEmail != "" {
+		// If participant name matches owner's display name and email is available, pre-populate email
+		if ownerEmail != "" && name == ownerDisplayName {
 			input.Email = &ownerEmail
 			input.EmailVerified = true
 		}
