@@ -12,7 +12,7 @@ require (
 	github.com/pquerna/otp v1.5.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/cobra v1.10.2
-	github.com/stripe/stripe-go/v84 v84.3.0
+	github.com/stripe/stripe-go/v84 v84.4.0
 	github.com/swaggo/http-swagger/v2 v2.0.2
 	github.com/swaggo/swag v1.16.6
 	github.com/whento/pkg v0.0.0-00010101000000-000000000000
