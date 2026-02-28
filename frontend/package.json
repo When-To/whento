@@ -18,7 +18,7 @@
     "format:check": "prettier --check \"src/**/*.{vue,ts,js,css,json}\""
   },
   "dependencies": {
-    "axios": "^1.13.5",
+    "axios": "^1.13.6",
     "countries-and-timezones": "^3.8.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
