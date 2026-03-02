@@ -367,6 +367,8 @@
   },
   "availability": {
     "title": "Disponibilités",
+    "availability": "disponibilité",
+    "availabilities": "disponibilités",
     "myAvailabilities": "Mes disponibilités",
     "available": "Disponible",
     "recurring": "Récurrent",
@@ -374,6 +376,7 @@
     "timeSlot": "Plage horaire",
     "clickDateToAdd": "Cliquez sur une date pour ajouter votre disponibilité",
     "noAvailabilities": "Aucune disponibilité",
+    "noParticipant": "Aucun participant disponible",
     "addAvailability": "Ajouter une disponibilité",
     "selectDate": "Sélectionner une date",
     "startTime": "Début",

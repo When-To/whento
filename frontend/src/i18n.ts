@@ -28,6 +28,23 @@ export function isSupportedLocale(locale: string): locale is SupportedLocale {
 }
 
 /**
+ * First day of the week per locale (0 = Sunday, 1 = Monday)
+ * To add a new language: add its entry here (e.g., de: 1)
+ */
+const LOCALE_WEEK_START: Partial<Record<SupportedLocale, number>> = {
+  fr: 1,
+  en: 0,
+};
+
+/**
+ * Returns the first day of the week for a given locale (0 = Sunday, 1 = Monday)
+ * Defaults to Sunday (0) for unknown locales
+ */
+export function getWeekStartDay(locale: string): number {
+  return LOCALE_WEEK_START[locale as SupportedLocale] ?? 0;
+}
+
+/**
  * Determines the initial locale based on (in order of priority):
  * 1. URL parameter ?lang=xx
  * 2. Browser language preference

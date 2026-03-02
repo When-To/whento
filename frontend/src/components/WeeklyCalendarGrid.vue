@@ -553,6 +553,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { getWeekStartDay } from '@/i18n';
 import { useToastStore } from '@/stores/toast';
 import { availabilitiesApi } from '@/api/availabilities';
 import type { Availability, DateAvailabilitySummary } from '@/types';
@@ -739,7 +740,7 @@ watch(
 // Calculate initial week start date
 function getWeekStartDate(year: number, month: number, week: number): Date {
   const firstDayOfMonth = new Date(year, month, 1);
-  const firstDayOfWeek = locale.value === 'fr' ? 1 : 0; // Monday for fr, Sunday for en
+  const firstDayOfWeek = getWeekStartDay(locale.value); // Monday for fr, Sunday for en
 
   const dayOfWeek = firstDayOfMonth.getDay();
   const diff = (dayOfWeek - firstDayOfWeek + 7) % 7;
@@ -2456,12 +2457,12 @@ function formatDateForAPI(date: Date): string {
 }
 
 function formatDayName(date: Date): string {
-  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US';
+  const localeCode = locale.value;
   return new Intl.DateTimeFormat(localeCode, { weekday: 'short' }).format(date);
 }
 
 function formatDateShort(date: Date): string {
-  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US';
+  const localeCode = locale.value;
   return new Intl.DateTimeFormat(localeCode, {
     day: 'numeric',
     month: 'short',
@@ -2520,7 +2521,7 @@ const formatSelectedDateTime = computed(() => {
   // Format is "YYYY-MM-DD|HH:MM"
   const [dateString, time] = selectedSlotKey.value.split('|');
   const date = new Date(dateString);
-  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US';
+  const localeCode = locale.value;
   const formattedDate = date.toLocaleDateString(localeCode, {
     weekday: 'long',
     day: 'numeric',
