@@ -196,6 +196,21 @@ export const useCalendarStore = defineStore('calendar', () => {
     }
   }
 
+  async function addAnonymousParticipant(token: string, data: CreateParticipantRequest) {
+    error.value = null;
+
+    try {
+      const participant = await calendarsApi.addAnonymousParticipant(token, data);
+      if (currentCalendar.value) {
+        currentCalendar.value.participants.push(participant);
+      }
+      return participant;
+    } catch (err: any) {
+      error.value = err.message || 'Failed to add participant';
+      throw err;
+    }
+  }
+
   async function regeneratePublicToken(id: string) {
     loading.value = true;
     error.value = null;
@@ -259,6 +274,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     updateCalendar,
     deleteCalendar,
     addParticipant,
+    addAnonymousParticipant,
     updateParticipant,
     deleteParticipant,
     regeneratePublicToken,

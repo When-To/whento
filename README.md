@@ -25,6 +25,7 @@ Self-hosted web application for organizing recurring events with friends through
 - **Timezone Support** — Each calendar can have its own timezone
 - **Holiday Policies** — Configure how public holidays are handled (ignore/allow/block)
 - **Participant Locking** — Option to disable public view and require direct participant links
+- **Anonymous Participant Registration** — Allow anyone with the public link to self-register as a participant without authentication (mutually exclusive with participant locking)
 - **Self-hosted** — Your data stays on your infrastructure
 
 ### Authentication & Security
@@ -132,7 +133,7 @@ https://your-domain.com/c/abc123def456...
 Each participant:
 
 1. Opens the link
-2. Selects their name from the list
+2. Selects their name from the list (or self-registers if anonymous registration is enabled on the calendar)
 3. Indicates their availability (dates + optional time slots)
 4. Can add recurring availability patterns
 
@@ -446,6 +447,7 @@ npm run lint        # ESLint
 - `PATCH /{id}` — Update calendar
 - `DELETE /{id}` — Delete calendar
 - `GET /public/{token}` — Public calendar view
+- `POST /public/{token}/participants` — Self-register as a participant (anonymous, no auth required — only when `allow_anonymous_participants` is enabled)
 - `POST /{id}/participants` — Add participant
 - `PATCH /{id}/participants/{pid}` — Update participant
 - `DELETE /{id}/participants/{pid}` — Delete participant
@@ -497,6 +499,7 @@ npm run lint        # ESLint
   - Login: 5 req/min/IP
   - Register: 3 req/min/IP
   - Public endpoints: 60 req/min/IP
+  - Anonymous participant registration: 10 req/min/IP
   - ICS feed: 30 req/min/IP
   - Authenticated: 100 req/min/user
 - **Token Regeneration** — Separate public and ICS tokens can be regenerated

@@ -69,6 +69,11 @@ export const calendarsApi = {
     return apiClient.delete<void>(`/calendars/${calendarId}/participants/${participantId}`);
   },
 
+  // Anonymous participant registration (no auth required)
+  async addAnonymousParticipant(token: string, data: CreateParticipantRequest): Promise<Participant> {
+    return apiClient.post<Participant>(`/calendars/public/${token}/participants`, data);
+  },
+
   // Public calendar view (no auth required)
   async getPublic(token: string, participantId?: string): Promise<CalendarWithParticipants> {
     const params = participantId ? { participant_id: participantId } : {};

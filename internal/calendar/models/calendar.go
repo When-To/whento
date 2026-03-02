@@ -35,9 +35,10 @@ type Calendar struct {
 	AllowedHours      *string    `json:"allowed_hours,omitempty"` // JSONB stored as nullable string
 	NotifyOnThreshold bool       `json:"notify_on_threshold"`
 	NotifyConfig      *string    `json:"notify_config,omitempty"` // JSONB stored as nullable string
-	LockParticipants  bool       `json:"lock_participants"`
-	StartDate         *time.Time `json:"start_date,omitempty"`
-	EndDate           *time.Time `json:"end_date,omitempty"`
+	LockParticipants             bool       `json:"lock_participants"`
+	AllowAnonymousParticipants   bool       `json:"allow_anonymous_participants"`
+	StartDate                    *time.Time `json:"start_date,omitempty"`
+	EndDate                      *time.Time `json:"end_date,omitempty"`
 }
 
 // Participant represents a participant in a calendar
@@ -82,11 +83,12 @@ type CreateCalendarRequest struct {
 	HolidayEveMaxTime string               `json:"holiday_eve_max_time,omitempty"`
 	NotifyOnThreshold bool                 `json:"notify_on_threshold,omitempty"`
 	NotifyConfig      *string              `json:"notify_config,omitempty"` // JSONB stored as nullable string
-	LockParticipants  bool                 `json:"lock_participants,omitempty"`
-	StartDate         string               `json:"start_date,omitempty"`
-	EndDate           string               `json:"end_date,omitempty"`
-	ParticipantLocale string               `json:"participant_locale,omitempty" validate:"omitempty,oneof=en fr"`
-	Participants      []string             `json:"participants,omitempty" validate:"omitempty,dive,min=1,max=100"`
+	LockParticipants             bool                 `json:"lock_participants,omitempty"`
+	AllowAnonymousParticipants   bool                 `json:"allow_anonymous_participants,omitempty"`
+	StartDate                    string               `json:"start_date,omitempty"`
+	EndDate                      string               `json:"end_date,omitempty"`
+	ParticipantLocale            string               `json:"participant_locale,omitempty" validate:"omitempty,oneof=en fr"`
+	Participants                 []string             `json:"participants,omitempty" validate:"omitempty,dive,min=1,max=100"`
 }
 
 // UpdateCalendarRequest represents a request to update a calendar
@@ -106,9 +108,10 @@ type UpdateCalendarRequest struct {
 	HolidayEveMaxTime *string              `json:"holiday_eve_max_time,omitempty"`
 	NotifyOnThreshold *bool                `json:"notify_on_threshold,omitempty"`
 	NotifyConfig      *string              `json:"notify_config,omitempty"` // JSONB stored as nullable string
-	LockParticipants  *bool                `json:"lock_participants,omitempty"`
-	StartDate         *string              `json:"start_date,omitempty"`
-	EndDate           *string              `json:"end_date,omitempty"`
+	LockParticipants             *bool                `json:"lock_participants,omitempty"`
+	AllowAnonymousParticipants   *bool                `json:"allow_anonymous_participants,omitempty"`
+	StartDate                    *string              `json:"start_date,omitempty"`
+	EndDate                      *string              `json:"end_date,omitempty"`
 }
 
 // AddParticipantRequest represents a request to add a participant
@@ -159,12 +162,13 @@ type CalendarResponse struct {
 	HolidayEveMinTime string               `json:"holiday_eve_min_time,omitempty"`
 	HolidayEveMaxTime string               `json:"holiday_eve_max_time,omitempty"`
 	NotifyOnThreshold bool                 `json:"notify_on_threshold"`
-	LockParticipants  bool                 `json:"lock_participants"`
-	StartDate         *time.Time           `json:"start_date,omitempty"`
-	EndDate           *time.Time           `json:"end_date,omitempty"`
-	Participants      []Participant        `json:"participants,omitempty"`
-	CreatedAt         time.Time            `json:"created_at"`
-	UpdatedAt         time.Time            `json:"updated_at"`
+	LockParticipants             bool                 `json:"lock_participants"`
+	AllowAnonymousParticipants   bool                 `json:"allow_anonymous_participants"`
+	StartDate                    *time.Time           `json:"start_date,omitempty"`
+	EndDate                      *time.Time           `json:"end_date,omitempty"`
+	Participants                 []Participant        `json:"participants,omitempty"`
+	CreatedAt                    time.Time            `json:"created_at"`
+	UpdatedAt                    time.Time            `json:"updated_at"`
 }
 
 // PublicCalendarResponse represents the public view of a calendar
@@ -183,11 +187,12 @@ type PublicCalendarResponse struct {
 	HolidayMaxTime     string               `json:"holiday_max_time,omitempty"`
 	HolidayEveMinTime  string               `json:"holiday_eve_min_time,omitempty"`
 	HolidayEveMaxTime  string               `json:"holiday_eve_max_time,omitempty"`
-	LockParticipants   bool                 `json:"lock_participants"`
-	NotifyParticipants bool                 `json:"notify_participants"`
-	ICSToken           string               `json:"ics_token"`
-	StartDate          *time.Time           `json:"start_date,omitempty"`
-	EndDate            *time.Time           `json:"end_date,omitempty"`
-	Participants       []PublicParticipant  `json:"participants"`
-	CreatedAt          time.Time            `json:"created_at"`
+	LockParticipants             bool                 `json:"lock_participants"`
+	AllowAnonymousParticipants   bool                 `json:"allow_anonymous_participants"`
+	NotifyParticipants           bool                 `json:"notify_participants"`
+	ICSToken                     string               `json:"ics_token"`
+	StartDate                    *time.Time           `json:"start_date,omitempty"`
+	EndDate                      *time.Time           `json:"end_date,omitempty"`
+	Participants                 []PublicParticipant  `json:"participants"`
+	CreatedAt                    time.Time            `json:"created_at"`
 }
