@@ -813,6 +813,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { getWeekStartDay } from '@/i18n';
 import { useCalendarStore } from '@/stores/calendar';
 import { useToastStore } from '@/stores/toast';
 import TimezoneSelector from '@/components/TimezoneSelector.vue';
@@ -945,9 +946,8 @@ const weekdays = computed(() => {
     { value: 6, short: t('weekdays.short.saturday') },
   ];
 
-  // For locales that start the week on Monday (fr, most of Europe)
-  if (locale.value === 'fr') {
-    // Move Sunday to the end
+  // For locales that start the week on Monday, move Sunday to the end
+  if (getWeekStartDay(locale.value) === 1) {
     return [...days.slice(1), days[0]];
   }
 

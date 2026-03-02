@@ -795,6 +795,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { getWeekStartDay } from '@/i18n';
 import { availabilitiesApi } from '@/api/availabilities';
 import type { Availability, RecurrenceWithExceptions } from '@/types';
 import { useDateValidation, clearHolidaysCache } from '@/composables/useDateValidation';
@@ -928,7 +929,7 @@ watch(isCompactMode, async () => {
 });
 
 const weekDays = computed(() => {
-  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US';
+  const localeCode = locale.value;
   // For fr-FR, week starts on Monday (day 1)
   // For en-US, week starts on Sunday (day 0)
   const firstDayOfWeek = localeCode === 'fr-FR' ? 1 : 0;
@@ -965,7 +966,7 @@ const compactCellWidth = computed(() => {
 });
 
 const currentMonthLabel = computed(() => {
-  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US';
+  const localeCode = locale.value;
   return currentDate.value.toLocaleDateString(localeCode, {
     month: 'long',
     year: 'numeric',
@@ -975,7 +976,7 @@ const currentMonthLabel = computed(() => {
 const formatSelectedDate = computed(() => {
   if (!selectedDate.value) return '';
   const date = new Date(selectedDate.value);
-  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US';
+  const localeCode = locale.value;
   return date.toLocaleDateString(localeCode, {
     weekday: 'long',
     day: 'numeric',
@@ -1040,7 +1041,7 @@ const calendarDays = computed((): CalendarDay[] => {
   const firstDay = new Date(year, month, 1);
   // Adjust for first day of week based on locale
   // fr: week starts on Monday (1), en: week starts on Sunday (0)
-  const weekStartDay = locale.value === 'fr' ? 1 : 0;
+  const weekStartDay = getWeekStartDay(locale.value);
   const firstDayOfWeek = (firstDay.getDay() - weekStartDay + 7) % 7;
 
   // Last day of the month
@@ -1238,7 +1239,7 @@ function formatTimeRange(startTime?: string, endTime?: string): string {
 function getDayOfWeek(dateString: string): string {
   if (!dateString) return '';
   const date = new Date(dateString);
-  const localeCode = locale.value === 'fr' ? 'fr-FR' : 'en-US';
+  const localeCode = locale.value;
   return date.toLocaleDateString(localeCode, { weekday: 'short' });
 }
 

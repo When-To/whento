@@ -1222,6 +1222,7 @@
 import { ref, reactive, computed, onMounted, watchEffect, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { getWeekStartDay } from '@/i18n';
 import { useCalendarStore } from '@/stores/calendar';
 import { useAuthStore } from '@/stores/auth';
 import { useCalendarHistoryStore } from '@/stores/calendarHistory';
@@ -1405,7 +1406,7 @@ const weeksToDisplay = computed(() => {
 });
 
 const weekDaysOptions = computed(() => {
-  const firstDayOfWeek = locale.value === 'fr' ? 1 : 0; // Monday for fr, Sunday for en
+  const firstDayOfWeek = getWeekStartDay(locale.value); // Monday for fr, Sunday for en
 
   const daysOrder = [];
   for (let i = 0; i < 7; i++) {
@@ -1527,8 +1528,7 @@ const calendarDateRangeText = computed(() => {
   // Helper function to format date
   const formatDateShort = (dateStr: string): string => {
     const date = new Date(dateStr);
-    const locale = authStore.user?.locale || 'en';
-    const localeCode = locale === 'fr' ? 'fr-FR' : 'en-US';
+    const localeCode = locale.value;
     return new Intl.DateTimeFormat(localeCode, {
       day: 'numeric',
       month: 'short',
@@ -1772,7 +1772,7 @@ async function loadCalendar() {
 
     // Initialize current week start date
     const today = new Date();
-    const firstDayOfWeek = locale.value === 'fr' ? 1 : 0; // Monday for fr, Sunday for en
+    const firstDayOfWeek = getWeekStartDay(locale.value); // Monday for fr, Sunday for en
     const dayOfWeek = today.getDay();
     const diff = (dayOfWeek - firstDayOfWeek + 7) % 7;
     const weekStart = new Date(today);
@@ -2056,8 +2056,7 @@ async function handleRemoveException(recurrenceId: string, date: string) {
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
-  const locale = authStore.user?.locale || 'en';
-  const localeCode = locale === 'fr' ? 'fr-FR' : 'en-US';
+  const localeCode = locale.value;
   return new Intl.DateTimeFormat(localeCode, {
     weekday: 'short',
     day: 'numeric',

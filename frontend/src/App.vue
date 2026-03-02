@@ -539,6 +539,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { SUPPORTED_LOCALES } from '@/i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useCalendarHistoryStore } from '@/stores/calendarHistory';
 import { useCartStore } from '@/stores/cart';
@@ -581,7 +582,8 @@ function updateTheme() {
 }
 
 function toggleLocale() {
-  locale.value = locale.value === 'fr' ? 'en' : 'fr';
+  const idx = SUPPORTED_LOCALES.indexOf(locale.value as (typeof SUPPORTED_LOCALES)[number]);
+  locale.value = SUPPORTED_LOCALES[(idx + 1) % SUPPORTED_LOCALES.length];
   localStorage.setItem('locale', locale.value);
 }
 
