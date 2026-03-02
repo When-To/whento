@@ -364,6 +364,8 @@
   },
   "availability": {
     "title": "Availability",
+    "availability": "availability",
+    "availabilities": "availabilities",
     "myAvailabilities": "My availabilities",
     "available": "Available",
     "recurring": "Recurring",
@@ -371,6 +373,7 @@
     "timeSlot": "Time slot",
     "clickDateToAdd": "Click on a date to add your availability",
     "noAvailabilities": "No availabilities",
+    "noParticipant": "No participants available",
     "addAvailability": "Add availability",
     "selectDate": "Select date",
     "startTime": "Start",

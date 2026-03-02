@@ -1038,10 +1038,10 @@ const calendarDays = computed((): CalendarDay[] => {
 
   // First day of the month
   const firstDay = new Date(year, month, 1);
-  // Adjust for Monday as first day of week (fr-FR)
-  // getDay() returns 0 for Sunday, 1 for Monday, etc.
-  // For Monday-first week, we need to adjust: (getDay() - 1 + 7) % 7
-  const firstDayOfWeek = (firstDay.getDay() - 1 + 7) % 7;
+  // Adjust for first day of week based on locale
+  // fr: week starts on Monday (1), en: week starts on Sunday (0)
+  const weekStartDay = locale.value === 'fr' ? 1 : 0;
+  const firstDayOfWeek = (firstDay.getDay() - weekStartDay + 7) % 7;
 
   // Last day of the month
   const lastDay = new Date(year, month + 1, 0);

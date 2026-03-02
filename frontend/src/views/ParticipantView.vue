@@ -558,7 +558,7 @@
         <!-- Participants List -->
         <div class="card mb-6">
           <h2 class="mb-4 font-display text-xl font-semibold text-gray-900 dark:text-white">
-            Participants
+            {{ t('calendar.participants') }}
           </h2>
           <div v-if="participantsStats.length > 0" class="space-y-2">
             <button
@@ -584,12 +584,12 @@
                     : 'bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200'
                 "
               >
-                {{ stat.count }} {{ stat.count > 1 ? 'disponibilités' : 'disponibilité' }}
+                {{ stat.count }} {{ stat.count > 1 ? t('availability.availabilities') : t('availability.availability') }}
               </span>
             </button>
           </div>
           <div v-else class="text-sm text-gray-600 dark:text-gray-400">
-            Aucun participant disponible
+            {{ t('availability.noParticipant') }}
           </div>
         </div>
 

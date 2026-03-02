@@ -7,7 +7,7 @@ services:
     environment:
       # Application
       - APP_ENV=${APP_ENV:-production}
-      - APP_URL=${APP_URL:-http://localhost:8080}
+      - APP_URL=${APP_URL:-http://localhost:8080} # Will be use in e-mail
       - PORT=8080
       - LOG_LEVEL=${LOG_LEVEL:-info}
 
@@ -25,6 +25,20 @@ services:
 
       # Rate Limiting
       - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      
+      # SMTP
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_TLS=${SMTP_TLS:-true}
+      - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-WhenTo}
+
+      # Registration
+      - EMAIL_VERIFICATION_ENABLED=${EMAIL_VERIFICATION_ENABLED:-true}
+      - ALLOWED_REGISTER=${ALLOWED_REGISTER:-true}
+      - ALLOWED_EMAILS=${ALLOWED_EMAILS:-*}
 
       # Notifications
       - NOTIFY_ENABLED=${NOTIFY_ENABLED:-false}
