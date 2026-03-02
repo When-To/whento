@@ -80,6 +80,7 @@ export interface Calendar {
   notify_on_threshold: boolean;
   notify_config?: Record<string, unknown>;
   lock_participants: boolean;
+  allow_anonymous_participants: boolean;
   notify_participants: boolean;
   start_date?: string;
   end_date?: string;
@@ -108,6 +109,7 @@ export interface CreateCalendarRequest {
   notify_on_threshold?: boolean;
   notify_config?: string;
   lock_participants?: boolean;
+  allow_anonymous_participants?: boolean;
   start_date?: string;
   end_date?: string;
   participant_locale?: Locale;
@@ -131,6 +133,7 @@ export interface UpdateCalendarRequest {
   notify_on_threshold?: boolean;
   notify_config?: string;
   lock_participants?: boolean;
+  allow_anonymous_participants?: boolean;
   start_date?: string;
   end_date?: string;
 }

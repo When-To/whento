@@ -90,6 +90,60 @@ func (h *ParticipantHandler) AddParticipant(w http.ResponseWriter, r *http.Reque
 	httputil.JSON(w, http.StatusCreated, participant)
 }
 
+// AddAnonymousParticipant adds a participant to a calendar via public token (no authentication required)
+//
+//	@Summary		Add anonymous participant
+//	@Description	Adds a new participant to a calendar via its public token. Only works when allow_anonymous_participants is enabled on the calendar.
+//	@Tags			Participants
+//	@Accept			json
+//	@Produce		json
+//	@Param			token	path		string							true	"Calendar public token"
+//	@Param			request	body		models.AddParticipantRequest	true	"Participant details"
+//	@Success		201		{object}	models.Participant
+//	@Failure		400		{object}	httputil.ErrorResponse	"Invalid request"
+//	@Failure		403		{object}	httputil.ErrorResponse	"Anonymous registration not allowed"
+//	@Failure		404		{object}	httputil.ErrorResponse	"Calendar not found"
+//	@Failure		409		{object}	httputil.ErrorResponse	"Participant already exists"
+//	@Router			/api/v1/calendars/public/{token}/participants [post]
+func (h *ParticipantHandler) AddAnonymousParticipant(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+
+	var req models.AddParticipantRequest
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := validator.Validate(&req); err != nil {
+		if validationErrs, ok := err.(validator.ValidationErrors); ok {
+			httputil.ValidationError(w, validationErrs)
+			return
+		}
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+		return
+	}
+
+	participant, err := h.calendarService.AddAnonymousParticipant(r.Context(), token, &req)
+	if err != nil {
+		if errors.Is(err, service.ErrCalendarNotFound) {
+			httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
+			return
+		}
+		if errors.Is(err, service.ErrUnauthorized) {
+			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "Anonymous participant registration is not allowed for this calendar")
+			return
+		}
+		if errors.Is(err, service.ErrParticipantExists) {
+			httputil.Error(w, http.StatusConflict, httputil.ErrCodeConflict, "Participant with this name already exists")
+			return
+		}
+		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to add participant")
+		return
+	}
+
+	httputil.JSON(w, http.StatusCreated, participant)
+}
+
 // UpdateParticipant updates a participant's name
 //
 //	@Summary		Update participant

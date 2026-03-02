@@ -340,8 +340,9 @@
               </button>
             </form>
 
-            <!-- Lock Participants Toggle -->
+            <!-- Lock Participants Toggle (hidden when anonymous registration is enabled) -->
             <div
+              v-if="!form.allow_anonymous_participants"
               class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800"
             >
               <div class="flex items-start">
@@ -359,6 +360,33 @@
                   <span class="font-medium">{{ t('calendar.lockParticipants') }}</span>
                   <p class="text-gray-500 dark:text-gray-400">
                     {{ t('calendar.lockParticipantsHelp') }}
+                  </p>
+                </label>
+              </div>
+            </div>
+
+            <!-- Allow Anonymous Participants Toggle (hidden when lock participants is enabled) -->
+            <div
+              v-if="!form.lock_participants"
+              class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800"
+            >
+              <div class="flex items-start">
+                <input
+                  id="allow-anonymous-participants"
+                  v-model="form.allow_anonymous_participants"
+                  type="checkbox"
+                  class="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
+                  @change="handleAllowAnonymousParticipantsChange"
+                />
+                <label
+                  for="allow-anonymous-participants"
+                  class="ml-2 text-sm text-gray-700 dark:text-gray-300"
+                >
+                  <span class="font-medium">{{
+                    t('calendar.allowAnonymousParticipants')
+                  }}</span>
+                  <p class="text-gray-500 dark:text-gray-400">
+                    {{ t('calendar.allowAnonymousParticipantsHelp') }}
                   </p>
                 </label>
               </div>
@@ -858,6 +886,7 @@ const form = reactive({
   holidays_policy: 'ignore' as 'ignore' | 'allow' | 'block',
   allow_holiday_eves: false,
   lock_participants: false,
+  allow_anonymous_participants: false,
   weekday_times: {
     0: { min_time: '', max_time: '' },
     1: { min_time: '', max_time: '' },
@@ -885,6 +914,7 @@ const originalForm = reactive({
   holidays_policy: 'ignore' as 'ignore' | 'allow' | 'block',
   allow_holiday_eves: false,
   lock_participants: false,
+  allow_anonymous_participants: false,
   weekday_times: {
     0: { min_time: '', max_time: '' },
     1: { min_time: '', max_time: '' },
@@ -917,6 +947,7 @@ const hasUnsavedChanges = computed(() => {
     form.holidays_policy !== originalForm.holidays_policy ||
     form.allow_holiday_eves !== originalForm.allow_holiday_eves ||
     form.lock_participants !== originalForm.lock_participants ||
+    form.allow_anonymous_participants !== originalForm.allow_anonymous_participants ||
     form.holiday_min_time !== originalForm.holiday_min_time ||
     form.holiday_max_time !== originalForm.holiday_max_time ||
     form.holiday_eve_min_time !== originalForm.holiday_eve_min_time ||
@@ -988,6 +1019,8 @@ async function loadCalendar() {
       form.holidays_policy = calendar.value.holidays_policy || 'ignore';
       form.allow_holiday_eves = calendar.value.allow_holiday_eves || false;
       form.lock_participants = (calendar.value as any).lock_participants || false;
+      form.allow_anonymous_participants =
+        (calendar.value as any).allow_anonymous_participants || false;
 
       // Initialize weekday_times from calendar data (if available)
       if ((calendar.value as any).weekday_times) {
@@ -1018,6 +1051,8 @@ async function loadCalendar() {
       originalForm.holidays_policy = calendar.value.holidays_policy || 'ignore';
       originalForm.allow_holiday_eves = calendar.value.allow_holiday_eves || false;
       originalForm.lock_participants = (calendar.value as any).lock_participants || false;
+      originalForm.allow_anonymous_participants =
+        (calendar.value as any).allow_anonymous_participants || false;
 
       // Save original weekday_times
       if ((calendar.value as any).weekday_times) {
@@ -1142,6 +1177,7 @@ async function handleUpdate() {
       holidays_policy: form.holidays_policy,
       allow_holiday_eves: form.allow_holiday_eves,
       lock_participants: form.lock_participants,
+      allow_anonymous_participants: form.allow_anonymous_participants,
       weekday_times: prepareWeekdayTimes(form.weekday_times),
       // Send empty string (not undefined) so backend knows to clear the value
       holiday_min_time: normalizedHolidayMinTime,
@@ -1162,6 +1198,7 @@ async function handleUpdate() {
     originalForm.holidays_policy = form.holidays_policy;
     originalForm.allow_holiday_eves = form.allow_holiday_eves;
     originalForm.lock_participants = form.lock_participants;
+    originalForm.allow_anonymous_participants = form.allow_anonymous_participants;
     originalForm.weekday_times = JSON.parse(JSON.stringify(form.weekday_times));
     originalForm.holiday_min_time = form.holiday_min_time;
     originalForm.holiday_max_time = form.holiday_max_time;
@@ -1294,17 +1331,50 @@ async function handleDelete() {
 }
 
 async function handleLockParticipantsChange() {
+  // Mutually exclusive: disable anonymous registration when locking
+  if (form.lock_participants) {
+    form.allow_anonymous_participants = false;
+  }
+
   try {
     await calendarStore.updateCalendar(calendarId, {
       lock_participants: form.lock_participants,
+      allow_anonymous_participants: form.allow_anonymous_participants,
     } as any);
 
-    // Update original value to reflect saved state
+    // Update original values to reflect saved state
+    originalForm.lock_participants = form.lock_participants;
+    originalForm.allow_anonymous_participants = form.allow_anonymous_participants;
+
+    toastStore.success(t('calendar.calendarUpdated'));
+  } catch (error: any) {
+    // Revert on error
+    form.lock_participants = originalForm.lock_participants;
+    form.allow_anonymous_participants = originalForm.allow_anonymous_participants;
+    toastStore.error(error.message || t('calendar.updateError'));
+  }
+}
+
+async function handleAllowAnonymousParticipantsChange() {
+  // Mutually exclusive: disable lock when allowing anonymous registration
+  if (form.allow_anonymous_participants) {
+    form.lock_participants = false;
+  }
+
+  try {
+    await calendarStore.updateCalendar(calendarId, {
+      allow_anonymous_participants: form.allow_anonymous_participants,
+      lock_participants: form.lock_participants,
+    } as any);
+
+    // Update original values to reflect saved state
+    originalForm.allow_anonymous_participants = form.allow_anonymous_participants;
     originalForm.lock_participants = form.lock_participants;
 
     toastStore.success(t('calendar.calendarUpdated'));
   } catch (error: any) {
     // Revert on error
+    form.allow_anonymous_participants = originalForm.allow_anonymous_participants;
     form.lock_participants = originalForm.lock_participants;
     toastStore.error(error.message || t('calendar.updateError'));
   }
