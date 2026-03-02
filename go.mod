@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/arran4/golang-ical v0.3.3
 	github.com/go-chi/chi/v5 v5.2.5
-	github.com/go-webauthn/webauthn v0.15.0
+	github.com/go-webauthn/webauthn v0.16.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/joho/godotenv v1.5.1
