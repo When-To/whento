@@ -33,8 +33,8 @@ func NewCalendarRepository(pool *pgxpool.Pool) *CalendarRepository {
 // Create creates a new calendar
 func (r *CalendarRepository) Create(ctx context.Context, calendar *models.Calendar) error {
 	query := `
-		INSERT INTO calendars (id, owner_id, name, description, public_token, ics_token, threshold, allowed_weekdays, min_duration_hours, timezone, holidays_policy, allow_holiday_eves, allowed_hours, notify_on_threshold, notify_config, lock_participants, start_date, end_date)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		INSERT INTO calendars (id, owner_id, name, description, public_token, ics_token, threshold, allowed_weekdays, min_duration_hours, timezone, holidays_policy, allow_holiday_eves, allowed_hours, notify_on_threshold, notify_config, lock_participants, allow_anonymous_participants, start_date, end_date)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		RETURNING created_at, updated_at`
 
 	err := r.Pool.QueryRow(ctx, query,
@@ -54,6 +54,7 @@ func (r *CalendarRepository) Create(ctx context.Context, calendar *models.Calend
 		calendar.NotifyOnThreshold,
 		calendar.NotifyConfig,
 		calendar.LockParticipants,
+		calendar.AllowAnonymousParticipants,
 		calendar.StartDate,
 		calendar.EndDate,
 	).Scan(&calendar.CreatedAt, &calendar.UpdatedAt)
@@ -83,8 +84,8 @@ func (r *CalendarRepository) CreateWithParticipants(ctx context.Context, calenda
 
 	// Create calendar
 	calendarQuery := `
-		INSERT INTO calendars (id, owner_id, name, description, public_token, ics_token, threshold, allowed_weekdays, min_duration_hours, timezone, holidays_policy, allow_holiday_eves, allowed_hours, notify_on_threshold, notify_config, lock_participants, start_date, end_date)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		INSERT INTO calendars (id, owner_id, name, description, public_token, ics_token, threshold, allowed_weekdays, min_duration_hours, timezone, holidays_policy, allow_holiday_eves, allowed_hours, notify_on_threshold, notify_config, lock_participants, allow_anonymous_participants, start_date, end_date)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		RETURNING created_at, updated_at`
 
 	err = tx.QueryRow(ctx, calendarQuery,
@@ -104,6 +105,7 @@ func (r *CalendarRepository) CreateWithParticipants(ctx context.Context, calenda
 		calendar.NotifyOnThreshold,
 		calendar.NotifyConfig,
 		calendar.LockParticipants,
+		calendar.AllowAnonymousParticipants,
 		calendar.StartDate,
 		calendar.EndDate,
 	).Scan(&calendar.CreatedAt, &calendar.UpdatedAt)
@@ -165,7 +167,7 @@ func (r *CalendarRepository) CreateWithParticipants(ctx context.Context, calenda
 // GetByID retrieves a calendar by ID
 func (r *CalendarRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Calendar, error) {
 	query := `
-		SELECT id, owner_id, name, description, public_token, ics_token, threshold, allowed_weekdays, min_duration_hours, timezone, holidays_policy, allow_holiday_eves, allowed_hours, notify_on_threshold, notify_config, lock_participants, start_date, end_date, created_at, updated_at
+		SELECT id, owner_id, name, description, public_token, ics_token, threshold, allowed_weekdays, min_duration_hours, timezone, holidays_policy, allow_holiday_eves, allowed_hours, notify_on_threshold, notify_config, lock_participants, allow_anonymous_participants, start_date, end_date, created_at, updated_at
 		FROM calendars
 		WHERE id = $1`
 
@@ -187,6 +189,7 @@ func (r *CalendarRepository) GetByID(ctx context.Context, id uuid.UUID) (*models
 		&calendar.NotifyOnThreshold,
 		&calendar.NotifyConfig,
 		&calendar.LockParticipants,
+		&calendar.AllowAnonymousParticipants,
 		&calendar.StartDate,
 		&calendar.EndDate,
 		&calendar.CreatedAt,
@@ -206,7 +209,7 @@ func (r *CalendarRepository) GetByID(ctx context.Context, id uuid.UUID) (*models
 // GetByOwnerID retrieves all calendars owned by a user
 func (r *CalendarRepository) GetByOwnerID(ctx context.Context, ownerID uuid.UUID) ([]*models.Calendar, error) {
 	query := `
-		SELECT id, owner_id, name, description, public_token, ics_token, threshold, allowed_weekdays, min_duration_hours, timezone, holidays_policy, allow_holiday_eves, allowed_hours, notify_on_threshold, notify_config, lock_participants, start_date, end_date, created_at, updated_at
+		SELECT id, owner_id, name, description, public_token, ics_token, threshold, allowed_weekdays, min_duration_hours, timezone, holidays_policy, allow_holiday_eves, allowed_hours, notify_on_threshold, notify_config, lock_participants, allow_anonymous_participants, start_date, end_date, created_at, updated_at
 		FROM calendars
 		WHERE owner_id = $1
 		ORDER BY created_at DESC`
@@ -237,6 +240,7 @@ func (r *CalendarRepository) GetByOwnerID(ctx context.Context, ownerID uuid.UUID
 			&calendar.NotifyOnThreshold,
 			&calendar.NotifyConfig,
 			&calendar.LockParticipants,
+			&calendar.AllowAnonymousParticipants,
 			&calendar.StartDate,
 			&calendar.EndDate,
 			&calendar.CreatedAt,
@@ -254,7 +258,7 @@ func (r *CalendarRepository) GetByOwnerID(ctx context.Context, ownerID uuid.UUID
 // GetByPublicToken retrieves a calendar by public token
 func (r *CalendarRepository) GetByPublicToken(ctx context.Context, token string) (*models.Calendar, error) {
 	query := `
-		SELECT id, owner_id, name, description, public_token, ics_token, threshold, allowed_weekdays, min_duration_hours, timezone, holidays_policy, allow_holiday_eves, allowed_hours, notify_on_threshold, notify_config, lock_participants, start_date, end_date, created_at, updated_at
+		SELECT id, owner_id, name, description, public_token, ics_token, threshold, allowed_weekdays, min_duration_hours, timezone, holidays_policy, allow_holiday_eves, allowed_hours, notify_on_threshold, notify_config, lock_participants, allow_anonymous_participants, start_date, end_date, created_at, updated_at
 		FROM calendars
 		WHERE public_token = $1`
 
@@ -276,6 +280,7 @@ func (r *CalendarRepository) GetByPublicToken(ctx context.Context, token string)
 		&calendar.NotifyOnThreshold,
 		&calendar.NotifyConfig,
 		&calendar.LockParticipants,
+		&calendar.AllowAnonymousParticipants,
 		&calendar.StartDate,
 		&calendar.EndDate,
 		&calendar.CreatedAt,
@@ -296,7 +301,7 @@ func (r *CalendarRepository) GetByPublicToken(ctx context.Context, token string)
 func (r *CalendarRepository) Update(ctx context.Context, calendar *models.Calendar) error {
 	query := `
 		UPDATE calendars
-		SET name = $2, description = $3, threshold = $4, allowed_weekdays = $5, min_duration_hours = $6, timezone = $7, holidays_policy = $8, allow_holiday_eves = $9, allowed_hours = $10, notify_on_threshold = $11, notify_config = $12, lock_participants = $13, start_date = $14, end_date = $15, updated_at = NOW()
+		SET name = $2, description = $3, threshold = $4, allowed_weekdays = $5, min_duration_hours = $6, timezone = $7, holidays_policy = $8, allow_holiday_eves = $9, allowed_hours = $10, notify_on_threshold = $11, notify_config = $12, lock_participants = $13, allow_anonymous_participants = $14, start_date = $15, end_date = $16, updated_at = NOW()
 		WHERE id = $1
 		RETURNING updated_at`
 
@@ -314,6 +319,7 @@ func (r *CalendarRepository) Update(ctx context.Context, calendar *models.Calend
 		calendar.NotifyOnThreshold,
 		calendar.NotifyConfig,
 		calendar.LockParticipants,
+		calendar.AllowAnonymousParticipants,
 		calendar.StartDate,
 		calendar.EndDate,
 	).Scan(&calendar.UpdatedAt)

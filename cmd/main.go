@@ -537,8 +537,16 @@ func main() {
 					Window:   time.Minute,
 					KeyFunc:  middleware.IPKeyFunc,
 				})).Get("/public/{token}", calendarHandler.GetPublicCalendar)
+
+				// Anonymous participant registration: 10 requests/minute/IP
+				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests: 10,
+					Window:   time.Minute,
+					KeyFunc:  middleware.IPKeyFunc,
+				})).Post("/public/{token}/participants", participantHandler.AddAnonymousParticipant)
 			} else {
 				r.Get("/public/{token}", calendarHandler.GetPublicCalendar)
+				r.Post("/public/{token}/participants", participantHandler.AddAnonymousParticipant)
 			}
 
 			// Public participant email verification

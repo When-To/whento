@@ -98,22 +98,45 @@
               <h3 class="mt-4 text-lg font-medium text-gray-900 dark:text-white">
                 {{ t('calendar.noParticipants', 'No participants') }}
               </h3>
-              <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                {{
-                  t(
-                    'calendar.noParticipantsDescription',
-                    'This calendar has no participants yet. No availability can be entered at this time.'
-                  )
-                }}
-              </p>
-              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                {{
-                  t(
-                    'calendar.contactOwnerToAddParticipants',
-                    'Contact the calendar owner to add participants.'
-                  )
-                }}
-              </p>
+              <template v-if="calendar.allow_anonymous_participants">
+                <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                  {{ t('calendar.joinAsParticipant') }}
+                </p>
+                <form class="mt-4 flex gap-2 justify-center" @submit.prevent="handleJoinAsParticipant">
+                  <input
+                    v-model="newParticipantName"
+                    type="text"
+                    class="input flex-1 max-w-xs"
+                    :placeholder="t('calendar.participantNamePlaceholder')"
+                    :disabled="joiningAsParticipant"
+                  />
+                  <button
+                    type="submit"
+                    :disabled="!newParticipantName.trim() || joiningAsParticipant"
+                    class="btn btn-primary"
+                  >
+                    {{ t('calendar.addYourselfAsParticipant') }}
+                  </button>
+                </form>
+              </template>
+              <template v-else>
+                <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                  {{
+                    t(
+                      'calendar.noParticipantsDescription',
+                      'This calendar has no participants yet. No availability can be entered at this time.'
+                    )
+                  }}
+                </p>
+                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  {{
+                    t(
+                      'calendar.contactOwnerToAddParticipants',
+                      'Contact the calendar owner to add participants.'
+                    )
+                  }}
+                </p>
+              </template>
             </div>
           </div>
 
@@ -159,6 +182,52 @@
 
             <!-- Participants List -->
             <div class="space-y-2">
+              <!-- Anonymous registration form -->
+              <div
+                v-if="calendar.allow_anonymous_participants && !calendar.lock_participants"
+                class="mb-6 rounded-lg border border-primary-200 bg-primary-50 p-4 dark:border-primary-800 dark:bg-primary-900/20"
+              >
+                <p class="mb-3 text-sm font-medium text-primary-800 dark:text-primary-200">
+                  {{ t('calendar.joinAsParticipant') }}
+                </p>
+                <form class="flex gap-2" @submit.prevent="handleJoinAsParticipant">
+                  <input
+                    v-model="newParticipantName"
+                    type="text"
+                    class="input flex-1"
+                    :placeholder="t('calendar.participantNamePlaceholder')"
+                    :disabled="joiningAsParticipant"
+                  />
+                  <button
+                    type="submit"
+                    :disabled="!newParticipantName.trim() || joiningAsParticipant"
+                    class="btn btn-primary"
+                  >
+                    <svg
+                      v-if="joiningAsParticipant"
+                      class="mr-2 h-4 w-4 animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        class="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        stroke-width="4"
+                      />
+                      <path
+                        class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    {{ t('calendar.addYourselfAsParticipant') }}
+                  </button>
+                </form>
+              </div>
+
               <!-- Locked: show as non-clickable -->
               <template v-if="calendar.lock_participants">
                 <div
@@ -268,6 +337,8 @@ const toastStore = useToastStore();
 
 const token = route.params.token as string;
 const loading = ref(false);
+const newParticipantName = ref('');
+const joiningAsParticipant = ref(false);
 
 const calendar = computed(() => calendarStore.currentCalendar);
 
@@ -303,6 +374,27 @@ async function loadCalendar() {
     router.push('/');
   } finally {
     loading.value = false;
+  }
+}
+
+async function handleJoinAsParticipant() {
+  if (!newParticipantName.value.trim()) return;
+
+  joiningAsParticipant.value = true;
+  try {
+    const participant = await calendarStore.addAnonymousParticipant(token, {
+      name: newParticipantName.value.trim(),
+    });
+    if (participant && participant.id) {
+      historyStore.updateParticipantId(token, participant.id);
+      router.push(`/c/${token}/p/${participant.id}`);
+    }
+  } catch (err: any) {
+    toastStore.error(
+      err.message || t('calendar.participantNameAlreadyTaken', 'This name is already taken')
+    );
+  } finally {
+    joiningAsParticipant.value = false;
   }
 }
 

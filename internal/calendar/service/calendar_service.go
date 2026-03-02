@@ -173,9 +173,10 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 		AllowedHours:      allowedHoursJSON,
 		NotifyOnThreshold: req.NotifyOnThreshold,
 		NotifyConfig:      req.NotifyConfig,
-		LockParticipants:  req.LockParticipants,
-		StartDate:         startDate,
-		EndDate:           endDate,
+		LockParticipants:           req.LockParticipants,
+		AllowAnonymousParticipants: req.AllowAnonymousParticipants,
+		StartDate:                  startDate,
+		EndDate:                    endDate,
 	}
 	calendar.ID = uuid.New()
 
@@ -278,12 +279,13 @@ func buildCalendarResponse(calendar *models.Calendar, participants []models.Part
 		HolidayEveMinTime: holidayEveMinTime,
 		HolidayEveMaxTime: holidayEveMaxTime,
 		NotifyOnThreshold: calendar.NotifyOnThreshold,
-		LockParticipants:  calendar.LockParticipants,
-		StartDate:         calendar.StartDate,
-		EndDate:           calendar.EndDate,
-		Participants:      participants,
-		CreatedAt:         calendar.CreatedAt,
-		UpdatedAt:         calendar.UpdatedAt,
+		LockParticipants:           calendar.LockParticipants,
+		AllowAnonymousParticipants: calendar.AllowAnonymousParticipants,
+		StartDate:                  calendar.StartDate,
+		EndDate:                    calendar.EndDate,
+		Participants:               participants,
+		CreatedAt:                  calendar.CreatedAt,
+		UpdatedAt:                  calendar.UpdatedAt,
 	}, nil
 }
 
@@ -324,8 +326,9 @@ func buildPublicCalendarResponse(calendar *models.Calendar, participants []model
 		HolidayMaxTime:     holidayMaxTime,
 		HolidayEveMinTime:  holidayEveMinTime,
 		HolidayEveMaxTime:  holidayEveMaxTime,
-		LockParticipants:   calendar.LockParticipants,
-		NotifyParticipants: notifyParticipants,
+		LockParticipants:           calendar.LockParticipants,
+		AllowAnonymousParticipants: calendar.AllowAnonymousParticipants,
+		NotifyParticipants:         notifyParticipants,
 		ICSToken:           calendar.ICSToken,
 		StartDate:          calendar.StartDate,
 		EndDate:            calendar.EndDate,
@@ -534,6 +537,9 @@ func (s *CalendarService) UpdateCalendar(ctx context.Context, userID, userRole, 
 	}
 	if req.LockParticipants != nil {
 		calendar.LockParticipants = *req.LockParticipants
+	}
+	if req.AllowAnonymousParticipants != nil {
+		calendar.AllowAnonymousParticipants = *req.AllowAnonymousParticipants
 	}
 
 	// Update start_date if provided
@@ -750,6 +756,41 @@ func (s *CalendarService) AddParticipant(ctx context.Context, userID, userRole, 
 
 	participant := &models.Participant{
 		CalendarID: id,
+		Name:       req.Name,
+	}
+	participant.ID = uuid.New()
+
+	if err := s.participantRepo.Create(ctx, participant); err != nil {
+		if errors.Is(err, repository.ErrParticipantAlreadyExists) {
+			return nil, ErrParticipantExists
+		}
+		return nil, err
+	}
+
+	// Invalidate the public calendar cache since participants list changed
+	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
+	_ = s.cache.Delete(ctx, cacheKey)
+
+	return participant, nil
+}
+
+// AddAnonymousParticipant adds a participant to a calendar via its public token (no authentication required).
+// Only succeeds if the calendar has allow_anonymous_participants enabled.
+func (s *CalendarService) AddAnonymousParticipant(ctx context.Context, publicToken string, req *models.AddParticipantRequest) (*models.Participant, error) {
+	calendar, err := s.calendarRepo.GetByPublicToken(ctx, publicToken)
+	if err != nil {
+		if errors.Is(err, repository.ErrCalendarNotFound) {
+			return nil, ErrCalendarNotFound
+		}
+		return nil, err
+	}
+
+	if !calendar.AllowAnonymousParticipants {
+		return nil, ErrUnauthorized
+	}
+
+	participant := &models.Participant{
+		CalendarID: calendar.ID,
 		Name:       req.Name,
 	}
 	participant.ID = uuid.New()
