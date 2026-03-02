@@ -200,7 +200,7 @@ All Self-hosted licenses are **perpetual** (lifetime) with optional support rene
 ```bash
 # Application
 APP_ENV=production
-APP_URL=https://your-domain.com
+APP_URL=https://your-domain.com  # Used to generate links in emails
 PORT=8080
 LOG_LEVEL=info
 
@@ -216,9 +216,19 @@ JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
 JWT_ACCESS_EXPIRY=15m
 JWT_REFRESH_EXPIRY=168h
 
+# SMTP (required for email verification and notifications)
+SMTP_HOST=mail.example.com
+SMTP_PORT=587               # Default: 587
+SMTP_USERNAME=user@example.com
+SMTP_PASSWORD=yourpassword
+SMTP_TLS=true               # Default: true
+EMAIL_FROM_ADDRESS=whento@example.com
+EMAIL_FROM_NAME=WhenTo      # Default: WhenTo
+
 # Registration
+EMAIL_VERIFICATION_ENABLED=true
 ALLOWED_REGISTER=true
-ALLOWED_EMAILS=  # Comma-separated patterns (e.g., *@company.com)
+ALLOWED_EMAILS=             # Comma-separated patterns (e.g., *@company.com). Default: * (all)
 
 # Rate Limiting
 RATE_LIMIT_ENABLED=true
@@ -292,7 +302,14 @@ services:
     environment:
       - DATABASE_URL=postgres://whento:password@postgres:5432/whento
       - REDIS_URL=redis://:password@redis:6379
-      - APP_URL=https://your-domain.com
+      - APP_URL=https://your-domain.com  # Used to generate links in emails
+      - SMTP_HOST=mail.example.com
+      - SMTP_PORT=587
+      - SMTP_USERNAME=user@example.com
+      - SMTP_PASSWORD=yourpassword
+      - SMTP_TLS=true
+      - EMAIL_FROM_ADDRESS=whento@example.com
+      - EMAIL_FROM_NAME=WhenTo
     depends_on:
       - postgres
       - redis
