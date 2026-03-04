@@ -96,16 +96,18 @@ func (h *CalendarHandler) CreateCalendar(w http.ResponseWriter, r *http.Request)
 			participantNames[name] = true
 		}
 
-		// Check that threshold doesn't exceed participant count
-		nonEmptyCount := 0
-		for _, name := range req.Participants {
-			if name != "" {
-				nonEmptyCount++
+		// Check that threshold doesn't exceed participant count (unless anonymous registration is enabled)
+		if !req.AllowAnonymousParticipants {
+			nonEmptyCount := 0
+			for _, name := range req.Participants {
+				if name != "" {
+					nonEmptyCount++
+				}
 			}
-		}
-		if req.Threshold > 0 && req.Threshold > nonEmptyCount {
-			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, "Threshold cannot exceed the number of participants")
-			return
+			if req.Threshold > 0 && req.Threshold > nonEmptyCount {
+				httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, "Threshold cannot exceed the number of participants")
+				return
+			}
 		}
 	}
 
