@@ -164,8 +164,9 @@
             {{ errors.participants }}
           </p>
 
-          <!-- Lock Participants Toggle -->
+          <!-- Lock Participants Toggle (hidden when anonymous registration is enabled) -->
           <div
+            v-if="!form.allow_anonymous_participants"
             class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800"
           >
             <div class="flex items-start">
@@ -174,6 +175,7 @@
                 v-model="form.lock_participants"
                 type="checkbox"
                 class="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
+                @change="() => { if (form.lock_participants) form.allow_anonymous_participants = false }"
               />
               <label
                 for="lock-participants-create"
@@ -182,6 +184,31 @@
                 <span class="font-medium">{{ t('calendar.lockParticipants') }}</span>
                 <p class="text-gray-500 dark:text-gray-400">
                   {{ t('calendar.lockParticipantsHelp') }}
+                </p>
+              </label>
+            </div>
+          </div>
+
+          <!-- Allow Anonymous Participants Toggle (hidden when lock participants is enabled) -->
+          <div
+            v-if="!form.lock_participants"
+            class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800"
+          >
+            <div class="flex items-start">
+              <input
+                id="allow-anonymous-participants-create"
+                v-model="form.allow_anonymous_participants"
+                type="checkbox"
+                class="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
+                @change="() => { if (form.allow_anonymous_participants) form.lock_participants = false }"
+              />
+              <label
+                for="allow-anonymous-participants-create"
+                class="ml-2 text-sm text-gray-700 dark:text-gray-300"
+              >
+                <span class="font-medium">{{ t('calendar.allowAnonymousParticipants') }}</span>
+                <p class="text-gray-500 dark:text-gray-400">
+                  {{ t('calendar.allowAnonymousParticipantsHelp') }}
                 </p>
               </label>
             </div>
@@ -207,14 +234,14 @@
               v-model.number="form.threshold"
               type="number"
               min="1"
-              :max="participants.length || undefined"
+              :max="form.allow_anonymous_participants ? undefined : (participants.length || undefined)"
               class="input"
               :class="{ 'border-danger-500': errors.threshold }"
               required
             />
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {{ t('calendar.thresholdHelp') }}
-              <span v-if="participants.length > 0">
+              <span v-if="!form.allow_anonymous_participants && participants.length > 0">
                 ({{ t('common.max') }}: {{ participants.length }})</span
               >
             </p>
@@ -453,7 +480,7 @@
 
         <!-- Warning Message - No Participants -->
         <div
-          v-if="participants.length === 0"
+          v-if="!form.allow_anonymous_participants && participants.length === 0"
           class="rounded-lg bg-orange-50 p-4 dark:bg-orange-900/20"
         >
           <div class="flex">
@@ -505,7 +532,7 @@
           </router-link>
           <button
             type="submit"
-            :disabled="loading || participants.length === 0"
+            :disabled="loading || (!form.allow_anonymous_participants && participants.length === 0)"
             class="btn btn-primary"
           >
             <svg v-if="loading" class="mr-2 h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -559,6 +586,7 @@ const form = reactive({
   holidays_policy: 'ignore' as 'ignore' | 'allow' | 'block',
   allow_holiday_eves: false,
   lock_participants: false,
+  allow_anonymous_participants: false,
   weekday_times: {
     0: { min_time: '', max_time: '' },
     1: { min_time: '', max_time: '' },
@@ -695,7 +723,7 @@ function validateForm(): boolean {
     isValid = false;
   }
 
-  if (participants.value.length === 0) {
+  if (!form.allow_anonymous_participants && participants.value.length === 0) {
     errors.participants = t('calendar.participantsRequired');
     isValid = false;
   }
@@ -705,7 +733,7 @@ function validateForm(): boolean {
     isValid = false;
   }
 
-  if (participants.value.length > 0 && form.threshold > participants.value.length) {
+  if (!form.allow_anonymous_participants && participants.value.length > 0 && form.threshold > participants.value.length) {
     errors.threshold = t('calendar.thresholdMaxError');
     isValid = false;
   }
@@ -740,6 +768,7 @@ async function handleSubmit() {
       holidays_policy: form.holidays_policy,
       allow_holiday_eves: form.allow_holiday_eves,
       lock_participants: form.lock_participants,
+      allow_anonymous_participants: form.allow_anonymous_participants,
       weekday_times: prepareWeekdayTimes(form.weekday_times),
       // Send empty string (not undefined) for consistency with update
       holiday_min_time: normalizedHolidayMinTime,
