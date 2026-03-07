@@ -36,7 +36,7 @@
     "@types/node": "^25.3.5",
     "@vitejs/plugin-vue": "^6.0.4",
     "@vueuse/core": "^14.2.1",
-    "eslint": "^10.0.2",
+    "eslint": "^10.0.3",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^10.8.0",
     "globals": "^17.4.0",
