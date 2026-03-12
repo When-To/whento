@@ -42,7 +42,7 @@
           <h1 class="font-display text-3xl font-bold text-gray-900 dark:text-white">
             {{ calendar.name }}
           </h1>
-          <p v-if="calendar.description" class="mt-2 text-gray-600 dark:text-gray-400">
+          <p v-if="calendar.description" class="mt-2 text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
             {{ calendar.description }}
           </p>
           <div class="mt-4 flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">

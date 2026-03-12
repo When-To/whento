@@ -46,6 +46,9 @@
             <p class="mt-2 text-base md:text-lg text-gray-600 dark:text-gray-400">
               {{ participant.name }}
             </p>
+            <p v-if="calendar.description" class="mt-2 text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+              {{ calendar.description }}
+            </p>
           </div>
           <button
             v-if="!calendar?.lock_participants"

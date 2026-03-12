@@ -144,7 +144,7 @@
               >
                 {{ calendar.name }}
               </h3>
-              <p v-if="calendar.description" class="text-sm text-gray-600 dark:text-gray-400">
+              <p v-if="calendar.description" class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
                 {{ calendar.description }}
               </p>
             </div>
