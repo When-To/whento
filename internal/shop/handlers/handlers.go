@@ -72,6 +72,17 @@ func (h *Handler) getOrCreateSessionID(w http.ResponseWriter, r *http.Request) s
 	return sessionID
 }
 
+// getSessionID retrieves an existing shop session ID from cookie (without creating one).
+func (h *Handler) getSessionID(r *http.Request) string {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err == nil && cookie.Value != "" {
+		if _, err := uuid.Parse(cookie.Value); err == nil {
+			return cookie.Value
+		}
+	}
+	return ""
+}
+
 // HandleGetProducts returns available license products
 // @Summary Get available license products (Cloud only)
 // @Description Returns list of available self-hosted license products (Pro and Enterprise tiers). Cloud-specific endpoint for license sales.
@@ -352,6 +363,13 @@ func (h *Handler) HandleGetOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify session ownership: the shop session cookie must be present
+	sessionID := h.getSessionID(r)
+	if sessionID == "" {
+		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Session required")
+		return
+	}
+
 	order, err := h.service.GetOrderWithLicenses(r.Context(), orderID)
 	if err != nil {
 		h.log.Error("Failed to get order", "error", err, "order_id", orderID)
@@ -456,6 +474,12 @@ func (h *Handler) HandleDownloadLicenses(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Verify session ownership
+	if sessionID := h.getSessionID(r); sessionID == "" {
+		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Session required")
+		return
+	}
+
 	order, err := h.service.GetOrderWithLicenses(r.Context(), orderID)
 	if err != nil {
 		h.log.Error("Failed to get order for download", "error", err, "order_id", orderID)
@@ -516,6 +540,12 @@ func (h *Handler) HandleDownloadLicenses(w http.ResponseWriter, r *http.Request)
 func (h *Handler) HandleDownloadSingleLicense(w http.ResponseWriter, r *http.Request) {
 	orderIDStr := chi.URLParam(r, "order_id")
 	licenseIDStr := chi.URLParam(r, "license_id")
+
+	// Verify session ownership
+	if sessionID := h.getSessionID(r); sessionID == "" {
+		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Session required")
+		return
+	}
 
 	orderID, err := uuid.Parse(orderIDStr)
 	if err != nil {

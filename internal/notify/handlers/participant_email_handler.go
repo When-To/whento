@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/whento/pkg/httputil"
+	"github.com/whento/pkg/participanttoken"
 	"github.com/whento/pkg/validator"
 	calendarModels "github.com/whento/whento/internal/calendar/models"
 	calendarRepo "github.com/whento/whento/internal/calendar/repository"
@@ -61,6 +62,13 @@ func (h *ParticipantEmailHandler) AddEmail(w http.ResponseWriter, r *http.Reques
 	ctx := r.Context()
 	token := chi.URLParam(r, "token")
 	participantID := chi.URLParam(r, "pid")
+
+	// Verify participant token for authorization
+	ptToken := participanttoken.FromRequest(r, participantID)
+	if ptToken == "" || !participanttoken.Validate(participantID, ptToken) {
+		httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "Invalid or missing participant token")
+		return
+	}
 
 	// Validate participant ID
 	pid, err := uuid.Parse(participantID)

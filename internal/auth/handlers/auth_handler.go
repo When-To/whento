@@ -129,16 +129,17 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.authService.Register(r.Context(), &req)
 	if err != nil {
+		// Use generic error messages to prevent account enumeration
 		if errors.Is(err, service.ErrUserAlreadyExists) {
-			httputil.Error(w, http.StatusConflict, httputil.ErrCodeConflict, "User with this email already exists")
+			httputil.Error(w, http.StatusConflict, httputil.ErrCodeConflict, "Registration failed")
 			return
 		}
 		if errors.Is(err, service.ErrRegistrationDisabled) {
-			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "New user registration is disabled")
+			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "Registration is not available")
 			return
 		}
 		if errors.Is(err, service.ErrEmailNotAllowed) {
-			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "This email address is not allowed to register")
+			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "Registration is not available")
 			return
 		}
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to register user")

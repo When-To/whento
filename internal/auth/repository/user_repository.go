@@ -283,6 +283,36 @@ func (r *UserRepository) Count(ctx context.Context) (int, error) {
 	return count, nil
 }
 
+// DetermineRoleAtomically checks user count under an advisory lock to prevent
+// TOCTOU race conditions where concurrent registrations could all become admin.
+// Returns "admin" if no users exist, "user" otherwise.
+func (r *UserRepository) DetermineRoleAtomically(ctx context.Context) (string, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Acquire advisory lock (key 1 = first-user registration)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1)`); err != nil {
+		return "", fmt.Errorf("failed to acquire advisory lock: %w", err)
+	}
+
+	var count int
+	if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+		return "", fmt.Errorf("failed to count users: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	if count == 0 {
+		return "admin", nil
+	}
+	return "user", nil
+}
+
 // ExistsByEmail checks if a user exists with the given email
 func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	query := `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`

@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/whento/pkg/cache"
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/auth/models"
@@ -41,6 +42,7 @@ type UserRepository interface {
 	Update(ctx context.Context, user *models.User) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	Count(ctx context.Context) (int, error)
+	DetermineRoleAtomically(ctx context.Context) (string, error)
 	List(ctx context.Context) ([]*models.User, error)
 	ListWithSubscriptions(ctx context.Context) ([]*models.UserWithSubscription, error)
 	UpdateRole(ctx context.Context, userID uuid.UUID, role string) error
@@ -66,6 +68,7 @@ type AuthService struct {
 	tokenRepo       TokenRepository
 	mfaRepo         MFARepository
 	jwtManager      *jwt.Manager
+	cache           cache.Cache
 	bcryptCost      int
 	allowedRegister bool
 	allowedEmails   []string
@@ -77,6 +80,7 @@ func NewAuthService(
 	tokenRepo TokenRepository,
 	mfaRepo MFARepository,
 	jwtManager *jwt.Manager,
+	appCache cache.Cache,
 	bcryptCost int,
 	allowedRegister bool,
 	allowedEmails []string,
@@ -86,6 +90,7 @@ func NewAuthService(
 		tokenRepo:       tokenRepo,
 		mfaRepo:         mfaRepo,
 		jwtManager:      jwtManager,
+		cache:           appCache,
 		bcryptCost:      bcryptCost,
 		allowedRegister: allowedRegister,
 		allowedEmails:   allowedEmails,
@@ -94,34 +99,28 @@ func NewAuthService(
 
 // Register creates a new user account
 func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest) (*models.AuthResponse, error) {
-	// Check if this is the first user (will be admin)
-	count, err := s.userRepo.Count(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to count users: %w", err)
-	}
-
-	// If not the first user, check registration restrictions
-	if count > 0 {
-		// Check if registration is allowed
-		if !s.allowedRegister {
-			return nil, ErrRegistrationDisabled
-		}
-
-		// Check if email is in allowed list
-		if !validator.EmailMatches(req.Email, s.allowedEmails) {
-			return nil, ErrEmailNotAllowed
-		}
-	}
-
-	// Hash password
+	// Hash password first (expensive operation, do outside any lock)
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), s.bcryptCost)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	role := models.RoleUser
-	if count == 0 {
-		role = models.RoleAdmin
+	// Determine role atomically: count + create in a single call to prevent
+	// TOCTOU race where multiple concurrent requests could all see count=0
+	// and all become admin.
+	role, err := s.userRepo.DetermineRoleAtomically(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine role: %w", err)
+	}
+
+	// If not the first user, check registration restrictions
+	if role != models.RoleAdmin {
+		if !s.allowedRegister {
+			return nil, ErrRegistrationDisabled
+		}
+		if !validator.EmailMatches(req.Email, s.allowedEmails) {
+			return nil, ErrEmailNotAllowed
+		}
 	}
 
 	// Determine locale (default to English if not provided)
@@ -405,10 +404,29 @@ func (s *AuthService) generateTempToken(userID uuid.UUID) (string, error) {
 }
 
 // PasskeyLogin authenticates a user via passkey
-// Passkeys are already a strong authentication method, so we skip TOTP verification
+// If the user has TOTP MFA enabled, returns a temp token requiring MFA verification
 func (s *AuthService) PasskeyLogin(ctx context.Context, user *models.User) (*models.AuthResponse, error) {
-	// Passkey authentication is considered strong enough - no TOTP required
-	// Generate full tokens directly
+	// Check if user has TOTP MFA enabled
+	mfa, err := s.mfaRepo.GetByUserID(ctx, user.ID)
+	if err != nil && !errors.Is(err, mfaRepo.ErrMFANotFound) {
+		return nil, fmt.Errorf("failed to check MFA status: %w", err)
+	}
+
+	// If MFA is enabled, require TOTP verification even after passkey auth
+	if mfa != nil && mfa.Enabled {
+		tempToken, err := s.generateTempToken(user.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate temp token: %w", err)
+		}
+
+		return &models.AuthResponse{
+			RequireMFA: true,
+			TempToken:  tempToken,
+			User:       user,
+		}, nil
+	}
+
+	// No MFA - generate full tokens directly
 	return s.generateAuthResponse(user)
 }
 
@@ -424,6 +442,18 @@ func (s *AuthService) VerifyMFAAndLogin(ctx context.Context, tempToken string, m
 	mfaPending, ok := claims["mfa_pending"].(bool)
 	if !ok || !mfaPending {
 		return nil, ErrInvalidToken
+	}
+
+	// Prevent temp token replay: check JTI hasn't been consumed
+	jti, _ := claims["jti"].(string)
+	if jti != "" && s.cache != nil {
+		key := "mfa_used_jti:" + jti
+		used, _ := s.cache.Exists(ctx, key)
+		if used {
+			return nil, ErrInvalidToken
+		}
+		// Mark JTI as consumed (TTL matches temp token expiry: 5 minutes)
+		_ = s.cache.Set(ctx, key, true, 6*time.Minute)
 	}
 
 	// Extract user ID
@@ -442,10 +472,6 @@ func (s *AuthService) VerifyMFAAndLogin(ctx context.Context, tempToken string, m
 	if err != nil {
 		return nil, ErrUserNotFound
 	}
-
-	// Verify MFA code through MFA service (this will be called from MFA handler)
-	// For now, we assume the code has been verified by the MFA handler
-	// The handler will call this method only after successful verification
 
 	// Generate full tokens
 	return s.generateAuthResponse(user)

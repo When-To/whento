@@ -59,6 +59,7 @@ import (
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
+	"github.com/whento/pkg/participanttoken"
 	"github.com/whento/whento/internal/config"
 
 	// Auth module
@@ -160,6 +161,14 @@ func main() {
 	}
 	log.Info("JWT manager initialized")
 
+	// Initialize participant token signing (uses JWT private key as HMAC seed)
+	ptKeyBytes, err := os.ReadFile(cfg.JWTPrivateKeyPath)
+	if err != nil {
+		log.Warn("Failed to read JWT private key for participant tokens, using fallback", "error", err)
+		ptKeyBytes = []byte("whento-participant-token-fallback-secret")
+	}
+	participanttoken.Init(ptKeyBytes)
+
 	// Initialize cache (uses Redis if available, NoOp otherwise)
 	cacheInstance := cache.NewRedisCache(redisClient)
 	if cacheInstance.IsEnabled() {
@@ -201,8 +210,8 @@ func main() {
 	tokenRepo := authRepo.NewTokenRepository(pool)
 	mfaRepository := mfaRepo.NewMFARepository(pool)
 
-	// Initialize auth service (with MFA repository for 2FA checking)
-	authSvc := authService.NewAuthService(userRepo, tokenRepo, mfaRepository, jwtManager, cfg.BcryptCost, cfg.AllowedRegister, cfg.AllowedEmails)
+	// Initialize auth service (with MFA repository for 2FA checking and cache for temp token replay prevention)
+	authSvc := authService.NewAuthService(userRepo, tokenRepo, mfaRepository, jwtManager, cacheInstance, cfg.BcryptCost, cfg.AllowedRegister, cfg.AllowedEmails)
 
 	// Initialize password reset service
 	passwordResetSvc := authService.NewPasswordResetService(userRepo, tokenRepo, emailService, jwtManager, cfg, log, cfg.BcryptCost)
