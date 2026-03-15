@@ -346,7 +346,10 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.LimitRequestSize(1 * 1024 * 1024)) // 1MB max payload
-	r.Use(middleware.CORS([]string{"*"}))               // Configure for production
+	r.Use(middleware.CORS(cfg.CORSOrigins))
+
+	// Configure trusted proxies for X-Forwarded-For validation
+	middleware.SetTrustedProxies(cfg.TrustedProxies)
 
 	// Health routes (use auth health handler as primary)
 	r.Get("/api/health", authHealthHandler.Health)
@@ -389,7 +392,16 @@ func main() {
 			} else {
 				r.Post("/forgot-password", passwordResetHandler.ForgotPassword)
 			}
-			r.Post("/reset-password", passwordResetHandler.ResetPassword)
+			if cfg.RateLimitEnabled {
+				// Reset password: 5 requests/15 minutes/IP
+				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests: 5,
+					Window:   15 * time.Minute,
+					KeyFunc:  middleware.CombinedKeyFunc,
+				})).Post("/reset-password", passwordResetHandler.ResetPassword)
+			} else {
+				r.Post("/reset-password", passwordResetHandler.ResetPassword)
+			}
 
 			// Magic link authentication (public)
 			if cfg.RateLimitEnabled {
@@ -401,7 +413,16 @@ func main() {
 			} else {
 				r.Post("/magic-link/request", magicLinkHandler.RequestMagicLink)
 			}
-			r.Get("/magic-link/verify/{token}", magicLinkHandler.VerifyMagicLink)
+			if cfg.RateLimitEnabled {
+				// Magic link verify: 5 requests/15 minutes/IP
+				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests: 5,
+					Window:   15 * time.Minute,
+					KeyFunc:  middleware.CombinedKeyFunc,
+				})).Get("/magic-link/verify/{token}", magicLinkHandler.VerifyMagicLink)
+			} else {
+				r.Get("/magic-link/verify/{token}", magicLinkHandler.VerifyMagicLink)
+			}
 			r.Get("/magic-link/available", magicLinkHandler.CheckAvailable)
 
 			// Email verification (public - no auth required)

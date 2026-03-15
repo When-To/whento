@@ -38,6 +38,10 @@ type Config struct {
 	// Rate Limiting
 	RateLimitEnabled bool
 
+	// Security
+	TrustedProxies []string // IPs allowed to set X-Forwarded-For
+	CORSOrigins    []string // Allowed CORS origins
+
 	// SEO (robots.txt, sitemap.xml)
 	DisableRobots bool
 
@@ -138,6 +142,10 @@ func Load() *Config {
 
 		// Rate Limiting
 		RateLimitEnabled: getBool("RATE_LIMIT_ENABLED", true),
+
+		// Security
+		TrustedProxies: getStringList("TRUSTED_PROXIES", nil),
+		CORSOrigins:    getStringList("CORS_ORIGINS", []string{getEnv("APP_URL", "http://localhost:8080")}),
 
 		// SEO
 		DisableRobots: getBool("DISABLE_ROBOTS", false),
@@ -280,6 +288,25 @@ func buildRedisURL() string {
 		return fmt.Sprintf("redis://:%s@%s:%s/%s", password, host, port, db)
 	}
 	return fmt.Sprintf("redis://%s:%s/%s", host, port, db)
+}
+
+func getStringList(key string, defaultValue []string) []string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	if len(result) == 0 {
+		return defaultValue
+	}
+	return result
 }
 
 func getEmailList(key string, defaultValue []string) []string {

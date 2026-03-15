@@ -7,11 +7,31 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
+
+// trustedProxies holds the set of trusted proxy IPs.
+// Only requests from these IPs will have X-Forwarded-For / X-Real-IP honoured.
+var trustedProxies map[string]struct{}
+
+// SetTrustedProxies configures the set of trusted proxy IPs.
+// If empty/nil, proxy headers are never trusted (RemoteAddr is always used).
+func SetTrustedProxies(proxies []string) {
+	if len(proxies) == 0 {
+		trustedProxies = nil
+		return
+	}
+	tp := make(map[string]struct{}, len(proxies))
+	for _, p := range proxies {
+		tp[strings.TrimSpace(p)] = struct{}{}
+	}
+	trustedProxies = tp
+}
 
 // RateLimiter provides rate limiting functionality
 type RateLimiter struct {
@@ -108,18 +128,47 @@ func (rl *RateLimiter) check(ctx context.Context, key string, limit int, window 
 	return count <= int64(limit), remaining, resetAt, nil
 }
 
-// IPKeyFunc returns client IP as rate limit key
+// IPKeyFunc returns the real client IP as rate limit key.
+// X-Forwarded-For and X-Real-IP are only trusted when the direct
+// connection comes from a configured trusted proxy.
 func IPKeyFunc(r *http.Request) string {
-	// Check X-Forwarded-For header first
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return xff
+	remoteIP := remoteAddrIP(r)
+
+	if isFromTrustedProxy(remoteIP) {
+		// Trust the rightmost-minus-one entry in X-Forwarded-For (the one
+		// set by the trusted proxy), or fall back to X-Real-IP.
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			// Use the last entry (closest to the proxy that added it)
+			clientIP := strings.TrimSpace(parts[len(parts)-1])
+			if clientIP != "" {
+				return clientIP
+			}
+		}
+		if xri := r.Header.Get("X-Real-IP"); xri != "" {
+			return strings.TrimSpace(xri)
+		}
 	}
-	// Check X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
+
+	return remoteIP
+}
+
+// remoteAddrIP extracts the IP (without port) from r.RemoteAddr.
+func remoteAddrIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
 	}
-	// Fall back to RemoteAddr
-	return r.RemoteAddr
+	return host
+}
+
+// isFromTrustedProxy checks if the remote IP is in the trusted proxy set.
+func isFromTrustedProxy(ip string) bool {
+	if trustedProxies == nil {
+		return false
+	}
+	_, ok := trustedProxies[ip]
+	return ok
 }
 
 // UserKeyFunc returns user ID as rate limit key (requires Auth middleware)

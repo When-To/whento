@@ -11,7 +11,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -21,14 +23,108 @@ type ExternalNotifier struct {
 	httpClient *http.Client
 }
 
-// NewExternalNotifier creates a new external notifier
+// NewExternalNotifier creates a new external notifier with SSRF protection
 func NewExternalNotifier(logger *slog.Logger) *ExternalNotifier {
+	// Custom transport that blocks connections to private/internal IPs
+	safeTransport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid address: %w", err)
+			}
+			ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+			if err != nil {
+				return nil, fmt.Errorf("DNS lookup failed: %w", err)
+			}
+			for _, ip := range ips {
+				if isPrivateIP(ip.IP) {
+					return nil, fmt.Errorf("connections to private/internal IP %s are not allowed", ip.IP)
+				}
+			}
+			dialer := &net.Dialer{Timeout: 5 * time.Second}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(host, port))
+		},
+	}
+
 	return &ExternalNotifier{
 		logger: logger,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout:   10 * time.Second,
+			Transport: safeTransport,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 3 {
+					return fmt.Errorf("too many redirects")
+				}
+				// Re-validate redirect target
+				if err := validateWebhookURL(req.URL.String()); err != nil {
+					return err
+				}
+				return nil
+			},
 		},
 	}
+}
+
+// isPrivateIP returns true if the IP is private, loopback, link-local, or otherwise internal.
+func isPrivateIP(ip net.IP) bool {
+	privateRanges := []struct {
+		network *net.IPNet
+	}{
+		{mustParseCIDR("10.0.0.0/8")},
+		{mustParseCIDR("172.16.0.0/12")},
+		{mustParseCIDR("192.168.0.0/16")},
+		{mustParseCIDR("127.0.0.0/8")},
+		{mustParseCIDR("169.254.0.0/16")},
+		{mustParseCIDR("::1/128")},
+		{mustParseCIDR("fc00::/7")},
+		{mustParseCIDR("fe80::/10")},
+		{mustParseCIDR("100.64.0.0/10")},  // CGN
+		{mustParseCIDR("0.0.0.0/8")},      // "this" network
+		{mustParseCIDR("198.18.0.0/15")},   // benchmarking
+		{mustParseCIDR("240.0.0.0/4")},     // reserved
+	}
+	for _, r := range privateRanges {
+		if r.network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func mustParseCIDR(s string) *net.IPNet {
+	_, n, err := net.ParseCIDR(s)
+	if err != nil {
+		panic(err)
+	}
+	return n
+}
+
+// validateWebhookURL checks that a webhook URL uses https and points to a non-private host.
+func validateWebhookURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid webhook URL: %w", err)
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("webhook URL must use HTTPS scheme, got %q", u.Scheme)
+	}
+	host := u.Hostname()
+	// Block obvious internal hostnames
+	if host == "localhost" || host == "redis" || host == "postgres" || host == "db" || host == "memcached" {
+		return fmt.Errorf("webhook URL hostname %q is not allowed", host)
+	}
+	// Check if it's a raw IP
+	if ip := net.ParseIP(host); ip != nil {
+		if isPrivateIP(ip) {
+			return fmt.Errorf("webhook URL must not point to private IP %s", ip)
+		}
+	}
+	return nil
+}
+
+// ValidateWebhookURL is the exported version for use by handlers.
+func ValidateWebhookURL(rawURL string) error {
+	return validateWebhookURL(rawURL)
 }
 
 // SendDiscord sends notification via Discord webhook

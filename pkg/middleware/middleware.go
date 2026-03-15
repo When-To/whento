@@ -77,26 +77,31 @@ func Recoverer(next http.Handler) http.Handler {
 }
 
 // CORS handles Cross-Origin Resource Sharing
+// allowedOrigins must be explicit origins (e.g. "https://whento.be").
+// Never combine wildcard "*" with credentials — this middleware rejects
+// that misconfiguration by treating "*" as "same-origin only" (no CORS header set).
 func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
+	// Build lookup set for O(1) matching; filter out wildcards.
+	originSet := make(map[string]struct{}, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		if o != "*" && o != "" {
+			originSet[o] = struct{}{}
+		}
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
 
-			// Check if origin is allowed
-			allowed := false
-			for _, o := range allowedOrigins {
-				if o == "*" || o == origin {
-					allowed = true
-					break
+			if origin != "" {
+				if _, ok := originSet[origin]; ok {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+					w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-Request-ID")
+					w.Header().Set("Access-Control-Max-Age", "3600")
+					w.Header().Set("Vary", "Origin")
 				}
-			}
-
-			if allowed {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-Request-ID")
-				w.Header().Set("Access-Control-Max-Age", "3600")
 			}
 
 			if r.Method == http.MethodOptions {

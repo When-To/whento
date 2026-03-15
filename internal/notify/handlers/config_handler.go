@@ -18,6 +18,7 @@ import (
 	"github.com/whento/pkg/validator"
 	calendarRepo "github.com/whento/whento/internal/calendar/repository"
 	"github.com/whento/whento/internal/notify/models"
+	notifyService "github.com/whento/whento/internal/notify/service"
 )
 
 // NotifyConfigHandler handles notification configuration HTTP requests
@@ -147,6 +148,20 @@ func (h *NotifyConfigHandler) UpdateConfig(w http.ResponseWriter, r *http.Reques
 	if err := validator.Validate(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, err.Error())
 		return
+	}
+
+	// Validate webhook URLs against SSRF (must be HTTPS, no private IPs)
+	if req.Config.Channels.Discord.Enabled && req.Config.Channels.Discord.WebhookURL != "" {
+		if err := notifyService.ValidateWebhookURL(req.Config.Channels.Discord.WebhookURL); err != nil {
+			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid Discord webhook URL: "+err.Error())
+			return
+		}
+	}
+	if req.Config.Channels.Slack.Enabled && req.Config.Channels.Slack.WebhookURL != "" {
+		if err := notifyService.ValidateWebhookURL(req.Config.Channels.Slack.WebhookURL); err != nil {
+			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid Slack webhook URL: "+err.Error())
+			return
+		}
 	}
 
 	// Get calendar

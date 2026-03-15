@@ -31,7 +31,6 @@ services:
 
       # Application
       - APP_URL=${APP_URL:-http://localhost:8080}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:8080}
       - ALLOWED_REGISTER=${ALLOWED_REGISTER:-true}
       - ALLOWED_EMAILS=${ALLOWED_EMAILS:-}
 
@@ -40,6 +39,8 @@ services:
 
       # Security
       - BCRYPT_COST=12
+      - CORS_ORIGINS=${CORS_ORIGINS:-${APP_URL:-http://localhost:8080}}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-}
     volumes:
       - whento_keys:/app/keys
     depends_on:

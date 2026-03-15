@@ -65,7 +65,7 @@ func (h *Handler) getOrCreateSessionID(w http.ResponseWriter, r *http.Request) s
 		Path:     "/",
 		MaxAge:   sessionMaxAge,
 		HttpOnly: true,
-		Secure:   r.TLS != nil, // Secure flag only if HTTPS
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 		SameSite: http.SameSiteLaxMode,
 	})
 
