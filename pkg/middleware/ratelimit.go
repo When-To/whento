@@ -15,22 +15,39 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// trustedProxies holds the set of trusted proxy IPs.
-// Only requests from these IPs will have X-Forwarded-For / X-Real-IP honoured.
-var trustedProxies map[string]struct{}
+// trustedProxyIPs holds exact trusted proxy IPs.
+var trustedProxyIPs map[string]struct{}
 
-// SetTrustedProxies configures the set of trusted proxy IPs.
+// trustedProxyCIDRs holds trusted proxy CIDR ranges.
+var trustedProxyCIDRs []*net.IPNet
+
+// SetTrustedProxies configures the set of trusted proxy IPs and CIDR ranges.
+// Accepts individual IPs (e.g. "10.0.0.1") and CIDR notation (e.g. "172.17.0.0/16").
 // If empty/nil, proxy headers are never trusted (RemoteAddr is always used).
 func SetTrustedProxies(proxies []string) {
 	if len(proxies) == 0 {
-		trustedProxies = nil
+		trustedProxyIPs = nil
+		trustedProxyCIDRs = nil
 		return
 	}
-	tp := make(map[string]struct{}, len(proxies))
+	ips := make(map[string]struct{}, len(proxies))
+	var cidrs []*net.IPNet
 	for _, p := range proxies {
-		tp[strings.TrimSpace(p)] = struct{}{}
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if strings.Contains(p, "/") {
+			_, ipNet, err := net.ParseCIDR(p)
+			if err == nil {
+				cidrs = append(cidrs, ipNet)
+			}
+		} else {
+			ips[p] = struct{}{}
+		}
 	}
-	trustedProxies = tp
+	trustedProxyIPs = ips
+	trustedProxyCIDRs = cidrs
 }
 
 // RateLimiter provides rate limiting functionality
@@ -162,13 +179,26 @@ func remoteAddrIP(r *http.Request) string {
 	return host
 }
 
-// isFromTrustedProxy checks if the remote IP is in the trusted proxy set.
+// isFromTrustedProxy checks if the remote IP is in the trusted proxy set
+// or falls within a trusted CIDR range.
 func isFromTrustedProxy(ip string) bool {
-	if trustedProxies == nil {
+	if trustedProxyIPs == nil && len(trustedProxyCIDRs) == 0 {
 		return false
 	}
-	_, ok := trustedProxies[ip]
-	return ok
+	if _, ok := trustedProxyIPs[ip]; ok {
+		return true
+	}
+	if len(trustedProxyCIDRs) > 0 {
+		parsed := net.ParseIP(ip)
+		if parsed != nil {
+			for _, cidr := range trustedProxyCIDRs {
+				if cidr.Contains(parsed) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // UserKeyFunc returns user ID as rate limit key (requires Auth middleware)
