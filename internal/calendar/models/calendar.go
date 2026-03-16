@@ -82,7 +82,6 @@ type CreateCalendarRequest struct {
 	HolidayEveMinTime string               `json:"holiday_eve_min_time,omitempty"`
 	HolidayEveMaxTime string               `json:"holiday_eve_max_time,omitempty"`
 	NotifyOnThreshold bool                 `json:"notify_on_threshold,omitempty"`
-	NotifyConfig      *string              `json:"notify_config,omitempty"` // JSONB stored as nullable string
 	LockParticipants             bool                 `json:"lock_participants,omitempty"`
 	AllowAnonymousParticipants   bool                 `json:"allow_anonymous_participants,omitempty"`
 	StartDate                    string               `json:"start_date,omitempty"`
@@ -107,7 +106,6 @@ type UpdateCalendarRequest struct {
 	HolidayEveMinTime *string              `json:"holiday_eve_min_time,omitempty"`
 	HolidayEveMaxTime *string              `json:"holiday_eve_max_time,omitempty"`
 	NotifyOnThreshold *bool                `json:"notify_on_threshold,omitempty"`
-	NotifyConfig      *string              `json:"notify_config,omitempty"` // JSONB stored as nullable string
 	LockParticipants             *bool                `json:"lock_participants,omitempty"`
 	AllowAnonymousParticipants   *bool                `json:"allow_anonymous_participants,omitempty"`
 	StartDate                    *string              `json:"start_date,omitempty"`

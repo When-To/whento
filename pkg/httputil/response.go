@@ -46,9 +46,11 @@ func JSON(w http.ResponseWriter, status int, data interface{}) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// Error writes an error response
+// Error writes an error response with cache-prevention headers
 func Error(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
 	w.WriteHeader(status)
 
 	resp := Response{
@@ -62,9 +64,11 @@ func Error(w http.ResponseWriter, status int, code, message string) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// ValidationError writes a validation error response
+// ValidationError writes a validation error response with cache-prevention headers
 func ValidationError(w http.ResponseWriter, errs validator.ValidationErrors) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
 	w.WriteHeader(http.StatusBadRequest)
 
 	resp := Response{

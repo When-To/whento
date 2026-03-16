@@ -244,7 +244,7 @@ func main() {
 
 	// ========== MFA MODULE ==========
 	// Initialize MFA service (repository already created for auth service)
-	mfaSvc := mfaService.NewMFAService(mfaRepository, userRepo, cfg, log)
+	mfaSvc := mfaService.NewMFAService(mfaRepository, userRepo, tokenRepo, cfg, log)
 	log.Info("MFA service initialized")
 
 	// Initialize MFA handler (with auth service for completing login)

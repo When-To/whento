@@ -215,7 +215,7 @@ func (s *ICSService) generateICS(calendar *repository.Calendar, events []models.
 	cal.SetProductId("-//WhenTo//WhenTo Calendar//EN")
 	cal.SetName(sanitizeICSText(calendar.Name))
 	cal.SetXWRCalName(sanitizeICSText(calendar.Name))
-	cal.SetXWRTimezone(calendar.Timezone) // Hint for calendar clients about the intended timezone
+	cal.SetXWRTimezone(sanitizeICSText(calendar.Timezone)) // Hint for calendar clients about the intended timezone
 	cal.SetRefreshInterval("PT1H")        // Refresh every hour
 
 	// Add events using floating time (RFC 5545 FORM #1)
