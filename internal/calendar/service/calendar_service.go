@@ -329,6 +329,7 @@ func buildPublicCalendarResponse(calendar *models.Calendar, participants []model
 		LockParticipants:           calendar.LockParticipants,
 		AllowAnonymousParticipants: calendar.AllowAnonymousParticipants,
 		NotifyParticipants:         notifyParticipants,
+		ICSToken:           calendar.ICSToken,
 		StartDate:          calendar.StartDate,
 		EndDate:            calendar.EndDate,
 		Participants:       participants,
