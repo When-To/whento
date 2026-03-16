@@ -245,6 +245,11 @@ func SecurityHeaders(next http.Handler) http.Handler {
 			"form-action 'self'"
 		w.Header().Set("Content-Security-Policy", csp)
 
+		// Cross-origin isolation headers
+		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+		w.Header().Set("Cross-Origin-Embedder-Policy", "require-corp")
+
 		// Restrict browser features
 		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=()")
 
