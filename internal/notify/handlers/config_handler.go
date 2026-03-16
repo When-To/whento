@@ -150,16 +150,23 @@ func (h *NotifyConfigHandler) UpdateConfig(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Validate webhook URLs against SSRF (must be HTTPS, no private IPs)
-	if req.Config.Channels.Discord.Enabled && req.Config.Channels.Discord.WebhookURL != "" {
-		if err := notifyService.ValidateWebhookURL(req.Config.Channels.Discord.WebhookURL); err != nil {
+	// Validate webhook URLs against SSRF — always validate even when channel is disabled
+	if req.Config.Channels.Discord.WebhookURL != "" {
+		if err := notifyService.ValidateDiscordWebhookURL(req.Config.Channels.Discord.WebhookURL); err != nil {
 			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid Discord webhook URL: "+err.Error())
 			return
 		}
 	}
-	if req.Config.Channels.Slack.Enabled && req.Config.Channels.Slack.WebhookURL != "" {
-		if err := notifyService.ValidateWebhookURL(req.Config.Channels.Slack.WebhookURL); err != nil {
+	if req.Config.Channels.Slack.WebhookURL != "" {
+		if err := notifyService.ValidateSlackWebhookURL(req.Config.Channels.Slack.WebhookURL); err != nil {
 			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid Slack webhook URL: "+err.Error())
+			return
+		}
+	}
+	// Validate Telegram bot token format
+	if req.Config.Channels.Telegram.BotToken != "" {
+		if err := notifyService.ValidateTelegramBotToken(req.Config.Channels.Telegram.BotToken); err != nil {
+			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid Telegram bot token: "+err.Error())
 			return
 		}
 	}

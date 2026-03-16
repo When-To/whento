@@ -63,9 +63,10 @@ func NewRateLimiter(client *redis.Client) *RateLimiter {
 
 // RateLimitConfig holds rate limit configuration
 type RateLimitConfig struct {
-	Requests int                          // Number of requests allowed
-	Window   time.Duration                // Time window
-	KeyFunc  func(r *http.Request) string // Function to extract rate limit key
+	Requests   int                          // Number of requests allowed
+	Window     time.Duration                // Time window
+	KeyFunc    func(r *http.Request) string // Function to extract rate limit key
+	FailClosed bool                         // If true, block requests when Redis is unavailable (critical routes)
 }
 
 // Limit creates a rate limiting middleware
@@ -73,8 +74,12 @@ type RateLimitConfig struct {
 func (rl *RateLimiter) Limit(cfg RateLimitConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// If Redis is not available, skip rate limiting
+			// If Redis is not available, behavior depends on FailClosed setting
 			if rl.client == nil {
+				if cfg.FailClosed {
+					http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+					return
+				}
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -87,7 +92,11 @@ func (rl *RateLimiter) Limit(cfg RateLimitConfig) func(http.Handler) http.Handle
 
 			allowed, remaining, resetAt, err := rl.check(r.Context(), key, cfg.Requests, cfg.Window)
 			if err != nil {
-				// On error, allow the request but log it
+				if cfg.FailClosed {
+					http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				// On error, allow the request on non-critical routes
 				next.ServeHTTP(w, r)
 				return
 			}

@@ -190,7 +190,6 @@ type PublicCalendarResponse struct {
 	LockParticipants             bool                 `json:"lock_participants"`
 	AllowAnonymousParticipants   bool                 `json:"allow_anonymous_participants"`
 	NotifyParticipants           bool                 `json:"notify_participants"`
-	ICSToken                     string               `json:"ics_token"`
 	StartDate                    *time.Time           `json:"start_date,omitempty"`
 	EndDate                      *time.Time           `json:"end_date,omitempty"`
 	Participants                 []PublicParticipant  `json:"participants"`

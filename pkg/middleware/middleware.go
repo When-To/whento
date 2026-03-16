@@ -235,7 +235,7 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		// Content Security Policy - restricts resources the page can load
 		// This is a strict policy, adjust based on your needs
 		csp := "default-src 'self'; " +
-			"script-src 'self' 'unsafe-inline' 'unsafe-eval'; " + // Allow inline scripts for Vite dev mode
+			"script-src 'self'; " +
 			"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
 			"font-src 'self' https://fonts.gstatic.com; " +
 			"img-src 'self' data: https:; " +

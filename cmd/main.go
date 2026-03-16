@@ -369,34 +369,47 @@ func main() {
 		// Public routes with rate limiting
 		r.Group(func(r chi.Router) {
 			if cfg.RateLimitEnabled {
-				// Login: 5 requests/minute/IP
+				// Login: 5 requests/minute/IP (fail-closed: block if Redis is down)
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 5,
-					Window:   time.Minute,
-					KeyFunc:  middleware.CombinedKeyFunc,
+					Requests:   5,
+					Window:     time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
 				})).Post("/login", authHandler.Login)
 
-				// Register: 3 requests/minute/IP
+				// Register: 3 requests/minute/IP (fail-closed)
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 3,
-					Window:   time.Minute,
-					KeyFunc:  middleware.CombinedKeyFunc,
+					Requests:   3,
+					Window:     time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
 				})).Post("/register", authHandler.Register)
 			} else {
 				r.Post("/login", authHandler.Login)
 				r.Post("/register", authHandler.Register)
 			}
 
-			r.Post("/refresh", authHandler.Refresh)
+			if cfg.RateLimitEnabled {
+				// Refresh: 5 requests/minute/IP (fail-closed)
+				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests:   5,
+					Window:     time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
+				})).Post("/refresh", authHandler.Refresh)
+			} else {
+				r.Post("/refresh", authHandler.Refresh)
+			}
 			r.Post("/logout", authHandler.Logout)
 
 			// Password reset (public - no auth required)
 			if cfg.RateLimitEnabled {
-				// Forgot password: 3 requests/15 minutes/IP
+				// Forgot password: 3 requests/15 minutes/IP (fail-closed)
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 3,
-					Window:   15 * time.Minute,
-					KeyFunc:  middleware.IPKeyFunc,
+					Requests:   3,
+					Window:     15 * time.Minute,
+					KeyFunc:    middleware.IPKeyFunc,
+					FailClosed: true,
 				})).Post("/forgot-password", passwordResetHandler.ForgotPassword)
 			} else {
 				r.Post("/forgot-password", passwordResetHandler.ForgotPassword)
@@ -584,7 +597,16 @@ func main() {
 
 			// Public participant email management (requires calendar token validation)
 			r.Post("/{token}/participants/{pid}/email", participantEmailHandler.AddEmail)
-			r.Post("/{token}/participants/{pid}/resend-verification", participantEmailHandler.ResendVerification)
+			if cfg.RateLimitEnabled {
+				// Resend verification: 3 requests/15 minutes/IP
+				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests: 3,
+					Window:   15 * time.Minute,
+					KeyFunc:  middleware.IPKeyFunc,
+				})).Post("/{token}/participants/{pid}/resend-verification", participantEmailHandler.ResendVerification)
+			} else {
+				r.Post("/{token}/participants/{pid}/resend-verification", participantEmailHandler.ResendVerification)
+			}
 		})
 
 		// Authenticated routes

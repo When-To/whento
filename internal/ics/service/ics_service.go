@@ -213,8 +213,8 @@ func (s *ICSService) generateICS(calendar *repository.Calendar, events []models.
 	cal := ics.NewCalendar()
 	cal.SetMethod(ics.MethodPublish)
 	cal.SetProductId("-//WhenTo//WhenTo Calendar//EN")
-	cal.SetName(calendar.Name)
-	cal.SetXWRCalName(calendar.Name)
+	cal.SetName(sanitizeICSText(calendar.Name))
+	cal.SetXWRCalName(sanitizeICSText(calendar.Name))
 	cal.SetXWRTimezone(calendar.Timezone) // Hint for calendar clients about the intended timezone
 	cal.SetRefreshInterval("PT1H")        // Refresh every hour
 
@@ -328,7 +328,7 @@ func (s *ICSService) buildDescription(event models.CalendarEvent) string {
 		}
 
 		if p.Note != "" {
-			line += fmt.Sprintf(": %s", p.Note)
+			line += fmt.Sprintf(": %s", sanitizeICSText(p.Note))
 		}
 
 		desc += line + "\n"
@@ -336,7 +336,7 @@ func (s *ICSService) buildDescription(event models.CalendarEvent) string {
 
 	// Add calendar description at the end if present
 	if event.CalendarDescription != "" {
-		desc += "\n---\n" + event.CalendarDescription
+		desc += "\n---\n" + sanitizeICSText(event.CalendarDescription)
 	}
 
 	return desc

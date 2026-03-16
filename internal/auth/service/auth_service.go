@@ -32,6 +32,13 @@ var (
 	ErrCannotDemoteSelf     = errors.New("cannot change your own role")
 	ErrRegistrationDisabled = errors.New("new user registration is disabled")
 	ErrEmailNotAllowed      = errors.New("email address is not allowed to register")
+	ErrAccountLocked        = errors.New("too many failed login attempts, try again later")
+)
+
+const (
+	maxLoginAttempts    = 10
+	loginLockoutWindow  = 15 * time.Minute
+	loginAttemptsPrefix = "login_attempts:"
 )
 
 // UserRepository defines the interface for user repository operations
@@ -153,10 +160,22 @@ func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest)
 
 // Login authenticates a user
 func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (*models.AuthResponse, error) {
+	// Check account lockout before any credential validation
+	lockoutKey := loginAttemptsPrefix + req.Email
+	if s.cache.IsEnabled() {
+		var attempts int
+		if err := s.cache.Get(ctx, lockoutKey, &attempts); err == nil {
+			if attempts >= maxLoginAttempts {
+				return nil, ErrAccountLocked
+			}
+		}
+	}
+
 	// Get user by email
 	user, err := s.userRepo.GetByEmail(ctx, req.Email)
 	if err != nil {
 		if errors.Is(err, repository.ErrUserNotFound) {
+			s.incrementLoginAttempts(ctx, lockoutKey)
 			return nil, ErrInvalidCredentials
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
@@ -164,7 +183,13 @@ func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (*mod
 
 	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		s.incrementLoginAttempts(ctx, lockoutKey)
 		return nil, ErrInvalidCredentials
+	}
+
+	// Login successful — reset failed attempts counter
+	if s.cache.IsEnabled() {
+		_ = s.cache.Delete(ctx, lockoutKey)
 	}
 
 	// Check if user has 2FA enabled
@@ -189,6 +214,17 @@ func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (*mod
 
 	// No MFA - generate full tokens
 	return s.generateAuthResponse(user)
+}
+
+// incrementLoginAttempts increments the failed login counter for the given key
+func (s *AuthService) incrementLoginAttempts(ctx context.Context, key string) {
+	if !s.cache.IsEnabled() {
+		return
+	}
+	var attempts int
+	_ = s.cache.Get(ctx, key, &attempts)
+	attempts++
+	_ = s.cache.Set(ctx, key, attempts, loginLockoutWindow)
 }
 
 // RefreshToken refreshes the access token using a refresh token

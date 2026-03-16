@@ -90,6 +90,10 @@ func (h *RecurrenceHandler) GetParticipantRecurrences(w http.ResponseWriter, r *
 	token := chi.URLParam(r, "token")
 	participantID := chi.URLParam(r, "pid")
 
+	if !verifyParticipantToken(w, r, participantID) {
+		return
+	}
+
 	recurrences, err := h.service.GetParticipantRecurrences(r.Context(), token, participantID)
 	if err != nil {
 		handleRecurrenceError(w, r, err, "Failed to get recurrences")

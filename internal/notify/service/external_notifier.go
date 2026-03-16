@@ -14,6 +14,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -99,7 +101,8 @@ func mustParseCIDR(s string) *net.IPNet {
 	return n
 }
 
-// validateWebhookURL checks that a webhook URL uses https and points to a non-private host.
+// validateWebhookURL checks that a webhook URL uses https, points to a non-private host,
+// and resolves to a non-private IP (anti DNS-rebinding).
 func validateWebhookURL(rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -110,13 +113,27 @@ func validateWebhookURL(rawURL string) error {
 	}
 	host := u.Hostname()
 	// Block obvious internal hostnames
-	if host == "localhost" || host == "redis" || host == "postgres" || host == "db" || host == "memcached" {
-		return fmt.Errorf("webhook URL hostname %q is not allowed", host)
+	blockedHosts := []string{"localhost", "redis", "postgres", "db", "memcached", "internal", "metadata", "metadata.google.internal"}
+	for _, blocked := range blockedHosts {
+		if host == blocked {
+			return fmt.Errorf("webhook URL hostname %q is not allowed", host)
+		}
 	}
 	// Check if it's a raw IP
 	if ip := net.ParseIP(host); ip != nil {
 		if isPrivateIP(ip) {
 			return fmt.Errorf("webhook URL must not point to private IP %s", ip)
+		}
+	} else {
+		// Resolve DNS and verify all IPs are public (anti DNS-rebinding)
+		ips, err := net.LookupIP(host)
+		if err != nil {
+			return fmt.Errorf("webhook URL hostname %q could not be resolved: %w", host, err)
+		}
+		for _, ip := range ips {
+			if isPrivateIP(ip) {
+				return fmt.Errorf("webhook URL hostname %q resolves to private IP %s", host, ip)
+			}
 		}
 	}
 	return nil
@@ -125,6 +142,40 @@ func validateWebhookURL(rawURL string) error {
 // ValidateWebhookURL is the exported version for use by handlers.
 func ValidateWebhookURL(rawURL string) error {
 	return validateWebhookURL(rawURL)
+}
+
+// ValidateDiscordWebhookURL validates that the URL is a valid Discord webhook URL.
+func ValidateDiscordWebhookURL(rawURL string) error {
+	if err := validateWebhookURL(rawURL); err != nil {
+		return err
+	}
+	if !strings.HasPrefix(rawURL, "https://discord.com/api/webhooks/") &&
+		!strings.HasPrefix(rawURL, "https://discordapp.com/api/webhooks/") {
+		return fmt.Errorf("Discord webhook URL must start with https://discord.com/api/webhooks/")
+	}
+	return nil
+}
+
+// ValidateSlackWebhookURL validates that the URL is a valid Slack webhook URL.
+func ValidateSlackWebhookURL(rawURL string) error {
+	if err := validateWebhookURL(rawURL); err != nil {
+		return err
+	}
+	if !strings.HasPrefix(rawURL, "https://hooks.slack.com/") {
+		return fmt.Errorf("Slack webhook URL must start with https://hooks.slack.com/")
+	}
+	return nil
+}
+
+// telegramBotTokenRegex validates Telegram bot token format: digits:alphanumeric
+var telegramBotTokenRegex = regexp.MustCompile(`^[0-9]+:[A-Za-z0-9_-]+$`)
+
+// ValidateTelegramBotToken validates the Telegram bot token format to prevent URL injection.
+func ValidateTelegramBotToken(token string) error {
+	if !telegramBotTokenRegex.MatchString(token) {
+		return fmt.Errorf("bot token must match format '<numeric_id>:<alphanumeric_secret>'")
+	}
+	return nil
 }
 
 // SendDiscord sends notification via Discord webhook
@@ -233,6 +284,11 @@ func (e *ExternalNotifier) SendTelegram(
 ) error {
 	if botToken == "" || chatID == "" {
 		return fmt.Errorf("telegram bot token or chat ID not configured")
+	}
+
+	// Validate bot token format before constructing URL to prevent path injection
+	if err := ValidateTelegramBotToken(botToken); err != nil {
+		return fmt.Errorf("invalid telegram bot token: %w", err)
 	}
 
 	// Telegram Bot API endpoint

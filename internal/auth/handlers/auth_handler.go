@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -129,16 +130,15 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.authService.Register(r.Context(), &req)
 	if err != nil {
-		// Use generic error messages to prevent account enumeration
-		if errors.Is(err, service.ErrUserAlreadyExists) {
-			httputil.Error(w, http.StatusConflict, httputil.ErrCodeConflict, "Registration failed")
+		// Use identical error messages and status codes to prevent account enumeration.
+		// All user-facing registration failures return the same generic response
+		// so attackers cannot distinguish "email exists" from "email not allowed".
+		if errors.Is(err, service.ErrUserAlreadyExists) ||
+			errors.Is(err, service.ErrEmailNotAllowed) {
+			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Registration failed")
 			return
 		}
 		if errors.Is(err, service.ErrRegistrationDisabled) {
-			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "Registration is not available")
-			return
-		}
-		if errors.Is(err, service.ErrEmailNotAllowed) {
 			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "Registration is not available")
 			return
 		}
@@ -221,10 +221,10 @@ func (h *AuthHandler) sendVerificationEmail(to, displayName, locale, token strin
 	}
 }
 
-// replaceVar replaces {{.VarName}} with value in a string
+// replaceVar replaces {{.VarName}} with HTML-escaped value in a string
 func replaceVar(str, varName, value string) string {
 	placeholder := "{{." + varName + "}}"
-	return strings.ReplaceAll(str, placeholder, value)
+	return strings.ReplaceAll(str, placeholder, html.EscapeString(value))
 }
 
 // Login handles user login
@@ -259,6 +259,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.authService.Login(r.Context(), &req)
 	if err != nil {
+		if errors.Is(err, service.ErrAccountLocked) {
+			httputil.Error(w, http.StatusTooManyRequests, "TOO_MANY_REQUESTS", "Too many failed login attempts, try again later")
+			return
+		}
 		if errors.Is(err, service.ErrInvalidCredentials) {
 			httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Invalid email or password")
 			return

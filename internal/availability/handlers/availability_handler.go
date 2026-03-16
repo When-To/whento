@@ -107,6 +107,10 @@ func (h *AvailabilityHandler) GetParticipantAvailabilities(w http.ResponseWriter
 	token := chi.URLParam(r, "token")
 	participantID := chi.URLParam(r, "pid")
 
+	if !verifyParticipantToken(w, r, participantID) {
+		return
+	}
+
 	// Get optional date range query parameters
 	startDate := r.URL.Query().Get("start")
 	endDate := r.URL.Query().Get("end")

@@ -31,9 +31,11 @@ type ErrorResponse struct {
 	Error   *ErrorInfo `json:"error"`
 }
 
-// JSON writes a JSON response
+// JSON writes a JSON response with cache-prevention headers
 func JSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
 	w.WriteHeader(status)
 
 	resp := Response{

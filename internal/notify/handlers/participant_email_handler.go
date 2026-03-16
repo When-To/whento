@@ -177,6 +177,13 @@ func (h *ParticipantEmailHandler) ResendVerification(w http.ResponseWriter, r *h
 	token := chi.URLParam(r, "token")
 	participantID := chi.URLParam(r, "pid")
 
+	// Verify participant token for authorization
+	ptToken := participanttoken.FromRequest(r, participantID)
+	if ptToken == "" || !participanttoken.Validate(participantID, ptToken) {
+		httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "Invalid or missing participant token")
+		return
+	}
+
 	// Validate participant ID
 	pid, err := uuid.Parse(participantID)
 	if err != nil {
