@@ -45,7 +45,7 @@ RUN apk add --no-cache curl && \
     chmod +x /usr/local/bin/migrate
 
 # Runtime stage
-FROM alpine:3.19
+FROM alpine:3.22
 
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata openssl netcat-openbsd
