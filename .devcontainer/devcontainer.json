@@ -5,7 +5,10 @@
   "workspaceFolder": "/workspace",
   "features": {
     "ghcr.io/devcontainers/features/git:1": {},
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
   },
   "customizations": {
     "vscode": {
@@ -25,7 +28,6 @@
       "settings": {
         "go.useLanguageServer": true,
         "go.lintTool": "golangci-lint",
-        "go.lintFlags": ["--fast"],
         "editor.formatOnSave": true,
         "editor.defaultFormatter": null,
         "[go]": {

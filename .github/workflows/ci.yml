@@ -80,7 +80,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25'
 
       - name: Install swag CLI
         run: go install github.com/swaggo/swag/cmd/swag@latest
@@ -141,7 +141,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25'
 
       - name: Download dependencies
         run: go mod download
@@ -174,7 +174,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25'
 
       - name: Build selfhosted
         run: go build -tags selfhosted -o /dev/null ./cmd/

@@ -1,9 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/go:1.25-bookworm
-
-# Node.js for the frontend
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && npm install -g npm@latest
+FROM mcr.microsoft.com/devcontainers/go:1.25-trixie
 
 # Configure Go to use /home/vscode/go
 ENV GOPATH=/home/vscode/go
