@@ -12,26 +12,10 @@ import (
 
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/logger"
-	"github.com/whento/pkg/participanttoken"
 	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/availability/models"
 	"github.com/whento/whento/internal/availability/service"
 )
-
-// verifyParticipantToken checks the participant token from the request.
-// Returns true if the token is valid for the given participant ID.
-func verifyParticipantToken(w http.ResponseWriter, r *http.Request, participantID string) bool {
-	token := participanttoken.FromRequest(r, participantID)
-	if token == "" {
-		httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "Participant token required")
-		return false
-	}
-	if !participanttoken.Validate(participantID, token) {
-		httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "Invalid participant token")
-		return false
-	}
-	return true
-}
 
 // AvailabilityHandler handles availability HTTP requests
 type AvailabilityHandler struct {
@@ -61,11 +45,7 @@ func (h *AvailabilityHandler) CreateAvailability(w http.ResponseWriter, r *http.
 	token := chi.URLParam(r, "token")
 	participantID := chi.URLParam(r, "pid")
 
-	if !verifyParticipantToken(w, r, participantID) {
-		return
-	}
-
-	var req models.CreateAvailabilityRequest
+var req models.CreateAvailabilityRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
 		return
@@ -107,11 +87,7 @@ func (h *AvailabilityHandler) GetParticipantAvailabilities(w http.ResponseWriter
 	token := chi.URLParam(r, "token")
 	participantID := chi.URLParam(r, "pid")
 
-	if !verifyParticipantToken(w, r, participantID) {
-		return
-	}
-
-	// Get optional date range query parameters
+// Get optional date range query parameters
 	startDate := r.URL.Query().Get("start")
 	endDate := r.URL.Query().Get("end")
 
@@ -144,11 +120,7 @@ func (h *AvailabilityHandler) UpdateAvailability(w http.ResponseWriter, r *http.
 	participantID := chi.URLParam(r, "pid")
 	date := chi.URLParam(r, "date")
 
-	if !verifyParticipantToken(w, r, participantID) {
-		return
-	}
-
-	var req models.UpdateAvailabilityRequest
+var req models.UpdateAvailabilityRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
 		return
@@ -189,11 +161,7 @@ func (h *AvailabilityHandler) DeleteAvailability(w http.ResponseWriter, r *http.
 	participantID := chi.URLParam(r, "pid")
 	date := chi.URLParam(r, "date")
 
-	if !verifyParticipantToken(w, r, participantID) {
-		return
-	}
-
-	err := h.availabilityService.DeleteAvailability(r.Context(), token, participantID, date)
+err := h.availabilityService.DeleteAvailability(r.Context(), token, participantID, date)
 	if err != nil {
 		handleAvailabilityError(w, r, err, "Failed to delete availability")
 		return
