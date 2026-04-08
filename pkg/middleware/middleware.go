@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 
+	"github.com/whento/pkg/cache"
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/logger"
 )
@@ -115,7 +116,7 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 }
 
 // Auth creates an authentication middleware
-func Auth(jwtManager *jwt.Manager) func(http.Handler) http.Handler {
+func Auth(jwtManager *jwt.Manager, c cache.Cache) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -134,6 +135,18 @@ func Auth(jwtManager *jwt.Manager) func(http.Handler) http.Handler {
 			if err != nil {
 				http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
 				return
+			}
+
+			// Check if token was issued before a password change
+			if c != nil && c.IsEnabled() {
+				var changedAt int64
+				key := cache.UserPasswordChangedKey(claims.UserID)
+				if err := c.Get(r.Context(), key, &changedAt); err == nil {
+					if claims.IssuedAt != nil && claims.IssuedAt.Unix() < changedAt {
+						http.Error(w, "Token invalidated by password change", http.StatusUnauthorized)
+						return
+					}
+				}
 			}
 
 			// Add user info to context

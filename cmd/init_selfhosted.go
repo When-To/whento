@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/whento/pkg/cache"
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
@@ -86,7 +87,7 @@ func InitServices(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool) (
 }
 
 // RegisterBillingRoutes registers self-hosted specific licensing routes
-func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config, pool *pgxpool.Pool, jwtManager interface{}) {
+func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config, pool *pgxpool.Pool, jwtManager interface{}, cacheInstance cache.Cache) {
 	log := logger.Default()
 
 	// Reuse the licensing service from InitServices (already has license loaded in RAM)
@@ -108,7 +109,7 @@ func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config,
 	r.Route("/api/v1/license", func(r chi.Router) {
 		// Authenticated routes
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.Auth(jwtManager.(*jwt.Manager)))
+			r.Use(middleware.Auth(jwtManager.(*jwt.Manager), cacheInstance))
 
 			// Public info (any authenticated user can view)
 			r.Get("/info", licHandler.HandleGetLicenseInfo)
@@ -126,7 +127,7 @@ func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config,
 
 	// Quota routes (authenticated users)
 	r.Route("/api/v1/quota", func(r chi.Router) {
-		r.Use(middleware.Auth(jwtManager.(*jwt.Manager)))
+		r.Use(middleware.Auth(jwtManager.(*jwt.Manager), cacheInstance))
 		r.Get("/limits", quotaHandler.HandleGetLimits)
 	})
 

@@ -12,6 +12,7 @@ const (
 	PrefixParticipant  = "participant"
 	PrefixAvailability = "availability"
 	PrefixICS          = "ics"
+	PrefixAuth         = "auth"
 )
 
 // Calendar cache keys
@@ -51,6 +52,11 @@ func CalendarRangeSummaryKey(calendarID, start, end string) string {
 // ICS cache keys
 func ICSFeedKey(token string) string {
 	return fmt.Sprintf("%s:feed:%s", PrefixICS, token)
+}
+
+// Auth cache keys
+func UserPasswordChangedKey(userID string) string {
+	return fmt.Sprintf("%s:pwd_changed:%s", PrefixAuth, userID)
 }
 
 // Helper to invalidate all cache keys for a calendar

@@ -50,6 +50,11 @@ type Manager struct {
 	issuer        string
 }
 
+// AccessExpiry returns the configured access token expiry duration
+func (m *Manager) AccessExpiry() time.Duration {
+	return m.accessExpiry
+}
+
 // NewManager creates a new JWT manager
 func NewManager(cfg *Config) (*Manager, error) {
 	var privateKey *rsa.PrivateKey

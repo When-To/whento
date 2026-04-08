@@ -346,6 +346,12 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID string, req *mo
 	// Invalidate all refresh tokens
 	_ = s.tokenRepo.DeleteByUserID(ctx, uid)
 
+	// Invalidate all active access tokens by recording password change time
+	if s.cache != nil && s.cache.IsEnabled() {
+		pwdKey := cache.UserPasswordChangedKey(userID)
+		_ = s.cache.Set(ctx, pwdKey, time.Now().Unix(), s.jwtManager.AccessExpiry())
+	}
+
 	return nil
 }
 

@@ -164,8 +164,8 @@ func main() {
 	// Initialize participant token signing (uses JWT private key as HMAC seed)
 	ptKeyBytes, err := os.ReadFile(cfg.JWTPrivateKeyPath)
 	if err != nil {
-		log.Warn("Failed to read JWT private key for participant tokens, using fallback", "error", err)
-		ptKeyBytes = []byte("whento-participant-token-fallback-secret")
+		log.Error("Failed to read JWT private key for participant tokens", "error", err)
+		os.Exit(1)
 	}
 	participanttoken.Init(ptKeyBytes)
 
@@ -417,9 +417,10 @@ func main() {
 			if cfg.RateLimitEnabled {
 				// Reset password: 5 requests/15 minutes/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 5,
-					Window:   15 * time.Minute,
-					KeyFunc:  middleware.CombinedKeyFunc,
+					Requests:   5,
+					Window:     15 * time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
 				})).Post("/reset-password", passwordResetHandler.ResetPassword)
 			} else {
 				r.Post("/reset-password", passwordResetHandler.ResetPassword)
@@ -428,9 +429,10 @@ func main() {
 			// Magic link authentication (public)
 			if cfg.RateLimitEnabled {
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 3,
-					Window:   15 * time.Minute,
-					KeyFunc:  middleware.IPKeyFunc,
+					Requests:   3,
+					Window:     15 * time.Minute,
+					KeyFunc:    middleware.IPKeyFunc,
+					FailClosed: true,
 				})).Post("/magic-link/request", magicLinkHandler.RequestMagicLink)
 			} else {
 				r.Post("/magic-link/request", magicLinkHandler.RequestMagicLink)
@@ -438,9 +440,10 @@ func main() {
 			if cfg.RateLimitEnabled {
 				// Magic link verify: 5 requests/15 minutes/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 5,
-					Window:   15 * time.Minute,
-					KeyFunc:  middleware.CombinedKeyFunc,
+					Requests:   5,
+					Window:     15 * time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
 				})).Get("/magic-link/verify/{token}", magicLinkHandler.VerifyMagicLink)
 			} else {
 				r.Get("/magic-link/verify/{token}", magicLinkHandler.VerifyMagicLink)
@@ -453,7 +456,7 @@ func main() {
 
 		// Authenticated routes
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.Auth(jwtManager))
+			r.Use(middleware.Auth(jwtManager, cacheInstance))
 
 			r.Get("/me", authHandler.GetMe)
 			r.Patch("/me", authHandler.UpdateMe)
@@ -478,15 +481,17 @@ func main() {
 			if cfg.RateLimitEnabled {
 				// Passkey login (usernameless/passwordless): 5 requests/minute/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 5,
-					Window:   time.Minute,
-					KeyFunc:  middleware.CombinedKeyFunc,
+					Requests:   5,
+					Window:     time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
 				})).Post("/passkey/login/begin", passkeyHandler.BeginDiscoverableAuthentication)
 
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 5,
-					Window:   time.Minute,
-					KeyFunc:  middleware.CombinedKeyFunc,
+					Requests:   5,
+					Window:     time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
 				})).Post("/passkey/login/finish", passkeyHandler.FinishAuthentication)
 			} else {
 				r.Post("/passkey/login/begin", passkeyHandler.BeginDiscoverableAuthentication)
@@ -499,9 +504,10 @@ func main() {
 			if cfg.RateLimitEnabled {
 				// MFA verification: 5 requests/5 minutes/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 5,
-					Window:   5 * time.Minute,
-					KeyFunc:  middleware.CombinedKeyFunc,
+					Requests:   5,
+					Window:     5 * time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
 				})).Post("/mfa/verify", mfaHandler.VerifyLogin)
 			} else {
 				r.Post("/mfa/verify", mfaHandler.VerifyLogin)
@@ -511,7 +517,7 @@ func main() {
 
 	// ========== PASSKEY ROUTES (Authenticated) ==========
 	r.Route("/api/v1/passkey", func(r chi.Router) {
-		r.Use(middleware.Auth(jwtManager))
+		r.Use(middleware.Auth(jwtManager, cacheInstance))
 
 		if cfg.RateLimitEnabled {
 			// Passkey operations: 5 requests/minute/user
@@ -538,7 +544,7 @@ func main() {
 
 	// ========== MFA ROUTES (Authenticated) ==========
 	r.Route("/api/v1/mfa", func(r chi.Router) {
-		r.Use(middleware.Auth(jwtManager))
+		r.Use(middleware.Auth(jwtManager, cacheInstance))
 
 		if cfg.RateLimitEnabled {
 			// MFA setup/disable: 5 requests/minute/user
@@ -611,7 +617,7 @@ func main() {
 
 		// Authenticated routes
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.Auth(jwtManager))
+			r.Use(middleware.Auth(jwtManager, cacheInstance))
 
 			if cfg.RateLimitEnabled {
 				// Authenticated routes: 100 requests/minute/user
@@ -687,7 +693,7 @@ func main() {
 
 	// ========== BILLING/LICENSING ROUTES ==========
 	// Register build-specific routes (Cloud: Stripe billing, Self-hosted: License management)
-	RegisterBillingRoutes(r, services, cfg, pool, jwtManager)
+	RegisterBillingRoutes(r, services, cfg, pool, jwtManager, cacheInstance)
 
 	// ========== ICS ROUTES ==========
 	r.Route("/api/v1/ics", func(r chi.Router) {
