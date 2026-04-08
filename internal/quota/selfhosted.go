@@ -89,6 +89,11 @@ func (s *SelfHostedQuotaService) GetServerUsage(ctx context.Context) (int, error
 	return count, nil
 }
 
+// QuotaLockKey returns a fixed server-wide advisory lock key for self-hosted quota enforcement
+func (s *SelfHostedQuotaService) QuotaLockKey(_ uuid.UUID) int64 {
+	return 0x57484E54_4F51 // "WHNTOQ" — fixed key for server-wide lock
+}
+
 // IsOverQuota checks if the server has exceeded its calendar limit
 // For self-hosted, this is a server-wide check (not per-user)
 // When license expires/downgrades, the server may have more calendars than allowed

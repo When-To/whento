@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/logger"
@@ -28,6 +29,7 @@ type CalendarHandler struct {
 	quotaService    quota.QuotaService
 	userRepo        *authRepo.UserRepository
 	cfg             *config.Config
+	pool            *pgxpool.Pool
 }
 
 // NewCalendarHandler creates a new calendar handler
@@ -36,12 +38,14 @@ func NewCalendarHandler(
 	quotaService quota.QuotaService,
 	userRepo *authRepo.UserRepository,
 	cfg *config.Config,
+	pool *pgxpool.Pool,
 ) *CalendarHandler {
 	return &CalendarHandler{
 		calendarService: calendarService,
 		quotaService:    quotaService,
 		userRepo:        userRepo,
 		cfg:             cfg,
+		pool:            pool,
 	}
 }
 
@@ -133,7 +137,33 @@ func (h *CalendarHandler) CreateCalendar(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	// Check quota limits before creating calendar
+	// Acquire per-user (cloud) or server-wide (self-hosted) advisory lock
+	// to prevent TOCTOU race condition between quota check and calendar creation
+	if h.pool != nil {
+		lockKey := h.quotaService.QuotaLockKey(userUUID)
+
+		tx, err := h.pool.Begin(r.Context())
+		if err != nil {
+			logger.FromContext(r.Context()).Error("Failed to begin transaction for quota lock", "error", err, "user_id", userID)
+			httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to check calendar quota")
+			return
+		}
+		defer func() {
+			tx.Rollback(r.Context())
+		}()
+
+		if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock($1)`, lockKey); err != nil {
+			logger.FromContext(r.Context()).Error("Failed to acquire quota advisory lock", "error", err, "user_id", userID)
+			httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to check calendar quota")
+			return
+		}
+
+		defer func() {
+			tx.Commit(r.Context())
+		}()
+	}
+
+	// Check quota limits (safe under advisory lock when pool is available)
 	canCreate, err := h.quotaService.CanCreateCalendar(r.Context(), userUUID)
 	if err != nil {
 		logger.FromContext(r.Context()).Error("Failed to check quota", "error", err, "user_id", userID)

@@ -262,7 +262,7 @@ func main() {
 	calendarSvc := calendarService.NewCalendarService(calendarRepository, participantRepository, userRepo, cacheInstance)
 
 	// Initialize calendar handlers (with quota service for limit checking)
-	calendarHandler := calendarHandlers.NewCalendarHandler(calendarSvc, services.QuotaService, userRepo, cfg)
+	calendarHandler := calendarHandlers.NewCalendarHandler(calendarSvc, services.QuotaService, userRepo, cfg, pool)
 	participantHandler := calendarHandlers.NewParticipantHandler(calendarSvc)
 
 	// ========== AVAILABILITY MODULE ==========
