@@ -164,6 +164,10 @@ func (s *Service) CreateOrder(ctx context.Context, req models.CreateOrderRequest
 	if req.StripeSessionID != "" {
 		stripeSessionID = &req.StripeSessionID
 	}
+	var shopSessionID *string
+	if req.ShopSessionID != "" {
+		shopSessionID = &req.ShopSessionID
+	}
 
 	order := &models.Order{
 		ClientID:        req.ClientID,
@@ -174,6 +178,7 @@ func (s *Service) CreateOrder(ctx context.Context, req models.CreateOrderRequest
 		PaymentMethod:   paymentMethod,
 		StripePaymentID: stripePaymentID,
 		StripeSessionID: stripeSessionID,
+		ShopSessionID:   shopSessionID,
 		Status:          models.OrderStatusPending, // Always start as pending
 	}
 

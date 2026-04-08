@@ -248,7 +248,7 @@ func main() {
 	log.Info("MFA service initialized")
 
 	// Initialize MFA handler (with auth service for completing login)
-	mfaHandler := mfaHandlers.NewMFAHandler(mfaSvc, authSvc, jwtManager, log)
+	mfaHandler := mfaHandlers.NewMFAHandler(mfaSvc, authSvc, jwtManager, cacheInstance, log)
 
 	// Initialize admin MFA handler for admin operations (disable 2FA)
 	adminMFAHandler := authHandlers.NewAdminMFAHandler(mfaSvc, log)

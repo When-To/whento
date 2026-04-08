@@ -69,6 +69,7 @@ func InitServices(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool) (
 		StripeSecretKey:  cfg.Stripe.SecretKey,
 		StripePricePro:   cfg.Stripe.PricePro,
 		StripePricePower: cfg.Stripe.PricePower,
+		AppURL:           cfg.AppURL,
 	}, log)
 
 	log.Info("Subscription service initialized (Cloud mode)")
@@ -125,6 +126,7 @@ func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config,
 		StripeSecretKey:  cfg.Stripe.SecretKey,
 		StripePricePro:   cfg.Stripe.PricePro,
 		StripePricePower: cfg.Stripe.PricePower,
+		AppURL:           cfg.AppURL,
 	}, log)
 
 	// Initialize subscription handlers

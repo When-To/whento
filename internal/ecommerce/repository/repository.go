@@ -154,8 +154,8 @@ func (r *EcommerceRepository) UpdateClient(ctx context.Context, client *models.C
 func (r *EcommerceRepository) CreateOrder(ctx context.Context, order *models.Order) error {
 	query := `
 		INSERT INTO orders (id, client_id, amount_cents, country, vat_rate, vat_amount_cents,
-		                    payment_method, stripe_payment_id, stripe_session_id, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		                    payment_method, stripe_payment_id, stripe_session_id, shop_session_id, status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING created_at, updated_at
 	`
 
@@ -165,7 +165,7 @@ func (r *EcommerceRepository) CreateOrder(ctx context.Context, order *models.Ord
 
 	err := r.db.QueryRow(ctx, query,
 		order.ID, order.ClientID, order.AmountCents, order.Country, order.VATRate, order.VATAmountCents,
-		order.PaymentMethod, order.StripePaymentID, order.StripeSessionID, order.Status,
+		order.PaymentMethod, order.StripePaymentID, order.StripeSessionID, order.ShopSessionID, order.Status,
 	).Scan(&order.CreatedAt, &order.UpdatedAt)
 
 	if err != nil {
@@ -179,7 +179,7 @@ func (r *EcommerceRepository) CreateOrder(ctx context.Context, order *models.Ord
 func (r *EcommerceRepository) GetOrderByID(ctx context.Context, id uuid.UUID) (*models.Order, error) {
 	query := `
 		SELECT id, client_id, amount_cents, country, vat_rate, vat_amount_cents,
-		       payment_method, stripe_payment_id, stripe_session_id, status, created_at, updated_at
+		       payment_method, stripe_payment_id, stripe_session_id, shop_session_id, status, created_at, updated_at
 		FROM orders
 		WHERE id = $1
 	`
@@ -187,7 +187,7 @@ func (r *EcommerceRepository) GetOrderByID(ctx context.Context, id uuid.UUID) (*
 	var order models.Order
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&order.ID, &order.ClientID, &order.AmountCents, &order.Country, &order.VATRate, &order.VATAmountCents,
-		&order.PaymentMethod, &order.StripePaymentID, &order.StripeSessionID, &order.Status,
+		&order.PaymentMethod, &order.StripePaymentID, &order.StripeSessionID, &order.ShopSessionID, &order.Status,
 		&order.CreatedAt, &order.UpdatedAt,
 	)
 	if err != nil {
@@ -201,7 +201,7 @@ func (r *EcommerceRepository) GetOrderByID(ctx context.Context, id uuid.UUID) (*
 func (r *EcommerceRepository) GetOrderByStripeSessionID(ctx context.Context, sessionID string) (*models.Order, error) {
 	query := `
 		SELECT id, client_id, amount_cents, country, vat_rate, vat_amount_cents,
-		       payment_method, stripe_payment_id, stripe_session_id, status, created_at, updated_at
+		       payment_method, stripe_payment_id, stripe_session_id, shop_session_id, status, created_at, updated_at
 		FROM orders
 		WHERE stripe_session_id = $1
 	`
@@ -209,7 +209,7 @@ func (r *EcommerceRepository) GetOrderByStripeSessionID(ctx context.Context, ses
 	var order models.Order
 	err := r.db.QueryRow(ctx, query, sessionID).Scan(
 		&order.ID, &order.ClientID, &order.AmountCents, &order.Country, &order.VATRate, &order.VATAmountCents,
-		&order.PaymentMethod, &order.StripePaymentID, &order.StripeSessionID, &order.Status,
+		&order.PaymentMethod, &order.StripePaymentID, &order.StripeSessionID, &order.ShopSessionID, &order.Status,
 		&order.CreatedAt, &order.UpdatedAt,
 	)
 	if err != nil {

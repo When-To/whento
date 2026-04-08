@@ -119,6 +119,13 @@ func (h *WebhookHandler) handleCheckoutCompleted(ctx context.Context, event stri
 
 	h.log.Info("Processing checkout completion", "session_id", session.ID)
 
+	// Idempotency check: skip if order already exists for this Stripe session
+	existingOrder, err := h.ecommerceService.GetOrderByStripeSessionID(ctx, session.ID)
+	if err == nil && existingOrder != nil {
+		h.log.Info("Order already exists for session, skipping", "session_id", session.ID, "order_id", existingOrder.ID)
+		return
+	}
+
 	// Extract metadata
 	metadata := session.Metadata
 	cartJSON := metadata["cart"]
@@ -176,6 +183,7 @@ func (h *WebhookHandler) handleCheckoutCompleted(ctx context.Context, event stri
 	}
 
 	// Create order
+	shopSessionID := metadata["shop_session_id"]
 	order, err := h.ecommerceService.CreateOrder(ctx, ecommerceModels.CreateOrderRequest{
 		ClientID:        client.ID,
 		AmountCents:     subtotalCents,
@@ -183,6 +191,7 @@ func (h *WebhookHandler) handleCheckoutCompleted(ctx context.Context, event stri
 		VATRate:         vatRate,
 		VATAmountCents:  vatAmount,
 		StripeSessionID: session.ID,
+		ShopSessionID:   shopSessionID,
 		StripePaymentIntent: func() string {
 			if session.PaymentIntent != nil {
 				return session.PaymentIntent.ID

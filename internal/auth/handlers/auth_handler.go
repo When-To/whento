@@ -63,6 +63,32 @@ type PasskeyRepository interface {
 	CountByUserID(ctx context.Context, userID uuid.UUID) (int, error)
 }
 
+// setRefreshTokenCookie sets the refresh token as an httpOnly secure cookie.
+func setRefreshTokenCookie(w http.ResponseWriter, r *http.Request, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   7 * 24 * 60 * 60, // 7 days
+	})
+}
+
+// clearRefreshTokenCookie removes the refresh token cookie.
+func clearRefreshTokenCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
+	})
+}
+
 // NewAuthHandler creates a new auth handler
 func NewAuthHandler(
 	authService *service.AuthService,
@@ -260,7 +286,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.authService.Login(r.Context(), &req)
 	if err != nil {
 		if errors.Is(err, service.ErrAccountLocked) {
-			httputil.Error(w, http.StatusTooManyRequests, "TOO_MANY_REQUESTS", "Too many failed login attempts, try again later")
+			logger.FromContext(r.Context()).Warn("Login attempt on locked account", "email", req.Email)
+			httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Invalid email or password")
 			return
 		}
 		if errors.Is(err, service.ErrInvalidCredentials) {
@@ -269,6 +296,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to login")
 		return
+	}
+
+	// Set refresh token as httpOnly cookie
+	if resp.RefreshToken != "" {
+		setRefreshTokenCookie(w, r, resp.RefreshToken)
+		resp.RefreshToken = ""
 	}
 
 	httputil.JSON(w, http.StatusOK, resp)
@@ -287,25 +320,23 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 //	@Failure		401		{object}	httputil.ErrorResponse	"Invalid or expired refresh token"
 //	@Router			/api/v1/auth/refresh [post]
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
-	var req models.RefreshRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
+	// Read refresh token from httpOnly cookie
+	cookie, err := r.Cookie("refresh_token")
+	if err != nil || cookie.Value == "" {
+		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Invalid or expired refresh token")
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
-		return
-	}
-
-	resp, err := h.authService.RefreshToken(r.Context(), req.RefreshToken)
+	resp, err := h.authService.RefreshToken(r.Context(), cookie.Value)
 	if err != nil {
 		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Invalid or expired refresh token")
 		return
+	}
+
+	// Rotate refresh token cookie
+	if resp.RefreshToken != "" {
+		setRefreshTokenCookie(w, r, resp.RefreshToken)
+		resp.RefreshToken = ""
 	}
 
 	httputil.JSON(w, http.StatusOK, resp)
@@ -323,13 +354,13 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 //	@Failure		400		{object}	httputil.ErrorResponse	"Invalid request body"
 //	@Router			/api/v1/auth/logout [post]
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	var req models.RefreshRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
+	// Read refresh token from httpOnly cookie
+	cookie, err := r.Cookie("refresh_token")
+	if err == nil && cookie.Value != "" {
+		_ = h.authService.Logout(r.Context(), cookie.Value)
 	}
 
-	_ = h.authService.Logout(r.Context(), req.RefreshToken)
+	clearRefreshTokenCookie(w, r)
 
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }
