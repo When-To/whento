@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sort"
 	"sync"
@@ -426,9 +427,23 @@ func (s *Service) ValidateVATNumber(ctx context.Context, vatNumber string) (*mod
 		}, nil
 	}
 
-	// Extract country code (first 2 characters)
+	// Extract country code (first 2 characters) and validate format
 	countryCode := vatNumber[0:2]
 	vatNumberWithoutCountry := vatNumber[2:]
+
+	// Validate country code is letters only and VAT body is alphanumeric
+	if !regexp.MustCompile(`^[A-Z]{2}$`).MatchString(countryCode) {
+		return &models.ValidateVATResponse{
+			Valid: false,
+			Error: "Invalid country code in VAT number",
+		}, nil
+	}
+	if !regexp.MustCompile(`^[A-Za-z0-9.+*]+$`).MatchString(vatNumberWithoutCountry) {
+		return &models.ValidateVATResponse{
+			Valid: false,
+			Error: "Invalid VAT number format",
+		}, nil
+	}
 
 	// Retry logic for temporary VIES errors
 	maxRetries := 3
@@ -442,10 +457,10 @@ func (s *Service) ValidateVATNumber(ctx context.Context, vatNumber string) (*mod
 			time.Sleep(backoff)
 		}
 
-		// Call VIES API
-		url := fmt.Sprintf("https://ec.europa.eu/taxation_customs/vies/rest-api/ms/%s/vat/%s", countryCode, vatNumberWithoutCountry)
+		// Call VIES API (PathEscape to prevent URL path injection)
+		viesURL := fmt.Sprintf("https://ec.europa.eu/taxation_customs/vies/rest-api/ms/%s/vat/%s", url.PathEscape(countryCode), url.PathEscape(vatNumberWithoutCountry))
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, viesURL, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create VIES request: %w", err)
 		}

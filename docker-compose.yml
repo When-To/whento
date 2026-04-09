@@ -25,6 +25,10 @@ services:
 
       # Rate Limiting
       - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+
+      # Security
+      - CORS_ORIGINS=${CORS_ORIGINS:-${APP_URL:-http://localhost:8080}}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-}
       
       # SMTP
       - SMTP_HOST=${SMTP_HOST}

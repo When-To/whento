@@ -8,6 +8,7 @@ package quota
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -88,6 +89,11 @@ func (s *CloudQuotaService) GetServerUsage(ctx context.Context) (int, error) {
 	}
 
 	return count, nil
+}
+
+// QuotaLockKey returns a per-user advisory lock key derived from the user's UUID
+func (s *CloudQuotaService) QuotaLockKey(userID uuid.UUID) int64 {
+	return int64(binary.BigEndian.Uint64(userID[:8]))
 }
 
 // IsOverQuota checks if user has exceeded their calendar limit

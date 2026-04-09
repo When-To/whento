@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/whento/pkg/cache"
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
@@ -68,6 +69,7 @@ func InitServices(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool) (
 		StripeSecretKey:  cfg.Stripe.SecretKey,
 		StripePricePro:   cfg.Stripe.PricePro,
 		StripePricePower: cfg.Stripe.PricePower,
+		AppURL:           cfg.AppURL,
 	}, log)
 
 	log.Info("Subscription service initialized (Cloud mode)")
@@ -115,7 +117,7 @@ func InitServices(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool) (
 }
 
 // RegisterBillingRoutes registers cloud-specific billing routes (Stripe)
-func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config, pool *pgxpool.Pool, jwtManager interface{}) {
+func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config, pool *pgxpool.Pool, jwtManager interface{}, cacheInstance cache.Cache) {
 	log := logger.Default()
 
 	// Re-initialize subscription service for handlers
@@ -124,6 +126,7 @@ func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config,
 		StripeSecretKey:  cfg.Stripe.SecretKey,
 		StripePricePro:   cfg.Stripe.PricePro,
 		StripePricePower: cfg.Stripe.PricePower,
+		AppURL:           cfg.AppURL,
 	}, log)
 
 	// Initialize subscription handlers
@@ -141,7 +144,7 @@ func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config,
 
 		// Authenticated routes
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.Auth(jwtManager.(*jwt.Manager)))
+			r.Use(middleware.Auth(jwtManager.(*jwt.Manager), cacheInstance))
 
 			r.Post("/checkout", subHandler.HandleCreateCheckout)
 			r.Post("/portal", subHandler.HandleCreatePortal)
@@ -150,7 +153,7 @@ func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config,
 
 		// Admin-only routes
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.Auth(jwtManager.(*jwt.Manager)))
+			r.Use(middleware.Auth(jwtManager.(*jwt.Manager), cacheInstance))
 			r.Use(middleware.RequireRole("admin"))
 
 			r.Get("/accounting", subHandler.HandleGetAccounting)
@@ -159,7 +162,7 @@ func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config,
 
 	// Quota routes (authenticated)
 	r.Route("/api/v1/quota", func(r chi.Router) {
-		r.Use(middleware.Auth(jwtManager.(*jwt.Manager)))
+		r.Use(middleware.Auth(jwtManager.(*jwt.Manager), cacheInstance))
 		r.Get("/limits", quotaHandler.HandleGetLimits)
 	})
 
@@ -169,7 +172,7 @@ func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config,
 	ecommHandler := ecommerceHandlers.New(ecommService, log)
 
 	r.Route("/api/v1/admin/ecommerce", func(r chi.Router) {
-		r.Use(middleware.Auth(jwtManager.(*jwt.Manager)))
+		r.Use(middleware.Auth(jwtManager.(*jwt.Manager), cacheInstance))
 		r.Use(middleware.RequireRole("admin"))
 
 		// License search by support key
@@ -195,7 +198,7 @@ func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config,
 
 	// VAT admin routes (admin only)
 	r.Route("/api/v1/admin/vat", func(r chi.Router) {
-		r.Use(middleware.Auth(jwtManager.(*jwt.Manager)))
+		r.Use(middleware.Auth(jwtManager.(*jwt.Manager), cacheInstance))
 		r.Use(middleware.RequireRole("admin"))
 
 		r.Get("/rates", vatHandler.HandleGetRates)

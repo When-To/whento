@@ -46,7 +46,7 @@ func (h *RecurrenceHandler) CreateRecurrence(w http.ResponseWriter, r *http.Requ
 	token := chi.URLParam(r, "token")
 	participantID := chi.URLParam(r, "pid")
 
-	var req models.CreateRecurrenceRequest
+var req models.CreateRecurrenceRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
 		return
@@ -86,7 +86,7 @@ func (h *RecurrenceHandler) GetParticipantRecurrences(w http.ResponseWriter, r *
 	token := chi.URLParam(r, "token")
 	participantID := chi.URLParam(r, "pid")
 
-	recurrences, err := h.service.GetParticipantRecurrences(r.Context(), token, participantID)
+recurrences, err := h.service.GetParticipantRecurrences(r.Context(), token, participantID)
 	if err != nil {
 		handleRecurrenceError(w, r, err, "Failed to get recurrences")
 		return
@@ -116,7 +116,7 @@ func (h *RecurrenceHandler) UpdateRecurrence(w http.ResponseWriter, r *http.Requ
 	participantID := chi.URLParam(r, "pid")
 	recurrenceID := chi.URLParam(r, "rid")
 
-	var req models.UpdateRecurrenceRequest
+var req models.UpdateRecurrenceRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
 		return
@@ -158,7 +158,7 @@ func (h *RecurrenceHandler) DeleteRecurrence(w http.ResponseWriter, r *http.Requ
 	participantID := chi.URLParam(r, "pid")
 	recurrenceID := chi.URLParam(r, "rid")
 
-	if err := h.service.DeleteRecurrence(r.Context(), token, participantID, recurrenceID); err != nil {
+if err := h.service.DeleteRecurrence(r.Context(), token, participantID, recurrenceID); err != nil {
 		handleRecurrenceError(w, r, err, "Failed to delete recurrence")
 		return
 	}
@@ -188,7 +188,7 @@ func (h *RecurrenceHandler) CreateException(w http.ResponseWriter, r *http.Reque
 	participantID := chi.URLParam(r, "pid")
 	recurrenceID := chi.URLParam(r, "rid")
 
-	var req models.CreateExceptionRequest
+var req models.CreateExceptionRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
 		return
@@ -232,7 +232,7 @@ func (h *RecurrenceHandler) DeleteException(w http.ResponseWriter, r *http.Reque
 	recurrenceID := chi.URLParam(r, "rid")
 	date := chi.URLParam(r, "date")
 
-	if err := h.service.DeleteException(r.Context(), token, participantID, recurrenceID, date); err != nil {
+if err := h.service.DeleteException(r.Context(), token, participantID, recurrenceID, date); err != nil {
 		handleRecurrenceError(w, r, err, "Failed to delete exception")
 		return
 	}

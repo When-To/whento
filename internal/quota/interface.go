@@ -34,6 +34,10 @@ type QuotaService interface {
 	// This happens when subscription/license expires but user still has more calendars than allowed
 	// When over quota, users should be blocked from creating calendars and accessing ICS feeds
 	IsOverQuota(ctx context.Context, userID uuid.UUID) (bool, error)
+
+	// QuotaLockKey returns the advisory lock key to use for quota enforcement.
+	// Cloud: per-user key derived from userID. Self-hosted: fixed server-wide key.
+	QuotaLockKey(userID uuid.UUID) int64
 }
 
 // LimitInfo contains detailed information about limits and usage

@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log/slog"
 	"strings"
 	"text/template"
@@ -207,8 +208,8 @@ func (s *MagicLinkService) sendMagicLinkEmail(to, displayName, locale, token str
 	}
 }
 
-// replaceVar replaces {{.VarName}} with value in a string
+// replaceVar replaces {{.VarName}} with HTML-escaped value in a string
 func replaceVar(str, varName, value string) string {
 	placeholder := "{{." + varName + "}}"
-	return strings.ReplaceAll(str, placeholder, value)
+	return strings.ReplaceAll(str, placeholder, html.EscapeString(value))
 }

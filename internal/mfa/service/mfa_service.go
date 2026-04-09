@@ -37,9 +37,15 @@ var (
 )
 
 // MFAService handles MFA business logic
+// TokenRepository defines the interface for revoking refresh tokens when MFA is enabled
+type TokenRepository interface {
+	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
+}
+
 type MFAService struct {
 	repo       *repository.MFARepository
 	userRepo   *authRepo.UserRepository
+	tokenRepo  TokenRepository
 	issuer     string
 	period     uint
 	digits     otp.Digits
@@ -51,12 +57,14 @@ type MFAService struct {
 func NewMFAService(
 	repo *repository.MFARepository,
 	userRepo *authRepo.UserRepository,
+	tokenRepo TokenRepository,
 	cfg *config.Config,
 	logger *slog.Logger,
 ) *MFAService {
 	return &MFAService{
 		repo:       repo,
 		userRepo:   userRepo,
+		tokenRepo:  tokenRepo,
 		issuer:     cfg.TOTPIssuer,
 		period:     cfg.TOTPPeriod,
 		digits:     otp.Digits(cfg.TOTPDigits),
@@ -175,6 +183,13 @@ func (s *MFAService) FinishSetup(ctx context.Context, userID uuid.UUID, code str
 
 	if err := s.repo.Update(ctx, mfa); err != nil {
 		return fmt.Errorf("failed to enable MFA: %w", err)
+	}
+
+	// Revoke all existing refresh tokens so pre-MFA sessions cannot bypass MFA
+	if s.tokenRepo != nil {
+		if err := s.tokenRepo.DeleteByUserID(ctx, userID); err != nil {
+			s.logger.Error("Failed to revoke refresh tokens after MFA enable", "user_id", userID, "error", err)
+		}
 	}
 
 	return nil

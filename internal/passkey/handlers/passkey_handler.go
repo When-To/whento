@@ -351,5 +351,19 @@ func (h *PasskeyHandler) FinishAuthentication(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Set refresh token as httpOnly cookie
+	if authResponse.RefreshToken != "" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "refresh_token",
+			Value:    authResponse.RefreshToken,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+			SameSite: http.SameSiteStrictMode,
+			MaxAge:   7 * 24 * 60 * 60, // 7 days
+		})
+		authResponse.RefreshToken = ""
+	}
+
 	httputil.JSON(w, http.StatusOK, authResponse)
 }

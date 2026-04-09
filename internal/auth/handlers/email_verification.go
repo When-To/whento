@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -250,8 +251,8 @@ func (h *EmailVerificationHandler) sendVerificationEmail(to, displayName, locale
 	return nil
 }
 
-// replaceVarEV replaces {{.VarName}} with value in a string
+// replaceVarEV replaces {{.VarName}} with HTML-escaped value in a string
 func replaceVarEV(str, varName, value string) string {
 	placeholder := "{{." + varName + "}}"
-	return strings.ReplaceAll(str, placeholder, value)
+	return strings.ReplaceAll(str, placeholder, html.EscapeString(value))
 }

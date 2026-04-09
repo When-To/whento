@@ -7,11 +7,14 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/whento/pkg/cache"
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/middleware"
@@ -21,22 +24,65 @@ import (
 	"github.com/whento/whento/internal/mfa/service"
 )
 
+const (
+	maxMFAAttempts    = 5
+	mfaLockoutWindow  = 15 * time.Minute
+	mfaAttemptsPrefix = "mfa_attempts:"
+)
+
 // MFAHandler handles MFA HTTP requests
 type MFAHandler struct {
 	service     *service.MFAService
 	authService *authService.AuthService
 	jwtManager  *jwt.Manager
+	cache       cache.Cache
 	logger      *slog.Logger
 }
 
 // NewMFAHandler creates a new MFA handler
-func NewMFAHandler(service *service.MFAService, authSvc *authService.AuthService, jwtManager *jwt.Manager, logger *slog.Logger) *MFAHandler {
+func NewMFAHandler(service *service.MFAService, authSvc *authService.AuthService, jwtManager *jwt.Manager, cacheInstance cache.Cache, logger *slog.Logger) *MFAHandler {
 	return &MFAHandler{
 		service:     service,
 		authService: authSvc,
 		jwtManager:  jwtManager,
+		cache:       cacheInstance,
 		logger:      logger,
 	}
+}
+
+// checkMFAAttempts checks if a user has exceeded the MFA attempt limit.
+func (h *MFAHandler) checkMFAAttempts(r *http.Request, userID uuid.UUID) error {
+	if !h.cache.IsEnabled() {
+		return nil
+	}
+	key := mfaAttemptsPrefix + userID.String()
+	var attempts int
+	_ = h.cache.Get(r.Context(), key, &attempts)
+	if attempts >= maxMFAAttempts {
+		return fmt.Errorf("too many MFA attempts")
+	}
+	return nil
+}
+
+// incrementMFAAttempts increments the MFA failure counter for a user.
+func (h *MFAHandler) incrementMFAAttempts(r *http.Request, userID uuid.UUID) {
+	if !h.cache.IsEnabled() {
+		return
+	}
+	key := mfaAttemptsPrefix + userID.String()
+	var attempts int
+	_ = h.cache.Get(r.Context(), key, &attempts)
+	attempts++
+	_ = h.cache.Set(r.Context(), key, attempts, mfaLockoutWindow)
+}
+
+// clearMFAAttempts resets the MFA failure counter on successful verification.
+func (h *MFAHandler) clearMFAAttempts(r *http.Request, userID uuid.UUID) {
+	if !h.cache.IsEnabled() {
+		return
+	}
+	key := mfaAttemptsPrefix + userID.String()
+	_ = h.cache.Delete(r.Context(), key)
 }
 
 // @Summary		Begin MFA setup
@@ -298,6 +344,12 @@ func (h *MFAHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check per-user MFA attempt limit
+	if err := h.checkMFAAttempts(r, userID); err != nil {
+		httputil.Error(w, http.StatusTooManyRequests, "TOO_MANY_REQUESTS", "Too many MFA attempts, try again later")
+		return
+	}
+
 	// Verify MFA code (TOTP or backup code)
 	valid, err := h.service.VerifyCode(r.Context(), userID, req.Code)
 	if err != nil {
@@ -311,9 +363,12 @@ func (h *MFAHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !valid {
+		h.incrementMFAAttempts(r, userID)
 		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Invalid MFA code")
 		return
 	}
+
+	h.clearMFAAttempts(r, userID)
 
 	// Complete login by generating full auth tokens
 	authResponse, err := h.authService.VerifyMFAAndLogin(r.Context(), req.TempToken, req.Code)
@@ -321,6 +376,20 @@ func (h *MFAHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("Failed to complete MFA login", "error", err, "user_id", userID)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to complete login")
 		return
+	}
+
+	// Set refresh token as httpOnly cookie
+	if authResponse.RefreshToken != "" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "refresh_token",
+			Value:    authResponse.RefreshToken,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+			SameSite: http.SameSiteStrictMode,
+			MaxAge:   7 * 24 * 60 * 60, // 7 days
+		})
+		authResponse.RefreshToken = ""
 	}
 
 	httputil.JSON(w, http.StatusOK, authResponse)

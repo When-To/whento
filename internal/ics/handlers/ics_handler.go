@@ -7,6 +7,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -14,6 +15,14 @@ import (
 	"github.com/whento/pkg/logger"
 	"github.com/whento/whento/internal/ics/service"
 )
+
+// crlfRegexp matches CR, LF, and CRLF sequences
+var crlfRegexp = regexp.MustCompile(`[\r\n]+`)
+
+// sanitizeICSValue strips CR/LF characters to prevent CRLF injection into ICS properties
+func sanitizeICSValue(s string) string {
+	return crlfRegexp.ReplaceAllString(s, "")
+}
 
 type ICSHandler struct {
 	icsService *service.ICSService
@@ -64,6 +73,9 @@ func (h *ICSHandler) GetFeed(w http.ResponseWriter, r *http.Request) {
 	if host == "" {
 		host = r.Host
 	}
+
+	// Sanitize host to prevent CRLF injection into ICS properties
+	host = sanitizeICSValue(host)
 
 	// Generate ICS feed with the actual host from the request
 	icsContent, err := h.icsService.GenerateFeed(r.Context(), token, host)

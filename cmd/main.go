@@ -59,6 +59,7 @@ import (
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
+	"github.com/whento/pkg/participanttoken"
 	"github.com/whento/whento/internal/config"
 
 	// Auth module
@@ -160,6 +161,14 @@ func main() {
 	}
 	log.Info("JWT manager initialized")
 
+	// Initialize participant token signing (uses JWT private key as HMAC seed)
+	ptKeyBytes, err := os.ReadFile(cfg.JWTPrivateKeyPath)
+	if err != nil {
+		log.Error("Failed to read JWT private key for participant tokens", "error", err)
+		os.Exit(1)
+	}
+	participanttoken.Init(ptKeyBytes)
+
 	// Initialize cache (uses Redis if available, NoOp otherwise)
 	cacheInstance := cache.NewRedisCache(redisClient)
 	if cacheInstance.IsEnabled() {
@@ -201,8 +210,8 @@ func main() {
 	tokenRepo := authRepo.NewTokenRepository(pool)
 	mfaRepository := mfaRepo.NewMFARepository(pool)
 
-	// Initialize auth service (with MFA repository for 2FA checking)
-	authSvc := authService.NewAuthService(userRepo, tokenRepo, mfaRepository, jwtManager, cfg.BcryptCost, cfg.AllowedRegister, cfg.AllowedEmails)
+	// Initialize auth service (with MFA repository for 2FA checking and cache for temp token replay prevention)
+	authSvc := authService.NewAuthService(userRepo, tokenRepo, mfaRepository, jwtManager, cacheInstance, cfg.BcryptCost, cfg.AllowedRegister, cfg.AllowedEmails)
 
 	// Initialize password reset service
 	passwordResetSvc := authService.NewPasswordResetService(userRepo, tokenRepo, emailService, jwtManager, cfg, log, cfg.BcryptCost)
@@ -235,11 +244,11 @@ func main() {
 
 	// ========== MFA MODULE ==========
 	// Initialize MFA service (repository already created for auth service)
-	mfaSvc := mfaService.NewMFAService(mfaRepository, userRepo, cfg, log)
+	mfaSvc := mfaService.NewMFAService(mfaRepository, userRepo, tokenRepo, cfg, log)
 	log.Info("MFA service initialized")
 
 	// Initialize MFA handler (with auth service for completing login)
-	mfaHandler := mfaHandlers.NewMFAHandler(mfaSvc, authSvc, jwtManager, log)
+	mfaHandler := mfaHandlers.NewMFAHandler(mfaSvc, authSvc, jwtManager, cacheInstance, log)
 
 	// Initialize admin MFA handler for admin operations (disable 2FA)
 	adminMFAHandler := authHandlers.NewAdminMFAHandler(mfaSvc, log)
@@ -253,7 +262,7 @@ func main() {
 	calendarSvc := calendarService.NewCalendarService(calendarRepository, participantRepository, userRepo, cacheInstance)
 
 	// Initialize calendar handlers (with quota service for limit checking)
-	calendarHandler := calendarHandlers.NewCalendarHandler(calendarSvc, services.QuotaService, userRepo, cfg)
+	calendarHandler := calendarHandlers.NewCalendarHandler(calendarSvc, services.QuotaService, userRepo, cfg, pool)
 	participantHandler := calendarHandlers.NewParticipantHandler(calendarSvc)
 
 	// ========== AVAILABILITY MODULE ==========
@@ -346,7 +355,10 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.LimitRequestSize(1 * 1024 * 1024)) // 1MB max payload
-	r.Use(middleware.CORS([]string{"*"}))               // Configure for production
+	r.Use(middleware.CORS(cfg.CORSOrigins))
+
+	// Configure trusted proxies for X-Forwarded-For validation
+	middleware.SetTrustedProxies(cfg.TrustedProxies)
 
 	// Health routes (use auth health handler as primary)
 	r.Get("/api/health", authHealthHandler.Health)
@@ -357,60 +369,104 @@ func main() {
 		// Public routes with rate limiting
 		r.Group(func(r chi.Router) {
 			if cfg.RateLimitEnabled {
-				// Login: 5 requests/minute/IP
+				// Login: 5 requests/minute/IP (fail-closed: block if Redis is down)
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 5,
-					Window:   time.Minute,
-					KeyFunc:  middleware.CombinedKeyFunc,
+					Requests:   5,
+					Window:     time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
 				})).Post("/login", authHandler.Login)
 
-				// Register: 3 requests/minute/IP
+				// Register: 3 requests/minute/IP (fail-closed)
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 3,
-					Window:   time.Minute,
-					KeyFunc:  middleware.CombinedKeyFunc,
+					Requests:   3,
+					Window:     time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
 				})).Post("/register", authHandler.Register)
 			} else {
 				r.Post("/login", authHandler.Login)
 				r.Post("/register", authHandler.Register)
 			}
 
-			r.Post("/refresh", authHandler.Refresh)
+			if cfg.RateLimitEnabled {
+				// Refresh: 5 requests/minute/IP (fail-closed)
+				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests:   5,
+					Window:     time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
+				})).Post("/refresh", authHandler.Refresh)
+			} else {
+				r.Post("/refresh", authHandler.Refresh)
+			}
 			r.Post("/logout", authHandler.Logout)
 
 			// Password reset (public - no auth required)
 			if cfg.RateLimitEnabled {
-				// Forgot password: 3 requests/15 minutes/IP
+				// Forgot password: 3 requests/15 minutes/IP (fail-closed)
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 3,
-					Window:   15 * time.Minute,
-					KeyFunc:  middleware.IPKeyFunc,
+					Requests:   3,
+					Window:     15 * time.Minute,
+					KeyFunc:    middleware.IPKeyFunc,
+					FailClosed: true,
 				})).Post("/forgot-password", passwordResetHandler.ForgotPassword)
 			} else {
 				r.Post("/forgot-password", passwordResetHandler.ForgotPassword)
 			}
-			r.Post("/reset-password", passwordResetHandler.ResetPassword)
+			if cfg.RateLimitEnabled {
+				// Reset password: 5 requests/15 minutes/IP
+				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests:   5,
+					Window:     15 * time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
+				})).Post("/reset-password", passwordResetHandler.ResetPassword)
+			} else {
+				r.Post("/reset-password", passwordResetHandler.ResetPassword)
+			}
 
 			// Magic link authentication (public)
 			if cfg.RateLimitEnabled {
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 3,
-					Window:   15 * time.Minute,
-					KeyFunc:  middleware.IPKeyFunc,
+					Requests:   3,
+					Window:     15 * time.Minute,
+					KeyFunc:    middleware.IPKeyFunc,
+					FailClosed: true,
 				})).Post("/magic-link/request", magicLinkHandler.RequestMagicLink)
 			} else {
 				r.Post("/magic-link/request", magicLinkHandler.RequestMagicLink)
 			}
-			r.Get("/magic-link/verify/{token}", magicLinkHandler.VerifyMagicLink)
+			if cfg.RateLimitEnabled {
+				// Magic link verify: 5 requests/15 minutes/IP
+				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests:   5,
+					Window:     15 * time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
+				})).Get("/magic-link/verify/{token}", magicLinkHandler.VerifyMagicLink)
+			} else {
+				r.Get("/magic-link/verify/{token}", magicLinkHandler.VerifyMagicLink)
+			}
 			r.Get("/magic-link/available", magicLinkHandler.CheckAvailable)
 
 			// Email verification (public - no auth required)
-			r.Get("/verify-email/{token}", emailVerificationHandler.VerifyEmail)
+			if cfg.RateLimitEnabled {
+				// Verify email: 5 requests/15 minutes/IP (fail-closed)
+				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests:   5,
+					Window:     15 * time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
+				})).Get("/verify-email/{token}", emailVerificationHandler.VerifyEmail)
+			} else {
+				r.Get("/verify-email/{token}", emailVerificationHandler.VerifyEmail)
+			}
 		})
 
 		// Authenticated routes
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.Auth(jwtManager))
+			r.Use(middleware.Auth(jwtManager, cacheInstance))
 
 			r.Get("/me", authHandler.GetMe)
 			r.Patch("/me", authHandler.UpdateMe)
@@ -435,15 +491,17 @@ func main() {
 			if cfg.RateLimitEnabled {
 				// Passkey login (usernameless/passwordless): 5 requests/minute/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 5,
-					Window:   time.Minute,
-					KeyFunc:  middleware.CombinedKeyFunc,
+					Requests:   5,
+					Window:     time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
 				})).Post("/passkey/login/begin", passkeyHandler.BeginDiscoverableAuthentication)
 
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 5,
-					Window:   time.Minute,
-					KeyFunc:  middleware.CombinedKeyFunc,
+					Requests:   5,
+					Window:     time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
 				})).Post("/passkey/login/finish", passkeyHandler.FinishAuthentication)
 			} else {
 				r.Post("/passkey/login/begin", passkeyHandler.BeginDiscoverableAuthentication)
@@ -456,9 +514,10 @@ func main() {
 			if cfg.RateLimitEnabled {
 				// MFA verification: 5 requests/5 minutes/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests: 5,
-					Window:   5 * time.Minute,
-					KeyFunc:  middleware.CombinedKeyFunc,
+					Requests:   5,
+					Window:     5 * time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
 				})).Post("/mfa/verify", mfaHandler.VerifyLogin)
 			} else {
 				r.Post("/mfa/verify", mfaHandler.VerifyLogin)
@@ -468,7 +527,7 @@ func main() {
 
 	// ========== PASSKEY ROUTES (Authenticated) ==========
 	r.Route("/api/v1/passkey", func(r chi.Router) {
-		r.Use(middleware.Auth(jwtManager))
+		r.Use(middleware.Auth(jwtManager, cacheInstance))
 
 		if cfg.RateLimitEnabled {
 			// Passkey operations: 5 requests/minute/user
@@ -495,7 +554,7 @@ func main() {
 
 	// ========== MFA ROUTES (Authenticated) ==========
 	r.Route("/api/v1/mfa", func(r chi.Router) {
-		r.Use(middleware.Auth(jwtManager))
+		r.Use(middleware.Auth(jwtManager, cacheInstance))
 
 		if cfg.RateLimitEnabled {
 			// MFA setup/disable: 5 requests/minute/user
@@ -550,16 +609,35 @@ func main() {
 			}
 
 			// Public participant email verification
-			r.Get("/participants/verify-email/{token}", participantEmailHandler.VerifyEmail)
+			if cfg.RateLimitEnabled {
+				// Participant verify email: 5 requests/15 minutes/IP (fail-closed)
+				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests:   5,
+					Window:     15 * time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
+				})).Get("/participants/verify-email/{token}", participantEmailHandler.VerifyEmail)
+			} else {
+				r.Get("/participants/verify-email/{token}", participantEmailHandler.VerifyEmail)
+			}
 
 			// Public participant email management (requires calendar token validation)
 			r.Post("/{token}/participants/{pid}/email", participantEmailHandler.AddEmail)
-			r.Post("/{token}/participants/{pid}/resend-verification", participantEmailHandler.ResendVerification)
+			if cfg.RateLimitEnabled {
+				// Resend verification: 3 requests/15 minutes/IP
+				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests: 3,
+					Window:   15 * time.Minute,
+					KeyFunc:  middleware.IPKeyFunc,
+				})).Post("/{token}/participants/{pid}/resend-verification", participantEmailHandler.ResendVerification)
+			} else {
+				r.Post("/{token}/participants/{pid}/resend-verification", participantEmailHandler.ResendVerification)
+			}
 		})
 
 		// Authenticated routes
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.Auth(jwtManager))
+			r.Use(middleware.Auth(jwtManager, cacheInstance))
 
 			if cfg.RateLimitEnabled {
 				// Authenticated routes: 100 requests/minute/user
@@ -635,7 +713,7 @@ func main() {
 
 	// ========== BILLING/LICENSING ROUTES ==========
 	// Register build-specific routes (Cloud: Stripe billing, Self-hosted: License management)
-	RegisterBillingRoutes(r, services, cfg, pool, jwtManager)
+	RegisterBillingRoutes(r, services, cfg, pool, jwtManager, cacheInstance)
 
 	// ========== ICS ROUTES ==========
 	r.Route("/api/v1/ics", func(r chi.Router) {
