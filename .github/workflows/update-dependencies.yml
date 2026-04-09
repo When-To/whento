@@ -266,7 +266,8 @@ jobs:
         run: |
           if [ "${{ steps.node-updates.outputs.has_updates }}" == "true" ] || \
              [ "${{ steps.go-updates-root.outputs.has_updates }}" == "true" ] || \
-             [ "${{ steps.go-updates-pkg.outputs.has_updates }}" == "true" ]; then
+             [ "${{ steps.go-updates-pkg.outputs.has_updates }}" == "true" ] || \
+             [ "${{ steps.npm-audit.outputs.has_fixes }}" == "true" ]; then
             echo "has_updates=true" >> $GITHUB_OUTPUT
           else
             echo "has_updates=false" >> $GITHUB_OUTPUT
@@ -303,6 +304,36 @@ jobs:
         run: |
           ncu -u
           npm install
+
+      - name: Run npm audit fix
+        id: npm-audit
+        working-directory: frontend
+        run: |
+          AUDIT_BEFORE=$(npm audit --json 2>/dev/null | jq '.metadata.vulnerabilities // empty')
+          TOTAL_BEFORE=$(echo "$AUDIT_BEFORE" | jq '[.low, .moderate, .high, .critical] | add // 0')
+
+          if [ "$TOTAL_BEFORE" -gt 0 ] 2>/dev/null; then
+            npm audit fix || true
+            AUDIT_AFTER=$(npm audit --json 2>/dev/null | jq '.metadata.vulnerabilities // empty')
+            TOTAL_AFTER=$(echo "$AUDIT_AFTER" | jq '[.low, .moderate, .high, .critical] | add // 0')
+            FIXED=$((TOTAL_BEFORE - TOTAL_AFTER))
+
+            echo "has_fixes=true" >> $GITHUB_OUTPUT
+
+            echo "## 🛡️ Security Audit (npm)" > /tmp/audit_report.md
+            echo "" >> /tmp/audit_report.md
+            echo "- Vulnerabilities before: **$TOTAL_BEFORE**" >> /tmp/audit_report.md
+            echo "- Fixed automatically: **$FIXED**" >> /tmp/audit_report.md
+            echo "- Remaining: **$TOTAL_AFTER**" >> /tmp/audit_report.md
+
+            if [ "$TOTAL_AFTER" -gt 0 ]; then
+              echo "" >> /tmp/audit_report.md
+              echo "⚠️ Some vulnerabilities require manual review." >> /tmp/audit_report.md
+            fi
+          else
+            echo "has_fixes=false" >> $GITHUB_OUTPUT
+            echo "No vulnerabilities found"
+          fi
 
       - name: Apply Go updates (root)
         if: steps.go-updates-root.outputs.has_updates == 'true'
@@ -356,6 +387,11 @@ jobs:
 
           if [ -f /tmp/go_pkg_report.md ]; then
             cat /tmp/go_pkg_report.md >> /tmp/final_pr_body.md
+            echo "" >> /tmp/final_pr_body.md
+          fi
+
+          if [ -f /tmp/audit_report.md ]; then
+            cat /tmp/audit_report.md >> /tmp/final_pr_body.md
             echo "" >> /tmp/final_pr_body.md
           fi
 
