@@ -219,6 +219,33 @@ func (h *Handler) HandleGetOrder(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, order)
 }
 
+// HandleListLicenses retrieves all sold licenses with details and pagination
+//
+//	@Summary		List licenses (Cloud only, Admin)
+//	@Description	Retrieves all sold licenses with client and order details. Admin-only endpoint. Cloud-specific.
+//	@Tags			E-Commerce
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			limit	query		int	false	"Number of results per page (default: 20)"
+//	@Param			offset	query		int	false	"Offset for pagination (default: 0)"
+//	@Success		200		{object}	object	"List of licenses with details"
+//	@Failure		401		{object}	httputil.ErrorResponse	"User not authenticated"
+//	@Failure		403		{object}	httputil.ErrorResponse	"Admin role required"
+//	@Failure		500		{object}	httputil.ErrorResponse	"Internal server error"
+//	@Router			/api/v1/admin/ecommerce/licenses [get]
+func (h *Handler) HandleListLicenses(w http.ResponseWriter, r *http.Request) {
+	limit, offset := getPagination(r)
+
+	resp, err := h.service.ListSoldLicensesWithDetails(r.Context(), limit, offset)
+	if err != nil {
+		h.log.Error("Failed to list licenses", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to list licenses")
+		return
+	}
+
+	httputil.JSON(w, http.StatusOK, resp)
+}
+
 // getPagination extracts pagination parameters from request
 func getPagination(r *http.Request) (limit, offset int) {
 	limit = 20

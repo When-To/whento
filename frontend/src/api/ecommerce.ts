@@ -65,6 +65,11 @@ export interface ListOrdersResponse {
   total: number;
 }
 
+export interface ListLicensesResponse {
+  licenses: SoldLicenseWithDetails[];
+  total: number;
+}
+
 export const ecommerceApi = {
   /**
    * Search for a license by support key (admin only)
@@ -80,6 +85,15 @@ export const ecommerceApi = {
       }
       throw error;
     }
+  },
+
+  /**
+   * List all sold licenses with details (admin only)
+   */
+  async listLicenses(limit = 20, offset = 0): Promise<ListLicensesResponse> {
+    return apiClient.get<ListLicensesResponse>(
+      `/admin/ecommerce/licenses?limit=${limit}&offset=${offset}`
+    );
   },
 
   /**
