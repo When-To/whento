@@ -21,6 +21,7 @@ var (
 	ErrInvalidToken     = errors.New("invalid token")
 	ErrExpiredToken     = errors.New("token has expired")
 	ErrInvalidSignature = errors.New("invalid token signature")
+	ErrMFAPendingToken  = errors.New("mfa pending tokens cannot be used as access tokens")
 )
 
 // Claims represents JWT claims
@@ -147,6 +148,11 @@ func (m *Manager) ValidateAccessToken(tokenString string) (*Claims, error) {
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
 		return nil, ErrInvalidToken
+	}
+
+	// Reject temporary MFA tokens — they must only be used via ValidateCustomToken
+	if claims.MFAPending {
+		return nil, ErrMFAPendingToken
 	}
 
 	return claims, nil

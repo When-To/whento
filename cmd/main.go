@@ -451,7 +451,17 @@ func main() {
 			r.Get("/magic-link/available", magicLinkHandler.CheckAvailable)
 
 			// Email verification (public - no auth required)
-			r.Get("/verify-email/{token}", emailVerificationHandler.VerifyEmail)
+			if cfg.RateLimitEnabled {
+				// Verify email: 5 requests/15 minutes/IP (fail-closed)
+				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests:   5,
+					Window:     15 * time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
+				})).Get("/verify-email/{token}", emailVerificationHandler.VerifyEmail)
+			} else {
+				r.Get("/verify-email/{token}", emailVerificationHandler.VerifyEmail)
+			}
 		})
 
 		// Authenticated routes
@@ -599,7 +609,17 @@ func main() {
 			}
 
 			// Public participant email verification
-			r.Get("/participants/verify-email/{token}", participantEmailHandler.VerifyEmail)
+			if cfg.RateLimitEnabled {
+				// Participant verify email: 5 requests/15 minutes/IP (fail-closed)
+				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests:   5,
+					Window:     15 * time.Minute,
+					KeyFunc:    middleware.CombinedKeyFunc,
+					FailClosed: true,
+				})).Get("/participants/verify-email/{token}", participantEmailHandler.VerifyEmail)
+			} else {
+				r.Get("/participants/verify-email/{token}", participantEmailHandler.VerifyEmail)
+			}
 
 			// Public participant email management (requires calendar token validation)
 			r.Post("/{token}/participants/{pid}/email", participantEmailHandler.AddEmail)
