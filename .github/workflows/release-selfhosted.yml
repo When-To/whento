@@ -138,6 +138,12 @@ jobs:
             type=raw,value=${{ steps.version.outputs.version }}
             type=semver,pattern={{version}},value=${{ steps.version.outputs.tag }}
             type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.tag }}
+          labels: |
+            org.opencontainers.image.description=WhenTo - Self-hosted scheduling and calendar application
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
+            org.opencontainers.image.vendor=WhenTo Contributors
+            org.opencontainers.image.licenses=BSL-1.1
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
