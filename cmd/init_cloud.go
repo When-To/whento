@@ -171,11 +171,15 @@ func RegisterBillingRoutes(r chi.Router, services *Services, cfg *config.Config,
 	ecommService := ecommerceService.New(ecommRepo, log)
 	ecommHandler := ecommerceHandlers.New(ecommService, log)
 
+	// Wire ecommerce accounting data into subscription service
+	subService.SetEcommerceAccountingProvider(ecommService)
+
 	r.Route("/api/v1/admin/ecommerce", func(r chi.Router) {
 		r.Use(middleware.Auth(jwtManager.(*jwt.Manager), cacheInstance))
 		r.Use(middleware.RequireRole("admin"))
 
-		// License search by support key
+		// License listing and search
+		r.Get("/licenses", ecommHandler.HandleListLicenses)
 		r.Get("/licenses/search", ecommHandler.HandleSearchLicense)
 		r.Get("/licenses/{id}", ecommHandler.HandleGetLicense)
 

@@ -27,10 +27,16 @@ import (
 	"github.com/stripe/stripe-go/v84/subscription"
 
 	pkgmodels "github.com/whento/pkg/models"
+	ecommerceModels "github.com/whento/whento/internal/ecommerce/models"
 	"github.com/whento/whento/internal/subscription/models"
 	"github.com/whento/whento/internal/subscription/repository"
 	vatservice "github.com/whento/whento/internal/vat/service"
 )
+
+// EcommerceAccountingProvider provides ecommerce order data for accounting
+type EcommerceAccountingProvider interface {
+	GetOrderAccountingData(ctx context.Context, startTime, endTime time.Time) ([]ecommerceModels.OrderAccountingRow, error)
+}
 
 // Service handles subscription business logic
 type Service struct {
@@ -44,6 +50,9 @@ type Service struct {
 	// Cached plan configs fetched from Stripe
 	planConfigsMu sync.RWMutex
 	planConfigs   map[models.SubscriptionPlan]models.PlanConfig
+
+	// Optional ecommerce accounting data provider
+	ecommerceAccounting EcommerceAccountingProvider
 }
 
 // Config holds the configuration for the subscription service
@@ -78,6 +87,11 @@ func New(repo *repository.SubscriptionRepository, vatService *vatservice.Service
 	}
 
 	return s
+}
+
+// SetEcommerceAccountingProvider sets the ecommerce accounting data provider
+func (s *Service) SetEcommerceAccountingProvider(provider EcommerceAccountingProvider) {
+	s.ecommerceAccounting = provider
 }
 
 // GetPlanConfig returns the configuration for a plan (fetched from Stripe)
@@ -838,6 +852,31 @@ func (s *Service) GetAccountingData(ctx context.Context, req models.AccountingRe
 
 	if err := iter.Err(); err != nil {
 		return nil, fmt.Errorf("failed to fetch invoices from Stripe: %w", err)
+	}
+
+	// Merge ecommerce order data (license sales) if provider is available
+	if s.ecommerceAccounting != nil {
+		orderRows, err := s.ecommerceAccounting.GetOrderAccountingData(ctx, startTime, endTime)
+		if err != nil {
+			s.log.Error("Failed to fetch ecommerce accounting data, continuing with Stripe data only", "error", err)
+		} else {
+			for _, row := range orderRows {
+				country := row.Country
+				if _, exists := countryData[country]; !exists {
+					countryData[country] = &models.AccountingCountryRow{
+						Country:     country,
+						CountryName: s.getCountryName(country),
+					}
+				}
+				orderHT := float64(row.AmountCents-row.VATAmountCents) / 100.0
+				orderVAT := float64(row.VATAmountCents) / 100.0
+				orderTTC := float64(row.AmountCents) / 100.0
+				countryData[country].RevenueHT += orderHT
+				countryData[country].VAT += orderVAT
+				countryData[country].RevenueTTC += orderTTC
+				countryData[country].InvoiceCount += row.OrderCount
+			}
+		}
 	}
 
 	// Convert map to slice and calculate totals

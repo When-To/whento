@@ -876,7 +876,13 @@
       "completed": "Complétée",
       "refunded": "Remboursée",
       "failed": "Échouée"
-    }
+    },
+    "allLicenses": "Toutes les licences vendues",
+    "noLicenses": "Aucune licence vendue",
+    "paginationPrevious": "Précédent",
+    "paginationNext": "Suivant",
+    "paginationPage": "Page {page} sur {totalPages}",
+    "paginationShowing": "Affichage de {from} à {to} sur {total}"
   },
   "license": {
     "title": "Gestion des licences",
