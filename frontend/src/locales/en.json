@@ -873,7 +873,13 @@
       "completed": "Completed",
       "refunded": "Refunded",
       "failed": "Failed"
-    }
+    },
+    "allLicenses": "All Sold Licenses",
+    "noLicenses": "No licenses sold yet",
+    "paginationPrevious": "Previous",
+    "paginationNext": "Next",
+    "paginationPage": "Page {page} of {totalPages}",
+    "paginationShowing": "Showing {from} to {to} of {total}"
   },
   "license": {
     "title": "License Management",

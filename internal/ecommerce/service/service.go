@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -324,4 +325,33 @@ func (s *Service) GetLicensesByOrderID(ctx context.Context, orderID uuid.UUID) (
 		return nil, fmt.Errorf("failed to get licenses by order ID: %w", err)
 	}
 	return licenses, nil
+}
+
+// GetOrderAccountingData returns order revenue aggregated by country for a time period
+func (s *Service) GetOrderAccountingData(ctx context.Context, startTime, endTime time.Time) ([]models.OrderAccountingRow, error) {
+	return s.repo.GetOrderAccountingData(ctx, startTime, endTime)
+}
+
+// ListSoldLicensesWithDetails retrieves all sold licenses with client and order info, paginated
+func (s *Service) ListSoldLicensesWithDetails(ctx context.Context, limit, offset int) (*models.ListLicensesResponse, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	licenses, total, err := s.repo.ListSoldLicensesWithDetails(ctx, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sold licenses with details: %w", err)
+	}
+
+	if licenses == nil {
+		licenses = []models.SoldLicenseWithDetails{}
+	}
+
+	return &models.ListLicensesResponse{
+		Licenses: licenses,
+		Total:    total,
+	}, nil
 }

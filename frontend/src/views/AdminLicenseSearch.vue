@@ -293,12 +293,188 @@
           </div>
         </div>
       </div>
+
+      <!-- All Sold Licenses Table -->
+      <div class="mt-12">
+        <div class="mb-6">
+          <h2 class="font-display text-2xl font-bold text-gray-900 dark:text-white">
+            {{ t('adminLicense.allLicenses') }}
+          </h2>
+        </div>
+
+        <!-- Loading state -->
+        <div v-if="loadingLicenses" class="card">
+          <div class="flex items-center justify-center py-12">
+            <div
+              class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"
+            />
+            <span class="ml-3 text-gray-600 dark:text-gray-400">{{ t('common.loading') }}</span>
+          </div>
+        </div>
+
+        <!-- Licenses table -->
+        <div v-else-if="licenses.length > 0" class="card overflow-hidden p-0">
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead
+                class="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"
+              >
+                <tr>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+                  >
+                    {{ t('adminLicense.supportKey') }}
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+                  >
+                    {{ t('adminLicense.tier') }}
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+                  >
+                    {{ t('adminLicense.issuedTo') }}
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+                  >
+                    {{ t('adminLicense.clientEmail') }}
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+                  >
+                    {{ t('adminLicense.orderStatus') }}
+                  </th>
+                  <th
+                    class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+                  >
+                    {{ t('adminLicense.orderAmount') }}
+                  </th>
+                  <th
+                    class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+                  >
+                    {{ t('adminLicense.orderDate') }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody
+                class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800"
+              >
+                <tr
+                  v-for="lic in licenses"
+                  :key="lic.id"
+                  class="hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                >
+                  <td class="whitespace-nowrap px-6 py-4 font-mono text-sm text-gray-900 dark:text-white">
+                    {{ lic.support_key }}
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-4">
+                    <span
+                      :class="[
+                        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                        getTierClass(lic.license.tier),
+                      ]"
+                    >
+                      {{ lic.license.tier }}
+                    </span>
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-white">
+                    {{ lic.license.issued_to }}
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                    {{ lic.client?.email }}
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-4">
+                    <span
+                      v-if="lic.order"
+                      :class="[
+                        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                        getStatusClass(lic.order.status),
+                      ]"
+                    >
+                      {{ t(`adminLicense.status.${lic.order.status}`) }}
+                    </span>
+                  </td>
+                  <td
+                    class="whitespace-nowrap px-6 py-4 text-right font-mono text-sm text-gray-900 dark:text-white"
+                  >
+                    {{ lic.order ? formatAmount(lic.order.amount_cents) : '-' }}
+                  </td>
+                  <td
+                    class="whitespace-nowrap px-6 py-4 text-right text-sm text-gray-500 dark:text-gray-400"
+                  >
+                    {{ formatDate(lic.created_at) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination -->
+          <div
+            class="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-6 py-3 dark:border-gray-700 dark:bg-gray-900"
+          >
+            <div class="text-sm text-gray-600 dark:text-gray-400">
+              {{
+                t('adminLicense.paginationShowing', {
+                  from: (currentPage - 1) * pageSize + 1,
+                  to: Math.min(currentPage * pageSize, totalLicenses),
+                  total: totalLicenses,
+                })
+              }}
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="text-sm text-gray-600 dark:text-gray-400">
+                {{ t('adminLicense.paginationPage', { page: currentPage, totalPages }) }}
+              </span>
+              <div class="flex gap-2">
+                <button
+                  :disabled="currentPage <= 1"
+                  class="btn btn-secondary px-3 py-1 text-sm"
+                  @click="goToPage(currentPage - 1)"
+                >
+                  {{ t('adminLicense.paginationPrevious') }}
+                </button>
+                <button
+                  :disabled="currentPage >= totalPages"
+                  class="btn btn-secondary px-3 py-1 text-sm"
+                  @click="goToPage(currentPage + 1)"
+                >
+                  {{ t('adminLicense.paginationNext') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div v-else class="card">
+          <div class="text-center py-12">
+            <svg
+              class="mx-auto h-12 w-12 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+              {{ t('adminLicense.noLicenses') }}
+            </h3>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useToastStore } from '@/stores/toast';
 import { useAuthStore } from '@/stores/auth';
@@ -312,6 +488,42 @@ const supportKey = ref('');
 const searching = ref(false);
 const searched = ref(false);
 const license = ref<SoldLicenseWithDetails | null>(null);
+
+// License list state
+const licenses = ref<SoldLicenseWithDetails[]>([]);
+const totalLicenses = ref(0);
+const currentPage = ref(1);
+const pageSize = 20;
+const loadingLicenses = ref(false);
+
+const totalPages = computed(() => {
+  return Math.max(1, Math.ceil(totalLicenses.value / pageSize));
+});
+
+onMounted(() => {
+  loadLicenses();
+});
+
+async function loadLicenses() {
+  loadingLicenses.value = true;
+  try {
+    const offset = (currentPage.value - 1) * pageSize;
+    const resp = await ecommerceApi.listLicenses(pageSize, offset);
+    licenses.value = resp.licenses || [];
+    totalLicenses.value = resp.total;
+  } catch (err: any) {
+    console.error('Failed to load licenses:', err);
+    toastStore.error(err.message || t('errors.generic'));
+  } finally {
+    loadingLicenses.value = false;
+  }
+}
+
+function goToPage(page: number) {
+  if (page < 1 || page > totalPages.value) return;
+  currentPage.value = page;
+  loadLicenses();
+}
 
 async function searchLicense() {
   if (!supportKey.value.trim()) return;

@@ -9,6 +9,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -442,6 +443,83 @@ func (r *EcommerceRepository) ListSoldLicenses(ctx context.Context, limit, offse
 			return nil, 0, fmt.Errorf("failed to scan sold license: %w", err)
 		}
 		licenses = append(licenses, license)
+	}
+
+	return licenses, total, nil
+}
+
+// GetOrderAccountingData returns order revenue aggregated by country for a time period
+func (r *EcommerceRepository) GetOrderAccountingData(ctx context.Context, startTime, endTime time.Time) ([]models.OrderAccountingRow, error) {
+	query := `
+		SELECT country, SUM(amount_cents)::int AS total_amount_cents,
+		       COALESCE(SUM(vat_amount_cents), 0)::int AS total_vat_amount_cents,
+		       COUNT(*)::int AS order_count
+		FROM orders
+		WHERE status = 'completed' AND created_at >= $1 AND created_at < $2 AND country IS NOT NULL
+		GROUP BY country
+	`
+
+	rows, err := r.db.Query(ctx, query, startTime, endTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query order accounting data: %w", err)
+	}
+	defer rows.Close()
+
+	var result []models.OrderAccountingRow
+	for rows.Next() {
+		var row models.OrderAccountingRow
+		if err := rows.Scan(&row.Country, &row.AmountCents, &row.VATAmountCents, &row.OrderCount); err != nil {
+			return nil, fmt.Errorf("failed to scan order accounting row: %w", err)
+		}
+		result = append(result, row)
+	}
+
+	return result, nil
+}
+
+// ListSoldLicensesWithDetails retrieves all sold licenses with client and order info, paginated
+func (r *EcommerceRepository) ListSoldLicensesWithDetails(ctx context.Context, limit, offset int) ([]models.SoldLicenseWithDetails, int, error) {
+	countQuery := `SELECT COUNT(*) FROM sold_licenses`
+	var total int
+	if err := r.db.QueryRow(ctx, countQuery).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count sold licenses: %w", err)
+	}
+
+	query := `
+		SELECT
+			sl.id, sl.order_id, sl.support_key, sl.license, sl.created_at, sl.updated_at,
+			o.id, o.client_id, o.amount_cents, o.payment_method, o.stripe_payment_id, o.status, o.created_at, o.updated_at,
+			c.id, c.name, c.email, c.company, c.vat_number, c.address, c.country, c.created_at, c.updated_at
+		FROM sold_licenses sl
+		JOIN orders o ON sl.order_id = o.id
+		JOIN clients c ON o.client_id = c.id
+		ORDER BY sl.created_at DESC
+		LIMIT $1 OFFSET $2
+	`
+
+	rows, err := r.db.Query(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list sold licenses with details: %w", err)
+	}
+	defer rows.Close()
+
+	var licenses []models.SoldLicenseWithDetails
+	for rows.Next() {
+		var result models.SoldLicenseWithDetails
+		var order models.Order
+		var client models.Client
+
+		if err := rows.Scan(
+			&result.ID, &result.OrderID, &result.SupportKey, &result.License, &result.CreatedAt, &result.UpdatedAt,
+			&order.ID, &order.ClientID, &order.AmountCents, &order.PaymentMethod, &order.StripePaymentID, &order.Status, &order.CreatedAt, &order.UpdatedAt,
+			&client.ID, &client.Name, &client.Email, &client.Company, &client.VATNumber, &client.Address, &client.Country, &client.CreatedAt, &client.UpdatedAt,
+		); err != nil {
+			return nil, 0, fmt.Errorf("failed to scan sold license with details: %w", err)
+		}
+
+		result.Order = &order
+		result.Client = &client
+		licenses = append(licenses, result)
 	}
 
 	return licenses, total, nil

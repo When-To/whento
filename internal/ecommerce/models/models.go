@@ -127,3 +127,17 @@ type CreateLicenseRequest struct {
 	OrderID uuid.UUID       `json:"order_id" validate:"required"`
 	License json.RawMessage `json:"license" validate:"required"`
 }
+
+// OrderAccountingRow represents aggregated order data for a country (used by accounting)
+type OrderAccountingRow struct {
+	Country        string `json:"country" db:"country"`
+	AmountCents    int    `json:"amount_cents" db:"total_amount_cents"`
+	VATAmountCents int    `json:"vat_amount_cents" db:"total_vat_amount_cents"`
+	OrderCount     int    `json:"order_count" db:"order_count"`
+}
+
+// ListLicensesResponse contains a paginated list of sold licenses with details
+type ListLicensesResponse struct {
+	Licenses []SoldLicenseWithDetails `json:"licenses"`
+	Total    int                      `json:"total"`
+}
