@@ -172,7 +172,6 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 		AllowHolidayEves:  req.AllowHolidayEves,
 		AllowedHours:      allowedHoursJSON,
 		NotifyOnThreshold: req.NotifyOnThreshold,
-		NotifyConfig:      req.NotifyConfig,
 		LockParticipants:           req.LockParticipants,
 		AllowAnonymousParticipants: req.AllowAnonymousParticipants,
 		StartDate:                  startDate,
@@ -532,9 +531,8 @@ func (s *CalendarService) UpdateCalendar(ctx context.Context, userID, userRole, 
 	if req.NotifyOnThreshold != nil {
 		calendar.NotifyOnThreshold = *req.NotifyOnThreshold
 	}
-	if req.NotifyConfig != nil {
-		calendar.NotifyConfig = req.NotifyConfig
-	}
+	// notify_config is intentionally NOT accepted here — it must be set
+	// through the validated PATCH /notify-config endpoint to prevent SSRF.
 	if req.LockParticipants != nil {
 		calendar.LockParticipants = *req.LockParticipants
 	}

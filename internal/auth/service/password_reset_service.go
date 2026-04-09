@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log/slog"
 	"strings"
 	"text/template"
@@ -277,10 +278,10 @@ func (s *PasswordResetService) sendPasswordResetEmail(user *models.User, resetUR
 	return nil
 }
 
-// replaceVarPR replaces {{.VarName}} with value in a string
+// replaceVarPR replaces {{.VarName}} with HTML-escaped value in a string
 func replaceVarPR(str, varName, value string) string {
 	placeholder := "{{." + varName + "}}"
-	return strings.ReplaceAll(str, placeholder, value)
+	return strings.ReplaceAll(str, placeholder, html.EscapeString(value))
 }
 
 // toUserResponse converts User to UserResponse

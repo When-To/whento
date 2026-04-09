@@ -193,6 +193,10 @@ func (m *mockQuotaService) IsOverQuota(ctx context.Context, userID uuid.UUID) (b
 	return m.isOverQuota, nil
 }
 
+func (m *mockQuotaService) QuotaLockKey(userID uuid.UUID) int64 {
+	return 0
+}
+
 type mockUserRepository struct {
 	user *authModels.User
 	err  error
@@ -299,7 +303,7 @@ func TestCalendarHandler_CreateCalendar_Success(t *testing.T) {
 
 	calendarSvc := service.NewCalendarService(mockCalRepo, mockPartRepo, nil, mockCache)
 	cfg := &config.Config{Email: config.EmailConfig{VerificationEnabled: false}}
-	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg)
+	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg, nil)
 
 	reqBody := map[string]interface{}{
 		"name":         "Team Meeting",
@@ -333,7 +337,7 @@ func TestCalendarHandler_CreateCalendar_QuotaExceeded(t *testing.T) {
 
 	calendarSvc := service.NewCalendarService(mockCalRepo, mockPartRepo, nil, mockCache)
 	cfg := &config.Config{Email: config.EmailConfig{VerificationEnabled: false}}
-	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg)
+	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg, nil)
 
 	reqBody := map[string]interface{}{
 		"name": "Test Calendar",
@@ -358,7 +362,7 @@ func TestCalendarHandler_CreateCalendar_Unauthorized(t *testing.T) {
 
 	calendarSvc := service.NewCalendarService(mockCalRepo, mockPartRepo, nil, mockCache)
 	cfg := &config.Config{Email: config.EmailConfig{VerificationEnabled: false}}
-	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg)
+	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg, nil)
 
 	reqBody := map[string]interface{}{
 		"name": "Test Calendar",

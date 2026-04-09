@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 
+	"github.com/whento/pkg/cache"
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/logger"
 )
@@ -77,26 +78,31 @@ func Recoverer(next http.Handler) http.Handler {
 }
 
 // CORS handles Cross-Origin Resource Sharing
+// allowedOrigins must be explicit origins (e.g. "https://whento.be").
+// Never combine wildcard "*" with credentials — this middleware rejects
+// that misconfiguration by treating "*" as "same-origin only" (no CORS header set).
 func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
+	// Build lookup set for O(1) matching; filter out wildcards.
+	originSet := make(map[string]struct{}, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		if o != "*" && o != "" {
+			originSet[o] = struct{}{}
+		}
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
 
-			// Check if origin is allowed
-			allowed := false
-			for _, o := range allowedOrigins {
-				if o == "*" || o == origin {
-					allowed = true
-					break
+			if origin != "" {
+				if _, ok := originSet[origin]; ok {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+					w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-Request-ID")
+					w.Header().Set("Access-Control-Max-Age", "3600")
+					w.Header().Set("Vary", "Origin")
 				}
-			}
-
-			if allowed {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-Request-ID")
-				w.Header().Set("Access-Control-Max-Age", "3600")
 			}
 
 			if r.Method == http.MethodOptions {
@@ -110,7 +116,7 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 }
 
 // Auth creates an authentication middleware
-func Auth(jwtManager *jwt.Manager) func(http.Handler) http.Handler {
+func Auth(jwtManager *jwt.Manager, c cache.Cache) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -129,6 +135,18 @@ func Auth(jwtManager *jwt.Manager) func(http.Handler) http.Handler {
 			if err != nil {
 				http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
 				return
+			}
+
+			// Check if token was issued before a password change
+			if c != nil && c.IsEnabled() {
+				var changedAt int64
+				key := cache.UserPasswordChangedKey(claims.UserID)
+				if err := c.Get(r.Context(), key, &changedAt); err == nil {
+					if claims.IssuedAt != nil && claims.IssuedAt.Unix() < changedAt {
+						http.Error(w, "Token invalidated by password change", http.StatusUnauthorized)
+						return
+					}
+				}
 			}
 
 			// Add user info to context
@@ -230,7 +248,7 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		// Content Security Policy - restricts resources the page can load
 		// This is a strict policy, adjust based on your needs
 		csp := "default-src 'self'; " +
-			"script-src 'self' 'unsafe-inline' 'unsafe-eval'; " + // Allow inline scripts for Vite dev mode
+			"script-src 'self'; " +
 			"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
 			"font-src 'self' https://fonts.gstatic.com; " +
 			"img-src 'self' data: https:; " +
@@ -239,6 +257,11 @@ func SecurityHeaders(next http.Handler) http.Handler {
 			"base-uri 'self'; " +
 			"form-action 'self'"
 		w.Header().Set("Content-Security-Policy", csp)
+
+		// Cross-origin isolation headers
+		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+		w.Header().Set("Cross-Origin-Embedder-Policy", "require-corp")
 
 		// Restrict browser features
 		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=()")

@@ -45,6 +45,7 @@ type Order struct {
 	PaymentMethod   *string     `json:"payment_method,omitempty" db:"payment_method"`
 	StripePaymentID *string     `json:"stripe_payment_id,omitempty" db:"stripe_payment_id"`
 	StripeSessionID *string     `json:"stripe_session_id,omitempty" db:"stripe_session_id"`
+	ShopSessionID   *string     `json:"shop_session_id,omitempty" db:"shop_session_id"`
 	Status          OrderStatus `json:"status" db:"status"`
 }
 
@@ -111,6 +112,7 @@ type CreateOrderRequest struct {
 	PaymentMethod       string    `json:"payment_method,omitempty"`
 	StripePaymentIntent string    `json:"stripe_payment_intent,omitempty"`
 	StripeSessionID     string    `json:"stripe_session_id,omitempty"`
+	ShopSessionID       string    `json:"shop_session_id,omitempty"`
 }
 
 // CreateSoldLicenseRequest represents a request to record a sold license

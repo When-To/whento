@@ -65,11 +65,22 @@ func (h *Handler) getOrCreateSessionID(w http.ResponseWriter, r *http.Request) s
 		Path:     "/",
 		MaxAge:   sessionMaxAge,
 		HttpOnly: true,
-		Secure:   r.TLS != nil, // Secure flag only if HTTPS
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 		SameSite: http.SameSiteLaxMode,
 	})
 
 	return sessionID
+}
+
+// getSessionID retrieves an existing shop session ID from cookie (without creating one).
+func (h *Handler) getSessionID(r *http.Request) string {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err == nil && cookie.Value != "" {
+		if _, err := uuid.Parse(cookie.Value); err == nil {
+			return cookie.Value
+		}
+	}
+	return ""
 }
 
 // HandleGetProducts returns available license products
@@ -352,6 +363,20 @@ func (h *Handler) HandleGetOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify session ownership
+	sessionID := h.getSessionID(r)
+	if sessionID == "" {
+		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Session required")
+		return
+	}
+
+	// Verify the order belongs to this session
+	ecomOrder, err := h.ecommerceService.GetOrder(r.Context(), orderID)
+	if err != nil || ecomOrder.ShopSessionID == nil || *ecomOrder.ShopSessionID != sessionID {
+		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Order not found")
+		return
+	}
+
 	order, err := h.service.GetOrderWithLicenses(r.Context(), orderID)
 	if err != nil {
 		h.log.Error("Failed to get order", "error", err, "order_id", orderID)
@@ -373,17 +398,23 @@ func (h *Handler) HandleGetOrder(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} httputil.ErrorResponse "Order not found"
 // @Router /api/v1/shop/orders/by-session/{session_id} [get]
 func (h *Handler) HandleGetOrderBySession(w http.ResponseWriter, r *http.Request) {
-	sessionID := chi.URLParam(r, "session_id")
+	stripeSessionID := chi.URLParam(r, "session_id")
 
-	if sessionID == "" {
+	if stripeSessionID == "" {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Session ID is required")
 		return
 	}
 
-	// Get order by session ID via ecommerce service
-	order, err := h.ecommerceService.GetOrderByStripeSessionID(r.Context(), sessionID)
-	if err != nil {
-		h.log.Error("Failed to get order by session", "error", err, "session_id", sessionID)
+	// Verify shop session cookie ownership
+	cookieSessionID := h.getSessionID(r)
+	if cookieSessionID == "" {
+		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Session required")
+		return
+	}
+
+	// Get order by Stripe session ID via ecommerce service
+	order, err := h.ecommerceService.GetOrderByStripeSessionID(r.Context(), stripeSessionID)
+	if err != nil || order.ShopSessionID == nil || *order.ShopSessionID != cookieSessionID {
 		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Order not found")
 		return
 	}
@@ -456,6 +487,20 @@ func (h *Handler) HandleDownloadLicenses(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Verify session ownership
+	sessionID := h.getSessionID(r)
+	if sessionID == "" {
+		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Session required")
+		return
+	}
+
+	// Verify the order belongs to this session
+	ecomOrder, err := h.ecommerceService.GetOrder(r.Context(), orderID)
+	if err != nil || ecomOrder.ShopSessionID == nil || *ecomOrder.ShopSessionID != sessionID {
+		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Order not found")
+		return
+	}
+
 	order, err := h.service.GetOrderWithLicenses(r.Context(), orderID)
 	if err != nil {
 		h.log.Error("Failed to get order for download", "error", err, "order_id", orderID)
@@ -517,6 +562,13 @@ func (h *Handler) HandleDownloadSingleLicense(w http.ResponseWriter, r *http.Req
 	orderIDStr := chi.URLParam(r, "order_id")
 	licenseIDStr := chi.URLParam(r, "license_id")
 
+	// Verify session ownership
+	sessionID := h.getSessionID(r)
+	if sessionID == "" {
+		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Session required")
+		return
+	}
+
 	orderID, err := uuid.Parse(orderIDStr)
 	if err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid order ID")
@@ -526,6 +578,13 @@ func (h *Handler) HandleDownloadSingleLicense(w http.ResponseWriter, r *http.Req
 	licenseID, err := uuid.Parse(licenseIDStr)
 	if err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid license ID")
+		return
+	}
+
+	// Verify the order belongs to this session
+	ecomOrder, err := h.ecommerceService.GetOrder(r.Context(), orderID)
+	if err != nil || ecomOrder.ShopSessionID == nil || *ecomOrder.ShopSessionID != sessionID {
+		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Order not found")
 		return
 	}
 

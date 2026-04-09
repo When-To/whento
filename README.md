@@ -236,6 +236,8 @@ RATE_LIMIT_ENABLED=true
 
 # Security
 BCRYPT_COST=12
+CORS_ORIGINS=https://your-domain.com  # Comma-separated allowed CORS origins (default: APP_URL)
+TRUSTED_PROXIES=                       # Comma-separated trusted reverse proxy IPs (e.g., 127.0.0.1,10.0.0.1)
 ```
 
 ---

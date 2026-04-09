@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -24,6 +25,14 @@ var (
 	ErrCalendarNotFound = errors.New("calendar not found")
 	ErrQuotaExceeded    = errors.New("calendar owner has exceeded their quota - please delete calendars or upgrade")
 )
+
+// crlfRegexp matches CR, LF, and CRLF sequences for ICS injection prevention
+var crlfRegexp = regexp.MustCompile(`[\r\n]+`)
+
+// sanitizeICSText strips CR/LF characters to prevent CRLF injection into ICS properties
+func sanitizeICSText(s string) string {
+	return crlfRegexp.ReplaceAllString(s, " ")
+}
 
 // CalendarRepository defines the interface for calendar repository operations
 type CalendarRepository interface {
@@ -204,9 +213,9 @@ func (s *ICSService) generateICS(calendar *repository.Calendar, events []models.
 	cal := ics.NewCalendar()
 	cal.SetMethod(ics.MethodPublish)
 	cal.SetProductId("-//WhenTo//WhenTo Calendar//EN")
-	cal.SetName(calendar.Name)
-	cal.SetXWRCalName(calendar.Name)
-	cal.SetXWRTimezone(calendar.Timezone) // Hint for calendar clients about the intended timezone
+	cal.SetName(sanitizeICSText(calendar.Name))
+	cal.SetXWRCalName(sanitizeICSText(calendar.Name))
+	cal.SetXWRTimezone(sanitizeICSText(calendar.Timezone)) // Hint for calendar clients about the intended timezone
 	cal.SetRefreshInterval("PT1H")        // Refresh every hour
 
 	// Add events using floating time (RFC 5545 FORM #1)
@@ -235,7 +244,7 @@ func (s *ICSService) addEvent(cal *ics.Calendar, event models.CalendarEvent, dom
 
 	// Set summary: "{CalendarName} #{EventNumber} ({available}/{total})"
 	summary := fmt.Sprintf("%s #%d (%d/%d)",
-		event.CalendarName,
+		sanitizeICSText(event.CalendarName),
 		event.EventNumber,
 		event.AvailableCount,
 		event.TotalParticipants,
@@ -299,7 +308,7 @@ func (s *ICSService) buildDescription(event models.CalendarEvent) string {
 	desc := "Participants disponibles:\n"
 
 	for _, p := range event.Participants {
-		line := fmt.Sprintf("- %s", p.Name)
+		line := fmt.Sprintf("- %s", sanitizeICSText(p.Name))
 
 		// Only show time range if it's not a full day (00:00-23:59)
 		if p.StartTime != nil || p.EndTime != nil {
@@ -319,7 +328,7 @@ func (s *ICSService) buildDescription(event models.CalendarEvent) string {
 		}
 
 		if p.Note != "" {
-			line += fmt.Sprintf(": %s", p.Note)
+			line += fmt.Sprintf(": %s", sanitizeICSText(p.Note))
 		}
 
 		desc += line + "\n"
@@ -327,7 +336,7 @@ func (s *ICSService) buildDescription(event models.CalendarEvent) string {
 
 	// Add calendar description at the end if present
 	if event.CalendarDescription != "" {
-		desc += "\n---\n" + event.CalendarDescription
+		desc += "\n---\n" + sanitizeICSText(event.CalendarDescription)
 	}
 
 	return desc
@@ -341,7 +350,7 @@ func (s *ICSService) addAttendees(vevent *ics.VEvent, event models.CalendarEvent
 		vevent.AddProperty(
 			ics.ComponentProperty("ATTENDEE"),
 			"MAILTO:noreply@whento.be",
-			&ics.KeyValues{Key: "CN", Value: []string{p.Name}},
+			&ics.KeyValues{Key: "CN", Value: []string{sanitizeICSText(p.Name)}},
 			&ics.KeyValues{Key: "ROLE", Value: []string{"REQ-PARTICIPANT"}},
 			&ics.KeyValues{Key: "PARTSTAT", Value: []string{"ACCEPTED"}},
 			&ics.KeyValues{Key: "CUTYPE", Value: []string{"INDIVIDUAL"}},

@@ -91,6 +91,17 @@ func (m *mockUserRepository) UpdatePassword(ctx context.Context, userID uuid.UUI
 	return m.err
 }
 
+func (m *mockUserRepository) DetermineRoleAtomically(ctx context.Context) (string, error) {
+	count, err := m.Count(ctx)
+	if err != nil {
+		return "", err
+	}
+	if count == 0 {
+		return "admin", nil
+	}
+	return "user", nil
+}
+
 type mockTokenRepository struct {
 	err error
 }

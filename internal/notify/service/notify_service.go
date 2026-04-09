@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log/slog"
 	"time"
 
@@ -598,14 +599,14 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 		}
 	}
 
-	// Build participant list HTML
+	// Build participant list HTML (escape user-supplied names to prevent XSS)
 	var participantListHTML string
 	if len(participantNames) > 0 {
 		participantListHTML = fmt.Sprintf(`<div class="participant-list">
 			<div class="participant-list-header">%s</div>
 			<ul class="participant-names">`, participantListLabel)
 		for _, name := range participantNames {
-			participantListHTML += fmt.Sprintf(`<li>%s</li>`, name)
+			participantListHTML += fmt.Sprintf(`<li>%s</li>`, html.EscapeString(name))
 		}
 		participantListHTML += `</ul></div>`
 	}
@@ -702,7 +703,7 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 	</div>
 </body>
 </html>
-	`, emoji, messageText, calendarLabel, calendar.Name, dateLabel, dateStr, participantsLabel, transition.NewCount, transition.Threshold, participantListHTML, calendarURL, viewButton, cancelButton)
+	`, emoji, messageText, calendarLabel, html.EscapeString(calendar.Name), dateLabel, dateStr, participantsLabel, transition.NewCount, transition.Threshold, participantListHTML, calendarURL, viewButton, cancelButton)
 
 	return html
 }

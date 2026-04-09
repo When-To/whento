@@ -7,6 +7,7 @@ package web
 import (
 	"embed"
 	"fmt"
+	"html"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -236,29 +237,29 @@ func (h *SPAHandler) getMetaForRoute(path string) PageMeta {
 }
 
 // injectMetaTags replaces the default meta tags in index.html with route-specific ones
-func (h *SPAHandler) injectMetaTags(html []byte, meta PageMeta) []byte {
-	htmlStr := string(html)
+func (h *SPAHandler) injectMetaTags(htmlContent []byte, meta PageMeta) []byte {
+	htmlStr := string(htmlContent)
 
-	// Replace title (match the existing title tag)
+	// Replace title (match the existing title tag) — HTML-escaped to prevent injection
 	if meta.Title != "" {
 		// Find and replace the existing title tag
 		titleStart := strings.Index(htmlStr, "<title>")
 		if titleStart != -1 {
 			titleEnd := strings.Index(htmlStr[titleStart:], "</title>") + titleStart + 8 // +8 for </title>
 			if titleEnd > titleStart {
-				htmlStr = htmlStr[:titleStart] + "<title>" + meta.Title + "</title>" + htmlStr[titleEnd:]
+				htmlStr = htmlStr[:titleStart] + "<title>" + html.EscapeString(meta.Title) + "</title>" + htmlStr[titleEnd:]
 			}
 		}
 	}
 
-	// Replace existing meta description instead of adding a new one
+	// Replace existing meta description instead of adding a new one — HTML-escaped
 	if meta.Description != "" {
 		descStart := strings.Index(htmlStr, `<meta name="description"`)
 		if descStart != -1 {
 			// Find the end of the existing description tag
 			descEnd := strings.Index(htmlStr[descStart:], ">") + descStart + 1
 			if descEnd > descStart {
-				newDesc := fmt.Sprintf(`<meta name="description" content="%s">`, meta.Description)
+				newDesc := fmt.Sprintf(`<meta name="description" content="%s">`, html.EscapeString(meta.Description))
 				htmlStr = htmlStr[:descStart] + newDesc + htmlStr[descEnd:]
 			}
 		}
@@ -267,7 +268,7 @@ func (h *SPAHandler) injectMetaTags(html []byte, meta PageMeta) []byte {
 	// Find the position after <meta charset="UTF-8" /> to inject our meta tags
 	charsetPos := strings.Index(htmlStr, `<meta charset="UTF-8"`)
 	if charsetPos == -1 {
-		return html // If charset meta not found, return original
+		return htmlContent // If charset meta not found, return original
 	}
 
 	// Find the end of the charset meta tag (looking for />)
@@ -277,17 +278,17 @@ func (h *SPAHandler) injectMetaTags(html []byte, meta PageMeta) []byte {
 	var metaTags strings.Builder
 	metaTags.WriteString("\n    ")
 
-	// Open Graph tags
+	// Open Graph tags — all values are HTML-escaped to prevent XSS via URL path injection
 	if meta.OGTitle != "" {
-		metaTags.WriteString(fmt.Sprintf(`<meta property="og:title" content="%s">`, meta.OGTitle))
+		metaTags.WriteString(fmt.Sprintf(`<meta property="og:title" content="%s">`, html.EscapeString(meta.OGTitle)))
 		metaTags.WriteString("\n    ")
 	}
 	if meta.OGDescription != "" {
-		metaTags.WriteString(fmt.Sprintf(`<meta property="og:description" content="%s">`, meta.OGDescription))
+		metaTags.WriteString(fmt.Sprintf(`<meta property="og:description" content="%s">`, html.EscapeString(meta.OGDescription)))
 		metaTags.WriteString("\n    ")
 	}
 	if meta.OGImage != "" {
-		metaTags.WriteString(fmt.Sprintf(`<meta property="og:image" content="%s">`, meta.OGImage))
+		metaTags.WriteString(fmt.Sprintf(`<meta property="og:image" content="%s">`, html.EscapeString(meta.OGImage)))
 		metaTags.WriteString("\n    ")
 	}
 	metaTags.WriteString(`<meta property="og:type" content="website">`)
@@ -297,21 +298,21 @@ func (h *SPAHandler) injectMetaTags(html []byte, meta PageMeta) []byte {
 	metaTags.WriteString(`<meta name="twitter:card" content="summary_large_image">`)
 	metaTags.WriteString("\n    ")
 	if meta.OGTitle != "" {
-		metaTags.WriteString(fmt.Sprintf(`<meta name="twitter:title" content="%s">`, meta.OGTitle))
+		metaTags.WriteString(fmt.Sprintf(`<meta name="twitter:title" content="%s">`, html.EscapeString(meta.OGTitle)))
 		metaTags.WriteString("\n    ")
 	}
 	if meta.OGDescription != "" {
-		metaTags.WriteString(fmt.Sprintf(`<meta name="twitter:description" content="%s">`, meta.OGDescription))
+		metaTags.WriteString(fmt.Sprintf(`<meta name="twitter:description" content="%s">`, html.EscapeString(meta.OGDescription)))
 		metaTags.WriteString("\n    ")
 	}
 	if meta.OGImage != "" {
-		metaTags.WriteString(fmt.Sprintf(`<meta name="twitter:image" content="%s">`, meta.OGImage))
+		metaTags.WriteString(fmt.Sprintf(`<meta name="twitter:image" content="%s">`, html.EscapeString(meta.OGImage)))
 		metaTags.WriteString("\n    ")
 	}
 
 	// Canonical URL
 	if meta.Canonical != "" {
-		metaTags.WriteString(fmt.Sprintf(`<link rel="canonical" href="%s">`, meta.Canonical))
+		metaTags.WriteString(fmt.Sprintf(`<link rel="canonical" href="%s">`, html.EscapeString(meta.Canonical)))
 		metaTags.WriteString("\n    ")
 	}
 

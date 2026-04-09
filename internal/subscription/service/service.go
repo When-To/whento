@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -37,6 +38,7 @@ type Service struct {
 	vatService     *vatservice.Service
 	stripeKey      string
 	stripePriceIDs map[models.SubscriptionPlan]string
+	appURL         string
 	log            *slog.Logger
 
 	// Cached plan configs fetched from Stripe
@@ -49,6 +51,7 @@ type Config struct {
 	StripeSecretKey  string
 	StripePricePro   string
 	StripePricePower string
+	AppURL           string
 }
 
 // New creates a new subscription service
@@ -59,6 +62,7 @@ func New(repo *repository.SubscriptionRepository, vatService *vatservice.Service
 		repo:       repo,
 		vatService: vatService,
 		stripeKey:  cfg.StripeSecretKey,
+		appURL:     cfg.AppURL,
 		stripePriceIDs: map[models.SubscriptionPlan]string{
 			models.PlanPro:   cfg.StripePricePro,
 			models.PlanPower: cfg.StripePricePower,
@@ -345,6 +349,14 @@ func (s *Service) getInvoiceSettings(ctx context.Context, req models.CreateCheck
 
 // CreateCheckoutSession creates a Stripe checkout session for upgrading or handles subscription updates
 func (s *Service) CreateCheckoutSession(ctx context.Context, userID uuid.UUID, req models.CreateCheckoutRequest) (*models.CreateCheckoutResponse, error) {
+	// Validate redirect URLs against configured app origin
+	if err := s.validateRedirectURL(req.SuccessURL); err != nil {
+		return nil, fmt.Errorf("invalid success_url: %w", err)
+	}
+	if err := s.validateRedirectURL(req.CancelURL); err != nil {
+		return nil, fmt.Errorf("invalid cancel_url: %w", err)
+	}
+
 	// Get or create Stripe customer
 	sub, err := s.repo.GetByUserID(ctx, userID)
 	var stripeCustomerID string
@@ -592,8 +604,28 @@ func (s *Service) updateExistingSubscription(ctx context.Context, userID uuid.UU
 	}, nil
 }
 
+// validateRedirectURL checks that the given URL is under the configured AppURL origin.
+func (s *Service) validateRedirectURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	base, err := url.Parse(s.appURL)
+	if err != nil {
+		return fmt.Errorf("invalid app URL config: %w", err)
+	}
+	if parsed.Scheme != base.Scheme || parsed.Host != base.Host {
+		return fmt.Errorf("redirect URL must be under %s", s.appURL)
+	}
+	return nil
+}
+
 // CreatePortalSession creates a Stripe customer portal session
 func (s *Service) CreatePortalSession(ctx context.Context, userID uuid.UUID, req models.CreatePortalRequest) (*models.CreatePortalResponse, error) {
+	if err := s.validateRedirectURL(req.ReturnURL); err != nil {
+		return nil, fmt.Errorf("invalid return_url: %w", err)
+	}
+
 	sub, err := s.repo.GetByUserID(ctx, userID)
 	if err != nil || sub.StripeCustomerID == "" {
 		return nil, fmt.Errorf("no active subscription found")

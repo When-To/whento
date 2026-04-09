@@ -7,7 +7,7 @@ package models
 // AuthResponse represents an authentication response
 type AuthResponse struct {
 	AccessToken  string `json:"access_token,omitempty"`
-	RefreshToken string `json:"refresh_token,omitempty"`
+	RefreshToken string `json:"-"`
 	ExpiresIn    int64  `json:"expires_in,omitempty"`
 	User         *User  `json:"user"`
 	RequireMFA   bool   `json:"require_mfa,omitempty"` // True if 2FA verification is required
