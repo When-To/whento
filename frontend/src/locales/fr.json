@@ -1142,5 +1142,18 @@
     "invalidToken": "Le lien de vérification est invalide.",
     "tokenExpired": "Le lien de vérification a expiré. Veuillez en demander un nouveau.",
     "verificationError": "Une erreur s'est produite lors de la vérification. Veuillez réessayer."
+  },
+  "unifiedFeed": {
+    "title": "Flux ICS unifié",
+    "description": "Abonnez-vous à un seul flux qui combine les événements de vos calendriers sélectionnés.",
+    "enable": "Activer le flux unifié",
+    "feedUrl": "URL du flux",
+    "copyUrl": "Copier",
+    "urlCopied": "URL du flux unifié copiée !",
+    "regenerateToken": "Régénérer",
+    "regenerateConfirm": "La régénération du jeton invalidera l'URL actuelle. Toute personne utilisant l'ancienne URL aura besoin de la nouvelle. Continuer ?",
+    "tokenRegenerated": "Jeton régénéré. Mettez à jour vos abonnements calendrier avec la nouvelle URL.",
+    "includeInFeed": "Inclure dans le flux unifié",
+    "noCalendarsSelected": "Aucun calendrier sélectionné. Utilisez les cases à cocher sur vos calendriers ci-dessous pour choisir lesquels inclure."
   }
 }

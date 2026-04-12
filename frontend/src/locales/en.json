@@ -1139,5 +1139,18 @@
     "invalidToken": "The verification link is invalid.",
     "tokenExpired": "The verification link has expired. Please request a new one.",
     "verificationError": "An error occurred during verification. Please try again."
+  },
+  "unifiedFeed": {
+    "title": "Unified ICS Feed",
+    "description": "Subscribe to a single feed that combines events from your selected calendars.",
+    "enable": "Enable Unified Feed",
+    "feedUrl": "Feed URL",
+    "copyUrl": "Copy",
+    "urlCopied": "Unified feed URL copied!",
+    "regenerateToken": "Regenerate",
+    "regenerateConfirm": "Regenerating the token will invalidate the current URL. Anyone using the old URL will need the new one. Continue?",
+    "tokenRegenerated": "Token regenerated. Update your calendar subscriptions with the new URL.",
+    "includeInFeed": "Include in unified feed",
+    "noCalendarsSelected": "No calendars selected. Use the checkboxes on your calendars below to choose which ones to include."
   }
 }
