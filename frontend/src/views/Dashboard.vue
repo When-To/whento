@@ -38,6 +38,73 @@
         <QuotaUsage />
       </div>
 
+      <!-- Unified ICS Feed Section -->
+      <div v-if="!loading && calendars.length > 0" class="mb-6">
+        <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <svg class="mr-2 h-5 w-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              <div>
+                <h3 class="font-display text-sm font-semibold text-gray-900 dark:text-white">
+                  {{ t('unifiedFeed.title') }}
+                </h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('unifiedFeed.description') }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Enable button (if not configured) -->
+            <button
+              v-if="!unifiedFeedConfig?.configured"
+              class="btn btn-primary btn-sm"
+              :disabled="unifiedFeedLoading"
+              @click="enableUnifiedFeed"
+            >
+              {{ t('unifiedFeed.enable') }}
+            </button>
+          </div>
+
+          <!-- Feed URL + Actions (if configured) -->
+          <div v-if="unifiedFeedConfig?.configured" class="mt-3">
+            <div class="flex items-center space-x-2">
+              <input
+                type="text"
+                readonly
+                :value="unifiedFeedUrl"
+                class="input flex-1 text-xs"
+                @click="($event.target as HTMLInputElement)?.select()"
+              />
+              <button
+                class="btn btn-ghost btn-sm"
+                :title="t('unifiedFeed.copyUrl')"
+                @click="copyUnifiedFeedUrl"
+              >
+                <svg class="mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                {{ t('unifiedFeed.copyUrl') }}
+              </button>
+              <button
+                class="btn btn-ghost btn-sm text-danger-600 dark:text-danger-400"
+                :title="t('unifiedFeed.regenerateToken')"
+                @click="regenerateUnifiedFeedToken"
+              >
+                <svg class="mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {{ t('unifiedFeed.regenerateToken') }}
+              </button>
+            </div>
+            <p v-if="unifiedFeedConfig.included_calendar_ids?.length === 0" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+              {{ t('unifiedFeed.noCalendarsSelected') }}
+            </p>
+          </div>
+        </div>
+      </div>
+
       <!-- Loading State -->
       <div v-if="loading" class="flex items-center justify-center py-12">
         <svg class="h-8 w-8 animate-spin text-primary-600" fill="none" viewBox="0 0 24 24">
@@ -179,6 +246,24 @@
             </div>
           </div>
 
+          <!-- Unified Feed Checkbox -->
+          <div
+            v-if="unifiedFeedConfig?.configured"
+            class="mb-2 flex items-center"
+            @click.stop
+          >
+            <input
+              :id="`unified-feed-${calendar.id}`"
+              type="checkbox"
+              :checked="unifiedFeedStore.isCalendarIncluded(calendar.id)"
+              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
+              @change="unifiedFeedStore.toggleCalendar(calendar.id)"
+            />
+            <label :for="`unified-feed-${calendar.id}`" class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('unifiedFeed.includeInFeed') }}
+            </label>
+          </div>
+
           <!-- Quick Actions -->
           <div class="flex items-center space-x-2">
             <button
@@ -229,6 +314,7 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useCalendarStore } from '@/stores/calendar';
+import { useUnifiedFeedStore } from '@/stores/unifiedFeed';
 import { useToastStore } from '@/stores/toast';
 import QuotaUsage from '@/components/QuotaUsage.vue';
 import UpgradeBanner from '@/components/UpgradeBanner.vue';
@@ -237,6 +323,7 @@ const router = useRouter();
 const { t } = useI18n();
 const authStore = useAuthStore();
 const calendarStore = useCalendarStore();
+const unifiedFeedStore = useUnifiedFeedStore();
 const toastStore = useToastStore();
 
 const user = computed(() => authStore.user);
@@ -247,10 +334,40 @@ const calendars = computed(() => {
 const loading = computed(() => calendarStore.loading);
 const fetchError = ref<string | null>(null);
 
+const unifiedFeedConfig = computed(() => unifiedFeedStore.config);
+const unifiedFeedLoading = computed(() => unifiedFeedStore.loading);
+const unifiedFeedUrl = computed(() => {
+  if (!unifiedFeedConfig.value?.ics_token) return '';
+  return `${window.location.origin}/api/v1/ics/unified/${unifiedFeedConfig.value.ics_token}.ics`;
+});
+
 function copyPublicLink(token: string) {
   const url = `${window.location.origin}/c/${token}`;
   navigator.clipboard.writeText(url);
   toastStore.success(t('common.linkCopied'));
+}
+
+function copyUnifiedFeedUrl() {
+  navigator.clipboard.writeText(unifiedFeedUrl.value);
+  toastStore.success(t('unifiedFeed.urlCopied'));
+}
+
+async function enableUnifiedFeed() {
+  try {
+    await unifiedFeedStore.createFeed();
+  } catch (error: any) {
+    console.error('Error enabling unified feed:', error);
+  }
+}
+
+async function regenerateUnifiedFeedToken() {
+  if (!confirm(t('unifiedFeed.regenerateConfirm'))) return;
+  try {
+    await unifiedFeedStore.regenerateToken();
+    toastStore.success(t('unifiedFeed.tokenRegenerated'));
+  } catch (error: any) {
+    console.error('Error regenerating token:', error);
+  }
 }
 
 async function loadCalendars() {
@@ -265,5 +382,6 @@ async function loadCalendars() {
 
 onMounted(() => {
   loadCalendars();
+  unifiedFeedStore.fetchConfig();
 });
 </script>

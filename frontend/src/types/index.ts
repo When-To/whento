@@ -330,6 +330,13 @@ export interface ParticipantEmailResponse {
   message: string;
 }
 
+// Unified ICS Feed Types
+export interface UnifiedFeedConfig {
+  configured: boolean;
+  ics_token?: string;
+  included_calendar_ids?: string[];
+}
+
 // UI Types
 export type Theme = 'light' | 'dark' | 'system';
 

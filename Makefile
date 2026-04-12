@@ -161,8 +161,8 @@ migrate-down: migrate-build
 	@rm -rf ./migrations-build
 
 migrate-reset: migrate-build
-	migrate -path ./migrations-build -database "$$DATABASE_URL" down
-	migrate -path ./migrations-build -database "$$DATABASE_URL" up
+	migrate -path ./migrations-build -database "$$DATABASE_URL" down force
+	migrate -path ./migrations-build -database "$$DATABASE_URL" up force
 	@rm -rf ./migrations-build
 
 migrate-status: migrate-build

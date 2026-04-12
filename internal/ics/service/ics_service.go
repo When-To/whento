@@ -49,22 +49,31 @@ type QuotaChecker interface {
 	IsOverQuota(ctx context.Context, userID uuid.UUID) (bool, error)
 }
 
+// UnifiedFeedRepository defines the interface for unified feed repository operations
+type UnifiedFeedRepository interface {
+	GetCalendarsForFeed(ctx context.Context, icsToken string) ([]*repository.Calendar, error)
+	GetFeedOwnerInfo(ctx context.Context, icsToken string) (string, uuid.UUID, string, error)
+}
+
 type ICSService struct {
 	calendarRepo     CalendarRepository
 	availabilityRepo AvailabilityRepository
 	quotaChecker     QuotaChecker
+	unifiedFeedRepo  UnifiedFeedRepository
 	appDomain        string
 }
 
 func NewICSService(
 	calendarRepo CalendarRepository,
 	availabilityRepo AvailabilityRepository,
+	unifiedFeedRepo UnifiedFeedRepository,
 	quotaChecker QuotaChecker,
 	appDomain string,
 ) *ICSService {
 	return &ICSService{
 		calendarRepo:     calendarRepo,
 		availabilityRepo: availabilityRepo,
+		unifiedFeedRepo:  unifiedFeedRepo,
 		quotaChecker:     quotaChecker,
 		appDomain:        appDomain,
 	}
@@ -208,15 +217,20 @@ func (s *ICSService) calculateEventDuration(event *models.CalendarEvent) float64
 	return duration
 }
 
-// generateICS generates the iCalendar string from events
+// generateICS generates the iCalendar string from events for a single calendar
 func (s *ICSService) generateICS(calendar *repository.Calendar, events []models.CalendarEvent, domain string) string {
+	return s.generateICSFromEvents(calendar.Name, calendar.Timezone, events, domain)
+}
+
+// generateICSFromEvents generates the iCalendar string from events with a custom name and timezone
+func (s *ICSService) generateICSFromEvents(name string, timezone string, events []models.CalendarEvent, domain string) string {
 	cal := ics.NewCalendar()
 	cal.SetMethod(ics.MethodPublish)
 	cal.SetProductId("-//WhenTo//WhenTo Calendar//EN")
-	cal.SetName(sanitizeICSText(calendar.Name))
-	cal.SetXWRCalName(sanitizeICSText(calendar.Name))
-	cal.SetXWRTimezone(sanitizeICSText(calendar.Timezone)) // Hint for calendar clients about the intended timezone
-	cal.SetRefreshInterval("PT1H")        // Refresh every hour
+	cal.SetName(sanitizeICSText(name))
+	cal.SetXWRCalName(sanitizeICSText(name))
+	cal.SetXWRTimezone(sanitizeICSText(timezone)) // Hint for calendar clients about the intended timezone
+	cal.SetRefreshInterval("PT1H")                // Refresh every hour
 
 	// Add events using floating time (RFC 5545 FORM #1)
 	// Events are interpreted in the local timezone of the viewer
@@ -356,4 +370,68 @@ func (s *ICSService) addAttendees(vevent *ics.VEvent, event models.CalendarEvent
 			&ics.KeyValues{Key: "CUTYPE", Value: []string{"INDIVIDUAL"}},
 		)
 	}
+}
+
+// GenerateUnifiedFeed generates an iCalendar feed combining events from multiple calendars
+func (s *ICSService) GenerateUnifiedFeed(ctx context.Context, unifiedToken string, host string) (string, error) {
+	domain := host
+	if domain == "" {
+		domain = s.appDomain
+	}
+
+	// Get feed owner info
+	displayName, userID, timezone, err := s.unifiedFeedRepo.GetFeedOwnerInfo(ctx, unifiedToken)
+	if err != nil {
+		return "", ErrCalendarNotFound
+	}
+
+	// Check quota
+	isOverQuota, _ := s.quotaChecker.IsOverQuota(ctx, userID)
+	if isOverQuota {
+		return "", ErrQuotaExceeded
+	}
+
+	// Get all included calendars
+	calendars, err := s.unifiedFeedRepo.GetCalendarsForFeed(ctx, unifiedToken)
+	if err != nil {
+		return "", fmt.Errorf("failed to get calendars for unified feed: %w", err)
+	}
+
+	// Collect events from all calendars
+	var allEvents []models.CalendarEvent
+	globalEventNumber := 0
+
+	for _, calendar := range calendars {
+		eventsByDate, err := s.availabilityRepo.GetEventsAboveThreshold(ctx, calendar.ID, calendar.Threshold)
+		if err != nil {
+			return "", fmt.Errorf("failed to get events for calendar %s: %w", calendar.ID, err)
+		}
+
+		events := s.buildCalendarEvents(calendar, eventsByDate)
+
+		// Re-number events with global sequence
+		for i := range events {
+			globalEventNumber++
+			events[i].EventNumber = globalEventNumber
+		}
+
+		allEvents = append(allEvents, events...)
+	}
+
+	// Sort all events by date
+	sort.Slice(allEvents, func(i, j int) bool {
+		if allEvents[i].Date.Equal(allEvents[j].Date) {
+			return allEvents[i].CalendarName < allEvents[j].CalendarName
+		}
+		return allEvents[i].Date.Before(allEvents[j].Date)
+	})
+
+	// Re-number after sorting
+	for i := range allEvents {
+		allEvents[i].EventNumber = i + 1
+	}
+
+	// Generate unified ICS
+	feedName := fmt.Sprintf("WhenTo - %s", displayName)
+	return s.generateICSFromEvents(feedName, timezone, allEvents, domain), nil
 }
