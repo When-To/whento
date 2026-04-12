@@ -279,9 +279,14 @@ func main() {
 	// Initialize ICS repositories
 	icsCalendarRepo := icsRepo.NewCalendarRepository(pool)
 	icsAvailabilityRepo := icsRepo.NewAvailabilityRepository(pool)
+	unifiedFeedRepo := icsRepo.NewUnifiedFeedRepository(pool)
 
 	// Initialize ICS service (with quota checker to block feeds for over-quota users)
-	icsSvc := icsService.NewICSService(icsCalendarRepo, icsAvailabilityRepo, services.QuotaService, cfg.AppURL)
+	icsSvc := icsService.NewICSService(icsCalendarRepo, icsAvailabilityRepo, unifiedFeedRepo, services.QuotaService, cfg.AppURL)
+
+	// Initialize unified feed config service and handler
+	unifiedFeedConfigSvc := icsService.NewUnifiedFeedConfigService(unifiedFeedRepo)
+	unifiedFeedConfigHandler := icsHandlers.NewUnifiedFeedConfigHandler(unifiedFeedConfigSvc)
 
 	// Initialize ICS handlers
 	icsHandler := icsHandlers.NewICSHandler(icsSvc)
@@ -730,6 +735,24 @@ func main() {
 
 			// ICS feed endpoint (accepts both /feed/{token} and /feed/{token}.ics)
 			r.Get("/feed/{token}", icsHandler.GetFeed)
+			// Unified ICS feed endpoint
+			r.Get("/unified/{token}", icsHandler.GetUnifiedFeed)
+		})
+
+		// Authenticated routes for managing unified feed
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.Auth(jwtManager, cacheInstance))
+			if cfg.RateLimitEnabled {
+				r.Use(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests: 30,
+					Window:   time.Minute,
+					KeyFunc:  middleware.UserKeyFunc,
+				}))
+			}
+			r.Get("/unified-feed", unifiedFeedConfigHandler.GetConfig)
+			r.Post("/unified-feed", unifiedFeedConfigHandler.Create)
+			r.Patch("/unified-feed/calendars", unifiedFeedConfigHandler.UpdateCalendars)
+			r.Post("/unified-feed/regenerate-token", unifiedFeedConfigHandler.RegenerateToken)
 		})
 	})
 
