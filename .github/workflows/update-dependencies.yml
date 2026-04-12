@@ -360,6 +360,32 @@ jobs:
           go get -u ./...
           go mod tidy
 
+      - name: Verify build
+        if: steps.any-updates.outputs.has_updates == 'true'
+        id: build-check
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          make build 2>&1 | tee /tmp/build.log
+
+      - name: Generate build report
+        if: steps.any-updates.outputs.has_updates == 'true'
+        run: |
+          echo "## 🛠️ Build Verification (\`make build\`)" > /tmp/build_report.md
+          echo "" >> /tmp/build_report.md
+          if [ "${{ steps.build-check.outcome }}" == "success" ]; then
+            echo "✅ **Build OK** — the project compiles with the updated dependencies." >> /tmp/build_report.md
+          else
+            echo "❌ **Build KO** — the project failed to compile with the updated dependencies. Manual review required." >> /tmp/build_report.md
+            echo "" >> /tmp/build_report.md
+            echo "<details><summary>Last 50 lines of build output</summary>" >> /tmp/build_report.md
+            echo "" >> /tmp/build_report.md
+            echo '```' >> /tmp/build_report.md
+            tail -n 50 /tmp/build.log >> /tmp/build_report.md
+            echo '```' >> /tmp/build_report.md
+            echo "</details>" >> /tmp/build_report.md
+          fi
+
       - name: Check for changes
         if: steps.any-updates.outputs.has_updates == 'true' || steps.npm-audit-check.outputs.has_vulnerabilities == 'true'
         id: changes
@@ -404,6 +430,11 @@ jobs:
 
           if [ -f /tmp/audit_report.md ]; then
             cat /tmp/audit_report.md >> /tmp/final_pr_body.md
+            echo "" >> /tmp/final_pr_body.md
+          fi
+
+          if [ -f /tmp/build_report.md ]; then
+            cat /tmp/build_report.md >> /tmp/final_pr_body.md
             echo "" >> /tmp/final_pr_body.md
           fi
 
