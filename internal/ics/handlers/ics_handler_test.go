@@ -68,6 +68,31 @@ func (m *mockQuotaChecker) IsOverQuota(ctx context.Context, userID uuid.UUID) (b
 	return m.isOverQuota, nil
 }
 
+type mockUnifiedFeedRepository struct {
+	calendars []*repository.Calendar
+	ownerName string
+	ownerID   uuid.UUID
+	locale    string
+	err       error
+}
+
+// Ensure mockUnifiedFeedRepository implements service.UnifiedFeedRepository
+var _ service.UnifiedFeedRepository = (*mockUnifiedFeedRepository)(nil)
+
+func (m *mockUnifiedFeedRepository) GetCalendarsForFeed(ctx context.Context, icsToken string) ([]*repository.Calendar, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.calendars, nil
+}
+
+func (m *mockUnifiedFeedRepository) GetFeedOwnerInfo(ctx context.Context, icsToken string) (string, uuid.UUID, string, error) {
+	if m.err != nil {
+		return "", uuid.Nil, "", m.err
+	}
+	return m.ownerName, m.ownerID, m.locale, nil
+}
+
 func TestGetFeed_Success(t *testing.T) {
 	// Setup mock data
 	calID := uuid.New()
@@ -116,7 +141,7 @@ func TestGetFeed_Success(t *testing.T) {
 
 	// Create service and handler
 	mockQuota := &mockQuotaChecker{isOverQuota: false}
-	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, mockQuota, "localhost:8080")
+	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, &mockUnifiedFeedRepository{}, mockQuota, "localhost:8080")
 	handler := handlers.NewICSHandler(icsSvc)
 
 	// Create request
@@ -175,7 +200,7 @@ func TestGetFeed_CalendarNotFound(t *testing.T) {
 
 	// Create service and handler
 	mockQuota := &mockQuotaChecker{isOverQuota: false}
-	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, mockQuota, "localhost:8080")
+	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, &mockUnifiedFeedRepository{}, mockQuota, "localhost:8080")
 	handler := handlers.NewICSHandler(icsSvc)
 
 	// Create request
@@ -203,7 +228,7 @@ func TestGetFeed_MissingToken(t *testing.T) {
 
 	// Create service and handler
 	mockQuota := &mockQuotaChecker{isOverQuota: false}
-	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, mockQuota, "localhost:8080")
+	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, &mockUnifiedFeedRepository{}, mockQuota, "localhost:8080")
 	handler := handlers.NewICSHandler(icsSvc)
 
 	// Create request with empty token
@@ -262,7 +287,7 @@ func TestGetFeed_UsesCorrectDomain(t *testing.T) {
 
 	// Create service and handler
 	mockQuota := &mockQuotaChecker{isOverQuota: false}
-	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, mockQuota, "default.example.com")
+	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, &mockUnifiedFeedRepository{}, mockQuota, "default.example.com")
 	handler := handlers.NewICSHandler(icsSvc)
 
 	// Create request with specific host
@@ -334,7 +359,7 @@ func TestGetFeed_UsesXForwardedHost(t *testing.T) {
 
 	// Create service and handler
 	mockQuota := &mockQuotaChecker{isOverQuota: false}
-	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, mockQuota, "default.example.com")
+	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, &mockUnifiedFeedRepository{}, mockQuota, "default.example.com")
 	handler := handlers.NewICSHandler(icsSvc)
 
 	// Create request - the Host will be set to localhost:5173 (backend)
@@ -431,7 +456,7 @@ func TestGetFeed_MultipleTimeSlotsPerDay(t *testing.T) {
 	}
 
 	mockQuota := &mockQuotaChecker{isOverQuota: false}
-	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, mockQuota, "localhost:8080")
+	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, &mockUnifiedFeedRepository{}, mockQuota, "localhost:8080")
 	handler := handlers.NewICSHandler(icsSvc)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ics/feed/test-token.ics", nil)
@@ -526,7 +551,7 @@ func TestGetFeed_ContinuousTimeSlot(t *testing.T) {
 	}
 
 	mockQuota := &mockQuotaChecker{isOverQuota: false}
-	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, mockQuota, "localhost:8080")
+	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, &mockUnifiedFeedRepository{}, mockQuota, "localhost:8080")
 	handler := handlers.NewICSHandler(icsSvc)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ics/feed/test-token.ics", nil)
@@ -589,7 +614,7 @@ func TestGetFeed_UsesFloatingTimeWithTimezoneHint(t *testing.T) {
 	}
 
 	mockQuota := &mockQuotaChecker{isOverQuota: false}
-	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, mockQuota, "localhost:8080")
+	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, &mockUnifiedFeedRepository{}, mockQuota, "localhost:8080")
 	handler := handlers.NewICSHandler(icsSvc)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ics/feed/test-token.ics", nil)
@@ -741,7 +766,7 @@ func TestGetFeed_HolidaysAndHolidayEves(t *testing.T) {
 
 	// Create service and handler
 	mockQuota := &mockQuotaChecker{isOverQuota: false}
-	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, mockQuota, "localhost:8080")
+	icsSvc := service.NewICSService(mockCalRepo, mockAvailRepo, &mockUnifiedFeedRepository{}, mockQuota, "localhost:8080")
 	handler := handlers.NewICSHandler(icsSvc)
 
 	// Create request
