@@ -301,6 +301,7 @@
                     </option>
                   </select>
                 </div>
+
               </div>
             </div>
 
@@ -315,8 +316,35 @@
             </p>
           </div>
 
-          <!-- Calendar grids - Display months vertically (month view) -->
-          <div v-if="displayMode === 'month'" class="space-y-6">
+          <!-- List view (applies to both month and week display modes) -->
+          <CalendarListView
+            v-if="viewStyle === 'list'"
+            :display-mode="displayMode"
+            :months-to-display="monthsToDisplay"
+            :weeks-to-display="weeksToDisplay"
+            :availabilities="availabilities"
+            :recurrences="recurrences"
+            :participant-counts="participantCounts"
+            :threshold="calendar?.threshold || 1"
+            :allowed-weekdays="calendar?.allowed_weekdays"
+            :timezone="calendar?.timezone"
+            :holidays-policy="calendar?.holidays_policy"
+            :allow-holiday-eves="calendar?.allow_holiday_eves"
+            :start-date="calendarStartDate"
+            :end-date="calendarEndDate"
+            :displayed-year="displayedYear"
+            :displayed-month="displayedMonth"
+            :current-week-start-date="currentWeekStartDate"
+            :current-participant-id="participantId"
+            :highlighted-dates="selectedParticipantsCommonDates"
+            @day-click="handleCalendarDayClick"
+            @month-change="handleMonthChange"
+            @week-change="handleWeekChange"
+            @view-style-change="handleViewStyleChange"
+          />
+
+          <!-- Calendar grids - Display months vertically (month view, classic style) -->
+          <div v-else-if="displayMode === 'month'" class="space-y-6">
             <CalendarGrid
               v-for="(monthConfig, index) in monthsToDisplay"
               :key="`${monthConfig.key}-${calendar?.id}`"
@@ -331,16 +359,8 @@
               :timezone="calendar?.timezone"
               :holidays-policy="calendar?.holidays_policy"
               :allow-holiday-eves="calendar?.allow_holiday_eves"
-              :start-date="
-                calendar?.start_date
-                  ? new Date(calendar.start_date).toISOString().split('T')[0]
-                  : undefined
-              "
-              :end-date="
-                calendar?.end_date
-                  ? new Date(calendar.end_date).toISOString().split('T')[0]
-                  : undefined
-              "
+              :start-date="calendarStartDate"
+              :end-date="calendarEndDate"
               :calendar-token="token"
               :current-participant-id="participantId"
               :current-participant-name="participant?.name || ''"
@@ -350,10 +370,11 @@
               @days-deselect="handleCalendarDaysDeselect"
               @add-exception="handleCalendarAddException"
               @month-change="handleMonthChange"
+              @view-style-change="handleViewStyleChange"
             />
           </div>
 
-          <!-- Weekly grid - Display weeks (week view) -->
+          <!-- Weekly grid - Display weeks (week view, classic style) -->
           <div v-else class="space-y-6">
             <WeeklyCalendarGrid
               v-for="(weekConfig, index) in weeksToDisplay"
@@ -378,16 +399,8 @@
               :holiday-max-time="(calendar as any)?.holiday_max_time"
               :holiday-eve-min-time="(calendar as any)?.holiday_eve_min_time"
               :holiday-eve-max-time="(calendar as any)?.holiday_eve_max_time"
-              :start-date="
-                calendar?.start_date
-                  ? new Date(calendar.start_date).toISOString().split('T')[0]
-                  : undefined
-              "
-              :end-date="
-                calendar?.end_date
-                  ? new Date(calendar.end_date).toISOString().split('T')[0]
-                  : undefined
-              "
+              :start-date="calendarStartDate"
+              :end-date="calendarEndDate"
               :calendar-token="token"
               :current-participant-id="participantId"
               :current-participant-name="participant?.name || ''"
@@ -402,6 +415,7 @@
               @week-change="handleWeekChange"
               @settings-change="handleWeeklySettingsChange"
               @availability-updated="handleAvailabilityUpdated"
+              @view-style-change="handleViewStyleChange"
             />
           </div>
         </div>
@@ -1232,12 +1246,14 @@ import { useCalendarHistoryStore } from '@/stores/calendarHistory';
 import { useToastStore } from '@/stores/toast';
 import { availabilitiesApi } from '@/api/availabilities';
 import CalendarGrid from '@/components/CalendarGrid.vue';
+import CalendarListView from '@/components/CalendarListView.vue';
 import WeeklyCalendarGrid, {
   type AvailabilityOperation,
 } from '@/components/WeeklyCalendarGrid.vue';
 import TimeSelect from '@/components/TimeSelect.vue';
 import CollapsibleSection from '@/components/CollapsibleSection.vue';
 import { clearHolidaysCache } from '@/composables/useDateValidation';
+import { formatDateISO } from '@/utils/dateFormatting';
 import { addParticipantEmail, resendVerificationEmail } from '@/api/notify';
 import type {
   Availability,
@@ -1279,6 +1295,14 @@ const currentWeekStartDate = ref<Date>(new Date());
 
 // Display mode: 'month' or 'week'
 const displayMode = ref<'month' | 'week'>('month');
+
+// View style: 'classic' (grid) or 'list' (vertical card list)
+// Default to 'list' on mobile (screen width < 768px), 'classic' on desktop
+const getDefaultViewStyle = (): 'classic' | 'list' => {
+  if (typeof window === 'undefined') return 'classic';
+  return window.innerWidth < 768 ? 'list' : 'classic';
+};
+const viewStyle = ref<'classic' | 'list'>(getDefaultViewStyle());
 
 // Number of periods (months or weeks) to display (1-4 for weeks, 1-12 for months)
 const numberOfPeriods = ref(1);
@@ -1365,6 +1389,18 @@ const availabilities = computed((): Availability[] => {
     })
   );
 });
+
+// Calendar date range as formatted strings (shared across grid components)
+const calendarStartDate = computed(() =>
+  calendar.value?.start_date
+    ? new Date(calendar.value.start_date).toISOString().split('T')[0]
+    : undefined
+);
+const calendarEndDate = computed(() =>
+  calendar.value?.end_date
+    ? new Date(calendar.value.end_date).toISOString().split('T')[0]
+    : undefined
+);
 
 // Generate an array of month configurations to display
 const monthsToDisplay = computed(() => {
@@ -1767,6 +1803,9 @@ async function loadCalendar() {
         if (savedSettings.slotDuration !== undefined) {
           slotDuration.value = savedSettings.slotDuration;
         }
+        if (savedSettings.viewStyle !== undefined) {
+          viewStyle.value = savedSettings.viewStyle;
+        }
       }
     }
 
@@ -1828,8 +1867,8 @@ async function loadParticipantCounts(year?: number, month?: number) {
       endDate = new Date(targetYear, targetMonth + numberOfPeriods.value, 0); // Last day of last displayed month
     }
 
-    const startStr = formatDateForAPI(startDate);
-    const endStr = formatDateForAPI(endDate);
+    const startStr = formatDateISO(startDate);
+    const endStr = formatDateISO(endDate);
 
     const summaries = await availabilitiesApi.getRangeSummary(token.value, startStr, endStr);
 
@@ -1849,13 +1888,6 @@ async function loadParticipantCounts(year?: number, month?: number) {
     console.error('Failed to load participant counts:', err);
     participantCounts.value = {};
   }
-}
-
-function formatDateForAPI(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 async function handleDeleteAvailability(date: string) {
@@ -2583,6 +2615,24 @@ watch(numberOfPeriods, async newCount => {
     await loadParticipantCounts(displayedYear.value, displayedMonth.value);
   }
 });
+
+watch(viewStyle, newStyle => {
+  if (calendar.value) {
+    historyStore.updateDisplaySettings(token.value, { viewStyle: newStyle });
+  }
+});
+
+function handleViewStyleChange(style: 'classic' | 'compact' | 'list') {
+  if (style === 'list') {
+    viewStyle.value = 'list';
+  } else {
+    viewStyle.value = 'classic';
+    // When switching back to classic/compact in month mode, update CalendarGrid's localStorage
+    if (displayMode.value === 'month' && typeof window !== 'undefined') {
+      localStorage.setItem('calendar-view-mode', style);
+    }
+  }
+}
 
 // Watch for route changes to reload the calendar when navigating between calendars
 // The immediate flag ensures this runs on initial mount

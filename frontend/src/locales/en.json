@@ -354,7 +354,9 @@
     "nextWeek": "Next week",
     "thresholdMet": "Event (threshold met)",
     "viewClassic": "Classic",
-    "viewCompact": "Compact"
+    "viewCompact": "Compact",
+    "listView": "List",
+    "noActionableDays": "No available days in this period"
   },
   "weekdays": {
     "short": {
