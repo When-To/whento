@@ -357,7 +357,9 @@
     "nextWeek": "Semaine suivante",
     "thresholdMet": "Événement (seuil atteint)",
     "viewClassic": "Classique",
-    "viewCompact": "Compact"
+    "viewCompact": "Compact",
+    "listView": "Liste",
+    "noActionableDays": "Aucun jour disponible dans cette période"
   },
   "weekdays": {
     "short": {
