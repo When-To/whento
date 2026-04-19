@@ -336,11 +336,14 @@
             :displayed-month="displayedMonth"
             :current-week-start-date="currentWeekStartDate"
             :current-participant-id="participantId"
+            :current-participant-name="participant?.name || ''"
+            :calendar-token="token"
             :highlighted-dates="selectedParticipantsCommonDates"
             @day-click="handleCalendarDayClick"
             @month-change="handleMonthChange"
             @week-change="handleWeekChange"
             @view-style-change="handleViewStyleChange"
+            @availability-updated="handleAvailabilityUpdated"
           />
 
           <!-- Calendar grids - Display months vertically (month view, classic style) -->

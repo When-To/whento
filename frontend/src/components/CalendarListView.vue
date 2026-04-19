@@ -84,9 +84,13 @@
                 : 'border-gray-200 bg-white hover:border-primary-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-primary-600',
           day.isToday && 'ring-2 ring-primary-500 ring-offset-1',
           day.isHighlighted &&
-            'ring-2 ring-amber-400 ring-offset-1 dark:ring-amber-500 dark:ring-offset-gray-900',
+            'ring-2 ring-purple-500 bg-purple-100 dark:bg-purple-900/40',
         ]"
-        @click="emit('day-click', day.dateString)"
+        @pointerdown="onRowPointerDown(day, $event)"
+        @pointermove="onRowPointerMove($event)"
+        @pointerup="onRowPointerUp()"
+        @pointercancel="onRowPointerCancel()"
+        @click="onRowClick(day, $event)"
       >
         <div class="flex items-center justify-between gap-3">
           <!-- Left: date info -->
@@ -185,11 +189,84 @@
         </div>
       </button>
     </div>
+
+    <!-- Legend -->
+    <div
+      v-if="actionableDays.length > 0"
+      class="mt-4 flex flex-wrap gap-4 text-xs"
+    >
+      <div class="flex items-center gap-1">
+        <div class="h-3 w-3 rounded border-2 border-primary-500" />
+        <span class="text-gray-600 dark:text-gray-400">{{ t('calendar.today', 'Today') }}</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <div
+          class="h-3 w-3 rounded bg-green-100 border border-green-200 dark:bg-green-900/20 dark:border-green-700"
+        />
+        <span class="text-gray-600 dark:text-gray-400">{{
+          t('availability.thresholdMet', 'Threshold met')
+        }}</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <div
+          class="h-3 w-3 rounded bg-primary-100 border border-primary-200 dark:bg-primary-900/20 dark:border-primary-700"
+        />
+        <span class="text-gray-600 dark:text-gray-400">{{
+          t('availability.available', 'Available')
+        }}</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <div
+          class="h-3 w-3 rounded bg-blue-100 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-700"
+        />
+        <span class="text-gray-600 dark:text-gray-400">{{
+          t('availability.recurring', 'Recurring')
+        }}</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <div
+          class="h-3 w-3 rounded bg-orange-100 border border-orange-200 dark:bg-orange-900/40 dark:border-orange-700"
+        />
+        <span class="text-gray-600 dark:text-gray-400">{{
+          t('calendar.publicHoliday', 'Public holiday')
+        }}</span>
+      </div>
+      <div v-if="allowHolidayEves" class="flex items-center gap-1">
+        <div
+          class="h-3 w-3 rounded bg-purple-100 border border-purple-200 dark:bg-purple-900/40 dark:border-purple-700"
+        />
+        <span class="text-gray-600 dark:text-gray-400">{{
+          t('calendar.holidayEve', 'Holiday eve')
+        }}</span>
+      </div>
+      <div
+        v-if="props.highlightedDates && props.highlightedDates.size > 0"
+        class="flex items-center gap-1"
+      >
+        <div
+          class="h-3 w-3 rounded border border-purple-500 ring-2 ring-purple-500 bg-purple-100 dark:bg-purple-900/40"
+        />
+        <span class="text-gray-600 dark:text-gray-400">
+          {{ t('participant.commonDates', 'Common dates') }}
+        </span>
+      </div>
+    </div>
+
+    <ParticipantDetailsPopup
+      v-if="popupDate && popupAnchor"
+      :calendar-token="calendarToken"
+      :current-participant-id="currentParticipantId"
+      :current-participant-name="currentParticipantName"
+      :date="popupDate"
+      :anchor-rect="popupAnchor"
+      @close="onPopupClose"
+      @availability-updated="onPopupAvailabilityUpdated"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useDateValidation, clearHolidaysCache } from '@/composables/useDateValidation';
 import {
@@ -198,6 +275,7 @@ import {
   formatFullDate,
 } from '@/utils/dateFormatting';
 import type { Availability, RecurrenceWithExceptions } from '@/types';
+import ParticipantDetailsPopup from './ParticipantDetailsPopup.vue';
 
 interface MonthConfig {
   year: number;
@@ -226,6 +304,8 @@ interface Props {
   displayedMonth: number;
   currentWeekStartDate: Date;
   currentParticipantId: string;
+  currentParticipantName: string;
+  calendarToken: string;
   highlightedDates?: Set<string>;
 }
 
@@ -254,7 +334,78 @@ const emit = defineEmits<{
   (e: 'month-change', year: number, month: number): void;
   (e: 'week-change', weekStartDate: Date): void;
   (e: 'view-style-change', style: 'classic' | 'compact' | 'list'): void;
+  (e: 'availability-updated'): void;
 }>();
+
+// Long-press detection for opening the participant details popup
+const LONG_PRESS_MS = 500;
+const MOVE_THRESHOLD_PX = 8;
+const popupDate = ref<string | null>(null);
+const popupAnchor = ref<DOMRect | null>(null);
+let holdTimer: number | null = null;
+let longPressFired = false;
+let pointerStartX = 0;
+let pointerStartY = 0;
+
+function clearHoldTimer() {
+  if (holdTimer !== null) {
+    window.clearTimeout(holdTimer);
+    holdTimer = null;
+  }
+}
+
+function onRowPointerDown(day: ListDay, event: PointerEvent) {
+  if (!event.isPrimary) return;
+  if (day.participantCount === 0) return;
+  const target = event.currentTarget as HTMLElement;
+  pointerStartX = event.clientX;
+  pointerStartY = event.clientY;
+  longPressFired = false;
+  clearHoldTimer();
+  holdTimer = window.setTimeout(() => {
+    popupAnchor.value = target.getBoundingClientRect();
+    popupDate.value = day.dateString;
+    longPressFired = true;
+    holdTimer = null;
+  }, LONG_PRESS_MS);
+}
+
+function onRowPointerMove(event: PointerEvent) {
+  if (holdTimer === null) return;
+  const dx = event.clientX - pointerStartX;
+  const dy = event.clientY - pointerStartY;
+  if (Math.hypot(dx, dy) > MOVE_THRESHOLD_PX) {
+    clearHoldTimer();
+  }
+}
+
+function onRowPointerUp() {
+  clearHoldTimer();
+}
+
+function onRowPointerCancel() {
+  clearHoldTimer();
+  longPressFired = false;
+}
+
+function onRowClick(day: ListDay, event: MouseEvent) {
+  if (longPressFired) {
+    event.preventDefault();
+    event.stopPropagation();
+    longPressFired = false;
+    return;
+  }
+  emit('day-click', day.dateString);
+}
+
+function onPopupClose() {
+  popupDate.value = null;
+  popupAnchor.value = null;
+}
+
+function onPopupAvailabilityUpdated() {
+  emit('availability-updated');
+}
 
 const { t, locale } = useI18n();
 
