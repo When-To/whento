@@ -5,7 +5,9 @@
 package handlers
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -34,6 +36,69 @@ func NewICSHandler(icsService *service.ICSService) *ICSHandler {
 	}
 }
 
+// icsFeedEndpoint describes what varies between the single-calendar and
+// unified ICS feed endpoints; shared request handling lives in serveICSFeed.
+type icsFeedEndpoint struct {
+	filename      string
+	notFoundMsg   string
+	quotaMsg      string
+	errLogMessage string
+	generate      func(ctx context.Context, token, host string) (string, error)
+}
+
+// extractTokenAndHost pulls the ICS token from the URL and resolves the host,
+// honoring X-Forwarded-Host / X-Real-Host before r.Host, and sanitizes the
+// host to prevent CRLF injection into ICS properties.
+func extractTokenAndHost(r *http.Request) (token, host string) {
+	token = strings.TrimSuffix(chi.URLParam(r, "token"), ".ics")
+
+	host = r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Header.Get("X-Real-Host")
+	}
+	if host == "" {
+		host = r.Host
+	}
+	host = sanitizeICSValue(host)
+	return token, host
+}
+
+func (h *ICSHandler) serveICSFeed(w http.ResponseWriter, r *http.Request, ep icsFeedEndpoint) {
+	log := logger.FromContext(r.Context())
+
+	token, host := extractTokenAndHost(r)
+	if token == "" {
+		http.Error(w, "Token required", http.StatusBadRequest)
+		return
+	}
+
+	icsContent, err := ep.generate(r.Context(), token, host)
+	if err != nil {
+		if errors.Is(err, service.ErrCalendarNotFound) {
+			http.Error(w, ep.notFoundMsg, http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrQuotaExceeded) {
+			http.Error(w, ep.quotaMsg, http.StatusForbidden)
+			return
+		}
+		log.Error(ep.errLogMessage, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", ep.filename))
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte(icsContent)); err != nil {
+		log.Error("Failed to write ICS response", "error", err)
+	}
+}
+
 // GetFeed handles GET /api/v1/ics/feed/{token}.ics
 // Generates an iCalendar feed for a calendar using its ICS token
 //
@@ -48,63 +113,13 @@ func NewICSHandler(icsService *service.ICSService) *ICSHandler {
 //	@Failure		404		{string}	string	"Calendar not found"
 //	@Router			/api/v1/ics/feed/{token} [get]
 func (h *ICSHandler) GetFeed(w http.ResponseWriter, r *http.Request) {
-	log := logger.FromContext(r.Context())
-
-	// Get token from URL parameter
-	token := chi.URLParam(r, "token")
-
-	// Strip .ics extension if present
-	token = strings.TrimSuffix(token, ".ics")
-
-	if token == "" {
-		http.Error(w, "Token required", http.StatusBadRequest)
-		return
-	}
-
-	// Extract host from request
-	// Priority order:
-	// 1. X-Forwarded-Host header (when behind a proxy)
-	// 2. X-Real-Host header (alternative proxy header)
-	// 3. r.Host (direct request)
-	host := r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Header.Get("X-Real-Host")
-	}
-	if host == "" {
-		host = r.Host
-	}
-
-	// Sanitize host to prevent CRLF injection into ICS properties
-	host = sanitizeICSValue(host)
-
-	// Generate ICS feed with the actual host from the request
-	icsContent, err := h.icsService.GenerateFeed(r.Context(), token, host)
-	if err != nil {
-		if errors.Is(err, service.ErrCalendarNotFound) {
-			http.Error(w, "Calendar not found", http.StatusNotFound)
-			return
-		}
-		if errors.Is(err, service.ErrQuotaExceeded) {
-			http.Error(w, "Calendar owner has exceeded their quota. Please delete calendars or upgrade to access this feed.", http.StatusForbidden)
-			return
-		}
-		log.Error("Failed to generate ICS feed", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	// Set headers for iCalendar response
-	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
-	w.Header().Set("Content-Disposition", "inline; filename=\"calendar.ics\"")
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-
-	// Write response
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte(icsContent)); err != nil {
-		log.Error("Failed to write ICS response", "error", err)
-	}
+	h.serveICSFeed(w, r, icsFeedEndpoint{
+		filename:      "calendar.ics",
+		notFoundMsg:   "Calendar not found",
+		quotaMsg:      "Calendar owner has exceeded their quota. Please delete calendars or upgrade to access this feed.",
+		errLogMessage: "Failed to generate ICS feed",
+		generate:      h.icsService.GenerateFeed,
+	})
 }
 
 // GetUnifiedFeed handles GET /api/v1/ics/unified/{token}.ics
@@ -121,48 +136,11 @@ func (h *ICSHandler) GetFeed(w http.ResponseWriter, r *http.Request) {
 //	@Failure		404		{string}	string	"Feed not found"
 //	@Router			/api/v1/ics/unified/{token} [get]
 func (h *ICSHandler) GetUnifiedFeed(w http.ResponseWriter, r *http.Request) {
-	log := logger.FromContext(r.Context())
-
-	token := chi.URLParam(r, "token")
-	token = strings.TrimSuffix(token, ".ics")
-
-	if token == "" {
-		http.Error(w, "Token required", http.StatusBadRequest)
-		return
-	}
-
-	host := r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Header.Get("X-Real-Host")
-	}
-	if host == "" {
-		host = r.Host
-	}
-	host = sanitizeICSValue(host)
-
-	icsContent, err := h.icsService.GenerateUnifiedFeed(r.Context(), token, host)
-	if err != nil {
-		if errors.Is(err, service.ErrCalendarNotFound) {
-			http.Error(w, "Feed not found", http.StatusNotFound)
-			return
-		}
-		if errors.Is(err, service.ErrQuotaExceeded) {
-			http.Error(w, "Feed owner has exceeded their quota. Please delete calendars or upgrade to access this feed.", http.StatusForbidden)
-			return
-		}
-		log.Error("Failed to generate unified ICS feed", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
-	w.Header().Set("Content-Disposition", "inline; filename=\"WhenTo-unified.ics\"")
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte(icsContent)); err != nil {
-		log.Error("Failed to write unified ICS response", "error", err)
-	}
+	h.serveICSFeed(w, r, icsFeedEndpoint{
+		filename:      "WhenTo-unified.ics",
+		notFoundMsg:   "Feed not found",
+		quotaMsg:      "Feed owner has exceeded their quota. Please delete calendars or upgrade to access this feed.",
+		errLogMessage: "Failed to generate unified ICS feed",
+		generate:      h.icsService.GenerateUnifiedFeed,
+	})
 }
