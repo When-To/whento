@@ -26,9 +26,20 @@
         </button>
       </div>
 
-      <h3 class="text-base md:text-lg font-semibold text-gray-900 dark:text-white text-center px-2">
-        {{ weekRangeText }}
-      </h3>
+      <div class="flex flex-col items-center gap-1">
+        <h3 class="text-base md:text-lg font-semibold text-gray-900 dark:text-white text-center px-2">
+          {{ weekRangeText }}
+        </h3>
+        <select
+          v-if="showNavigation"
+          value="classic"
+          class="text-xs md:text-sm px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          @change="handleViewStyleSelect"
+        >
+          <option value="classic">{{ t('calendar.viewClassic') }}</option>
+          <option value="list">{{ t('calendar.listView') }}</option>
+        </select>
+      </div>
 
       <div class="flex justify-end">
         <button
@@ -559,6 +570,11 @@ import { availabilitiesApi } from '@/api/availabilities';
 import type { Availability, DateAvailabilitySummary } from '@/types';
 import TimeSelect from '@/components/TimeSelect.vue';
 import { useDateValidation, clearHolidaysCache } from '@/composables/useDateValidation';
+import {
+  formatDateISO,
+  formatWeekday,
+  formatDayMonthShort,
+} from '@/utils/dateFormatting';
 
 const { t, locale } = useI18n();
 const toastStore = useToastStore();
@@ -647,6 +663,7 @@ interface Emits {
     settings: { startHour?: number; endHour?: number; slotDuration?: number }
   ): void;
   (e: 'availability-updated'): void;
+  (e: 'view-style-change', style: 'classic' | 'list'): void;
 }
 
 const emit = defineEmits<Emits>();
@@ -831,9 +848,9 @@ const weekDays = computed(() => {
     const date = new Date(start);
     date.setDate(start.getDate() + i);
 
-    const dateString = formatDateForAPI(date);
-    const dayName = formatDayName(date);
-    const dateFormatted = formatDateShort(date);
+    const dateString = formatDateISO(date);
+    const dayName = formatWeekday(date, locale.value, 'short');
+    const dateFormatted = formatDayMonthShort(date, locale.value);
 
     days.push({
       date,
@@ -1373,7 +1390,7 @@ const weekRangeText = computed(() => {
 
   if (!start || !end) return '';
 
-  return `${formatDateShort(start)} - ${formatDateShort(end)}`;
+  return `${formatDayMonthShort(start, locale.value)} - ${formatDayMonthShort(end, locale.value)}`;
 });
 
 // Check if a date is in the past
@@ -1510,7 +1527,7 @@ function isTimeSlotAllowed(date: Date, time: string): boolean {
 
 // Check if a date is enabled (day-level check, without time consideration)
 function isDateEnabled(date: Date): boolean {
-  const dateString = formatDateForAPI(date);
+  const dateString = formatDateISO(date);
 
   // Disable past dates
   if (isPastDate(date)) return false;
@@ -2433,6 +2450,16 @@ function addMinutes(time: string, minutes: number): string {
   return `${String(newHours).padStart(2, '0')}:${String(newMins).padStart(2, '0')}`;
 }
 
+// Handle view style selection (list is rendered by parent)
+function handleViewStyleSelect(event: Event) {
+  const value = (event.target as HTMLSelectElement).value;
+  if (value === 'list') {
+    // Reset the select back to 'classic' (list is rendered by parent, not this grid)
+    (event.target as HTMLSelectElement).value = 'classic';
+    emit('view-style-change', 'list');
+  }
+}
+
 // Navigation
 function previousWeek() {
   const newStart = new Date(currentWeekStartDate.value);
@@ -2446,27 +2473,6 @@ function nextWeek() {
   newStart.setDate(newStart.getDate() + 7);
   currentWeekStartDate.value = newStart;
   emit('week-change', newStart);
-}
-
-// Formatting helpers
-function formatDateForAPI(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function formatDayName(date: Date): string {
-  const localeCode = locale.value;
-  return new Intl.DateTimeFormat(localeCode, { weekday: 'short' }).format(date);
-}
-
-function formatDateShort(date: Date): string {
-  const localeCode = locale.value;
-  return new Intl.DateTimeFormat(localeCode, {
-    day: 'numeric',
-    month: 'short',
-  }).format(date);
 }
 
 // Watch for prop changes

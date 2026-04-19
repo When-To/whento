@@ -19,6 +19,7 @@ export interface CalendarHistoryItem {
   startHour?: number;
   endHour?: number;
   slotDuration?: number;
+  viewStyle?: 'classic' | 'list';
 }
 
 const STORAGE_KEY = 'whento_visited_calendars';
@@ -91,6 +92,7 @@ export const useCalendarHistoryStore = defineStore('calendarHistory', () => {
         ...(existing?.startHour !== undefined && { startHour: existing.startHour }),
         ...(existing?.endHour !== undefined && { endHour: existing.endHour }),
         ...(existing?.slotDuration !== undefined && { slotDuration: existing.slotDuration }),
+        ...(existing?.viewStyle !== undefined && { viewStyle: existing.viewStyle }),
         // Update participantId if provided, otherwise preserve existing
         ...(participantId !== undefined
           ? { participantId }
@@ -161,6 +163,7 @@ export const useCalendarHistoryStore = defineStore('calendarHistory', () => {
       startHour?: number;
       endHour?: number;
       slotDuration?: number;
+      viewStyle?: 'classic' | 'list';
     }
   ) {
     const calendar = calendars.value.find(c => c.token === token);
@@ -174,6 +177,7 @@ export const useCalendarHistoryStore = defineStore('calendarHistory', () => {
       if (settings.startHour !== undefined) calendar.startHour = settings.startHour;
       if (settings.endHour !== undefined) calendar.endHour = settings.endHour;
       if (settings.slotDuration !== undefined) calendar.slotDuration = settings.slotDuration;
+      if (settings.viewStyle !== undefined) calendar.viewStyle = settings.viewStyle;
       saveVisitedCalendars(calendars.value);
     }
   }
@@ -188,6 +192,7 @@ export const useCalendarHistoryStore = defineStore('calendarHistory', () => {
       startHour: calendar.startHour,
       endHour: calendar.endHour,
       slotDuration: calendar.slotDuration,
+      viewStyle: calendar.viewStyle,
     };
   }
 

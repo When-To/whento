@@ -34,11 +34,13 @@
         <!-- View mode selector (only shown for first month) -->
         <select
           v-if="props.showNavigation !== false"
-          v-model="viewMode"
+          :value="viewMode"
           class="text-xs md:text-sm px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          @change="handleViewModeSelect"
         >
           <option value="classic">{{ t('calendar.viewClassic') }}</option>
           <option value="compact">{{ t('calendar.viewCompact') }}</option>
+          <option value="list">{{ t('calendar.listView') }}</option>
         </select>
       </div>
 
@@ -799,6 +801,7 @@ import { getWeekStartDay } from '@/i18n';
 import { availabilitiesApi } from '@/api/availabilities';
 import type { Availability, RecurrenceWithExceptions } from '@/types';
 import { useDateValidation, clearHolidaysCache } from '@/composables/useDateValidation';
+import { formatDateISO } from '@/utils/dateFormatting';
 import TimeSelect from '@/components/TimeSelect.vue';
 
 interface Props {
@@ -828,6 +831,7 @@ interface Emits {
   (e: 'add-exception', recurrenceId: string, date: string): void;
   (e: 'month-change', year: number, month: number): void;
   (e: 'availability-updated'): void;
+  (e: 'view-style-change', style: 'classic' | 'list'): void;
 }
 
 const props = defineProps<Props>();
@@ -906,6 +910,18 @@ watch(viewMode, newMode => {
     window.dispatchEvent(new CustomEvent('calendar-view-mode-change', { detail: newMode }));
   }
 });
+
+// Handle view mode selection from dropdown (includes 'list' which is handled by parent)
+function handleViewModeSelect(event: Event) {
+  const value = (event.target as HTMLSelectElement).value;
+  if (value === 'list') {
+    // Reset the select to current mode (list is rendered by parent, not CalendarGrid)
+    (event.target as HTMLSelectElement).value = viewMode.value;
+    emit('view-style-change', 'list');
+  } else {
+    viewMode.value = value as 'classic' | 'compact';
+  }
+}
 
 const isCompactMode = computed(() => viewMode.value === 'compact');
 
@@ -1061,7 +1077,7 @@ const calendarDays = computed((): CalendarDay[] => {
     const date = daysInPrevMonth - i;
     const dateObj = new Date(year, month - 1, date);
     dateObj.setHours(0, 0, 0, 0);
-    const dateString = formatDateString(dateObj);
+    const dateString = formatDateISO(dateObj);
     const isPast = dateObj < today;
     const timezone = props.timezone || 'Europe/Paris';
 
@@ -1087,7 +1103,7 @@ const calendarDays = computed((): CalendarDay[] => {
   for (let date = 1; date <= daysInMonth; date++) {
     const dateObj = new Date(year, month, date);
     dateObj.setHours(0, 0, 0, 0);
-    const dateString = formatDateString(dateObj);
+    const dateString = formatDateISO(dateObj);
     const dayOfWeek = dateObj.getDay();
     const isPast = dateObj < today;
 
@@ -1151,7 +1167,7 @@ const calendarDays = computed((): CalendarDay[] => {
   for (let date = 1; date <= remainingDays; date++) {
     const dateObj = new Date(year, month + 1, date);
     dateObj.setHours(0, 0, 0, 0);
-    const dateString = formatDateString(dateObj);
+    const dateString = formatDateISO(dateObj);
     const isPast = dateObj < today;
     const timezone = props.timezone || 'Europe/Paris';
 
@@ -1175,13 +1191,6 @@ const calendarDays = computed((): CalendarDay[] => {
 
   return days;
 });
-
-function formatDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
 
 function previousMonth() {
   const newDate = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() - 1, 1);
