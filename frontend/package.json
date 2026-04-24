@@ -26,7 +26,7 @@
     "i18n-iso-countries": "^7.14.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.33",
-    "vue-i18n": "^11.3.2",
+    "vue-i18n": "^11.4.0",
     "vue-router": "^5.0.6",
     "world-countries": "^5.1.0"
   },
@@ -43,7 +43,7 @@
     "prettier": "^3.8.3",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.0",
-    "vite": "^8.0.9",
+    "vite": "^8.0.10",
     "vue-tsc": "^3.2.7"
   }
 }
