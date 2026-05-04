@@ -22,7 +22,7 @@
     "countries-and-timezones": "^3.9.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
-    "date-holidays": "^3.27.0",
+    "date-holidays": "^3.28.0",
     "i18n-iso-countries": "^7.14.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.33",
