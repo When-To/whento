@@ -6,6 +6,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -266,8 +267,10 @@ func buildDatabaseURL() string {
 	password := getEnv("DB_PASSWORD", "whento")
 	sslmode := getEnv("DB_SSLMODE", "disable")
 
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		user, password, host, port, name, sslmode)
+	// url.UserPassword percent-encodes special characters in user/password so
+	// passwords containing '@', ':', '/', '?' do not break the URL.
+	return fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=%s",
+		url.UserPassword(user, password).String(), host, port, name, sslmode)
 }
 
 func buildRedisURL() string {
@@ -285,7 +288,9 @@ func buildRedisURL() string {
 	db := getEnv("REDIS_DB", "0")
 
 	if password != "" {
-		return fmt.Sprintf("redis://:%s@%s:%s/%s", password, host, port, db)
+		// url.UserPassword percent-encodes special characters in the password.
+		return fmt.Sprintf("redis://%s@%s:%s/%s",
+			url.UserPassword("", password).String(), host, port, db)
 	}
 	return fmt.Sprintf("redis://%s:%s/%s", host, port, db)
 }
@@ -329,6 +334,94 @@ func getEmailList(key string, defaultValue []string) []string {
 		return defaultValue
 	}
 	return result
+}
+
+// Validate checks that URL-shaped environment variables are well-formed.
+// It runs at startup so configuration errors surface before any side effect
+// (logger, JWT keys, DB connection). Error messages mask passwords.
+func (c *Config) Validate() error {
+	if err := validateDatabaseURL(c.DatabaseURL); err != nil {
+		return fmt.Errorf("invalid DATABASE_URL (or DB_* vars): %w", err)
+	}
+	if err := validateRedisURL(c.RedisURL); err != nil {
+		return fmt.Errorf("invalid REDIS_URL (or REDIS_* vars): %w", err)
+	}
+	if err := validateAppURL(c.AppURL); err != nil {
+		return fmt.Errorf("invalid APP_URL: %w", err)
+	}
+	return nil
+}
+
+func validateDatabaseURL(raw string) error {
+	if raw == "" {
+		return fmt.Errorf("value is empty")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("malformed URL %q: %w", MaskURL(raw), err)
+	}
+	if u.Scheme != "postgres" && u.Scheme != "postgresql" {
+		return fmt.Errorf("scheme must be postgres:// or postgresql:// (got %q in %q)", u.Scheme, MaskURL(raw))
+	}
+	if u.Host == "" {
+		return fmt.Errorf("missing host in %q (expected postgres://user:password@host:port/dbname)", MaskURL(raw))
+	}
+	return nil
+}
+
+func validateRedisURL(raw string) error {
+	if raw == "" {
+		return fmt.Errorf("value is empty")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("malformed URL %q: %w", MaskURL(raw), err)
+	}
+	if u.Scheme != "redis" && u.Scheme != "rediss" {
+		return fmt.Errorf("scheme must be redis:// or rediss:// (got %q in %q)", u.Scheme, MaskURL(raw))
+	}
+	if u.Host == "" {
+		return fmt.Errorf("missing host in %q (expected redis://[:password@]host:port[/db])", MaskURL(raw))
+	}
+	return nil
+}
+
+func validateAppURL(raw string) error {
+	if raw == "" {
+		return fmt.Errorf("value is empty")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("malformed URL %q: %w", raw, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("scheme must be http:// or https:// (got %q)", u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("missing host in %q", raw)
+	}
+	return nil
+}
+
+// MaskURL returns a copy of raw with the userinfo password replaced by ***.
+// Safe to embed in logs and error messages. Returns the input unchanged
+// if it cannot be parsed as a URL (best-effort masking).
+func MaskURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.User == nil {
+		return raw
+	}
+	if _, hasPassword := u.User.Password(); !hasPassword {
+		return raw
+	}
+	// Build the userinfo manually so the placeholder is not percent-encoded
+	// (url.UserPassword would turn "***" into "%2A%2A%2A").
+	masked := *u
+	masked.User = nil
+	rest := masked.String()
+	prefix := u.Scheme + "://"
+	suffix := strings.TrimPrefix(rest, prefix)
+	return fmt.Sprintf("%s%s:***@%s", prefix, u.User.Username(), suffix)
 }
 
 // extractDomain extracts the domain from a URL for WebAuthn RP ID
