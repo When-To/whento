@@ -48,12 +48,12 @@ RUN apk add --no-cache curl && \
 FROM alpine:3.22
 
 LABEL org.opencontainers.image.title="WhenTo" \
-      org.opencontainers.image.description="Self-hosted scheduling and calendar application" \
-      org.opencontainers.image.vendor="WhenTo Contributors" \
-      org.opencontainers.image.licenses="BSL-1.1"
+    org.opencontainers.image.description="Self-hosted scheduling and calendar application" \
+    org.opencontainers.image.vendor="WhenTo Contributors" \
+    org.opencontainers.image.licenses="BSL-1.1"
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata openssl netcat-openbsd
+RUN apk add --no-cache ca-certificates tzdata openssl postgresql-client
 
 WORKDIR /app
 
