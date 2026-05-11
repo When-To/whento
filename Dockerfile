@@ -20,7 +20,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Go build stage
-FROM golang:1.25-alpine3.22 AS builder
+FROM golang:1.26-alpine3.23 AS builder
 
 WORKDIR /build
 
@@ -57,7 +57,7 @@ RUN go build \
     ./cmd/
 
 # Download migrate CLI (use BUILDPLATFORM to avoid QEMU issues)
-FROM --platform=$BUILDPLATFORM alpine:3.19 AS migrate-builder
+FROM --platform=$BUILDPLATFORM alpine:3.23 AS migrate-builder
 
 ARG TARGETARCH
 
@@ -68,7 +68,7 @@ RUN apk add --no-cache curl && \
     chmod +x /usr/local/bin/migrate
 
 # Runtime stage
-FROM alpine:3.19
+FROM alpine:3.23
 
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata openssl postgresql-client
