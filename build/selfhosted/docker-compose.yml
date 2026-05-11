@@ -10,8 +10,9 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # Build type
-      - BUILD_TYPE=selfhosted
+      # Application
+      - APP_ENV=${APP_ENV:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
 
       # Database
       - DATABASE_URL=postgres://whento:${POSTGRES_PASSWORD:-changeme}@postgres:5432/whento?sslmode=disable
@@ -29,10 +30,19 @@ services:
       - LICENSE_KEY=${LICENSE_KEY:-}
       - LICENSE_PUBLIC_KEY=${LICENSE_PUBLIC_KEY:-}
 
-      # Application
+      # Application URL & registration
       - APP_URL=${APP_URL:-http://localhost:8080}
       - ALLOWED_REGISTER=${ALLOWED_REGISTER:-true}
-      - ALLOWED_EMAILS=${ALLOWED_EMAILS:-}
+      - ALLOWED_EMAILS=${ALLOWED_EMAILS:-*}
+
+      # SMTP (TLS is implied by SMTP_PORT: 465 = implicit TLS, otherwise STARTTLS)
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-contact@whento.be}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-WhenTo}
+      - EMAIL_VERIFICATION_ENABLED=${EMAIL_VERIFICATION_ENABLED:-true}
 
       # Rate limiting
       - RATE_LIMIT_ENABLED=true

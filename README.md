@@ -200,44 +200,112 @@ All Self-hosted licenses are **perpetual** (lifetime) with optional support rene
 
 ```bash
 # Application
-APP_ENV=production
-APP_URL=https://your-domain.com  # Used to generate links in emails
-PORT=8080
-LOG_LEVEL=info
+APP_ENV=production                # Default: development
+APP_URL=https://your-domain.com   # Used to generate links in emails
+PORT=8080                         # Default: 8080
+LOG_LEVEL=info                    # Default: info (debug, info, warn, error)
 
-# Database
+# Database — use DATABASE_URL (preferred) OR individual DB_* variables
 DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=disable
+# Alternative granular variables (used if DATABASE_URL is not set):
+# DB_HOST=localhost
+# DB_PORT=5432
+# DB_NAME=whento
+# DB_USER=whento
+# DB_PASSWORD=yourpassword
+# DB_SSLMODE=disable
 
-# Redis
+# Redis — use REDIS_URL (preferred) OR individual REDIS_* variables
 REDIS_URL=redis://:password@host:6379
+# Alternative granular variables (used if REDIS_URL is not set):
+# REDIS_HOST=localhost
+# REDIS_PORT=6379
+# REDIS_PASSWORD=
+# REDIS_DB=0
 
-# JWT (auto-generated on first run)
+# JWT — keys are auto-generated on first run if they do not exist
 JWT_PRIVATE_KEY_PATH=/app/keys/private.pem
 JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
-JWT_ACCESS_EXPIRY=15m
-JWT_REFRESH_EXPIRY=168h
+JWT_ACCESS_EXPIRY=15m             # Default: 15m
+JWT_REFRESH_EXPIRY=168h           # Default: 168h (7 days)
+# JWT_ISSUER=whento               # Default: whento
 
-# SMTP (required for email verification and notifications)
+# SMTP (required for email verification, password reset, and notifications)
 SMTP_HOST=mail.example.com
-SMTP_PORT=587               # Default: 587
+SMTP_PORT=587                     # Default: 587. Use 465 for implicit TLS, 587 for STARTTLS
 SMTP_USERNAME=user@example.com
 SMTP_PASSWORD=yourpassword
-SMTP_TLS=true               # Default: true
-EMAIL_FROM_ADDRESS=whento@example.com
-EMAIL_FROM_NAME=WhenTo      # Default: WhenTo
+SMTP_FROM=whento@example.com      # Default: contact@whento.be
+SMTP_FROM_NAME=WhenTo             # Default: Contact WhenTo
+# Note: TLS mode is determined automatically by the port — there is no
+#       separate TLS toggle variable.
 
-# Registration
-EMAIL_VERIFICATION_ENABLED=true
-ALLOWED_REGISTER=true
-ALLOWED_EMAILS=             # Comma-separated patterns (e.g., *@company.com). Default: * (all)
+# Registration & email verification
+EMAIL_VERIFICATION_ENABLED=true   # Default: false
+# EMAIL_VERIFICATION_EXPIRY=24h
+# PASSWORD_RESET_EXPIRY=1h
+# MAGIC_LINK_EXPIRY=1h
+ALLOWED_REGISTER=true             # Default: true
+ALLOWED_EMAILS=*                  # Comma-separated patterns (e.g., *@company.com). Default: * (all)
 
 # Rate Limiting
-RATE_LIMIT_ENABLED=true
+RATE_LIMIT_ENABLED=true           # Default: true
 
 # Security
-BCRYPT_COST=12
-CORS_ORIGINS=https://your-domain.com  # Comma-separated allowed CORS origins (default: APP_URL)
-TRUSTED_PROXIES=                       # Comma-separated trusted reverse proxy IPs (e.g., 127.0.0.1,10.0.0.1)
+BCRYPT_COST=12                                # Default: 12
+CORS_ORIGINS=https://your-domain.com          # Comma-separated allowed CORS origins (default: APP_URL)
+TRUSTED_PROXIES=                              # Comma-separated trusted reverse proxy IPs/CIDRs (e.g., 127.0.0.1,10.0.0.0/8)
+# DISABLE_ROBOTS=false                        # Disable robots.txt (default: false)
+
+# WebAuthn / Passkeys (optional — defaults are derived from APP_URL)
+# WEBAUTHN_RP_NAME=WhenTo
+# WEBAUTHN_RP_ID=your-domain.com
+# WEBAUTHN_RP_ORIGIN=https://your-domain.com
+# WEBAUTHN_TIMEOUT=60s
+
+# TOTP / 2FA (optional)
+# TOTP_ISSUER=WhenTo
+# TOTP_PERIOD=30
+# TOTP_DIGITS=6
+```
+
+#### Self-Hosted Only (build tag `selfhosted`)
+
+```bash
+# License — leave empty for Community tier (30 calendars).
+# JSON license key; auto-activates at startup if the DB has no license yet.
+# Can also be activated via the Admin UI.
+LICENSE_KEY=
+
+# Public key used to verify license signatures.
+# Leave empty to use the built-in WhenTo public key (recommended).
+# LICENSE_PUBLIC_KEY=
+```
+
+#### Cloud Only (build tag `cloud`)
+
+```bash
+# Stripe — subscription billing
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SUBSCRIPTION_SECRET=whsec_...
+STRIPE_PRICE_PRO=price_...        # Stripe Price ID for the Pro plan
+STRIPE_PRICE_POWER=price_...      # Stripe Price ID for the Power plan
+
+# Stripe — license shop (one-time payments)
+STRIPE_PRICE_PRO_LICENSE=price_...
+STRIPE_PRICE_ENTERPRISE_LICENSE=price_...
+STRIPE_WEBHOOK_LICENCE_SECRET=whsec_...
+STRIPE_WEBHOOK_PRICE_SECRET=whsec_...    # Optional: product/price update webhooks
+
+# Ed25519 private key (base64) used to sign self-hosted licenses sold through the shop
+LICENSE_PRIVATE_KEY_BASE64=
+```
+
+#### Frontend (Build-Time Only)
+
+```bash
+# Set at build time (npm run build), not at runtime
+VITE_BUILD_TYPE=selfhosted        # 'selfhosted' or 'cloud'. Default: selfhosted
 ```
 
 ---
@@ -299,7 +367,7 @@ version: "3.8"
 
 services:
   whento:
-    image: ghcr.io/When-To/whento:latest
+    image: ghcr.io/when-to/whento:latest
     ports:
       - "8080:8080"
     environment:
@@ -307,12 +375,11 @@ services:
       - REDIS_URL=redis://:password@redis:6379
       - APP_URL=https://your-domain.com  # Used to generate links in emails
       - SMTP_HOST=mail.example.com
-      - SMTP_PORT=587
+      - SMTP_PORT=587                    # 465 = implicit TLS, 587 = STARTTLS
       - SMTP_USERNAME=user@example.com
       - SMTP_PASSWORD=yourpassword
-      - SMTP_TLS=true
-      - EMAIL_FROM_ADDRESS=whento@example.com
-      - EMAIL_FROM_NAME=WhenTo
+      - SMTP_FROM=whento@example.com
+      - SMTP_FROM_NAME=WhenTo
     depends_on:
       - postgres
       - redis
@@ -346,7 +413,7 @@ volumes:
 # Self-hosted build (default)
 make build
 # or
-go build -tags selfhosted -o bin/whento ./cmd/main.go
+go build -tags selfhosted -o bin/whento ./cmd/
 ```
 
 ### Reverse Proxy
