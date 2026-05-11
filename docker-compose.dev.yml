@@ -1,51 +1,9 @@
-version: "3.8"
+# Development stack: PostgreSQL + Redis only.
+# The backend runs on the host via `go run` (see `make dev-db` / `make dev-app`),
+# so postgres and redis must be reachable on localhost — their ports are
+# intentionally exposed here, unlike the production docker-compose.yml.
 
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        VERSION: ${VERSION:-latest}
-    container_name: whento-app
-    ports:
-      - "${APP_PORT:-8080}:8080"
-    environment:
-      # Application
-      - APP_ENV=${APP_ENV:-production}
-      - APP_URL=${APP_URL:-http://localhost:8080}
-      - PORT=8080
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-
-      # Database
-      - DATABASE_URL=postgres://${DB_USER:-whento}:${DB_PASSWORD:?Database password required}@postgres:5432/${DB_NAME:-whento}?sslmode=disable
-
-      # Redis
-      - REDIS_URL=redis://:${REDIS_PASSWORD:?Redis password required}@redis:6379/0
-
-      # JWT - Keys are auto-generated on first start
-      - JWT_PRIVATE_KEY_PATH=/app/keys/private.pem
-      - JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
-      - JWT_ACCESS_EXPIRY=${JWT_ACCESS_EXPIRY:-15m}
-      - JWT_REFRESH_EXPIRY=${JWT_REFRESH_EXPIRY:-168h}
-
-      # Rate Limiting
-      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - whento-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
   postgres:
     image: postgres:16-alpine
     container_name: whento-postgres
