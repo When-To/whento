@@ -71,7 +71,7 @@ RUN apk add --no-cache curl && \
 FROM alpine:3.19
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata openssl netcat-openbsd
+RUN apk add --no-cache ca-certificates tzdata openssl postgresql-client
 
 WORKDIR /app
 
