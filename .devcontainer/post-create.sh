@@ -54,7 +54,7 @@ fi
 # Run migrations
 echo "🗄️ Running migrations..."
 if [ -d "migrations" ]; then
-    if migrate -path ./migrations -database "$DATABASE_URL" up; then
+    if make migrate-up; then
         echo "  ✅ Migrations applied successfully"
     else
         echo "  ⚠️  Error applying migrations (may already be applied)"
