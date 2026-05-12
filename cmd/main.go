@@ -115,6 +115,12 @@ func main() {
 	log := logger.New(cfg.LogLevel, "json")
 	logger.SetDefault(log)
 
+	// Fail fast on malformed URL-shaped env vars (DATABASE_URL, REDIS_URL, APP_URL).
+	if err := cfg.Validate(); err != nil {
+		log.Error("Invalid configuration", "error", err)
+		os.Exit(1)
+	}
+
 	log.Info("Starting WhenTo Application", "port", cfg.Port, "env", cfg.AppEnv)
 
 	// Context for initialization
