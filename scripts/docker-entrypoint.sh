@@ -79,30 +79,17 @@ generate_keys() {
 wait_for_db() {
     echo "[DB] Waiting for database to be ready..."
 
-    # Extract host and port from DATABASE_URL
-    # Format: postgres://user:pass@host:port/db?sslmode=disable
     if [ -z "$DATABASE_URL" ]; then
         echo "[DB] WARNING: DATABASE_URL not set, skipping database check"
         return 0
-    fi
-
-    # Parse host from DATABASE_URL
-    DB_HOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p')
-    DB_PORT=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-
-    if [ -z "$DB_HOST" ]; then
-        DB_HOST="localhost"
-    fi
-    if [ -z "$DB_PORT" ]; then
-        DB_PORT="5432"
     fi
 
     MAX_RETRIES=30
     RETRY_COUNT=0
 
     while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-        if nc -z "$DB_HOST" "$DB_PORT" 2>/dev/null; then
-            echo "[DB] Database is ready at $DB_HOST:$DB_PORT"
+        if pg_isready -d "$DATABASE_URL" -q -t 2; then
+            echo "[DB] Database is ready"
             return 0
         fi
         RETRY_COUNT=$((RETRY_COUNT + 1))
