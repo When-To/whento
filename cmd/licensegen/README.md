@@ -49,8 +49,7 @@ Example output:
 Private key: ./license_private.key (keep this SECRET!)
 Public key:  ./license_public.key (distribute with binary)
 
-Add to your self-hosted .env file:
-LICENSE_PUBLIC_KEY=YourBase64EncodedPublicKeyHere==
+Public key (base64): YourBase64EncodedPublicKeyHere==
 ```
 
 ### 2. Generate licenses for customers
