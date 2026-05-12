@@ -145,11 +145,11 @@ func main() {
 	}
 	redisClient, err := database.NewRedisClient(ctx, redisConfig)
 	if err != nil {
-		log.Warn("Failed to connect to Redis - running without cache and rate limiting", "error", err)
+		log.Warn("Failed to connect to Redis - running without cache", "error", err)
 		redisClient = nil
 	} else {
 		defer database.CloseRedis(redisClient)
-		log.Info("Connected to Redis - cache and rate limiting enabled")
+		log.Info("Connected to Redis - cache enabled")
 	}
 
 	// Initialize JWT manager
@@ -380,20 +380,18 @@ func main() {
 		// Public routes with rate limiting
 		r.Group(func(r chi.Router) {
 			if cfg.RateLimitEnabled {
-				// Login: 5 requests/minute/IP (fail-closed: block if Redis is down)
+				// Login: 5 requests/minute/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests:   5,
-					Window:     time.Minute,
-					KeyFunc:    middleware.CombinedKeyFunc,
-					FailClosed: true,
+					Requests: 5,
+					Window:   time.Minute,
+					KeyFunc:  middleware.CombinedKeyFunc,
 				})).Post("/login", authHandler.Login)
 
-				// Register: 3 requests/minute/IP (fail-closed)
+				// Register: 3 requests/minute/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests:   3,
-					Window:     time.Minute,
-					KeyFunc:    middleware.CombinedKeyFunc,
-					FailClosed: true,
+					Requests: 3,
+					Window:   time.Minute,
+					KeyFunc:  middleware.CombinedKeyFunc,
 				})).Post("/register", authHandler.Register)
 			} else {
 				r.Post("/login", authHandler.Login)
@@ -401,12 +399,11 @@ func main() {
 			}
 
 			if cfg.RateLimitEnabled {
-				// Refresh: 5 requests/minute/IP (fail-closed)
+				// Refresh: 5 requests/minute/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests:   5,
-					Window:     time.Minute,
-					KeyFunc:    middleware.CombinedKeyFunc,
-					FailClosed: true,
+					Requests: 5,
+					Window:   time.Minute,
+					KeyFunc:  middleware.CombinedKeyFunc,
 				})).Post("/refresh", authHandler.Refresh)
 			} else {
 				r.Post("/refresh", authHandler.Refresh)
@@ -415,12 +412,11 @@ func main() {
 
 			// Password reset (public - no auth required)
 			if cfg.RateLimitEnabled {
-				// Forgot password: 3 requests/15 minutes/IP (fail-closed)
+				// Forgot password: 3 requests/15 minutes/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests:   3,
-					Window:     15 * time.Minute,
-					KeyFunc:    middleware.IPKeyFunc,
-					FailClosed: true,
+					Requests: 3,
+					Window:   15 * time.Minute,
+					KeyFunc:  middleware.IPKeyFunc,
 				})).Post("/forgot-password", passwordResetHandler.ForgotPassword)
 			} else {
 				r.Post("/forgot-password", passwordResetHandler.ForgotPassword)
@@ -428,10 +424,9 @@ func main() {
 			if cfg.RateLimitEnabled {
 				// Reset password: 5 requests/15 minutes/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests:   5,
-					Window:     15 * time.Minute,
-					KeyFunc:    middleware.CombinedKeyFunc,
-					FailClosed: true,
+					Requests: 5,
+					Window:   15 * time.Minute,
+					KeyFunc:  middleware.CombinedKeyFunc,
 				})).Post("/reset-password", passwordResetHandler.ResetPassword)
 			} else {
 				r.Post("/reset-password", passwordResetHandler.ResetPassword)
@@ -440,10 +435,9 @@ func main() {
 			// Magic link authentication (public)
 			if cfg.RateLimitEnabled {
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests:   3,
-					Window:     15 * time.Minute,
-					KeyFunc:    middleware.IPKeyFunc,
-					FailClosed: true,
+					Requests: 3,
+					Window:   15 * time.Minute,
+					KeyFunc:  middleware.IPKeyFunc,
 				})).Post("/magic-link/request", magicLinkHandler.RequestMagicLink)
 			} else {
 				r.Post("/magic-link/request", magicLinkHandler.RequestMagicLink)
@@ -451,10 +445,9 @@ func main() {
 			if cfg.RateLimitEnabled {
 				// Magic link verify: 5 requests/15 minutes/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests:   5,
-					Window:     15 * time.Minute,
-					KeyFunc:    middleware.CombinedKeyFunc,
-					FailClosed: true,
+					Requests: 5,
+					Window:   15 * time.Minute,
+					KeyFunc:  middleware.CombinedKeyFunc,
 				})).Get("/magic-link/verify/{token}", magicLinkHandler.VerifyMagicLink)
 			} else {
 				r.Get("/magic-link/verify/{token}", magicLinkHandler.VerifyMagicLink)
@@ -463,12 +456,11 @@ func main() {
 
 			// Email verification (public - no auth required)
 			if cfg.RateLimitEnabled {
-				// Verify email: 5 requests/15 minutes/IP (fail-closed)
+				// Verify email: 5 requests/15 minutes/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests:   5,
-					Window:     15 * time.Minute,
-					KeyFunc:    middleware.CombinedKeyFunc,
-					FailClosed: true,
+					Requests: 5,
+					Window:   15 * time.Minute,
+					KeyFunc:  middleware.CombinedKeyFunc,
 				})).Get("/verify-email/{token}", emailVerificationHandler.VerifyEmail)
 			} else {
 				r.Get("/verify-email/{token}", emailVerificationHandler.VerifyEmail)
@@ -502,17 +494,15 @@ func main() {
 			if cfg.RateLimitEnabled {
 				// Passkey login (usernameless/passwordless): 5 requests/minute/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests:   5,
-					Window:     time.Minute,
-					KeyFunc:    middleware.CombinedKeyFunc,
-					FailClosed: true,
+					Requests: 5,
+					Window:   time.Minute,
+					KeyFunc:  middleware.CombinedKeyFunc,
 				})).Post("/passkey/login/begin", passkeyHandler.BeginDiscoverableAuthentication)
 
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests:   5,
-					Window:     time.Minute,
-					KeyFunc:    middleware.CombinedKeyFunc,
-					FailClosed: true,
+					Requests: 5,
+					Window:   time.Minute,
+					KeyFunc:  middleware.CombinedKeyFunc,
 				})).Post("/passkey/login/finish", passkeyHandler.FinishAuthentication)
 			} else {
 				r.Post("/passkey/login/begin", passkeyHandler.BeginDiscoverableAuthentication)
@@ -525,10 +515,9 @@ func main() {
 			if cfg.RateLimitEnabled {
 				// MFA verification: 5 requests/5 minutes/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests:   5,
-					Window:     5 * time.Minute,
-					KeyFunc:    middleware.CombinedKeyFunc,
-					FailClosed: true,
+					Requests: 5,
+					Window:   5 * time.Minute,
+					KeyFunc:  middleware.CombinedKeyFunc,
 				})).Post("/mfa/verify", mfaHandler.VerifyLogin)
 			} else {
 				r.Post("/mfa/verify", mfaHandler.VerifyLogin)
@@ -621,12 +610,11 @@ func main() {
 
 			// Public participant email verification
 			if cfg.RateLimitEnabled {
-				// Participant verify email: 5 requests/15 minutes/IP (fail-closed)
+				// Participant verify email: 5 requests/15 minutes/IP
 				r.With(rateLimiter.Limit(middleware.RateLimitConfig{
-					Requests:   5,
-					Window:     15 * time.Minute,
-					KeyFunc:    middleware.CombinedKeyFunc,
-					FailClosed: true,
+					Requests: 5,
+					Window:   15 * time.Minute,
+					KeyFunc:  middleware.CombinedKeyFunc,
 				})).Get("/participants/verify-email/{token}", participantEmailHandler.VerifyEmail)
 			} else {
 				r.Get("/participants/verify-email/{token}", participantEmailHandler.VerifyEmail)
