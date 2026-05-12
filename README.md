@@ -284,10 +284,6 @@ TRUSTED_PROXIES=                              # Comma-separated trusted reverse 
 # JSON license key; auto-activates at startup if the DB has no license yet.
 # Can also be activated via the Admin UI.
 LICENSE_KEY=
-
-# Public key used to verify license signatures.
-# Leave empty to use the built-in WhenTo public key (recommended).
-# LICENSE_PUBLIC_KEY=
 ```
 
 #### Cloud Only (build tag `cloud`)

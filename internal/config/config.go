@@ -96,8 +96,7 @@ type ShopConfig struct {
 
 // LicenseConfig holds license-related configuration (Self-hosted only)
 type LicenseConfig struct {
-	Key       string
-	PublicKey string
+	Key string
 }
 
 // EmailConfig holds email-related configuration
@@ -202,8 +201,7 @@ func Load() *Config {
 
 		// License (Self-hosted only)
 		License: LicenseConfig{
-			Key:       getEnv("LICENSE_KEY", ""),
-			PublicKey: getEnv("LICENSE_PUBLIC_KEY", ""),
+			Key: getEnv("LICENSE_KEY", ""),
 		},
 	}
 }

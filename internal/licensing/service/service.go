@@ -121,11 +121,6 @@ func (s *Service) GetServerCalendarLimit() int {
 
 // ActivateLicense validates and activates a new license
 func (s *Service) ActivateLicense(ctx context.Context, licenseKey string) error {
-	// Check if public key is configured
-	if s.publicKey == nil {
-		return fmt.Errorf("license activation unavailable: no public key configured (set LICENSE_PUBLIC_KEY environment variable)")
-	}
-
 	// Parse the license payload
 	var payload models.LicensePayload
 	if err := json.Unmarshal([]byte(licenseKey), &payload); err != nil {

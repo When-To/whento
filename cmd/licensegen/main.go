@@ -177,8 +177,7 @@ func generateKeyPair(outputDir string) error {
 	fmt.Printf("✓ Key pair generated successfully!\n\n")
 	fmt.Printf("Private key: %s (keep this SECRET!)\n", privateKeyFile)
 	fmt.Printf("Public key:  %s (distribute with binary)\n\n", publicKeyFile)
-	fmt.Printf("Add to your self-hosted .env file:\n")
-	fmt.Printf("LICENSE_PUBLIC_KEY=%s\n", publicKeyB64)
+	fmt.Printf("Public key (base64): %s\n", publicKeyB64)
 
 	return nil
 }
