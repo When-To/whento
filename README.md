@@ -200,44 +200,120 @@ All Self-hosted licenses are **perpetual** (lifetime) with optional support rene
 
 ```bash
 # Application
-APP_ENV=production
-APP_URL=https://your-domain.com  # Used to generate links in emails
-PORT=8080
-LOG_LEVEL=info
+APP_ENV=production                # Default: development
+APP_URL=https://your-domain.com   # Used to generate links in emails
+PORT=8080                         # Default: 8080
+LOG_LEVEL=info                    # Default: info (debug, info, warn, error)
 
 # Database
-DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=disable
+# - For the docker-compose.yml shipped with this repo: set the DB_* variables
+#   below (DB_NAME/DB_USER/DB_PASSWORD are REQUIRED — they are consumed by
+#   both the postgres service and the app service). DATABASE_URL is ignored
+#   in that mode.
+# - For standalone / binary deployments: set DATABASE_URL directly (preferred);
+#   DB_* are then only used as a fallback if DATABASE_URL is unset.
+DB_NAME=whento
+DB_USER=whento
+DB_PASSWORD=yourpassword
+# DB_HOST=localhost                 # Standalone/binary only (compose hardcodes "postgres")
+# DB_PORT=5432                      # Standalone/binary only (compose hardcodes 5432, not exposed)
+# DB_SSLMODE=disable                # Standalone/binary only (compose hardcodes "disable")
+# DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=disable   # Standalone only
 
-# Redis
-REDIS_URL=redis://:password@host:6379
+# Redis — same logic as the database
+# - docker-compose: REDIS_PASSWORD is REQUIRED (used by both the redis service
+#   and the app). REDIS_URL is ignored.
+# - Standalone / binary: set REDIS_URL directly (preferred); REDIS_* are
+#   fallback only.
+REDIS_PASSWORD=yourpassword
+# REDIS_HOST=localhost              # Standalone/binary only (compose hardcodes "redis")
+# REDIS_PORT=6379                   # Standalone/binary only (compose hardcodes 6379, not exposed)
+# REDIS_DB=0                        # Standalone/binary only
+# REDIS_URL=redis://:password@host:6379                            # Standalone only
 
-# JWT (auto-generated on first run)
+# JWT — keys are auto-generated on first run if they do not exist
 JWT_PRIVATE_KEY_PATH=/app/keys/private.pem
 JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
-JWT_ACCESS_EXPIRY=15m
-JWT_REFRESH_EXPIRY=168h
+JWT_ACCESS_EXPIRY=15m             # Default: 15m
+JWT_REFRESH_EXPIRY=168h           # Default: 168h (7 days)
+# JWT_ISSUER=whento               # Default: whento
 
-# SMTP (required for email verification and notifications)
+# SMTP (required for email verification, password reset, and notifications)
 SMTP_HOST=mail.example.com
-SMTP_PORT=587               # Default: 587
+SMTP_PORT=587                     # Default: 587. Use 465 for implicit TLS, 587 for STARTTLS
 SMTP_USERNAME=user@example.com
 SMTP_PASSWORD=yourpassword
-SMTP_TLS=true               # Default: true
-EMAIL_FROM_ADDRESS=whento@example.com
-EMAIL_FROM_NAME=WhenTo      # Default: WhenTo
+SMTP_FROM=whento@example.com      # Default: contact@whento.be
+SMTP_FROM_NAME=WhenTo             # Default: Contact WhenTo
+# Note: TLS mode is determined automatically by the port — there is no
+#       separate TLS toggle variable.
 
-# Registration
-EMAIL_VERIFICATION_ENABLED=true
-ALLOWED_REGISTER=true
-ALLOWED_EMAILS=             # Comma-separated patterns (e.g., *@company.com). Default: * (all)
+# Registration & email verification
+EMAIL_VERIFICATION_ENABLED=true   # Default: false
+# EMAIL_VERIFICATION_EXPIRY=24h
+# PASSWORD_RESET_EXPIRY=1h
+# MAGIC_LINK_EXPIRY=1h
+ALLOWED_REGISTER=true             # Default: true
+ALLOWED_EMAILS=*                  # Comma-separated patterns (e.g., *@company.com). Default: * (all)
 
 # Rate Limiting
-RATE_LIMIT_ENABLED=true
+RATE_LIMIT_ENABLED=true           # Default: true
 
 # Security
-BCRYPT_COST=12
-CORS_ORIGINS=https://your-domain.com  # Comma-separated allowed CORS origins (default: APP_URL)
-TRUSTED_PROXIES=                       # Comma-separated trusted reverse proxy IPs (e.g., 127.0.0.1,10.0.0.1)
+BCRYPT_COST=12                                # Default: 12
+CORS_ORIGINS=https://your-domain.com          # Comma-separated allowed CORS origins (default: APP_URL)
+TRUSTED_PROXIES=                              # Comma-separated trusted reverse proxy IPs/CIDRs (e.g., 127.0.0.1,10.0.0.0/8)
+# DISABLE_ROBOTS=false                        # Disable robots.txt (default: false)
+
+# WebAuthn / Passkeys (optional — defaults are derived from APP_URL)
+# WEBAUTHN_RP_NAME=WhenTo
+# WEBAUTHN_RP_ID=your-domain.com
+# WEBAUTHN_RP_ORIGIN=https://your-domain.com
+# WEBAUTHN_TIMEOUT=60s
+
+# TOTP / 2FA (optional)
+# TOTP_ISSUER=WhenTo
+# TOTP_PERIOD=30
+# TOTP_DIGITS=6
+```
+
+#### Self-Hosted Only (build tag `selfhosted`)
+
+```bash
+# License — leave empty for Community tier (30 calendars).
+# JSON license key; auto-activates at startup if the DB has no license yet.
+# Can also be activated via the Admin UI.
+LICENSE_KEY=
+
+# Public key used to verify license signatures.
+# Leave empty to use the built-in WhenTo public key (recommended).
+# LICENSE_PUBLIC_KEY=
+```
+
+#### Cloud Only (build tag `cloud`)
+
+```bash
+# Stripe — subscription billing
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SUBSCRIPTION_SECRET=whsec_...
+STRIPE_PRICE_PRO=price_...        # Stripe Price ID for the Pro plan
+STRIPE_PRICE_POWER=price_...      # Stripe Price ID for the Power plan
+
+# Stripe — license shop (one-time payments)
+STRIPE_PRICE_PRO_LICENSE=price_...
+STRIPE_PRICE_ENTERPRISE_LICENSE=price_...
+STRIPE_WEBHOOK_LICENCE_SECRET=whsec_...
+STRIPE_WEBHOOK_PRICE_SECRET=whsec_...    # Optional: product/price update webhooks
+
+# Ed25519 private key (base64) used to sign self-hosted licenses sold through the shop
+LICENSE_PRIVATE_KEY_BASE64=
+```
+
+#### Frontend (Build-Time Only)
+
+```bash
+# Set at build time (npm run build), not at runtime
+VITE_BUILD_TYPE=selfhosted        # 'selfhosted' or 'cloud'. Default: selfhosted
 ```
 
 ---
@@ -294,51 +370,37 @@ whento/
 
 ### Docker Compose (Recommended)
 
-```yaml
-version: "3.8"
+The repository ships a ready-to-use [`docker-compose.yml`](docker-compose.yml). It defines the `app`, `postgres`, and `redis` services and builds `DATABASE_URL` / `REDIS_URL` for the app from the variables you set in `.env`.
 
-services:
-  whento:
-    image: ghcr.io/When-To/whento:latest
-    ports:
-      - "8080:8080"
-    environment:
-      - DATABASE_URL=postgres://whento:password@postgres:5432/whento
-      - REDIS_URL=redis://:password@redis:6379
-      - APP_URL=https://your-domain.com  # Used to generate links in emails
-      - SMTP_HOST=mail.example.com
-      - SMTP_PORT=587
-      - SMTP_USERNAME=user@example.com
-      - SMTP_PASSWORD=yourpassword
-      - SMTP_TLS=true
-      - EMAIL_FROM_ADDRESS=whento@example.com
-      - EMAIL_FROM_NAME=WhenTo
-    depends_on:
-      - postgres
-      - redis
-    volumes:
-      - jwt_keys:/app/keys
-
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: whento
-      POSTGRES_USER: whento
-      POSTGRES_PASSWORD: password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    command: redis-server --requirepass password
-    volumes:
-      - redis_data:/data
-
-volumes:
-  postgres_data:
-  redis_data:
-  jwt_keys:
+```bash
+cp .env.example .env
+# Edit .env — at minimum set:
+#   DB_PASSWORD, REDIS_PASSWORD, APP_URL, and SMTP_* if you want email
+docker compose up -d
 ```
+
+Minimum required variables in `.env` when using this compose file:
+
+```bash
+# Database — consumed by both the postgres service and the app
+DB_PASSWORD=your_secure_password
+# DB_NAME, DB_USER default to "whento" if unset
+
+# Redis — consumed by both the redis service and the app
+REDIS_PASSWORD=your_redis_password
+
+# Application
+APP_URL=https://your-domain.com
+
+# SMTP (required for email verification and notifications)
+SMTP_HOST=mail.example.com
+SMTP_PORT=587
+SMTP_USERNAME=user@example.com
+SMTP_PASSWORD=yourpassword
+SMTP_FROM=whento@example.com
+```
+
+> **Note:** with this compose file, `DATABASE_URL` and `REDIS_URL` are constructed automatically from `DB_*` / `REDIS_PASSWORD`. Setting them directly in `.env` has no effect here — they only apply to standalone / binary deployments.
 
 ### Building from Source
 
@@ -346,7 +408,7 @@ volumes:
 # Self-hosted build (default)
 make build
 # or
-go build -tags selfhosted -o bin/whento ./cmd/main.go
+go build -tags selfhosted -o bin/whento ./cmd/
 ```
 
 ### Reverse Proxy

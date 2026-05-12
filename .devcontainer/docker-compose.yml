@@ -1,4 +1,12 @@
-version: '3.8'
+# VS Code Dev Container stack.
+# The backend runs INSIDE the `devcontainer` service via `go run`, so it
+# reaches postgres/redis through the docker bridge network (hostnames
+# `postgres`/`redis`). Host port mappings on 5432/6379 are kept so the
+# developer can also connect from the host (psql, redis-cli, etc.).
+#
+# Credentials default to `whento`/`whento`/`whento` (same defaults as the Go
+# config), so no .env file is required to open the devcontainer. Override
+# via .env if you need different values.
 
 services:
   devcontainer:
@@ -12,16 +20,13 @@ services:
     ports:
       - "8080:8080"   # Application (backend in prod, frontend in dev)
     environment:
-      # Database
-      - DATABASE_URL=postgres://whento_user:whento_password@postgres:5432/whento_db?sslmode=disable
-      # Redis
-      - REDIS_URL=redis://redis:6379
-      # Go configuration
+      # DEVCONTAINER=1 makes the Go config default to host=postgres / host=redis
+      # and build DATABASE_URL / REDIS_URL automatically, so we don't hardcode
+      # them here.
+      - DEVCONTAINER=1
       - GOPATH=/home/vscode/go
       - GOCACHE=/home/vscode/go/cache
       - GOMODCACHE=/home/vscode/go/pkg/mod
-      # Dev settings
-      - DEVCONTAINER=1
       - GO_ENV=development
       - LOG_LEVEL=debug
     depends_on:
@@ -33,15 +38,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: whento_db
-      POSTGRES_USER: whento_user
-      POSTGRES_PASSWORD: whento_password
+      - POSTGRES_DB=${DB_NAME:-whento}
+      - POSTGRES_USER=${DB_USER:-whento}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-whento}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U whento_user -d whento_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-whento} -d ${DB_NAME:-whento}"]
       interval: 5s
       timeout: 5s
       retries: 5
