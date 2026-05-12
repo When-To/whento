@@ -29,6 +29,8 @@ services:
       - GOMODCACHE=/home/vscode/go/pkg/mod
       - GO_ENV=development
       - LOG_LEVEL=debug
+      - DATABASE_URL=postgres://${DB_USER:-whento}:${DB_PASSWORD:-whento}@postgres:5432/${DB_NAME:-whento}?sslmode=disable
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,8 +45,6 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD:-whento}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-whento} -d ${DB_NAME:-whento}"]
       interval: 5s
@@ -53,8 +53,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
