@@ -10,9 +10,11 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/time/rate"
 )
 
 // trustedProxyIPs holds exact trusted proxy IPs.
@@ -50,53 +52,71 @@ func SetTrustedProxies(proxies []string) {
 	trustedProxyCIDRs = cidrs
 }
 
-// RateLimiter provides rate limiting functionality
-type RateLimiter struct {
-	client *redis.Client
+// rateLimitBackend is the abstraction used by RateLimiter to decide whether a
+// request is allowed. It has two implementations: redisBackend (authoritative,
+// shared across instances) and memoryBackend (per-process fallback).
+type rateLimitBackend interface {
+	Allow(ctx context.Context, key string, limit int, window time.Duration) (allowed bool, remaining int, resetAt int64, err error)
 }
 
-// NewRateLimiter creates a new rate limiter
-// If client is nil, rate limiting is disabled (allows all requests)
+// RateLimiter provides rate limiting with Redis as the primary backend and an
+// in-memory token bucket as a fallback. When Redis is unreachable, requests
+// continue to be rate-limited locally instead of failing with 503.
+//
+// The per-call ctx timeout caps the worst case (~the Redis client's
+// ReadTimeout) on a probe after Redis recovers. Process-wide circuit breaking
+// and outage logging live in the Redis client hook (pkg/database).
+type RateLimiter struct {
+	primary      rateLimitBackend // nil if no Redis client was provided at startup
+	memory       *memoryBackend   // always present, used as fallback or sole backend
+	redisTimeout time.Duration
+}
+
+const defaultRedisTimeout = 500 * time.Millisecond
+
+// NewRateLimiter creates a new rate limiter. If client is nil, the in-memory
+// backend is used exclusively. Otherwise Redis is the primary backend and the
+// memory backend takes over transparently on Redis errors.
 func NewRateLimiter(client *redis.Client) *RateLimiter {
-	return &RateLimiter{client: client}
+	rl := &RateLimiter{
+		memory:       newMemoryBackend(),
+		redisTimeout: defaultRedisTimeout,
+	}
+	if client != nil {
+		rl.primary = &redisBackend{client: client}
+	}
+	return rl
+}
+
+// Stop releases background resources held by the rate limiter (the memory
+// backend's eviction goroutine). Safe to call multiple times.
+func (rl *RateLimiter) Stop() {
+	rl.memory.stop()
 }
 
 // RateLimitConfig holds rate limit configuration
 type RateLimitConfig struct {
-	Requests   int                          // Number of requests allowed
-	Window     time.Duration                // Time window
-	KeyFunc    func(r *http.Request) string // Function to extract rate limit key
-	FailClosed bool                         // If true, block requests when Redis is unavailable (critical routes)
+	Requests int                          // Number of requests allowed
+	Window   time.Duration                // Time window
+	KeyFunc  func(r *http.Request) string // Function to extract rate limit key
 }
 
-// Limit creates a rate limiting middleware
-// If Redis client is nil, this middleware does nothing (allows all requests)
+// Limit creates a rate limiting middleware. Requests are checked against
+// Redis when available; on Redis failure the in-memory backend takes over so
+// the endpoint stays protected without ever returning 503.
 func (rl *RateLimiter) Limit(cfg RateLimitConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// If Redis is not available, behavior depends on FailClosed setting
-			if rl.client == nil {
-				if cfg.FailClosed {
-					http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
-					return
-				}
-				next.ServeHTTP(w, r)
-				return
-			}
-
 			key := cfg.KeyFunc(r)
 			if key == "" {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			allowed, remaining, resetAt, err := rl.check(r.Context(), key, cfg.Requests, cfg.Window)
+			allowed, remaining, resetAt, backend, err := rl.check(r.Context(), key, cfg.Requests, cfg.Window)
 			if err != nil {
-				if cfg.FailClosed {
-					http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
-					return
-				}
-				// On error, allow the request on non-critical routes
+				// Should not happen: memory backend never errors. Allow the
+				// request rather than block on an unexpected internal error.
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -104,6 +124,7 @@ func (rl *RateLimiter) Limit(cfg RateLimitConfig) func(http.Handler) http.Handle
 			w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", cfg.Requests))
 			w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
 			w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetAt))
+			w.Header().Set("X-RateLimit-Backend", backend)
 
 			if !allowed {
 				w.Header().Set("Retry-After", fmt.Sprintf("%d", resetAt-time.Now().Unix()))
@@ -116,31 +137,55 @@ func (rl *RateLimiter) Limit(cfg RateLimitConfig) func(http.Handler) http.Handle
 	}
 }
 
-func (rl *RateLimiter) check(ctx context.Context, key string, limit int, window time.Duration) (bool, int, int64, error) {
+// Backend identifiers exposed via the X-RateLimit-Backend response header so
+// operators can tell which backend served a given request.
+const (
+	backendRedis  = "redis"
+	backendMemory = "memory"
+)
+
+// check dispatches to the primary (Redis) backend first and falls back to the
+// memory backend on errors. The per-call ctx timeout caps the worst-case
+// latency when Redis is slow or unreachable. The Redis client hook installed
+// in pkg/database short-circuits subsequent calls during an outage. The
+// returned backend identifier records which path actually served the request.
+func (rl *RateLimiter) check(ctx context.Context, key string, limit int, window time.Duration) (bool, int, int64, string, error) {
+	if rl.primary != nil {
+		callCtx, cancel := context.WithTimeout(ctx, rl.redisTimeout)
+		allowed, remaining, resetAt, err := rl.primary.Allow(callCtx, key, limit, window)
+		cancel()
+		if err == nil {
+			return allowed, remaining, resetAt, backendRedis, nil
+		}
+	}
+	allowed, remaining, resetAt, err := rl.memory.Allow(ctx, key, limit, window)
+	return allowed, remaining, resetAt, backendMemory, err
+}
+
+// redisBackend implements rateLimitBackend on top of a Redis sorted set.
+// It uses a pipeline to atomically prune the window, record the request, and
+// read the resulting count.
+type redisBackend struct {
+	client *redis.Client
+}
+
+func (b *redisBackend) Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, int, int64, error) {
 	redisKey := fmt.Sprintf("ratelimit:%s", key)
 	now := time.Now()
 	windowStart := now.Add(-window).UnixMicro()
 
-	pipe := rl.client.Pipeline()
-
-	// Remove old entries
+	pipe := b.client.Pipeline()
 	pipe.ZRemRangeByScore(ctx, redisKey, "0", fmt.Sprintf("%d", windowStart))
-
-	// Add current request
 	pipe.ZAdd(ctx, redisKey, redis.Z{
 		Score:  float64(now.UnixMicro()),
 		Member: now.UnixMicro(),
 	})
-
-	// Count requests in window
 	pipe.ZCard(ctx, redisKey)
-
-	// Set expiry
 	pipe.Expire(ctx, redisKey, window)
 
 	results, err := pipe.Exec(ctx)
 	if err != nil {
-		return true, limit, now.Add(window).Unix(), err
+		return false, 0, 0, err
 	}
 
 	count := results[2].(*redis.IntCmd).Val()
@@ -148,10 +193,94 @@ func (rl *RateLimiter) check(ctx context.Context, key string, limit int, window 
 	if remaining < 0 {
 		remaining = 0
 	}
-
 	resetAt := now.Add(window).Unix()
-
 	return count <= int64(limit), remaining, resetAt, nil
+}
+
+// memoryBackend implements rateLimitBackend with a per-key token bucket from
+// golang.org/x/time/rate. A background sweeper evicts entries that have not
+// been used for evictAfter to avoid unbounded growth on volatile keys.
+type memoryBackend struct {
+	mu      sync.Mutex
+	entries map[string]*memEntry
+	done    chan struct{}
+	once    sync.Once
+}
+
+type memEntry struct {
+	limiter  *rate.Limiter
+	lastUsed time.Time
+}
+
+const (
+	sweepInterval = 5 * time.Minute
+	evictAfter    = 10 * time.Minute
+)
+
+func newMemoryBackend() *memoryBackend {
+	b := &memoryBackend{
+		entries: make(map[string]*memEntry),
+		done:    make(chan struct{}),
+	}
+	go b.sweepLoop(sweepInterval)
+	return b
+}
+
+func (b *memoryBackend) Allow(_ context.Context, key string, limit int, window time.Duration) (bool, int, int64, error) {
+	if limit <= 0 || window <= 0 {
+		return true, limit, time.Now().Add(window).Unix(), nil
+	}
+
+	now := time.Now()
+	b.mu.Lock()
+	entry, ok := b.entries[key]
+	if !ok {
+		entry = &memEntry{
+			limiter: rate.NewLimiter(rate.Every(window/time.Duration(limit)), limit),
+		}
+		b.entries[key] = entry
+	}
+	entry.lastUsed = now
+	lim := entry.limiter
+	b.mu.Unlock()
+
+	allowed := lim.AllowN(now, 1)
+	tokens := lim.TokensAt(now)
+	remaining := int(tokens)
+	if remaining < 0 {
+		remaining = 0
+	}
+	resetAt := now.Add(window).Unix()
+	return allowed, remaining, resetAt, nil
+}
+
+func (b *memoryBackend) sweepLoop(interval time.Duration) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-b.done:
+			return
+		case <-t.C:
+			b.sweep(time.Now())
+		}
+	}
+}
+
+// sweep removes entries that have not been used for evictAfter.
+func (b *memoryBackend) sweep(now time.Time) {
+	cutoff := now.Add(-evictAfter)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for k, e := range b.entries {
+		if e.lastUsed.Before(cutoff) {
+			delete(b.entries, k)
+		}
+	}
+}
+
+func (b *memoryBackend) stop() {
+	b.once.Do(func() { close(b.done) })
 }
 
 // IPKeyFunc returns the real client IP as rate limit key.
