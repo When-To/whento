@@ -200,9 +200,9 @@ All Self-hosted licenses are **perpetual** (lifetime) with optional support rene
 
 ```bash
 # Application
+APP_PORT=8080                     # Host port (Docker compose). Default: 8080
 APP_ENV=production                # Default: development
 APP_URL=https://your-domain.com   # Used to generate links in emails
-PORT=8080                         # Default: 8080
 LOG_LEVEL=info                    # Default: info (debug, info, warn, error)
 
 # Database
