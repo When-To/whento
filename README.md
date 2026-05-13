@@ -160,11 +160,11 @@ Events sync automatically!
 
 ### Cloud Subscriptions (Per User)
 
-| Plan      | Calendars     | Price               | Features                                   |
-| --------- | ------------- | ------------------- | ------------------------------------------ |
-| **Free**  | 3 calendars   | Free                | Unlimited participants, iCal subscriptions |
-| **Pro**   | 100 calendars | 25€/year (+ VAT)    | Email support                              |
-| **Power** | Unlimited     | 100€/year (+ VAT)   | Priority support                           |
+| Plan      | Calendars     | Price             | Features                                   |
+| --------- | ------------- | ----------------- | ------------------------------------------ |
+| **Free**  | 3 calendars   | Free              | Unlimited participants, iCal subscriptions |
+| **Pro**   | 100 calendars | 25€/year (+ VAT)  | Email support                              |
+| **Power** | Unlimited     | 100€/year (+ VAT) | Priority support                           |
 
 All Cloud plans include:
 
@@ -175,11 +175,11 @@ All Cloud plans include:
 
 ### Self-Hosted Licenses (Per Server)
 
-| Tier           | Calendars     | Price                   | Support                            |
-| -------------- | ------------- | ----------------------- | ---------------------------------- |
-| **Community**  | 30 calendars  | Free                    | Community support                  |
-| **Pro**        | 300 calendars | 100€ one-time (+ VAT)   | 1 year included, 60€/year renewal  |
-| **Enterprise** | Unlimited     | 250€ one-time (+ VAT)   | 2 years included, 60€/year renewal |
+| Tier           | Calendars     | Price                 | Support                            |
+| -------------- | ------------- | --------------------- | ---------------------------------- |
+| **Community**  | 30 calendars  | Free                  | Community support                  |
+| **Pro**        | 300 calendars | 100€ one-time (+ VAT) | 1 year included, 60€/year renewal  |
+| **Enterprise** | Unlimited     | 250€ one-time (+ VAT) | 2 years included, 60€/year renewal |
 
 All Self-hosted licenses are **perpetual** (lifetime) with optional support renewal.
 
@@ -284,32 +284,6 @@ TRUSTED_PROXIES=                              # Comma-separated trusted reverse 
 # JSON license key; auto-activates at startup if the DB has no license yet.
 # Can also be activated via the Admin UI.
 LICENSE_KEY=
-```
-
-#### Cloud Only (build tag `cloud`)
-
-```bash
-# Stripe — subscription billing
-STRIPE_SECRET_KEY=sk_live_...
-STRIPE_WEBHOOK_SUBSCRIPTION_SECRET=whsec_...
-STRIPE_PRICE_PRO=price_...        # Stripe Price ID for the Pro plan
-STRIPE_PRICE_POWER=price_...      # Stripe Price ID for the Power plan
-
-# Stripe — license shop (one-time payments)
-STRIPE_PRICE_PRO_LICENSE=price_...
-STRIPE_PRICE_ENTERPRISE_LICENSE=price_...
-STRIPE_WEBHOOK_LICENCE_SECRET=whsec_...
-STRIPE_WEBHOOK_PRICE_SECRET=whsec_...    # Optional: product/price update webhooks
-
-# Ed25519 private key (base64) used to sign self-hosted licenses sold through the shop
-LICENSE_PRIVATE_KEY_BASE64=
-```
-
-#### Frontend (Build-Time Only)
-
-```bash
-# Set at build time (npm run build), not at runtime
-VITE_BUILD_TYPE=selfhosted        # 'selfhosted' or 'cloud'. Default: selfhosted
 ```
 
 ---
@@ -457,7 +431,6 @@ go test ./internal/auth/... -v
 make test-coverage
 
 # Build-specific tests
-go test -tags cloud ./...
 go test -tags selfhosted ./...
 ```
 
@@ -525,13 +498,7 @@ npm run lint        # ESLint
 
 - `GET /feed/{ics_token}` — iCalendar subscription feed
 
-### Billing Routes - Cloud Only (`/api/v1/billing`)
-
-- `POST /checkout` — Create Stripe checkout session
-- `POST /portal` — Create Stripe customer portal session
-- `POST /webhook` — Stripe webhook handler
-
-### License Routes - Self-hosted Only (`/api/v1/license`)
+### License Routes (`/api/v1/license`)
 
 - `POST /activate` — Activate license with JSON key
 - `GET /status` — Get license status and quota
