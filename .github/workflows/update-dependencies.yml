@@ -58,6 +58,7 @@ jobs:
             echo "has_vulnerabilities=false" >> $GITHUB_OUTPUT
             echo "No vulnerabilities found"
           fi
+          echo "total_vulnerabilities=$" >> $GITHUB_OUTPUT
           
           echo "## 🛡️ Security Audit (npm)" > /tmp/audit_report.md
           echo "" >> /tmp/audit_report.md
@@ -330,12 +331,19 @@ jobs:
       - name: Run npm audit fix
         if: steps.npm-audit-check.outputs.has_vulnerabilities == 'true'
         working-directory: frontend
+        env:
+          TOTAL_BEFORE: ${{ steps.npm-audit-check.outputs.total_vulnerabilities }}
         run: |
           npm install --package-lock-only --ignore-scripts 2>/dev/null
           npm audit fix || true
-
+          
+          TOTAL_BEFORE=${TOTAL_BEFORE:-0}
+          
           AUDIT_AFTER=$(npm audit --json 2>/dev/null | jq '.metadata.vulnerabilities // empty')
+          
           TOTAL_AFTER=$(echo "$AUDIT_AFTER" | jq '[.low, .moderate, .high, .critical] | add // 0')
+          TOTAL_AFTER=${TOTAL_AFTER:-0}
+          
           FIXED=$((TOTAL_BEFORE - TOTAL_AFTER))
 
           echo "- Fixed automatically: **$FIXED**" >> /tmp/audit_report.md
