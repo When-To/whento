@@ -43,6 +43,23 @@ jobs:
 
       # ── Check available updates (from main) ──────────────────────────
 
+      - name: Check npm audit vulnerabilities
+        id: npm-audit-check
+        working-directory: frontend
+        run: |
+          npm install --package-lock-only --ignore-scripts 2>/dev/null
+          AUDIT=$(npm audit --json 2>/dev/null | jq '.metadata.vulnerabilities // empty')
+          TOTAL=$(echo "$AUDIT" | jq '[.low, .moderate, .high, .critical] | add // 0' 2>/dev/null || echo "0")
+
+          if [ "$TOTAL" -gt 0 ] 2>/dev/null; then
+            echo "has_vulnerabilities=true" >> $GITHUB_OUTPUT
+            echo "Found $TOTAL vulnerabilities fixable by npm audit fix"
+          else
+            echo "has_vulnerabilities=false" >> $GITHUB_OUTPUT
+            echo "No vulnerabilities found"
+          fi
+          git checkout -- . 2>/dev/null || true
+
       - name: Check Node.js updates
         id: node-updates
         working-directory: frontend
@@ -258,23 +275,6 @@ jobs:
               echo "_No patch updates_" >> /tmp/go_pkg_report.md
             fi
           fi
-
-      - name: Check npm audit vulnerabilities
-        id: npm-audit-check
-        working-directory: frontend
-        run: |
-          npm install --package-lock-only --ignore-scripts 2>/dev/null
-          AUDIT=$(npm audit --json 2>/dev/null | jq '.metadata.vulnerabilities // empty')
-          TOTAL=$(echo "$AUDIT" | jq '[.low, .moderate, .high, .critical] | add // 0' 2>/dev/null || echo "0")
-
-          if [ "$TOTAL" -gt 0 ] 2>/dev/null; then
-            echo "has_vulnerabilities=true" >> $GITHUB_OUTPUT
-            echo "Found $TOTAL vulnerabilities fixable by npm audit fix"
-          else
-            echo "has_vulnerabilities=false" >> $GITHUB_OUTPUT
-            echo "No vulnerabilities found"
-          fi
-          git checkout -- . 2>/dev/null || true
 
       # ── Stop here if nothing to update ───────────────────────────────
 
