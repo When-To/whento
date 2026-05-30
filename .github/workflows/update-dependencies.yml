@@ -58,11 +58,8 @@ jobs:
             echo "has_vulnerabilities=false" >> $GITHUB_OUTPUT
             echo "No vulnerabilities found"
           fi
-          echo "total_vulnerabilities=$" >> $GITHUB_OUTPUT
           
-          echo "## 🛡️ Security Audit (npm)" > /tmp/audit_report.md
-          echo "" >> /tmp/audit_report.md
-          echo "- Vulnerabilities before: **$TOTAL_BEFORE**" >> /tmp/audit_report.md
+          echo "total_vulnerabilities=$TOTAL_BEFORE" >> $GITHUB_OUTPUT
           
           git checkout -- . 2>/dev/null || true
 
@@ -346,6 +343,9 @@ jobs:
           
           FIXED=$((TOTAL_BEFORE - TOTAL_AFTER))
 
+          echo "## 🛡️ Security Audit (npm)" > /tmp/audit_report.md
+          echo "" >> /tmp/audit_report.md
+          echo "- Vulnerabilities before: **$TOTAL_BEFORE**" >> /tmp/audit_report.md
           echo "- Fixed automatically: **$FIXED**" >> /tmp/audit_report.md
           echo "- Remaining: **$TOTAL_AFTER**" >> /tmp/audit_report.md
 
