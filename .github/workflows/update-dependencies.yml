@@ -49,15 +49,20 @@ jobs:
         run: |
           npm install --package-lock-only --ignore-scripts 2>/dev/null
           AUDIT=$(npm audit --json 2>/dev/null | jq '.metadata.vulnerabilities // empty')
-          TOTAL=$(echo "$AUDIT" | jq '[.low, .moderate, .high, .critical] | add // 0' 2>/dev/null || echo "0")
+          TOTAL_BEFORE=$(echo "$AUDIT" | jq '[.low, .moderate, .high, .critical] | add // 0' 2>/dev/null || echo "0")
 
-          if [ "$TOTAL" -gt 0 ] 2>/dev/null; then
+          if [ "$TOTAL_BEFORE" -gt 0 ] 2>/dev/null; then
             echo "has_vulnerabilities=true" >> $GITHUB_OUTPUT
             echo "Found $TOTAL vulnerabilities fixable by npm audit fix"
           else
             echo "has_vulnerabilities=false" >> $GITHUB_OUTPUT
             echo "No vulnerabilities found"
           fi
+          
+          echo "## 🛡️ Security Audit (npm)" > /tmp/audit_report.md
+          echo "" >> /tmp/audit_report.md
+          echo "- Vulnerabilities before: **$TOTAL_BEFORE**" >> /tmp/audit_report.md
+          
           git checkout -- . 2>/dev/null || true
 
       - name: Check Node.js updates
@@ -327,18 +332,12 @@ jobs:
         working-directory: frontend
         run: |
           npm install --package-lock-only --ignore-scripts 2>/dev/null
-          AUDIT_BEFORE=$(npm audit --json 2>/dev/null | jq '.metadata.vulnerabilities // empty')
-          TOTAL_BEFORE=$(echo "$AUDIT_BEFORE" | jq '[.low, .moderate, .high, .critical] | add // 0')
-
           npm audit fix || true
 
           AUDIT_AFTER=$(npm audit --json 2>/dev/null | jq '.metadata.vulnerabilities // empty')
           TOTAL_AFTER=$(echo "$AUDIT_AFTER" | jq '[.low, .moderate, .high, .critical] | add // 0')
           FIXED=$((TOTAL_BEFORE - TOTAL_AFTER))
 
-          echo "## 🛡️ Security Audit (npm)" > /tmp/audit_report.md
-          echo "" >> /tmp/audit_report.md
-          echo "- Vulnerabilities before: **$TOTAL_BEFORE**" >> /tmp/audit_report.md
           echo "- Fixed automatically: **$FIXED**" >> /tmp/audit_report.md
           echo "- Remaining: **$TOTAL_AFTER**" >> /tmp/audit_report.md
 
