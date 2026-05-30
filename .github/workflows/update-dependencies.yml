@@ -53,7 +53,7 @@ jobs:
 
           if [ "$TOTAL_BEFORE" -gt 0 ] 2>/dev/null; then
             echo "has_vulnerabilities=true" >> $GITHUB_OUTPUT
-            echo "Found $TOTAL vulnerabilities fixable by npm audit fix"
+            echo "Found $TOTAL_BEFORE vulnerabilities fixable by npm audit fix"
           else
             echo "has_vulnerabilities=false" >> $GITHUB_OUTPUT
             echo "No vulnerabilities found"
