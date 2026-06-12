@@ -50,7 +50,7 @@ require (
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/omidnikrah/go-holidays v1.0.0 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
-	github.com/redis/go-redis/v9 v9.20.0 // indirect
+	github.com/redis/go-redis/v9 v9.20.1 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/swaggo/files/v2 v2.0.2 // indirect
@@ -63,7 +63,7 @@ require (
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	golang.org/x/tools v0.45.0 // indirect
+	golang.org/x/tools v0.46.0 // indirect
 )
 
 replace github.com/whento/pkg => ./pkg
