@@ -80,10 +80,10 @@ func isPrivateIP(ip net.IP) bool {
 		{mustParseCIDR("::1/128")},
 		{mustParseCIDR("fc00::/7")},
 		{mustParseCIDR("fe80::/10")},
-		{mustParseCIDR("100.64.0.0/10")},  // CGN
-		{mustParseCIDR("0.0.0.0/8")},      // "this" network
-		{mustParseCIDR("198.18.0.0/15")},   // benchmarking
-		{mustParseCIDR("240.0.0.0/4")},     // reserved
+		{mustParseCIDR("100.64.0.0/10")}, // CGN
+		{mustParseCIDR("0.0.0.0/8")},     // "this" network
+		{mustParseCIDR("198.18.0.0/15")}, // benchmarking
+		{mustParseCIDR("240.0.0.0/4")},   // reserved
 	}
 	for _, r := range privateRanges {
 		if r.network.Contains(ip) {

@@ -365,7 +365,9 @@
                   :key="lic.id"
                   class="hover:bg-gray-50 dark:hover:bg-gray-700/50"
                 >
-                  <td class="whitespace-nowrap px-6 py-4 font-mono text-sm text-gray-900 dark:text-white">
+                  <td
+                    class="whitespace-nowrap px-6 py-4 font-mono text-sm text-gray-900 dark:text-white"
+                  >
                     {{ lic.support_key }}
                   </td>
                   <td class="whitespace-nowrap px-6 py-4">

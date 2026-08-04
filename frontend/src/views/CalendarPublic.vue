@@ -42,7 +42,10 @@
           <h1 class="font-display text-3xl font-bold text-gray-900 dark:text-white">
             {{ calendar.name }}
           </h1>
-          <p v-if="calendar.description" class="mt-2 text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+          <p
+            v-if="calendar.description"
+            class="mt-2 text-gray-600 dark:text-gray-400 whitespace-pre-wrap"
+          >
             {{ calendar.description }}
           </p>
           <div class="mt-4 flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
@@ -102,7 +105,10 @@
                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
                   {{ t('calendar.joinAsParticipant') }}
                 </p>
-                <form class="mt-4 flex gap-2 justify-center" @submit.prevent="handleJoinAsParticipant">
+                <form
+                  class="mt-4 flex gap-2 justify-center"
+                  @submit.prevent="handleJoinAsParticipant"
+                >
                   <input
                     v-model="newParticipantName"
                     type="text"

@@ -382,9 +382,7 @@
                   for="allow-anonymous-participants"
                   class="ml-2 text-sm text-gray-700 dark:text-gray-300"
                 >
-                  <span class="font-medium">{{
-                    t('calendar.allowAnonymousParticipants')
-                  }}</span>
+                  <span class="font-medium">{{ t('calendar.allowAnonymousParticipants') }}</span>
                   <p class="text-gray-500 dark:text-gray-400">
                     {{ t('calendar.allowAnonymousParticipantsHelp') }}
                   </p>
@@ -437,14 +435,24 @@
                 v-model.number="form.threshold"
                 type="number"
                 min="1"
-                :max="form.allow_anonymous_participants ? undefined : (calendar.participants?.length || undefined)"
+                :max="
+                  form.allow_anonymous_participants
+                    ? undefined
+                    : calendar.participants?.length || undefined
+                "
                 class="input"
                 :class="{ 'border-danger-500': errors.threshold }"
                 required
               />
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {{ t('calendar.thresholdHelp') }}
-                <span v-if="!form.allow_anonymous_participants && calendar.participants && calendar.participants.length > 0">
+                <span
+                  v-if="
+                    !form.allow_anonymous_participants &&
+                    calendar.participants &&
+                    calendar.participants.length > 0
+                  "
+                >
                   ({{ t('common.max') }}: {{ calendar.participants.length }})
                 </span>
               </p>
@@ -1145,7 +1153,11 @@ function validateForm(): boolean {
     isValid = false;
   }
 
-  if (!form.allow_anonymous_participants && calendar.value?.participants && form.threshold > calendar.value.participants.length) {
+  if (
+    !form.allow_anonymous_participants &&
+    calendar.value?.participants &&
+    form.threshold > calendar.value.participants.length
+  ) {
     errors.threshold = t('calendar.thresholdMaxError');
     isValid = false;
   }
