@@ -63,6 +63,9 @@
 # Dev Container
 !.devcontainer/
 
+# Git hooks (enabled with `make hooks`)
+!.githooks/
+
 # ============================================
 # Recursive Rules for Included Directories
 # ============================================

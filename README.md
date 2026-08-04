@@ -456,7 +456,18 @@ npm run dev         # Vite dev server
 npm run build       # Production build
 npm run type-check  # TypeScript checking
 npm run lint        # ESLint
+npm run format      # Prettier (same as `make format-frontend`)
 ```
+
+### Formatting
+
+```bash
+make hooks         # Enable the pre-commit hook (once per clone)
+make format        # Format Go (goimports) + frontend (prettier)
+make format-check  # Check formatting without modifying
+```
+
+The `pre-commit` hook formats staged files automatically — see [CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 ---
 

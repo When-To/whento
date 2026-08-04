@@ -1,7 +1,10 @@
-.PHONY: dev dev-fullstack dev-backend dev-frontend dev-db dev-app test build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-build-multiarch docker-test-build docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-clean docs-serve docs-validate build-licensegen keys help format format-check
+.PHONY: dev dev-fullstack dev-backend dev-frontend dev-db dev-app test build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-build-multiarch docker-test-build docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-clean docs-serve docs-validate build-licensegen keys help hooks format format-go format-frontend format-check format-check-go format-check-frontend
 
 # BUILD_TYPE can be 'cloud' or 'selfhosted' (default: selfhosted)
 BUILD_TYPE ?= selfhosted
+
+# Pinned dev tools (keep in sync with .devcontainer/ and .githooks/pre-commit)
+GOIMPORTS_VERSION := v0.48.0
 
 # Load environment variables from .env file if it exists
 -include .env
@@ -41,8 +44,11 @@ help:
 	@echo "  make swagger-clean    - Remove generated Swagger files"
 	@echo "  make docs-serve       - Info on accessing embedded Swagger UI"
 	@echo "  make build-licensegen - Build license generator tool (for e-commerce)"
-	@echo "  make format           - Format all Go files with goimports"
-	@echo "  make format-check     - Check Go file formatting without modifying"
+	@echo "  make hooks            - Enable the repo git hooks (format on commit)"
+	@echo "  make format           - Format Go (goimports) + frontend (prettier) files"
+	@echo "  make format-go        - Format Go files only"
+	@echo "  make format-frontend  - Format frontend files only"
+	@echo "  make format-check     - Check formatting without modifying"
 
 # Development
 ensure-dist-placeholder:
@@ -117,25 +123,45 @@ clean:
 	rm -rf bin/
 	docker compose -f docker-compose.dev.yml down -v
 
+# Git hooks
+# core.hooksPath is local config, so every clone must run this once.
+hooks:
+	@git config core.hooksPath .githooks
+	@chmod +x .githooks/pre-commit
+	@echo "✓ Git hooks enabled (.githooks) - staged files are formatted on commit"
+
 # Formatting
-format:
+format: format-go format-frontend
+
+format-check: format-check-go format-check-frontend
+
+format-go:
 	@echo "Formatting Go files with goimports..."
-	@which goimports > /dev/null || (echo "Error: goimports not installed. Install with: go install golang.org/x/tools/cmd/goimports@latest" && exit 1)
-	@goimports -w -local github.com/whento $$(find . -type f -name '*.go' -not -path './.go-cache/*' -not -path './vendor/*')
+	@which goimports > /dev/null || (echo "Error: goimports not installed. Install with: go install golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION)" && exit 1)
+	@goimports -w -local github.com/whento $$(find . -type f -name '*.go' -not -path './.go-cache/*' -not -path './vendor/*' -not -path './.claude/*')
 	@echo "✓ All Go files formatted"
 
-format-check:
+format-check-go:
 	@echo "Checking Go file formatting..."
-	@which goimports > /dev/null || (echo "Error: goimports not installed. Install with: go install golang.org/x/tools/cmd/goimports@latest" && exit 1)
-	@UNFORMATTED=$$(goimports -l -local github.com/whento $$(find . -type f -name '*.go' -not -path './.go-cache/*' -not -path './vendor/*')); \
+	@which goimports > /dev/null || (echo "Error: goimports not installed. Install with: go install golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION)" && exit 1)
+	@UNFORMATTED=$$(goimports -l -local github.com/whento $$(find . -type f -name '*.go' -not -path './.go-cache/*' -not -path './vendor/*' -not -path './.claude/*')); \
 	if [ -n "$$UNFORMATTED" ]; then \
 		echo "The following files need formatting:"; \
 		echo "$$UNFORMATTED"; \
 		echo ""; \
-		echo "Run 'make format' to fix formatting"; \
+		echo "Run 'make format-go' to fix formatting"; \
 		exit 1; \
 	fi
 	@echo "✓ All Go files are properly formatted"
+
+format-frontend:
+	@echo "Formatting frontend files with prettier..."
+	@cd frontend && npm run format
+	@echo "✓ All frontend files formatted"
+
+format-check-frontend:
+	@echo "Checking frontend file formatting..."
+	@cd frontend && npm run format:check
 
 # Go workspace sync (fixes "is not in your go.mod" errors in VS Code)
 sync:

@@ -12,7 +12,8 @@ RUN mkdir -p /home/vscode/go/pkg /home/vscode/go/bin /home/vscode/go/src \
 USER vscode
 RUN go install github.com/air-verse/air@v1.67.1 \
     && go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 \
-    && go install github.com/swaggo/swag/cmd/swag@v1.16.6
+    && go install github.com/swaggo/swag/cmd/swag@v1.16.6 \
+    && go install golang.org/x/tools/cmd/goimports@v0.48.0
 
 # Install golang-migrate with PostgreSQL support (requires tags)
 USER root

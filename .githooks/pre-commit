@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+#
+# Formats staged files and re-stages them, so commits always land formatted.
+# Activate with: make hooks   (sets core.hooksPath to .githooks)
+# Bypass with:   git commit --no-verify
+#
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Hooks triggered from an IDE don't inherit the interactive shell PATH.
+if command -v go > /dev/null 2>&1; then
+    export PATH="$(go env GOPATH)/bin:$PATH"
+fi
+
+GOIMPORTS_VERSION="v0.48.0"
+PRETTIER_BIN="frontend/node_modules/.bin/prettier"
+
+# Files staged for this commit.
+mapfile -t STAGED < <(git diff --cached --name-only --diff-filter=ACMR)
+[ ${#STAGED[@]} -eq 0 ] && exit 0
+
+# Files with unstaged changes on top of what's staged (git add -p). Formatting
+# those would re-stage work that was deliberately left out of this commit.
+mapfile -t UNSTAGED < <(git diff --name-only --diff-filter=ACMR)
+
+is_partially_staged() {
+    local file="$1" other
+    for other in ${UNSTAGED[@]+"${UNSTAGED[@]}"}; do
+        [ "$other" = "$file" ] && return 0
+    done
+    return 1
+}
+
+GO_FILES=()
+FRONTEND_FILES=()
+SKIPPED=()
+
+for file in "${STAGED[@]}"; do
+    # Deleted in the worktree between staging and committing.
+    [ -f "$file" ] || continue
+
+    case "$file" in
+        .go-cache/*|vendor/*|frontend/node_modules/*|frontend/dist/*) continue ;;
+    esac
+
+    case "$file" in
+        *.go)                                          kind="go" ;;
+        frontend/*.vue|frontend/*.ts|frontend/*.js|frontend/*.css|frontend/*.json) kind="frontend" ;;
+        *) continue ;;
+    esac
+
+    if is_partially_staged "$file"; then
+        SKIPPED+=("$file")
+        continue
+    fi
+
+    if [ "$kind" = "go" ]; then
+        GO_FILES+=("$file")
+    else
+        FRONTEND_FILES+=("$file")
+    fi
+done
+
+FORMATTED=()
+
+if [ ${#GO_FILES[@]} -gt 0 ]; then
+    if ! command -v goimports > /dev/null 2>&1; then
+        echo "✗ goimports not installed."
+        echo "  Install with: go install golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION}"
+        exit 1
+    fi
+    goimports -w -local github.com/whento "${GO_FILES[@]}"
+    FORMATTED+=("${GO_FILES[@]}")
+fi
+
+if [ ${#FRONTEND_FILES[@]} -gt 0 ]; then
+    if [ ! -x "$PRETTIER_BIN" ]; then
+        echo "✗ prettier not installed."
+        echo "  Install with: cd frontend && npm install"
+        exit 1
+    fi
+    # prettier resolves .prettierrc.json relative to each file, but run from
+    # frontend/ so paths match the ones used by 'npm run format'.
+    (cd frontend && "./node_modules/.bin/prettier" --write --log-level warn \
+        "${FRONTEND_FILES[@]#frontend/}")
+    FORMATTED+=("${FRONTEND_FILES[@]}")
+fi
+
+if [ ${#FORMATTED[@]} -gt 0 ]; then
+    git add -- "${FORMATTED[@]}"
+    echo "✓ Formatted ${#FORMATTED[@]} staged file(s)"
+fi
+
+if [ ${#SKIPPED[@]} -gt 0 ]; then
+    echo "⚠ Skipped (partially staged, format manually):"
+    printf '    %s\n' "${SKIPPED[@]}"
+fi
+
+exit 0
