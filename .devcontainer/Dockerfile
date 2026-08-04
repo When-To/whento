@@ -10,15 +10,15 @@ RUN mkdir -p /home/vscode/go/pkg /home/vscode/go/bin /home/vscode/go/src \
 
 # Install Go tools as vscode user to avoid permission issues
 USER vscode
-RUN go install github.com/air-verse/air@latest \
-    && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest \
-    && go install github.com/swaggo/swag/cmd/swag@latest
+RUN go install github.com/air-verse/air@v1.67.1 \
+    && go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 \
+    && go install github.com/swaggo/swag/cmd/swag@v1.16.6
 
 # Install golang-migrate with PostgreSQL support (requires tags)
 USER root
 RUN apt-get update && apt-get install -y gcc musl-dev && rm -rf /var/lib/apt/lists/*
 USER vscode
-RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
 
 # Switch back to root to install system tools
 USER root
