@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: BSL-1.1
 
 # Frontend build stage
-FROM node:20-alpine AS frontend-builder
+FROM node:24-alpine AS frontend-builder
 
 WORKDIR /frontend
 
