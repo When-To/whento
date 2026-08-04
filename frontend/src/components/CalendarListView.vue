@@ -39,7 +39,9 @@
           @change="handleViewStyleSelect"
         >
           <option value="classic">{{ t('calendar.viewClassic') }}</option>
-          <option v-if="props.displayMode === 'month'" value="compact">{{ t('calendar.viewCompact') }}</option>
+          <option v-if="props.displayMode === 'month'" value="compact">
+            {{ t('calendar.viewCompact') }}
+          </option>
           <option value="list">{{ t('calendar.listView') }}</option>
         </select>
       </div>
@@ -64,7 +66,9 @@
       v-if="actionableDays.length === 0"
       class="py-12 text-center text-gray-500 dark:text-gray-400"
     >
-      <p class="text-sm">{{ t('calendar.noActionableDays', 'No available days in this period') }}</p>
+      <p class="text-sm">
+        {{ t('calendar.noActionableDays', 'No available days in this period') }}
+      </p>
     </div>
 
     <!-- Day cards list -->
@@ -83,8 +87,7 @@
                 ? 'border-blue-200 bg-blue-50 hover:border-blue-300 hover:shadow-sm dark:border-blue-700 dark:bg-blue-900/20 dark:hover:border-blue-600'
                 : 'border-gray-200 bg-white hover:border-primary-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-primary-600',
           day.isToday && 'ring-2 ring-primary-500 ring-offset-1',
-          day.isHighlighted &&
-            'ring-2 ring-purple-500 bg-purple-100 dark:bg-purple-900/40',
+          day.isHighlighted && 'ring-2 ring-purple-500 bg-purple-100 dark:bg-purple-900/40',
         ]"
         @pointerdown="onRowPointerDown(day, $event)"
         @pointermove="onRowPointerMove($event)"
@@ -191,10 +194,7 @@
     </div>
 
     <!-- Legend -->
-    <div
-      v-if="actionableDays.length > 0"
-      class="mt-4 flex flex-wrap gap-4 text-xs"
-    >
+    <div v-if="actionableDays.length > 0" class="mt-4 flex flex-wrap gap-4 text-xs">
       <div class="flex items-center gap-1">
         <div class="h-3 w-3 rounded border-2 border-primary-500" />
         <span class="text-gray-600 dark:text-gray-400">{{ t('calendar.today', 'Today') }}</span>
@@ -269,11 +269,7 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useDateValidation, clearHolidaysCache } from '@/composables/useDateValidation';
-import {
-  formatDateISO,
-  formatWeekday,
-  formatFullDate,
-} from '@/utils/dateFormatting';
+import { formatDateISO, formatWeekday, formatFullDate } from '@/utils/dateFormatting';
 import type { Availability, RecurrenceWithExceptions } from '@/types';
 import ParticipantDetailsPopup from './ParticipantDetailsPopup.vue';
 

@@ -70,7 +70,10 @@ export const calendarsApi = {
   },
 
   // Anonymous participant registration (no auth required)
-  async addAnonymousParticipant(token: string, data: CreateParticipantRequest): Promise<Participant> {
+  async addAnonymousParticipant(
+    token: string,
+    data: CreateParticipantRequest
+  ): Promise<Participant> {
     return apiClient.post<Participant>(`/calendars/public/${token}/participants`, data);
   },
 

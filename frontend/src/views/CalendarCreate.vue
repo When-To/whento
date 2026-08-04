@@ -175,7 +175,11 @@
                 v-model="form.lock_participants"
                 type="checkbox"
                 class="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
-                @change="() => { if (form.lock_participants) form.allow_anonymous_participants = false }"
+                @change="
+                  () => {
+                    if (form.lock_participants) form.allow_anonymous_participants = false;
+                  }
+                "
               />
               <label
                 for="lock-participants-create"
@@ -200,7 +204,11 @@
                 v-model="form.allow_anonymous_participants"
                 type="checkbox"
                 class="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
-                @change="() => { if (form.allow_anonymous_participants) form.lock_participants = false }"
+                @change="
+                  () => {
+                    if (form.allow_anonymous_participants) form.lock_participants = false;
+                  }
+                "
               />
               <label
                 for="allow-anonymous-participants-create"
@@ -234,7 +242,9 @@
               v-model.number="form.threshold"
               type="number"
               min="1"
-              :max="form.allow_anonymous_participants ? undefined : (participants.length || undefined)"
+              :max="
+                form.allow_anonymous_participants ? undefined : participants.length || undefined
+              "
               class="input"
               :class="{ 'border-danger-500': errors.threshold }"
               required
@@ -733,7 +743,11 @@ function validateForm(): boolean {
     isValid = false;
   }
 
-  if (!form.allow_anonymous_participants && participants.value.length > 0 && form.threshold > participants.value.length) {
+  if (
+    !form.allow_anonymous_participants &&
+    participants.value.length > 0 &&
+    form.threshold > participants.value.length
+  ) {
     errors.threshold = t('calendar.thresholdMaxError');
     isValid = false;
   }

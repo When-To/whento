@@ -46,7 +46,10 @@
             <p class="mt-2 text-base md:text-lg text-gray-600 dark:text-gray-400">
               {{ participant.name }}
             </p>
-            <p v-if="calendar.description" class="mt-2 text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+            <p
+              v-if="calendar.description"
+              class="mt-2 text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap"
+            >
               {{ calendar.description }}
             </p>
           </div>
@@ -301,7 +304,6 @@
                     </option>
                   </select>
                 </div>
-
               </div>
             </div>
 
@@ -604,7 +606,10 @@
                     : 'bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200'
                 "
               >
-                {{ stat.count }} {{ stat.count > 1 ? t('availability.availabilities') : t('availability.availability') }}
+                {{ stat.count }}
+                {{
+                  stat.count > 1 ? t('availability.availabilities') : t('availability.availability')
+                }}
               </span>
             </button>
           </div>
@@ -1382,15 +1387,13 @@ const availabilities = computed((): Availability[] => {
   if (!availabilityData.value) return [];
 
   const participantInfo = availabilityData.value.participant;
-  return availabilityData.value.availabilities.map(
-    (item): Availability => ({
-      ...item,
-      participant_id: participantInfo.id,
-      participant_name: participantInfo.name,
-      participant_email: participantInfo.email,
-      participant_email_verified: participantInfo.email_verified,
-    })
-  );
+  return availabilityData.value.availabilities.map((item): Availability => ({
+    ...item,
+    participant_id: participantInfo.id,
+    participant_name: participantInfo.name,
+    participant_email: participantInfo.email,
+    participant_email_verified: participantInfo.email_verified,
+  }));
 });
 
 // Calendar date range as formatted strings (shared across grid components)

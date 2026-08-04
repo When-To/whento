@@ -31,9 +31,9 @@ type UnifiedFeedConfigRepository interface {
 
 // UnifiedFeedConfig represents the configuration returned to the frontend
 type UnifiedFeedConfig struct {
-	Configured          bool      `json:"configured"`
-	ICSToken            string    `json:"ics_token,omitempty"`
-	IncludedCalendarIDs []string  `json:"included_calendar_ids"`
+	Configured          bool     `json:"configured"`
+	ICSToken            string   `json:"ics_token,omitempty"`
+	IncludedCalendarIDs []string `json:"included_calendar_ids"`
 }
 
 type UnifiedFeedConfigService struct {

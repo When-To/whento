@@ -27,7 +27,9 @@
       </div>
 
       <div class="flex flex-col items-center gap-1">
-        <h3 class="text-base md:text-lg font-semibold text-gray-900 dark:text-white text-center px-2">
+        <h3
+          class="text-base md:text-lg font-semibold text-gray-900 dark:text-white text-center px-2"
+        >
           {{ weekRangeText }}
         </h3>
         <select
@@ -570,11 +572,7 @@ import { availabilitiesApi } from '@/api/availabilities';
 import type { Availability, DateAvailabilitySummary } from '@/types';
 import TimeSelect from '@/components/TimeSelect.vue';
 import { useDateValidation, clearHolidaysCache } from '@/composables/useDateValidation';
-import {
-  formatDateISO,
-  formatWeekday,
-  formatDayMonthShort,
-} from '@/utils/dateFormatting';
+import { formatDateISO, formatWeekday, formatDayMonthShort } from '@/utils/dateFormatting';
 
 const { t, locale } = useI18n();
 const toastStore = useToastStore();

@@ -45,7 +45,7 @@ func (h *AvailabilityHandler) CreateAvailability(w http.ResponseWriter, r *http.
 	token := chi.URLParam(r, "token")
 	participantID := chi.URLParam(r, "pid")
 
-var req models.CreateAvailabilityRequest
+	var req models.CreateAvailabilityRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
 		return
@@ -87,7 +87,7 @@ func (h *AvailabilityHandler) GetParticipantAvailabilities(w http.ResponseWriter
 	token := chi.URLParam(r, "token")
 	participantID := chi.URLParam(r, "pid")
 
-// Get optional date range query parameters
+	// Get optional date range query parameters
 	startDate := r.URL.Query().Get("start")
 	endDate := r.URL.Query().Get("end")
 
@@ -120,7 +120,7 @@ func (h *AvailabilityHandler) UpdateAvailability(w http.ResponseWriter, r *http.
 	participantID := chi.URLParam(r, "pid")
 	date := chi.URLParam(r, "date")
 
-var req models.UpdateAvailabilityRequest
+	var req models.UpdateAvailabilityRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
 		return
@@ -161,7 +161,7 @@ func (h *AvailabilityHandler) DeleteAvailability(w http.ResponseWriter, r *http.
 	participantID := chi.URLParam(r, "pid")
 	date := chi.URLParam(r, "date")
 
-err := h.availabilityService.DeleteAvailability(r.Context(), token, participantID, date)
+	err := h.availabilityService.DeleteAvailability(r.Context(), token, participantID, date)
 	if err != nil {
 		handleAvailabilityError(w, r, err, "Failed to delete availability")
 		return

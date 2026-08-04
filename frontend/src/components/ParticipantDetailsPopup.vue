@@ -85,7 +85,9 @@
 
                 <!-- Availability edit form -->
                 <div
-                  v-if="participant.participant_name === props.currentParticipantName && editingNote"
+                  v-if="
+                    participant.participant_name === props.currentParticipantName && editingNote
+                  "
                   class="mt-2"
                 >
                   <!-- Time Range -->
@@ -118,9 +120,7 @@
 
                   <!-- Note -->
                   <div class="mb-2">
-                    <label
-                      class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-                    >
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                       {{ t('availability.note', 'Note') }}
                     </label>
                     <textarea
@@ -133,11 +133,7 @@
 
                   <!-- Action buttons -->
                   <div class="flex gap-2">
-                    <button
-                      :disabled="savingNote"
-                      class="btn btn-primary btn-sm"
-                      @click="saveNote"
-                    >
+                    <button :disabled="savingNote" class="btn btn-primary btn-sm" @click="saveNote">
                       <svg
                         v-if="savingNote"
                         class="mr-1 h-3 w-3 animate-spin"
@@ -160,11 +156,7 @@
                       </svg>
                       {{ t('common.save', 'Save') }}
                     </button>
-                    <button
-                      :disabled="savingNote"
-                      class="btn btn-ghost btn-sm"
-                      @click="cancelEdit"
-                    >
+                    <button :disabled="savingNote" class="btn btn-ghost btn-sm" @click="cancelEdit">
                       {{ t('common.cancel', 'Cancel') }}
                     </button>
                   </div>
@@ -185,9 +177,7 @@
 
               <!-- Edit button for current participant -->
               <button
-                v-if="
-                  participant.participant_name === props.currentParticipantName && !editingNote
-                "
+                v-if="participant.participant_name === props.currentParticipantName && !editingNote"
                 class="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 :title="t('common.edit', 'Edit')"
                 @click="
@@ -349,16 +339,11 @@ async function saveNote() {
   savingNote.value = true;
 
   try {
-    await availabilitiesApi.update(
-      props.calendarToken,
-      props.currentParticipantId,
-      props.date,
-      {
-        note: editedNote.value || undefined,
-        start_time: editedStartTime.value || undefined,
-        end_time: editedEndTime.value || undefined,
-      }
-    );
+    await availabilitiesApi.update(props.calendarToken, props.currentParticipantId, props.date, {
+      note: editedNote.value || undefined,
+      start_time: editedStartTime.value || undefined,
+      end_time: editedEndTime.value || undefined,
+    });
 
     await loadParticipantDetails();
 
