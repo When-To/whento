@@ -10,22 +10,22 @@ export PATH="/home/vscode/go/bin:$PATH"
 echo "🔧 Checking Go tools..."
 if ! command -v migrate &> /dev/null; then
     echo "  → Installing migrate..."
-    go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+    go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
 fi
 
 if ! command -v air &> /dev/null; then
     echo "  → Installing air..."
-    go install github.com/air-verse/air@latest
+    go install github.com/air-verse/air@v1.67.1
 fi
 
 if ! command -v golangci-lint &> /dev/null; then
     echo "  → Installing golangci-lint..."
-    go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 fi
 
 if ! command -v swag &> /dev/null; then
     echo "  → Installing swag..."
-    go install github.com/swaggo/swag/cmd/swag@latest
+    go install github.com/swaggo/swag/cmd/swag@v1.16.6
 fi
 
 # Initialize Go workspace if necessary
