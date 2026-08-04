@@ -28,6 +28,11 @@ if ! command -v swag &> /dev/null; then
     go install github.com/swaggo/swag/cmd/swag@v1.16.6
 fi
 
+if ! command -v goimports &> /dev/null; then
+    echo "  → Installing goimports..."
+    go install golang.org/x/tools/cmd/goimports@v0.48.0
+fi
+
 # Initialize Go workspace if necessary
 cd /workspace
 if [ ! -f "go.work" ]; then
@@ -50,6 +55,10 @@ if [ -f "frontend/package.json" ]; then
     echo "📦 Installing frontend dependencies..."
     (cd frontend && npm install)
 fi
+
+# Enable the repo git hooks (formats staged files on commit)
+echo "🪝 Enabling git hooks..."
+make hooks
 
 # Run migrations
 echo "🗄️ Running migrations..."
@@ -80,6 +89,6 @@ echo "📋 Useful commands:"
 echo "  • make dev          - Run all services in watch mode"
 echo "  • make test         - Run tests"
 echo "  • make migrate-up   - Apply migrations"
-echo "  • make lint         - Check code"
+echo "  • make format       - Format Go + frontend code"
 echo ""
 echo "Happy coding! 🎉"

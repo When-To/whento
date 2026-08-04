@@ -20,18 +20,34 @@ Thank you for your interest in contributing to WhenTo!
 
 1. **Fork** the repository
 2. **Create a branch** from `main`: `git checkout -b feature/your-feature`
-3. **Make your changes** following the code style guidelines
-4. **Test your changes**: `make test`
-5. **Commit** with clear messages
-6. **Push** to your fork
-7. **Open a Pull Request** against `main`
+3. **Enable the git hooks** (once per clone): `make hooks`
+4. **Make your changes** following the code style guidelines
+5. **Test your changes**: `make test`
+6. **Commit** with clear messages
+7. **Push** to your fork
+8. **Open a Pull Request** against `main`
+
+### Git Hooks
+
+Run `make hooks` once after cloning (done automatically in the devcontainer). It
+points `core.hooksPath` at the versioned `.githooks/` directory.
+
+The `pre-commit` hook formats the files staged for the commit and re-stages them,
+so commits always land formatted:
+
+- Go files → `goimports -w -local github.com/whento`
+- Frontend files → `prettier --write`
+
+Files that are only partially staged (`git add -p`) are skipped with a warning,
+to avoid pulling unstaged work into the commit. Use `git commit --no-verify` to
+bypass the hook.
 
 ### Code Style
 
 #### Go
 
 - Follow standard Go conventions
-- Use `gofmt` for formatting
+- Format with `make format-go` (goimports with `-local github.com/whento`), not plain `gofmt`
 - Add tests for new functionality
 - Use meaningful variable names
 
@@ -39,7 +55,9 @@ Thank you for your interest in contributing to WhenTo!
 
 - Follow existing component patterns
 - Use TypeScript strict mode
-- Run `npm run lint` before committing
+- Format with `make format-frontend` (prettier) and run `npm run lint` before committing
+
+`make format` runs both; `make format-check` verifies without modifying.
 
 ### Commit Messages
 
