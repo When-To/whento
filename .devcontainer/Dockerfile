@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/go:1.25-trixie
+FROM mcr.microsoft.com/devcontainers/go:1.26-trixie
 
 # Configure Go to use /home/vscode/go
 ENV GOPATH=/home/vscode/go
