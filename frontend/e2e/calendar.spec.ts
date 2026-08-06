@@ -198,18 +198,13 @@ test.describe('keyboard', () => {
 });
 
 test.describe('week grid', () => {
-  test('paints coverage bands weighted by participant count', async ({ page }) => {
+  test('leaves coverage spans unpainted, so only what matters is coloured', async ({ page }) => {
     await gotoPreview(page);
-    const bands = page.locator('.cal-band[data-kind="coverage"]');
-    await expect(bands.first()).toBeVisible();
-
-    const strengths = await bands.evaluateAll(nodes =>
-      nodes.map(n => Number(getComputedStyle(n).getPropertyValue('--cal-band-strength')))
-    );
-    expect(Math.min(...strengths)).toBeGreaterThan(0.3);
-    expect(Math.max(...strengths)).toBeLessThanOrEqual(1);
-    // More than one weight, otherwise the count is not being encoded at all.
-    expect(new Set(strengths).size).toBeGreaterThan(1);
+    const fill = await page
+      .locator('.cal-band[data-kind="coverage"]')
+      .first()
+      .evaluate(el => getComputedStyle(el).backgroundColor);
+    expect(fill).toBe('rgba(0, 0, 0, 0)');
   });
 
   test('outlines the range where the threshold is met', async ({ page }) => {
@@ -218,26 +213,19 @@ test.describe('week grid', () => {
     await expect(page.locator('.cal-band[data-kind="threshold"]')).not.toHaveCount(0);
   });
 
-  test('separates "mine" from "everyone" by hue, not by shade', async ({ page }) => {
+  test('makes a met threshold visible even over the blue fill', async ({ page }) => {
     await gotoPreview(page);
-    // Two shades of the same blue were indistinguishable. The slot fill is the brand
-    // colour and means "I answered"; coverage is neutral and means "how many".
-    const own = await page
-      .locator('.cal-slot[data-own]')
-      .first()
-      .evaluate(el => getComputedStyle(el).backgroundColor);
-    const coverage = await page
-      .locator('.cal-band[data-kind="coverage"]')
-      .first()
-      .evaluate(el => getComputedStyle(el).backgroundColor);
-    expect(own).not.toBe(coverage);
-
-    const channels = (value: string) => value.match(/[\d.]+/g)!.map(Number);
-    const [ownR, ownG, ownB] = channels(own);
-    const [covR, covG, covB] = channels(coverage);
-    // The coverage wash is near-neutral; the own fill is decidedly not.
-    expect(Math.max(ownR, ownG, ownB) - Math.min(ownR, ownG, ownB)).toBeGreaterThan(60);
-    expect(Math.max(covR, covG, covB) - Math.min(covR, covG, covB)).toBeLessThan(60);
+    const band = page.locator('.cal-band[data-kind="threshold"]').first();
+    const [width, colour, background] = await band.evaluate(el => {
+      const style = getComputedStyle(el);
+      return [parseFloat(style.borderTopWidth), style.borderTopColor, style.backgroundColor];
+    });
+    // A hairline ring disappeared against the fill underneath it.
+    expect(width).toBeGreaterThanOrEqual(3);
+    const [r, g, b] = colour.match(/[\d.]+/g)!.map(Number);
+    expect(g).toBeGreaterThan(r + 40);
+    expect(g).toBeGreaterThan(b + 40);
+    expect(background).not.toBe('rgba(0, 0, 0, 0)');
   });
 
   test('shows how many of the threshold each span reaches', async ({ page }) => {

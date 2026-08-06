@@ -307,7 +307,7 @@ function shiftWeek(days: number) {
               :key="`${band.kind}-${band.startMin}-${bandIndex}`"
               class="cal-band"
               :data-kind="band.kind"
-              :style="{ top: band.top, height: band.height, '--cal-band-strength': band.strength }"
+              :style="{ top: band.top, height: band.height }"
             >
               <template v-if="band.kind !== 'threshold' && band.count > 0">
                 <span class="cal-band-count">{{ band.count }}/{{ threshold }}</span>

@@ -36,12 +36,11 @@
   --cal-own-ink: #ffffff;
   --cal-recurring: var(--color-secondary-600);
   --cal-recurring-ink: #ffffff;
-  --cal-threshold: #15803d; /* green-700 */
+  --cal-threshold: #16a34a; /* green-600 */
+  --cal-threshold-wash: rgb(22 163 74 / 0.18);
 
   --cal-accent-own: var(--color-primary-600);
-  --cal-band-coverage: #64748b; /* slate-500 — neutral, so blue stays "mine" */
   --cal-hour-line: var(--color-gray-300, #d1d5db);
-  --cal-band-threshold: #16a34a; /* green-600 — outline where the threshold is met */
   --cal-accent-recurring: var(--color-secondary-500);
   --cal-accent-holiday: #ea580c; /* orange-600 */
   --cal-accent-eve: var(--color-secondary-400);
@@ -55,12 +54,11 @@
   --cal-own-ink: #08131c;
   --cal-recurring: var(--color-secondary-500);
   --cal-recurring-ink: #150525;
-  --cal-threshold: #22c55e; /* green-500 */
+  --cal-threshold: #4ade80; /* green-400 — has to stay visible over the blue fill */
+  --cal-threshold-wash: rgb(74 222 128 / 0.22);
 
   --cal-accent-own: var(--color-primary-400);
-  --cal-band-coverage: #94a3b8; /* slate-400 */
   --cal-hour-line: var(--color-gray-600, #4b5563);
-  --cal-band-threshold: #22c55e; /* green-500 */
   --cal-accent-recurring: var(--color-secondary-400);
   --cal-accent-holiday: #fb923c; /* orange-400 */
   --cal-accent-eve: var(--color-secondary-300);
@@ -167,10 +165,13 @@
     border-color: var(--cal-recurring);
   }
 
-  /* Enough participants overall. An outline, so it composes with the fill above
-     instead of competing with it. */
+  /*
+   * Enough participants overall. A 2px inset ring was almost invisible against the
+   * blue fill it sits on; this is a thicker ring separated from the fill by a gap in
+   * the surface colour, so it reads at a glance on filled and empty cells alike.
+   */
   .cal-cell[data-threshold] {
-    box-shadow: inset 0 0 0 2px var(--cal-threshold);
+    @apply outline-3 -outline-offset-1 outline-[var(--cal-threshold)];
   }
 
   /* Rings, in ascending precedence: a later rule wins, and in practice only one
@@ -433,22 +434,21 @@
   }
 
   /*
-   * Collective coverage is deliberately neutral. Blue belongs to "I answered here" and
-   * green to "enough people"; painting coverage in a third blue made the participant's
-   * own slots indistinguishable from everyone else's. Weight still follows the count,
-   * so the column reads as a gradient without competing for hue.
+   * Coverage spans carry no fill. A wash behind them — of any colour — competed with
+   * the two things worth seeing: the slots this participant answered, and the spans
+   * where enough people are free. Those two paint; everything else is a number.
    */
   .cal-band[data-kind='coverage'] {
-    background-color: color-mix(
-      in oklab,
-      var(--cal-band-coverage) calc(var(--cal-band-strength, 1) * 100%),
-      transparent
-    );
+    @apply bg-transparent;
   }
 
+  /* The one thing a participant is looking for, so it reads as a zone rather than a
+     hairline: a tinted block with a thick border that survives sitting on top of the
+     solid blue fill underneath. */
   .cal-band[data-kind='threshold'] {
-    @apply rounded border-2 bg-transparent;
-    border-color: var(--cal-band-threshold);
+    @apply rounded;
+    border: 3px solid var(--cal-threshold);
+    background-color: var(--cal-threshold-wash);
   }
 
   /* Count and gauge ride together at the top of the band. Pinning the gauge to the
@@ -466,7 +466,7 @@
 
   .cal-band-gauge-fill {
     @apply block h-full rounded-full;
-    background-color: var(--cal-band-threshold);
+    background-color: var(--cal-threshold);
   }
 
   /* This participant's own answer. Solid, and beneath the translucent coverage bands
@@ -496,7 +496,7 @@
   }
 
   .cal-row[data-threshold] {
-    box-shadow: inset 0 0 0 2px var(--cal-threshold);
+    @apply outline-3 -outline-offset-1 outline-[var(--cal-threshold)];
   }
 
   .cal-row[data-today] {

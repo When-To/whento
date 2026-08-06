@@ -165,11 +165,12 @@ export interface GridGeometry {
 }
 
 /**
- * One painted band in a day column, positioned as percentages of the column.
+ * One band in a day column, positioned as percentages of the column.
  *
- * `coverage` is how many people are free, whoever they are. It deliberately does not
- * distinguish the current participant: that is the slot fill's job, and encoding both
- * as shades of the same blue made the two indistinguishable.
+ * `coverage` spans carry no fill at all — only their count and gauge. A wash behind
+ * them competed with the two things worth seeing, which are the slots this participant
+ * answered and the spans where enough people are free. `threshold` is the latter, and
+ * is the only band that paints.
  */
 export interface Band {
   readonly kind: 'coverage' | 'threshold';
@@ -177,31 +178,8 @@ export interface Band {
   /** Pre-stringified so the template does no arithmetic. */
   readonly top: string;
   readonly height: string;
-  /**
-   * How strongly to paint the band, 0..1, from the participant count relative to the
-   * threshold. Without it every span is the same flat colour and the reader has to
-   * read the numbers to see where the coverage actually is.
-   */
-  readonly strength: number;
   readonly startMin: number;
   readonly endMin: number;
-}
-
-/** Faintest a band may be, so a single participant is still clearly visible. */
-const MIN_BAND_STRENGTH = 0.25;
-
-/**
- * Strongest a band may be. Bands are drawn *over* the participant's own slots, so they
- * have to stay translucent: at full opacity a busy day would hide the one thing the
- * user is looking for, which is where they themselves answered.
- */
-const MAX_BAND_STRENGTH = 0.6;
-
-function strengthFor(count: number, threshold: number): number {
-  if (count <= 0) return MAX_BAND_STRENGTH;
-  if (threshold <= 0) return MAX_BAND_STRENGTH;
-  const ratio = Math.min(count / threshold, 1);
-  return MIN_BAND_STRENGTH + (MAX_BAND_STRENGTH - MIN_BAND_STRENGTH) * ratio;
 }
 
 function pct(value: number): string {
@@ -220,8 +198,7 @@ function pct(value: number): string {
 export function buildDayBands(
   coverage: readonly CoverageSegment[],
   thresholds: readonly Interval[],
-  geometry: GridGeometry,
-  threshold = 1
+  geometry: GridGeometry
 ): Band[] {
   const { firstSlotMin, lastSlotEndMin } = geometry;
   const span = lastSlotEndMin - firstSlotMin;
@@ -238,7 +215,6 @@ export function buildDayBands(
       count,
       top: pct((clippedStart - firstSlotMin) / span),
       height: pct((clippedEnd - clippedStart) / span),
-      strength: kind === 'threshold' ? 1 : strengthFor(count, threshold),
       startMin: clippedStart,
       endMin: clippedEnd,
     });

@@ -158,8 +158,7 @@ export function buildWeekModel(
       bands: buildDayBands(
         options.coverage?.get(day.date) ?? NO_SEGMENTS,
         options.thresholds?.get(day.date) ?? NO_INTERVALS,
-        geometry,
-        deps.rules.threshold || 1
+        geometry
       ),
     });
 
