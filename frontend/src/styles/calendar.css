@@ -14,25 +14,40 @@
 /* --------------------------------------------------------------------------
  * Density ramp
  *
- * An ordinal ramp on a single hue (the success scale), encoding progress toward the
- * calendar's threshold. Validated against the four ordinal checks — monotone
- * lightness, adjacent dL >= 0.06, near-surface end >= 2:1, single hue — in both
- * modes. The ramp anchors to the surface, so it runs light-to-dark on a white cell
- * and dark-to-light on a gray-800 one.
+ * An ordinal ramp encoding progress toward the calendar's threshold: amber for "not
+ * enough yet", green for "this date works". The hue carries the semantic, which makes
+ * a month scannable at a glance in a way four shades of one colour is not.
  *
- * Hue alone never carries the reading: the gauge width, the "n/threshold" count and
- * the threshold outline all repeat it, and the ramp is monotone in lightness so the
- * order survives any colour vision deficiency.
+ * Validated per mode against the ordinal checks. Monotone lightness, adjacent
+ * dL >= 0.06 and near-surface contrast >= 2:1 all pass. The "single hue" check fails by
+ * construction, and that is the deliberate trade: that rule exists so lightness carries
+ * the order, and lightness monotonicity is verified separately and holds — so hue adds
+ * a channel here rather than replacing one.
  *
- * The ink flips at the point where the fill gets too dark (or too light) to hold the
- * default text colour; every pairing below clears 4.5:1.
+ * The cost of a warm-to-cool ramp is that amber and green are the classic
+ * red-green-deficient collision. It is affordable only because hue is never the sole
+ * encoding: the gauge width and the "n/threshold" count repeat the same value, and the
+ * monotone lightness keeps the order legible without any colour perception at all.
+ *
+ * The ramp anchors to the surface, so it darkens toward green on a white cell and
+ * brightens toward green on a gray-800 one. Dark mode is selected, not flipped.
+ *
+ * Values are the validated hexes, not `var()` references: Tailwind only emits theme
+ * variables that its own utilities pull in, and a raw `var(--color-lime-600)` here
+ * would resolve to nothing.
+ *
+ * The ink flips where the fill gets too dark (or too light) to hold the default text
+ * colour; every pairing below clears 4.5:1.
  * ----------------------------------------------------------------------- */
 
 :root {
-  --cal-density-1: var(--color-success-500); /* 7.79:1 with gray-900 */
-  --cal-density-2: var(--color-success-600); /* 5.38:1 with gray-900 */
-  --cal-density-3: var(--color-success-700); /* 5.02:1 with white     */
-  --cal-density-4: var(--color-success-800); /* 7.13:1 with white     */
+  /* Deliberately desaturated rather than a full amber: warm colours advance, so a
+     saturated first step made the emptiest days the loudest thing on a light month
+     and pushed the dates that actually work into the background. */
+  --cal-density-1: #d4a843; /* muted sand · 2.21:1 on white · 8.01:1 with gray-900 */
+  --cal-density-2: #65a30d; /* lime-600   · 3.09:1 on white · 5.74:1 with gray-900 */
+  --cal-density-3: #15803d; /* green-700  · 5.02:1 on white · 4.56:1 with white    */
+  --cal-density-4: #166534; /* green-800  · 7.13:1 on white · 6.48:1 with white    */
   --cal-density-1-ink: var(--color-gray-900, #111827);
   --cal-density-2-ink: var(--color-gray-900, #111827);
   --cal-density-3-ink: #ffffff;
@@ -48,12 +63,12 @@
 }
 
 .dark {
-  --cal-density-1: var(--color-success-800); /* 6.48:1 with gray-100 */
-  --cal-density-2: var(--color-success-700); /* 4.56:1 with gray-100 */
-  --cal-density-3: var(--color-success-600); /* 5.38:1 with gray-900 */
-  --cal-density-4: var(--color-success-500); /* 7.79:1 with gray-900 */
+  --cal-density-1: #b45309; /* amber-700 · 2.92:1 on gray-800 · 4.56:1 with gray-100 */
+  --cal-density-2: #65a30d; /* lime-600  · 4.75:1 on gray-800 · 5.74:1 with gray-900 */
+  --cal-density-3: #22c55e; /* green-500 · 6.44:1 on gray-800 · 7.79:1 with gray-900 */
+  --cal-density-4: #4ade80; /* green-400 · 8.42:1 on gray-800 · 10.18:1 with gray-900 */
   --cal-density-1-ink: var(--color-gray-100, #f3f4f6);
-  --cal-density-2-ink: var(--color-gray-100, #f3f4f6);
+  --cal-density-2-ink: var(--color-gray-900, #111827);
   --cal-density-3-ink: var(--color-gray-900, #111827);
   --cal-density-4-ink: var(--color-gray-900, #111827);
 
