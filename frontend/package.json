@@ -15,6 +15,7 @@
     "lint": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "type-check": "vue-tsc --noEmit",
     "format": "prettier --write \"src/**/*.{vue,ts,js,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{vue,ts,js,css,json}\""

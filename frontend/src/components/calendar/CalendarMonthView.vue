@@ -9,6 +9,7 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { DayModel, MonthModel } from '@/types/calendar';
 import { useDragSelection, type DragTarget } from '@/composables/calendar/useDragSelection';
+import { useCalendarGridNav } from '@/composables/calendar/useCalendarGridNav';
 import CalendarDayCell from './CalendarDayCell.vue';
 
 interface Props {
@@ -100,8 +101,41 @@ const drag = useDragSelection<DayTargetRef>({
   },
 });
 
-function dragStateFor(day: DayModel): 'add' | 'remove' | null {
-  return drag.selected.value.has(day.date) ? drag.mode.value : null;
+// Keyboard navigation shares the drag's commit path, so arrows and pointer cannot
+// disagree about what a selection does.
+const nav = useCalendarGridNav({
+  container: gridRef,
+  count: computed(() => props.model.days.length),
+  isFocusable: index => {
+    const day = props.model.days[index];
+    return !!day && day.isCurrentMonth && day.status !== 'disabled';
+  },
+  activate: index => {
+    const day = props.model.days[index];
+    if (day) emit('day-click', day.date);
+  },
+  commitRange: (anchor, focus) => {
+    const from = Math.min(anchor, focus);
+    const to = Math.max(anchor, focus);
+    const dates: string[] = [];
+    let anyWithoutOwn = false;
+    for (let index = from; index <= to; index++) {
+      const day = props.model.days[index];
+      if (!day || !day.isCurrentMonth || day.status === 'disabled') continue;
+      dates.push(day.date);
+      if (!day.own) anyWithoutOwn = true;
+    }
+    if (dates.length === 0) return;
+    // Mirrors the pointer drag: a range that is not already fully covered adds.
+    if (anyWithoutOwn) emit('days-select', dates);
+    else emit('days-deselect', dates);
+  },
+  shiftPeriod: delta => (delta > 0 ? goToNextMonth() : goToPreviousMonth()),
+});
+
+function dragStateFor(day: DayModel, index: number): 'add' | 'remove' | null {
+  if (drag.selected.value.has(day.date)) return drag.mode.value;
+  return nav.rangeIndices.value.has(index) ? 'add' : null;
 }
 
 function goToPreviousMonth() {
@@ -170,13 +204,15 @@ defineExpose({ selectableDays });
         role="grid"
         :aria-label="model.label"
         @pointerdown="drag.onPointerDown"
+        @keydown="nav.onKeydown"
         @contextmenu.prevent="openDetailsFromEvent"
       >
         <CalendarDayCell
-          v-for="day in model.days"
+          v-for="(day, index) in model.days"
           :key="day.date"
           :day="day"
-          :drag="dragStateFor(day)"
+          :drag="dragStateFor(day, index)"
+          :focused="index === nav.tabStopIndex.value"
           @remove-recurrence="(id, date) => emit('add-exception', id, date)"
           @show-details="openDetails"
         />

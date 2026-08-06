@@ -91,6 +91,11 @@
 **/dist/
 **/node_modules/
 **/tmp/
+# Playwright run output
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/.cache/ms-playwright/
 **/*.exe
 **/*.exe~
 **/*.dll
