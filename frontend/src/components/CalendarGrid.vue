@@ -800,8 +800,9 @@ import { useI18n } from 'vue-i18n';
 import { getWeekStartDay } from '@/i18n';
 import { availabilitiesApi } from '@/api/availabilities';
 import type { Availability, RecurrenceWithExceptions } from '@/types';
-import { useDateValidation } from '@/composables/useDateValidation';
-import { formatDateISO } from '@/utils/dateFormatting';
+import { formatDateISO, todayISO } from '@/utils/date/isoDate';
+import { getHolidayIndex } from '@/utils/calendar/holidays';
+import { buildCalendarRules, isDayAllowed, isInRange } from '@/utils/calendar/dateRules';
 import TimeSelect from '@/components/TimeSelect.vue';
 
 interface Props {
@@ -838,7 +839,21 @@ const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const { t, locale } = useI18n();
 
-const { isDateAllowed, checkIsHoliday, checkIsHolidayEve, getHolidayName } = useDateValidation();
+// Calendar constraints and holiday lookup, resolved once instead of per cell.
+const calendarTimezone = computed(() => props.timezone || 'Europe/Paris');
+const holidayIndex = computed(() => getHolidayIndex(calendarTimezone.value, locale.value));
+const calendarRules = computed(() =>
+  buildCalendarRules({
+    timeZone: calendarTimezone.value,
+    todayISO: todayISO(calendarTimezone.value),
+    allowedWeekdays: props.allowedWeekdays,
+    holidaysPolicy: props.holidaysPolicy,
+    allowHolidayEves: props.allowHolidayEves,
+    startDate: props.startDate,
+    endDate: props.endDate,
+    threshold: props.threshold,
+  })
+);
 
 // Initialize currentDate with props or default to current date
 const initDate =
@@ -1019,30 +1034,19 @@ interface CalendarDay {
 }
 
 // Helper function to check if a date is allowed for availability
-const checkDateAllowed = (dateObj: Date): boolean => {
-  const timezone = props.timezone || 'Europe/Paris';
-  const allowedWeekdays = props.allowedWeekdays || [0, 1, 2, 3, 4, 5, 6];
-  const holidaysPolicy = props.holidaysPolicy || 'ignore';
-  const allowHolidayEves = props.allowHolidayEves || false;
-
-  // Check if date is within calendar's date range
-  if (props.startDate) {
-    const startDate = new Date(props.startDate);
-    startDate.setHours(0, 0, 0, 0);
-    if (dateObj < startDate) {
-      return false;
-    }
-  }
-
-  if (props.endDate) {
-    const endDate = new Date(props.endDate);
-    endDate.setHours(0, 0, 0, 0);
-    if (dateObj > endDate) {
-      return false;
-    }
-  }
-
-  return isDateAllowed(dateObj, timezone, allowedWeekdays, holidaysPolicy, allowHolidayEves);
+const checkDateAllowed = (dateString: string, dayOfWeek: number): boolean => {
+  const rules = calendarRules.value;
+  if (!isInRange(dateString, rules)) return false;
+  const holidays = holidayIndex.value;
+  return isDayAllowed(
+    {
+      date: dateString,
+      dayOfWeek,
+      isHoliday: holidays.isHoliday(dateString),
+      isHolidayEve: holidays.isHolidayEve(dateString),
+    },
+    rules
+  );
 };
 
 const calendarDays = computed((): CalendarDay[] => {
@@ -1065,8 +1069,9 @@ const calendarDays = computed((): CalendarDay[] => {
   const daysInPrevMonth = prevMonthLastDay.getDate();
 
   const days: CalendarDay[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // "Today" follows the calendar's timezone, not the viewer's browser.
+  const today = calendarRules.value.todayISO;
+  const holidays = holidayIndex.value;
 
   // Previous month days
   for (let i = firstDayOfWeek - 1; i >= 0; i--) {
@@ -1074,23 +1079,22 @@ const calendarDays = computed((): CalendarDay[] => {
     const dateObj = new Date(year, month - 1, date);
     dateObj.setHours(0, 0, 0, 0);
     const dateString = formatDateISO(dateObj);
-    const isPast = dateObj < today;
-    const timezone = props.timezone || 'Europe/Paris';
+    const dayOfWeek = dateObj.getDay();
 
     days.push({
       date,
       dateString,
       isCurrentMonth: false,
       isToday: false,
-      isPast,
-      isAllowed: checkDateAllowed(dateObj),
-      isHoliday: checkIsHoliday(dateObj, timezone),
-      isHolidayEve: checkIsHolidayEve(dateObj, timezone),
+      isPast: dateString < today,
+      isAllowed: checkDateAllowed(dateString, dayOfWeek),
+      isHoliday: holidays.isHoliday(dateString),
+      isHolidayEve: holidays.isHolidayEve(dateString),
       hasAvailability: false,
       hasRecurrence: false,
       meetsThreshold: false,
       availabilities: [],
-      dayOfWeek: dateObj.getDay(),
+      dayOfWeek,
       isHighlighted: props.highlightedDates?.has(dateString) || false,
     });
   }
@@ -1101,7 +1105,6 @@ const calendarDays = computed((): CalendarDay[] => {
     dateObj.setHours(0, 0, 0, 0);
     const dateString = formatDateISO(dateObj);
     const dayOfWeek = dateObj.getDay();
-    const isPast = dateObj < today;
 
     // Check if this date has an availability
     const dateAvailabilities = (props.availabilities || []).filter(a => a.date === dateString);
@@ -1132,18 +1135,17 @@ const calendarDays = computed((): CalendarDay[] => {
     // Check if this day meets the threshold
     const participantCount = props.participantCounts?.[dateString] || 0;
     const meetsThreshold = participantCount >= (props.threshold || 1);
-    const timezone = props.timezone || 'Europe/Paris';
 
     days.push({
       date,
       dateString,
       isCurrentMonth: true,
-      isToday: dateObj.getTime() === today.getTime(),
-      isPast,
-      isAllowed: checkDateAllowed(dateObj),
-      isHoliday: checkIsHoliday(dateObj, timezone),
-      isHolidayEve: checkIsHolidayEve(dateObj, timezone),
-      holidayName: getHolidayName(dateObj, timezone) ?? undefined,
+      isToday: dateString === today,
+      isPast: dateString < today,
+      isAllowed: checkDateAllowed(dateString, dayOfWeek),
+      isHoliday: holidays.isHoliday(dateString),
+      isHolidayEve: holidays.isHolidayEve(dateString),
+      holidayName: holidays.getName(dateString) ?? undefined,
       hasAvailability: dateAvailabilities.length > 0,
       hasRecurrence,
       meetsThreshold,
@@ -1164,23 +1166,22 @@ const calendarDays = computed((): CalendarDay[] => {
     const dateObj = new Date(year, month + 1, date);
     dateObj.setHours(0, 0, 0, 0);
     const dateString = formatDateISO(dateObj);
-    const isPast = dateObj < today;
-    const timezone = props.timezone || 'Europe/Paris';
+    const dayOfWeek = dateObj.getDay();
 
     days.push({
       date,
       dateString,
       isCurrentMonth: false,
       isToday: false,
-      isPast,
-      isAllowed: checkDateAllowed(dateObj),
-      isHoliday: checkIsHoliday(dateObj, timezone),
-      isHolidayEve: checkIsHolidayEve(dateObj, timezone),
+      isPast: dateString < today,
+      isAllowed: checkDateAllowed(dateString, dayOfWeek),
+      isHoliday: holidays.isHoliday(dateString),
+      isHolidayEve: holidays.isHolidayEve(dateString),
       hasAvailability: false,
       hasRecurrence: false,
       meetsThreshold: false,
       availabilities: [],
-      dayOfWeek: dateObj.getDay(),
+      dayOfWeek,
       isHighlighted: props.highlightedDates?.has(dateString) || false,
     });
   }

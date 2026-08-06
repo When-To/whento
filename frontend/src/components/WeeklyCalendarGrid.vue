@@ -571,13 +571,49 @@ import { useToastStore } from '@/stores/toast';
 import { availabilitiesApi } from '@/api/availabilities';
 import type { Availability, DateAvailabilitySummary } from '@/types';
 import TimeSelect from '@/components/TimeSelect.vue';
-import { useDateValidation } from '@/composables/useDateValidation';
-import { formatDateISO, formatWeekday, formatDayMonthShort } from '@/utils/dateFormatting';
+import { formatWeekday, formatDayMonthShort } from '@/utils/dateFormatting';
+import { formatDateISO, todayISO } from '@/utils/date/isoDate';
+import { getHolidayIndex } from '@/utils/calendar/holidays';
+import {
+  buildCalendarRules,
+  isDayOpen,
+  isSlotAllowed,
+  resolveTimeWindow,
+  type DayContext,
+} from '@/utils/calendar/dateRules';
 
 const { t, locale } = useI18n();
 const toastStore = useToastStore();
 
-const { checkIsHoliday, checkIsHolidayEve, getHolidayName } = useDateValidation();
+// Calendar constraints and holiday lookup, resolved once instead of per cell.
+const calendarTimezone = computed(() => props.timezone || 'Europe/Paris');
+const holidayIndex = computed(() => getHolidayIndex(calendarTimezone.value, locale.value));
+const calendarRules = computed(() =>
+  buildCalendarRules({
+    timeZone: calendarTimezone.value,
+    todayISO: todayISO(calendarTimezone.value),
+    allowedWeekdays: props.allowedWeekdays,
+    holidaysPolicy: props.holidaysPolicy,
+    allowHolidayEves: props.allowHolidayEves,
+    startDate: props.startDate,
+    endDate: props.endDate,
+    weekdayTimes: props.weekdayTimes,
+    holidayTimes: { min_time: props.holidayMinTime, max_time: props.holidayMaxTime },
+    holidayEveTimes: { min_time: props.holidayEveMinTime, max_time: props.holidayEveMaxTime },
+    threshold: props.threshold,
+  })
+);
+
+function dayContext(date: Date): DayContext {
+  const dateString = formatDateISO(date);
+  const holidays = holidayIndex.value;
+  return {
+    date: dateString,
+    dayOfWeek: date.getDay(),
+    isHoliday: holidays.isHoliday(dateString),
+    isHolidayEve: holidays.isHolidayEve(dateString),
+  };
+}
 
 export interface AvailabilityOperation {
   type: 'create' | 'delete' | 'update';
@@ -836,7 +872,7 @@ const timeSlots = computed(() => {
 const weekDays = computed(() => {
   const days = [];
   const start = new Date(currentWeekStartDate.value);
-  const timezone = props.timezone || 'Europe/Paris';
+  const holidays = holidayIndex.value;
 
   for (let i = 0; i < 7; i++) {
     const date = new Date(start);
@@ -851,9 +887,9 @@ const weekDays = computed(() => {
       dateString,
       dayName,
       dateFormatted,
-      isHoliday: checkIsHoliday(date, timezone),
-      isHolidayEve: checkIsHolidayEve(date, timezone),
-      holidayName: getHolidayName(date, timezone) ?? undefined,
+      isHoliday: holidays.isHoliday(dateString),
+      isHolidayEve: holidays.isHolidayEve(dateString),
+      holidayName: holidays.getName(dateString) ?? undefined,
     });
   }
 
@@ -1387,172 +1423,19 @@ const weekRangeText = computed(() => {
   return `${formatDayMonthShort(start, locale.value)} - ${formatDayMonthShort(end, locale.value)}`;
 });
 
-// Check if a date is in the past
-function isPastDate(date: Date): boolean {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const checkDate = new Date(date);
-  checkDate.setHours(0, 0, 0, 0);
-  return checkDate < today;
-}
-
 // Check if a time slot is allowed for a given date
 function isTimeSlotAllowed(date: Date, time: string): boolean {
-  const dayOfWeek = date.getDay();
-  const timezone = props.timezone || 'Europe/Paris';
-  const isHoliday = checkIsHoliday(date, timezone);
-  const isHolidayEve = checkIsHolidayEve(date, timezone);
-
-  // Check if the day itself is allowed by weekday restrictions
-  const isDayAllowed = props.allowedWeekdays && props.allowedWeekdays.includes(dayOfWeek);
-
-  // Determine if this day should be enabled based on holiday policy
-  let dayIsEnabled: boolean;
-  let minTime: string | undefined;
-  let maxTime: string | undefined;
-
-  // Case 1: Day is a holiday
-  if (isHoliday) {
-    if (props.holidaysPolicy === 'allow') {
-      // Holiday is allowed - use holiday time restrictions if any
-      minTime = props.holidayMinTime;
-      maxTime = props.holidayMaxTime;
-      dayIsEnabled = true;
-    } else if (props.holidaysPolicy === 'block') {
-      // Holiday is blocked
-      return false;
-    } else {
-      // holidays_policy === 'ignore' - treat as regular day
-      if (!isDayAllowed) return false;
-      // Use weekday restrictions
-      if (props.weekdayTimes && props.weekdayTimes[dayOfWeek]) {
-        minTime = props.weekdayTimes[dayOfWeek].min_time;
-        maxTime = props.weekdayTimes[dayOfWeek].max_time;
-      }
-      dayIsEnabled = true;
-    }
-
-    // If day is allowed AND has weekday restrictions, merge with holiday restrictions
-    if (dayIsEnabled && isDayAllowed && props.weekdayTimes && props.weekdayTimes[dayOfWeek]) {
-      const weekdayMin = props.weekdayTimes[dayOfWeek].min_time;
-      const weekdayMax = props.weekdayTimes[dayOfWeek].max_time;
-
-      // Take the widest range (earliest start, latest end)
-      if (minTime && weekdayMin) {
-        minTime = minTime < weekdayMin ? minTime : weekdayMin;
-      } else {
-        minTime = minTime || weekdayMin;
-      }
-
-      if (maxTime && weekdayMax) {
-        maxTime = maxTime > weekdayMax ? maxTime : weekdayMax;
-      } else {
-        maxTime = maxTime || weekdayMax;
-      }
-    }
-  }
-  // Case 2: Day is a holiday eve
-  else if (isHolidayEve) {
-    if (props.allowHolidayEves) {
-      // Holiday eve is allowed - use holiday eve time restrictions if any
-      minTime = props.holidayEveMinTime;
-      maxTime = props.holidayEveMaxTime;
-      dayIsEnabled = true;
-    } else {
-      // Holiday eve not explicitly allowed - treat as regular day
-      if (!isDayAllowed) return false;
-      // Use weekday restrictions
-      if (props.weekdayTimes && props.weekdayTimes[dayOfWeek]) {
-        minTime = props.weekdayTimes[dayOfWeek].min_time;
-        maxTime = props.weekdayTimes[dayOfWeek].max_time;
-      }
-      dayIsEnabled = true;
-    }
-
-    // If day is allowed AND has weekday restrictions, merge with holiday eve restrictions
-    if (dayIsEnabled && isDayAllowed && props.weekdayTimes && props.weekdayTimes[dayOfWeek]) {
-      const weekdayMin = props.weekdayTimes[dayOfWeek].min_time;
-      const weekdayMax = props.weekdayTimes[dayOfWeek].max_time;
-
-      // Take the widest range (earliest start, latest end)
-      if (minTime && weekdayMin) {
-        minTime = minTime < weekdayMin ? minTime : weekdayMin;
-      } else {
-        minTime = minTime || weekdayMin;
-      }
-
-      if (maxTime && weekdayMax) {
-        maxTime = maxTime > weekdayMax ? maxTime : weekdayMax;
-      } else {
-        maxTime = maxTime || weekdayMax;
-      }
-    }
-  }
-  // Case 3: Regular day (not holiday or holiday eve)
-  else {
-    if (!isDayAllowed) return false;
-
-    // Use weekday restrictions
-    if (props.weekdayTimes && props.weekdayTimes[dayOfWeek]) {
-      minTime = props.weekdayTimes[dayOfWeek].min_time;
-      maxTime = props.weekdayTimes[dayOfWeek].max_time;
-    }
-    dayIsEnabled = true;
-  }
-
-  // If day is not enabled at all, slot is not allowed
-  if (!dayIsEnabled) return false;
-
-  // If no time restrictions, all times are allowed
-  if (!minTime && !maxTime) return true;
-
-  // Check if the time slot is within the allowed time range
-  const slotStartMin = timeToMinutes(time);
-  const slotEndMin = slotStartMin + slotDuration.value;
-
-  // Parse min and max times
-  const minTimeMin = minTime ? timeToMinutes(minTime) : 0;
-  const maxTimeMin = maxTime ? timeToMinutes(maxTime) : 24 * 60;
-
-  // Slot is allowed if it overlaps with the allowed time range
-  // Overlap check: slot start < allowed end AND slot end > allowed start
-  return slotStartMin < maxTimeMin && slotEndMin > minTimeMin;
+  const startMin = timeToMinutes(time);
+  return isSlotAllowed(
+    resolveTimeWindow(dayContext(date), calendarRules.value),
+    startMin,
+    startMin + slotDuration.value
+  );
 }
 
 // Check if a date is enabled (day-level check, without time consideration)
 function isDateEnabled(date: Date): boolean {
-  const dateString = formatDateISO(date);
-
-  // Disable past dates
-  if (isPastDate(date)) return false;
-
-  // Check if date is within allowed range
-  if (props.startDate && dateString < props.startDate) return false;
-  if (props.endDate && dateString > props.endDate) return false;
-
-  const dayOfWeek = date.getDay();
-  const timezone = props.timezone || 'Europe/Paris';
-  const isHoliday = checkIsHoliday(date, timezone);
-  const isHolidayEve = checkIsHolidayEve(date, timezone);
-
-  // Check if the day itself is allowed
-  const isDayAllowed = props.allowedWeekdays && props.allowedWeekdays.includes(dayOfWeek);
-
-  // Holiday handling
-  if (isHoliday) {
-    if (props.holidaysPolicy === 'allow') return true;
-    if (props.holidaysPolicy === 'block') return false;
-    // holidays_policy === 'ignore' - treat as regular day
-    return isDayAllowed;
-  }
-
-  // Holiday eve handling
-  if (isHolidayEve && props.allowHolidayEves) {
-    return true;
-  }
-
-  // Regular day - check if weekday is allowed
-  return isDayAllowed;
+  return isDayOpen(dayContext(date), calendarRules.value);
 }
 
 // Check if there's an availability at this time slot

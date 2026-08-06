@@ -268,8 +268,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useDateValidation } from '@/composables/useDateValidation';
-import { formatDateISO, formatWeekday, formatFullDate } from '@/utils/dateFormatting';
+import { formatWeekday, formatFullDate } from '@/utils/dateFormatting';
+import { formatDateISO, todayISO } from '@/utils/date/isoDate';
+import { getHolidayIndex } from '@/utils/calendar/holidays';
+import { buildCalendarRules, isDayOpen } from '@/utils/calendar/dateRules';
 import type { Availability, RecurrenceWithExceptions } from '@/types';
 import ParticipantDetailsPopup from './ParticipantDetailsPopup.vue';
 
@@ -414,7 +416,21 @@ function handleViewStyleSelect(event: Event) {
     emit('view-style-change', value);
   }
 }
-const { isDateAllowed, checkIsHoliday, checkIsHolidayEve, getHolidayName } = useDateValidation();
+// Calendar constraints and holiday lookup, resolved once instead of per day.
+const calendarTimezone = computed(() => props.timezone || 'Europe/Paris');
+const holidayIndex = computed(() => getHolidayIndex(calendarTimezone.value, locale.value));
+const calendarRules = computed(() =>
+  buildCalendarRules({
+    timeZone: calendarTimezone.value,
+    todayISO: todayISO(calendarTimezone.value),
+    allowedWeekdays: props.allowedWeekdays,
+    holidaysPolicy: props.holidaysPolicy,
+    allowHolidayEves: props.allowHolidayEves,
+    startDate: props.startDate,
+    endDate: props.endDate,
+    threshold: props.threshold,
+  })
+);
 
 // Range label for navigation header
 const rangeLabel = computed(() => {
@@ -465,13 +481,10 @@ const actionableDays = computed((): ListDay[] => {
     }
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const timezone = props.timezone || 'Europe/Paris';
-  const allowedWeekdays = props.allowedWeekdays || [0, 1, 2, 3, 4, 5, 6];
-  const holidaysPolicy = (props.holidaysPolicy as 'ignore' | 'allow' | 'block') || 'ignore';
-  const allowHolidayEves = props.allowHolidayEves || false;
+  // "Today" follows the calendar's timezone, not the viewer's browser.
+  const rules = calendarRules.value;
+  const today = rules.todayISO;
+  const holidays = holidayIndex.value;
 
   // Deduplicate dates (month ranges may overlap with week ranges)
   const seen = new Set<string>();
@@ -484,18 +497,13 @@ const actionableDays = computed((): ListDay[] => {
     if (seen.has(dateString)) continue;
     seen.add(dateString);
 
-    // Filter: not past
-    if (dateObj < today) continue;
-
-    // Filter: within calendar date range
-    if (props.startDate && dateString < props.startDate) continue;
-    if (props.endDate && dateString > props.endDate) continue;
-
-    // Filter: isAllowed (weekdays + holidays policy)
-    if (!isDateAllowed(dateObj, timezone, allowedWeekdays, holidaysPolicy, allowHolidayEves))
-      continue;
-
     const dayOfWeek = dateObj.getDay();
+    const isHoliday = holidays.isHoliday(dateString);
+    const isHolidayEve = holidays.isHolidayEve(dateString);
+
+    // Filter: not past, within the calendar range, and accepted by the weekday
+    // and holiday rules.
+    if (!isDayOpen({ date: dateString, dayOfWeek, isHoliday, isHolidayEve }, rules)) continue;
 
     // Check availability
     const dateAvailabilities = (props.availabilities || []).filter(a => a.date === dateString);
@@ -533,10 +541,10 @@ const actionableDays = computed((): ListDay[] => {
       dayOfWeek,
       dayName: formatWeekday(dateObj, locale.value, 'long'),
       dateFormatted: formatFullDate(dateObj, locale.value),
-      isToday: dateObj.getTime() === today.getTime(),
-      isHoliday: checkIsHoliday(dateObj, timezone),
-      isHolidayEve: checkIsHolidayEve(dateObj, timezone),
-      holidayName: getHolidayName(dateObj, timezone) ?? undefined,
+      isToday: dateString === today,
+      isHoliday,
+      isHolidayEve,
+      holidayName: holidays.getName(dateString) ?? undefined,
       hasAvailability,
       hasRecurrence,
       meetsThreshold,
