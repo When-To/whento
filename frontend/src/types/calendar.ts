@@ -12,7 +12,6 @@
  * once, so templates contain property reads and no function calls.
  */
 
-import type { Availability } from '@/types';
 import type { ISODate } from '@/utils/date/isoDate';
 import type { HHMM } from '@/utils/date/timeRange';
 
@@ -42,6 +41,8 @@ export interface OwnAvailabilityView {
   readonly isFullDay: boolean;
   /** "All day" or "09:00-12:00", already localized. */
   readonly label: string;
+  /** Stable across re-renders, for `v-for` keys. */
+  readonly key: string;
 }
 
 /** A recurrence covering a day, preformatted. */
@@ -52,9 +53,6 @@ export interface RecurrenceView {
   readonly note?: string;
   readonly label: string;
 }
-
-/** Number of heatmap steps, `0` (nobody) through {@link DENSITY_STEPS}. */
-export const DENSITY_STEPS = 4;
 
 /** Everything a day cell renders, in any of the views. */
 export interface DayModel {
@@ -85,12 +83,16 @@ export interface DayModel {
   readonly meetsThreshold: boolean;
   /** Progress toward the threshold, 0..1. Drives the gauge width. */
   readonly density: number;
-  /** Quantized density, 0..{@link DENSITY_STEPS}. Drives the heatmap background. */
-  readonly densityStep: number;
 
   readonly own: OwnAvailabilityView | null;
-  /** Every own availability for the day, when more than one needs listing. */
-  readonly ownAll: readonly Availability[];
+  /**
+   * Every own availability for the day, preformatted like {@link own}.
+   *
+   * Preformatted rather than raw, so no component ever formats a time range itself —
+   * that is how "all day" came to render as the literal "00:00-23:59" in one view and
+   * "All day" in another.
+   */
+  readonly ownAll: readonly OwnAvailabilityView[];
   readonly recurrence: RecurrenceView | null;
 }
 

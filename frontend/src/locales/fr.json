@@ -346,6 +346,7 @@
     "calendarDateRangeTo": "jusqu'au {date}",
     "calendarDateRangeFromTo": "du {startDate} au {endDate}",
     "displayMode": "Affichage",
+    "viewStyle": "Vue",
     "monthView": "Mois",
     "weekView": "Semaine",
     "numberOfWeeks": "Nombre de semaines à afficher",

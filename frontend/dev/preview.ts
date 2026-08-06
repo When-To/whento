@@ -21,6 +21,10 @@ import { createI18n } from 'vue-i18n';
 import en from '../src/locales/en.json';
 import fr from '../src/locales/fr.json';
 import '../src/style.css';
+// Loaded explicitly, as `main.ts` does: `styles/calendar.css` is imported from JS
+// rather than `@import`ed from `style.css`, because Vite does not invalidate a CSS
+// `@import` on change. Every entry that renders calendar components needs both.
+import '../src/styles/calendar.css';
 import CalendarPreview from './CalendarPreview.vue';
 
 const i18n = createI18n({

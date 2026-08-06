@@ -15,7 +15,7 @@
  * {@link CalendarFormatters}, which keeps it unit-testable in plain Node.
  */
 
-import { DENSITY_STEPS, type DayModel, type DayStatus, type MonthModel } from '@/types/calendar';
+import type { DayModel, DayStatus, MonthModel, OwnAvailabilityView } from '@/types/calendar';
 import {
   addDaysISO,
   daysInMonth,
@@ -53,20 +53,6 @@ export interface ModelDeps {
   readonly highlighted?: ReadonlySet<ISODate>;
 }
 
-/**
- * Quantize a participant count into heatmap steps.
- *
- * Scaled against the threshold so the background reads as "progress toward a workable
- * date", saturating once the threshold is met. A day with nobody is step 0; any day
- * with at least one participant is at least step 1, so "someone" is never invisible.
- */
-export function densityStepFor(count: number, threshold: number): number {
-  if (count <= 0) return 0;
-  if (threshold <= 0) return DENSITY_STEPS;
-  const ratio = Math.min(count / threshold, 1);
-  return Math.max(1, Math.ceil(ratio * DENSITY_STEPS));
-}
-
 function statusFor(input: {
   isCurrentMonth: boolean;
   isOpen: boolean;
@@ -100,7 +86,15 @@ export function buildDayModel(date: ISODate, deps: ModelDeps, isCurrentMonth = t
     isInRange(date, rules) && isDayAllowed({ date, dayOfWeek, isHoliday, isHolidayEve }, rules);
   const isOpen = !past && allowed;
 
-  const ownAll = index.ownFor(date);
+  const rawOwn = index.ownFor(date);
+  const ownAll: OwnAvailabilityView[] = rawOwn.map(availability => ({
+    startTime: availability.start_time,
+    endTime: availability.end_time,
+    note: availability.note,
+    isFullDay: isFullDay(availability.start_time, availability.end_time),
+    label: fmt.timeRange(availability.start_time, availability.end_time),
+    key: `${date}-${availability.start_time ?? 'all'}-${availability.end_time ?? 'day'}`,
+  }));
   const first = ownAll[0];
   const recurrenceHit = index.recurrenceFor(date, dayOfWeek);
 
@@ -143,17 +137,8 @@ export function buildDayModel(date: ISODate, deps: ModelDeps, isCurrentMonth = t
     threshold,
     meetsThreshold,
     density: threshold > 0 ? Math.min(participantCount / threshold, 1) : 0,
-    densityStep: densityStepFor(participantCount, threshold),
 
-    own: first
-      ? {
-          startTime: first.start_time,
-          endTime: first.end_time,
-          note: first.note,
-          isFullDay: isFullDay(first.start_time, first.end_time),
-          label: fmt.timeRange(first.start_time, first.end_time),
-        }
-      : null,
+    own: first ?? null,
     ownAll,
     recurrence: recurrenceHit
       ? {

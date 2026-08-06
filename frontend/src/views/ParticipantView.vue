@@ -282,6 +282,21 @@
                   </select>
                 </div>
 
+                <!-- Grid or list -->
+                <div class="flex items-center gap-2">
+                  <label for="viewStyle" class="text-sm text-gray-700 dark:text-gray-300 shrink-0">
+                    {{ t('calendar.viewStyle') }}
+                  </label>
+                  <select
+                    id="viewStyle"
+                    v-model="viewStyle"
+                    class="input text-sm flex-1 md:w-32 min-h-11 md:min-h-0"
+                  >
+                    <option value="grid">{{ t('calendar.viewClassic') }}</option>
+                    <option value="list">{{ t('calendar.listView') }}</option>
+                  </select>
+                </div>
+
                 <!-- Period count selector -->
                 <div class="flex items-center gap-2">
                   <label
@@ -317,13 +332,6 @@
               }}
             </p>
           </div>
-
-          <!-- One switcher for the whole view; the grids no longer carry their own -->
-          <CalendarViewSwitcher
-            v-model:display-mode="displayMode"
-            v-model:view-style="viewStyle"
-            class="mb-4"
-          />
 
           <!-- List view: the same model as the grids, laid out as rows -->
           <CalendarListView
@@ -365,6 +373,7 @@
               :key="weekModel.key"
               :model="weekModel"
               :slot-duration-min="slotDuration"
+              :threshold="calendar?.threshold || 1"
               :availabilities-for="availabilitiesForDate"
               :show-navigation="index === 0"
               @batch-operations="handleBatchOperations"
@@ -1220,7 +1229,6 @@ import ParticipantDetailsPopup from '@/components/ParticipantDetailsPopup.vue';
 import CalendarListView from '@/components/calendar/CalendarListView.vue';
 import CalendarWeekView from '@/components/calendar/CalendarWeekView.vue';
 import CalendarWeekControls from '@/components/calendar/CalendarWeekControls.vue';
-import CalendarViewSwitcher from '@/components/calendar/CalendarViewSwitcher.vue';
 import type { AvailabilityOperation } from '@/types/calendar';
 import { buildCoverageMap } from '@/utils/calendar/segments';
 import { buildWeekModel } from '@/utils/calendar/weekModel';
@@ -2575,6 +2583,18 @@ watch(numberOfPeriods, async newCount => {
     historyStore.updateDisplaySettings(token.value, { periodCount: newCount });
     // Reload participant counts to include all displayed periods
     await loadParticipantCounts(displayedYear.value, displayedMonth.value);
+  }
+});
+
+// The week grid used to emit these and the parent persisted them; now that the parent
+// owns the values it has to save them itself, or they reset on every visit.
+watch([startHour, endHour, slotDuration], ([newStart, newEnd, newDuration]) => {
+  if (token.value) {
+    historyStore.updateDisplaySettings(token.value, {
+      startHour: newStart,
+      endHour: newEnd,
+      slotDuration: newDuration,
+    });
   }
 });
 

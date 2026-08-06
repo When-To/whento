@@ -41,13 +41,30 @@ test.describe('month grid', () => {
     await expect(cell(page, '2026-04-07')).not.toHaveAttribute('data-status', 'disabled');
   });
 
-  test('encodes density in steps that rise with the participant count', async ({ page }) => {
+  test('fills only the days this participant answered', async ({ page }) => {
     await gotoPreview(page);
-    await expect(cell(page, '2026-04-07')).toHaveAttribute('data-density', '1'); // 1 of 5
-    await expect(cell(page, '2026-04-09')).toHaveAttribute('data-density', '3'); // 3 of 5
-    await expect(cell(page, '2026-04-13')).toHaveAttribute('data-density', '4'); // 5 of 5
-    // An empty day carries no step at all, so it reads as empty rather than faint.
-    await expect(cell(page, '2026-04-06')).not.toHaveAttribute('data-density', /.*/);
+    // The fill answers one question: did I mark this day? It says nothing about how
+    // many others did — that is the gauge and the count below it.
+    await expect(cell(page, '2026-04-08')).toHaveAttribute('data-own', 'true');
+    await expect(cell(page, '2026-04-15')).toHaveAttribute('data-own', 'true');
+    // Busy for everyone else, but not answered by me.
+    await expect(cell(page, '2026-04-13')).not.toHaveAttribute('data-own', /.*/);
+    await expect(cell(page, '2026-04-13')).toHaveAttribute('data-threshold', 'true');
+  });
+
+  test('outlines a day covered only by a recurrence', async ({ page }) => {
+    await gotoPreview(page);
+    // 2 April onwards is a Thursday recurrence; 9 April also has an explicit answer.
+    await expect(cell(page, '2026-04-30')).toHaveAttribute('data-recurring', 'true');
+    await expect(cell(page, '2026-04-30')).not.toHaveAttribute('data-own', /.*/);
+    await expect(cell(page, '2026-04-09')).toHaveAttribute('data-own', 'true');
+  });
+
+  test('shows a gauge and a count on every open day', async ({ page }) => {
+    await gotoPreview(page);
+    const target = cell(page, '2026-04-09');
+    await expect(target.locator('.cal-gauge-fill')).toBeVisible();
+    await expect(target.locator('.cal-count')).toContainText('3/5');
   });
 
   test('shows a one-off availability and a recurrence on the same day', async ({ page }) => {
@@ -183,7 +200,7 @@ test.describe('keyboard', () => {
 test.describe('week grid', () => {
   test('paints coverage bands weighted by participant count', async ({ page }) => {
     await gotoPreview(page);
-    const bands = page.locator('.cal-band[data-kind="others"], .cal-band[data-kind="own"]');
+    const bands = page.locator('.cal-band[data-kind="coverage"]');
     await expect(bands.first()).toBeVisible();
 
     const strengths = await bands.evaluateAll(nodes =>
@@ -201,9 +218,43 @@ test.describe('week grid', () => {
     await expect(page.locator('.cal-band[data-kind="threshold"]')).not.toHaveCount(0);
   });
 
-  test('marks the current participant separately from the others', async ({ page }) => {
+  test('separates "mine" from "everyone" by hue, not by shade', async ({ page }) => {
     await gotoPreview(page);
-    await expect(page.locator('.cal-band[data-kind="own"]')).not.toHaveCount(0);
-    await expect(page.locator('.cal-band[data-kind="others"]')).not.toHaveCount(0);
+    // Two shades of the same blue were indistinguishable. The slot fill is the brand
+    // colour and means "I answered"; coverage is neutral and means "how many".
+    const own = await page
+      .locator('.cal-slot[data-own]')
+      .first()
+      .evaluate(el => getComputedStyle(el).backgroundColor);
+    const coverage = await page
+      .locator('.cal-band[data-kind="coverage"]')
+      .first()
+      .evaluate(el => getComputedStyle(el).backgroundColor);
+    expect(own).not.toBe(coverage);
+
+    const channels = (value: string) => value.match(/[\d.]+/g)!.map(Number);
+    const [ownR, ownG, ownB] = channels(own);
+    const [covR, covG, covB] = channels(coverage);
+    // The coverage wash is near-neutral; the own fill is decidedly not.
+    expect(Math.max(ownR, ownG, ownB) - Math.min(ownR, ownG, ownB)).toBeGreaterThan(60);
+    expect(Math.max(covR, covG, covB) - Math.min(covR, covG, covB)).toBeLessThan(60);
+  });
+
+  test('shows how many of the threshold each span reaches', async ({ page }) => {
+    await gotoPreview(page);
+    const counts = page.locator('.cal-band-count');
+    await expect(counts.first()).toContainText('/');
+    await expect(page.locator('.cal-band-gauge-fill').first()).toBeVisible();
+  });
+
+  test('labels the closing time of the last row', async ({ page }) => {
+    await gotoPreview(page);
+    // Without it the end of the day has to be counted out from the last hour mark.
+    await expect(page.locator('.cal-week-time--last')).toHaveText('20:00');
+  });
+
+  test('fills the slots this participant answered', async ({ page }) => {
+    await gotoPreview(page);
+    await expect(page.locator('.cal-slot[data-own]')).not.toHaveCount(0);
   });
 });

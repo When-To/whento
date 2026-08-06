@@ -6,7 +6,6 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Availability, RecurrenceWithExceptions } from '@/types';
-import { DENSITY_STEPS } from '@/types/calendar';
 import { formatDate } from '@/utils/date/intlFormatters';
 import { isFullDay } from '@/utils/date/timeRange';
 import { buildCalendarRules } from './dateRules';
@@ -17,7 +16,6 @@ import {
   buildMonthModel,
   buildWeekDays,
   buildWeekdayHeaders,
-  densityStepFor,
   type CalendarFormatters,
   type ModelDeps,
 } from './dayModel';
@@ -103,28 +101,19 @@ function availability(date: string, extra: Partial<Availability> = {}): Availabi
   };
 }
 
-describe('densityStepFor', () => {
-  it('is zero only when nobody is available', () => {
-    expect(densityStepFor(0, 5)).toBe(0);
-    expect(densityStepFor(1, 5)).toBeGreaterThan(0);
+describe('density', () => {
+  it('is the progress toward the threshold, capped at one', () => {
+    const deps = makeDeps({ threshold: 4, participantCounts: { '2026-04-08': 2 } });
+    expect(buildDayModel('2026-04-08', deps).density).toBe(0.5);
   });
 
   it('saturates once the threshold is met', () => {
-    expect(densityStepFor(5, 5)).toBe(DENSITY_STEPS);
-    expect(densityStepFor(50, 5)).toBe(DENSITY_STEPS);
+    const deps = makeDeps({ threshold: 4, participantCounts: { '2026-04-08': 9 } });
+    expect(buildDayModel('2026-04-08', deps).density).toBe(1);
   });
 
-  it('is monotonic between one and the threshold', () => {
-    const steps = [1, 2, 3, 4, 5, 6, 7, 8].map(n => densityStepFor(n, 8));
-    for (let i = 1; i < steps.length; i++) {
-      expect(steps[i]).toBeGreaterThanOrEqual(steps[i - 1]);
-    }
-    expect(new Set(steps).size).toBeGreaterThan(1);
-  });
-
-  it('treats a zero threshold as always saturated', () => {
-    expect(densityStepFor(1, 0)).toBe(DENSITY_STEPS);
-    expect(densityStepFor(0, 0)).toBe(0);
+  it('is zero when nobody is available', () => {
+    expect(buildDayModel('2026-04-08', makeDeps()).density).toBe(0);
   });
 });
 
@@ -217,6 +206,18 @@ describe('buildDayModel fields', () => {
     expect(day.own?.label).toBe('All day');
   });
 
+  it('labels an explicit 00:00-23:59 as all day too', () => {
+    // What the backend stores for an all-day answer. The month cell used to format
+    // this itself and rendered the literal range.
+    const deps = makeDeps({
+      availabilities: [availability('2026-04-08', { start_time: '00:00', end_time: '23:59' })],
+    });
+    const day = buildDayModel('2026-04-08', deps);
+    expect(day.own?.isFullDay).toBe(true);
+    expect(day.own?.label).toBe('All day');
+    expect(day.ownAll[0].label).toBe('All day');
+  });
+
   it('exposes every own availability, not just the first', () => {
     const deps = makeDeps({
       availabilities: [
@@ -227,6 +228,9 @@ describe('buildDayModel fields', () => {
     const day = buildDayModel('2026-04-08', deps);
     expect(day.ownAll).toHaveLength(2);
     expect(day.own?.startTime).toBe('09:00');
+    // Every entry is preformatted, so no component ever formats a range itself.
+    expect(day.ownAll.map(a => a.label)).toEqual(['09:00-12:00', '14:00-18:00']);
+    expect(new Set(day.ownAll.map(a => a.key)).size).toBe(2);
   });
 
   it('marks today using the calendar timezone', () => {

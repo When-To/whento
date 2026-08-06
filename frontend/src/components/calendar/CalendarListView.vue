@@ -71,7 +71,9 @@ function openDetails(date: string, event: Event) {
           class="cal-row"
           :data-date="day.date"
           :data-status="day.status"
-          :data-density="day.densityStep || undefined"
+          :data-own="day.own !== null || undefined"
+          :data-recurring="day.recurrence !== null || undefined"
+          :data-threshold="day.meetsThreshold || undefined"
           :data-today="day.isToday || undefined"
           :data-highlight="day.isHighlighted || undefined"
         >
@@ -99,17 +101,9 @@ function openDetails(date: string, event: Event) {
               <span class="flex flex-wrap items-center gap-1.5">
                 <!-- One-off availabilities and recurrences are both shown; a day can
                      carry either, or both at once. -->
-                <span
-                  v-for="availability in day.ownAll"
-                  :key="`${availability.start_time ?? 'all'}-${availability.end_time ?? 'day'}`"
-                  class="cal-tag"
-                >
+                <span v-for="own in day.ownAll" :key="own.key" class="cal-tag">
                   <span class="cal-dot" />
-                  {{
-                    availability.start_time && availability.end_time
-                      ? `${availability.start_time}-${availability.end_time}`
-                      : t('availability.allDay')
-                  }}
+                  {{ own.label }}
                 </span>
                 <span v-if="day.recurrence" class="cal-tag">
                   <span class="cal-dot cal-dot--recurring" />

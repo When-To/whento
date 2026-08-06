@@ -240,11 +240,11 @@ describe('buildDayBands', () => {
     // 09:00 is 60 minutes into a 720-minute column; the band runs 180 minutes.
     expect(bands).toEqual([
       {
-        kind: 'own',
+        kind: 'coverage',
         count: 1,
         top: '8.33%',
         height: '25.00%',
-        strength: 1,
+        strength: 0.6,
         startMin: 540,
         endMin: 720,
       },
@@ -259,7 +259,7 @@ describe('buildDayBands', () => {
     );
     expect(band.top).toBe('0.00%');
     expect(band.height).toBe('100.00%');
-    expect(band.kind).toBe('others');
+    expect(band.kind).toBe('coverage');
   });
 
   it('clips at both ends of the visible range', () => {
@@ -291,7 +291,7 @@ describe('buildDayBands', () => {
       [{ startMin: 600, endMin: 660 }],
       geometry
     );
-    expect(bands.map(b => b.kind)).toEqual(['others', 'threshold']);
+    expect(bands.map(b => b.kind)).toEqual(['coverage', 'threshold']);
   });
 
   it('weights a band by how close its count is to the threshold', () => {
@@ -302,11 +302,13 @@ describe('buildDayBands', () => {
     ];
     const strengths = buildDayBands(coverage, [], geometry, 4).map(b => b.strength);
 
-    // Monotone, never fully transparent, saturating at the threshold.
-    expect(strengths[0]).toBeGreaterThan(0.3);
+    // Monotone, never invisible, and never fully opaque: the bands are drawn over
+    // the participant's own slots, which must stay readable through them.
+    expect(strengths[0]).toBeGreaterThan(0.2);
     expect(strengths[0]).toBeLessThan(strengths[1]);
     expect(strengths[1]).toBeLessThan(strengths[2]);
-    expect(strengths[2]).toBe(1);
+    expect(strengths[2]).toBe(0.6);
+    expect(Math.max(...strengths)).toBeLessThan(1);
   });
 
   it('paints threshold outlines at full weight', () => {

@@ -184,20 +184,6 @@ onMounted(() => {
   dark.value = params.get('theme') === 'dark';
   applyTheme();
 });
-
-/** The two candidate density ramps, shown side by side for comparison. */
-const RAMPS = [
-  {
-    name: 'sand → green (current)',
-    light: ['#d4a843', '#65a30d', '#15803d', '#166534'],
-    dark: ['#b45309', '#65a30d', '#22c55e', '#4ade80'],
-  },
-  {
-    name: 'single-hue green (alternative)',
-    light: ['#22c55e', '#16a34a', '#15803d', '#166534'],
-    dark: ['#166534', '#15803d', '#16a34a', '#22c55e'],
-  },
-];
 </script>
 
 <template>
@@ -220,32 +206,12 @@ const RAMPS = [
         </div>
       </header>
 
-      <section class="card space-y-3 p-4" data-testid="ramps">
-        <h2 class="text-base">Density ramps</h2>
-        <div v-for="ramp in RAMPS" :key="ramp.name" class="flex items-center gap-3 text-sm">
-          <span class="w-56 shrink-0 text-gray-600 dark:text-gray-400">{{ ramp.name }}</span>
-          <span class="flex overflow-hidden rounded border border-gray-300 dark:border-gray-600">
-            <span
-              v-for="(hex, i) in dark ? ramp.dark : ramp.light"
-              :key="i"
-              class="flex h-8 w-16 items-center justify-center text-xs"
-              :style="{
-                backgroundColor: hex,
-                color: i < 2 && !dark ? '#111827' : i === 0 && dark ? '#f3f4f6' : '#111827',
-              }"
-            >
-              {{ i + 1 }}
-            </span>
-          </span>
-          <span class="text-xs text-gray-500">0 = empty cell surface</span>
-        </div>
-      </section>
-
       <CalendarMonthView :model="model" show-navigation data-testid="month" />
 
       <CalendarWeekView
         :model="weekModel"
         :slot-duration-min="30"
+        :threshold="THRESHOLD"
         :availabilities-for="availabilitiesFor"
         show-navigation
         data-testid="week"

@@ -343,6 +343,7 @@
     "calendarDateRangeTo": "until {date}",
     "calendarDateRangeFromTo": "from {startDate} to {endDate}",
     "displayMode": "Display",
+    "viewStyle": "View",
     "monthView": "Month",
     "weekView": "Week",
     "numberOfWeeks": "Number of weeks",

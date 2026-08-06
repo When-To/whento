@@ -1,7 +1,4 @@
 @import 'tailwindcss';
-/* Calendar design system. CSS requires every @import to precede any other rule, so
-   this has to sit here rather than next to the theme it extends. */
-@import './styles/calendar.css';
 
 /* Enable class-based dark mode for Tailwind v4 */
 @custom-variant dark (&:where(.dark, .dark *));

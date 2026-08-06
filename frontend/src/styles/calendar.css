@@ -9,52 +9,37 @@
  * previous week grid read `document.documentElement.classList.contains('dark')` during
  * render to pick `rgb()` strings, which was both expensive and non-reactive — toggling
  * the theme left every fill stale until an unrelated re-render.
+ *
+ * Loaded from `main.ts` rather than `@import`ed here from `style.css`: Vite does not
+ * invalidate a CSS `@import` when the imported file changes, so every edit to this
+ * file needed a dev-server restart to show up. `@reference` pulls in the theme and the
+ * `dark` variant for `@apply` without re-emitting the framework.
  */
 
+@reference '../style.css';
+
 /* --------------------------------------------------------------------------
- * Density ramp
+ * Selection colour
  *
- * An ordinal ramp encoding progress toward the calendar's threshold: amber for "not
- * enough yet", green for "this date works". The hue carries the semantic, which makes
- * a month scannable at a glance in a way four shades of one colour is not.
+ * The cell background answers one question only: has *this* participant marked this
+ * day or slot? A density heatmap was tried first and read badly — the eye spent its
+ * effort decoding a shade instead of finding the user's own answers, and the collective
+ * count was already carried, more precisely, by the gauge and the "n/threshold" label
+ * right below it.
  *
- * Validated per mode against the ordinal checks. Monotone lightness, adjacent
- * dL >= 0.06 and near-surface contrast >= 2:1 all pass. The "single hue" check fails by
- * construction, and that is the deliberate trade: that rule exists so lightness carries
- * the order, and lightness monotonicity is verified separately and holds — so hue adds
- * a channel here rather than replacing one.
- *
- * The cost of a warm-to-cool ramp is that amber and green are the classic
- * red-green-deficient collision. It is affordable only because hue is never the sole
- * encoding: the gauge width and the "n/threshold" count repeat the same value, and the
- * monotone lightness keeps the order legible without any colour perception at all.
- *
- * The ramp anchors to the surface, so it darkens toward green on a white cell and
- * brightens toward green on a gray-800 one. Dark mode is selected, not flipped.
- *
- * Values are the validated hexes, not `var()` references: Tailwind only emits theme
- * variables that its own utilities pull in, and a raw `var(--color-lime-600)` here
- * would resolve to nothing.
- *
- * The ink flips where the fill gets too dark (or too light) to hold the default text
- * colour; every pairing below clears 4.5:1.
+ * So: filled means mine, outlined means covered by one of my recurrences, and
+ * everything collective stays in the gauge, the count and the threshold outline.
  * ----------------------------------------------------------------------- */
 
 :root {
-  /* Deliberately desaturated rather than a full amber: warm colours advance, so a
-     saturated first step made the emptiest days the loudest thing on a light month
-     and pushed the dates that actually work into the background. */
-  --cal-density-1: #d4a843; /* muted sand · 2.21:1 on white · 8.01:1 with gray-900 */
-  --cal-density-2: #65a30d; /* lime-600   · 3.09:1 on white · 5.74:1 with gray-900 */
-  --cal-density-3: #15803d; /* green-700  · 5.02:1 on white · 4.56:1 with white    */
-  --cal-density-4: #166534; /* green-800  · 7.13:1 on white · 6.48:1 with white    */
-  --cal-density-1-ink: var(--color-gray-900, #111827);
-  --cal-density-2-ink: var(--color-gray-900, #111827);
-  --cal-density-3-ink: #ffffff;
-  --cal-density-4-ink: #ffffff;
+  --cal-own: var(--color-primary-600); /* 4.98:1 with white */
+  --cal-own-ink: #ffffff;
+  --cal-recurring: var(--color-secondary-600);
+  --cal-recurring-ink: #ffffff;
+  --cal-threshold: #15803d; /* green-700 */
 
   --cal-accent-own: var(--color-primary-600);
-  --cal-band-others: #93c5fd; /* blue-300 — participants other than me */
+  --cal-band-coverage: #64748b; /* slate-500 — neutral, so blue stays "mine" */
   --cal-hour-line: var(--color-gray-300, #d1d5db);
   --cal-band-threshold: #16a34a; /* green-600 — outline where the threshold is met */
   --cal-accent-recurring: var(--color-secondary-500);
@@ -66,17 +51,14 @@
 }
 
 .dark {
-  --cal-density-1: #b45309; /* amber-700 · 2.92:1 on gray-800 · 4.56:1 with gray-100 */
-  --cal-density-2: #65a30d; /* lime-600  · 4.75:1 on gray-800 · 5.74:1 with gray-900 */
-  --cal-density-3: #22c55e; /* green-500 · 6.44:1 on gray-800 · 7.79:1 with gray-900 */
-  --cal-density-4: #4ade80; /* green-400 · 8.42:1 on gray-800 · 10.18:1 with gray-900 */
-  --cal-density-1-ink: var(--color-gray-100, #f3f4f6);
-  --cal-density-2-ink: var(--color-gray-900, #111827);
-  --cal-density-3-ink: var(--color-gray-900, #111827);
-  --cal-density-4-ink: var(--color-gray-900, #111827);
+  --cal-own: var(--color-primary-500);
+  --cal-own-ink: #08131c;
+  --cal-recurring: var(--color-secondary-500);
+  --cal-recurring-ink: #150525;
+  --cal-threshold: #22c55e; /* green-500 */
 
   --cal-accent-own: var(--color-primary-400);
-  --cal-band-others: rgb(59 130 246 / 0.55); /* blue-500 at reduced weight */
+  --cal-band-coverage: #94a3b8; /* slate-400 */
   --cal-hour-line: var(--color-gray-600, #4b5563);
   --cal-band-threshold: #22c55e; /* green-500 */
   --cal-accent-recurring: var(--color-secondary-400);
@@ -171,30 +153,24 @@
     @apply border-primary-400 dark:border-primary-500;
   }
 
-  /* Heatmap steps. Step 0 keeps the default surface — an empty day should read as
-     empty, not as "the palest green". */
-  .cal-cell[data-density='1'] {
-    background-color: var(--cal-density-1);
-    color: var(--cal-density-1-ink);
+  /* The one thing the fill encodes: this participant answered here. */
+  .cal-cell[data-own] {
+    background-color: var(--cal-own);
+    color: var(--cal-own-ink);
     @apply border-transparent;
   }
 
-  .cal-cell[data-density='2'] {
-    background-color: var(--cal-density-2);
-    color: var(--cal-density-2-ink);
-    @apply border-transparent;
+  /* Covered by a recurrence rather than an explicit answer: outlined, not filled, so
+     the two are distinguishable at a glance. */
+  .cal-cell[data-recurring]:not([data-own]) {
+    @apply border-2;
+    border-color: var(--cal-recurring);
   }
 
-  .cal-cell[data-density='3'] {
-    background-color: var(--cal-density-3);
-    color: var(--cal-density-3-ink);
-    @apply border-transparent;
-  }
-
-  .cal-cell[data-density='4'] {
-    background-color: var(--cal-density-4);
-    color: var(--cal-density-4-ink);
-    @apply border-transparent;
+  /* Enough participants overall. An outline, so it composes with the fill above
+     instead of competing with it. */
+  .cal-cell[data-threshold] {
+    box-shadow: inset 0 0 0 2px var(--cal-threshold);
   }
 
   /* Rings, in ascending precedence: a later rule wins, and in practice only one
@@ -370,6 +346,11 @@
     @apply -translate-y-1/2 pr-1 text-right text-[0.65rem] leading-none text-gray-400 tabular-nums dark:text-gray-500;
   }
 
+  /* Sits on the closing edge of the last row rather than on a row of its own. */
+  .cal-week-time--last {
+    @apply text-gray-500 dark:text-gray-400;
+  }
+
   /*
    * One grid for the whole week. The previous markup nested a separate grid container
    * per time slot — forty-eight of them — each re-deriving its own cell state.
@@ -384,6 +365,14 @@
 
   .cal-slot {
     @apply border-b border-r border-gray-100 dark:border-gray-800;
+  }
+
+  /* A run of answered slots has to read as one block. Keeping the per-slot bottom
+     border striped it every half hour; the hour separators are drawn on the grid
+     above, so nothing is lost by dropping it here. */
+  .cal-slot[data-own] + .cal-slot[data-own],
+  .cal-slot[data-own] {
+    @apply border-b-transparent;
   }
 
   /*
@@ -432,24 +421,27 @@
     @apply pointer-events-none relative z-10;
   }
 
+  /* Counts and gauges must clear the fills underneath them, so they sit above the
+     hour separators too. */
+  .cal-band-count,
+  .cal-band-gauge {
+    @apply z-20;
+  }
+
   .cal-band {
     @apply absolute inset-x-0.5 rounded-sm;
   }
 
-  /* Weight follows the participant count, so coverage reads as a gradient down the
-     column rather than one flat block whose numbers have to be read. */
-  .cal-band[data-kind='own'] {
+  /*
+   * Collective coverage is deliberately neutral. Blue belongs to "I answered here" and
+   * green to "enough people"; painting coverage in a third blue made the participant's
+   * own slots indistinguishable from everyone else's. Weight still follows the count,
+   * so the column reads as a gradient without competing for hue.
+   */
+  .cal-band[data-kind='coverage'] {
     background-color: color-mix(
       in oklab,
-      var(--cal-accent-own) calc(var(--cal-band-strength, 1) * 100%),
-      transparent
-    );
-  }
-
-  .cal-band[data-kind='others'] {
-    background-color: color-mix(
-      in oklab,
-      var(--cal-band-others) calc(var(--cal-band-strength, 1) * 100%),
+      var(--cal-band-coverage) calc(var(--cal-band-strength, 1) * 100%),
       transparent
     );
   }
@@ -459,9 +451,29 @@
     border-color: var(--cal-band-threshold);
   }
 
+  /* Count and gauge ride together at the top of the band. Pinning the gauge to the
+     bottom of a tall band divorced it from the number it explains, and left a stray
+     white line floating mid-grid. */
   .cal-band-count {
-    @apply absolute right-0.5 top-0.5 text-[0.6rem] font-semibold leading-none;
-    @apply text-gray-700 dark:text-gray-100;
+    @apply absolute right-1 top-0.5 rounded px-1 text-[0.6rem] font-semibold leading-tight tabular-nums;
+    @apply bg-white/85 text-gray-800 dark:bg-gray-900/80 dark:text-gray-100;
+  }
+
+  .cal-band-gauge {
+    @apply absolute right-1 top-[1.15rem] block h-1 w-8 overflow-hidden rounded-full;
+    @apply bg-white/70 dark:bg-gray-900/70;
+  }
+
+  .cal-band-gauge-fill {
+    @apply block h-full rounded-full;
+    background-color: var(--cal-band-threshold);
+  }
+
+  /* This participant's own answer. Solid, and beneath the translucent coverage bands
+     so both readings survive: the block is mine, the tint over it is everyone's. */
+  .cal-slot[data-own] {
+    @apply relative z-[5];
+    background-color: var(--cal-own);
   }
 
   /* ------------------------------------------------------------- list view */
@@ -472,28 +484,19 @@
     @apply dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100;
   }
 
-  .cal-row[data-density='1'] {
-    background-color: var(--cal-density-1);
-    color: var(--cal-density-1-ink);
+  .cal-row[data-own] {
+    background-color: var(--cal-own);
+    color: var(--cal-own-ink);
     @apply border-transparent;
   }
 
-  .cal-row[data-density='2'] {
-    background-color: var(--cal-density-2);
-    color: var(--cal-density-2-ink);
-    @apply border-transparent;
+  .cal-row[data-recurring]:not([data-own]) {
+    @apply border-2;
+    border-color: var(--cal-recurring);
   }
 
-  .cal-row[data-density='3'] {
-    background-color: var(--cal-density-3);
-    color: var(--cal-density-3-ink);
-    @apply border-transparent;
-  }
-
-  .cal-row[data-density='4'] {
-    background-color: var(--cal-density-4);
-    color: var(--cal-density-4-ink);
-    @apply border-transparent;
+  .cal-row[data-threshold] {
+    box-shadow: inset 0 0 0 2px var(--cal-threshold);
   }
 
   .cal-row[data-today] {

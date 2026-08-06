@@ -164,9 +164,15 @@ export interface GridGeometry {
   readonly slotCount: number;
 }
 
-/** One painted band in a day column, positioned as percentages of the column. */
+/**
+ * One painted band in a day column, positioned as percentages of the column.
+ *
+ * `coverage` is how many people are free, whoever they are. It deliberately does not
+ * distinguish the current participant: that is the slot fill's job, and encoding both
+ * as shades of the same blue made the two indistinguishable.
+ */
 export interface Band {
-  readonly kind: 'own' | 'others' | 'threshold';
+  readonly kind: 'coverage' | 'threshold';
   readonly count: number;
   /** Pre-stringified so the template does no arithmetic. */
   readonly top: string;
@@ -182,12 +188,20 @@ export interface Band {
 }
 
 /** Faintest a band may be, so a single participant is still clearly visible. */
-const MIN_BAND_STRENGTH = 0.35;
+const MIN_BAND_STRENGTH = 0.25;
+
+/**
+ * Strongest a band may be. Bands are drawn *over* the participant's own slots, so they
+ * have to stay translucent: at full opacity a busy day would hide the one thing the
+ * user is looking for, which is where they themselves answered.
+ */
+const MAX_BAND_STRENGTH = 0.6;
 
 function strengthFor(count: number, threshold: number): number {
-  if (count <= 0) return 1;
-  if (threshold <= 0) return 1;
-  return Math.min(1, MIN_BAND_STRENGTH + (1 - MIN_BAND_STRENGTH) * (count / threshold));
+  if (count <= 0) return MAX_BAND_STRENGTH;
+  if (threshold <= 0) return MAX_BAND_STRENGTH;
+  const ratio = Math.min(count / threshold, 1);
+  return MIN_BAND_STRENGTH + (MAX_BAND_STRENGTH - MIN_BAND_STRENGTH) * ratio;
 }
 
 function pct(value: number): string {
@@ -231,12 +245,7 @@ export function buildDayBands(
   };
 
   for (const segment of coverage) {
-    push(
-      segment.includesCurrent ? 'own' : 'others',
-      segment.startMin,
-      segment.endMin,
-      segment.count
-    );
+    push('coverage', segment.startMin, segment.endMin, segment.count);
   }
 
   // Threshold bands are outlines drawn over the fills, so they come last.

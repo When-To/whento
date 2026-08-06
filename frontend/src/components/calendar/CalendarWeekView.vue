@@ -17,6 +17,8 @@ import { useDragSelection, type DragTarget } from '@/composables/calendar/useDra
 interface Props {
   model: WeekModel;
   slotDurationMin: number;
+  /** Participants needed for a slot to count as workable. */
+  threshold: number;
   /** Look up the current participant's availabilities for a date. */
   availabilitiesFor: (date: string) => readonly Availability[];
   showNavigation?: boolean;
@@ -41,6 +43,14 @@ const cellByKey = computed(() => new Map(props.model.cells.map(cell => [cell.key
 
 /** Column height in rows, so the band overlay can span the whole day. */
 const slotCount = computed(() => props.model.slots.length);
+
+/** Closing time of the last row, which has no row of its own to label. */
+const endLabel = computed(() => {
+  const last = props.model.slots[props.model.slots.length - 1];
+  if (!last) return '';
+  const end = last.startMin + props.slotDurationMin;
+  return `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
+});
 
 /** Spacing of the hour separators, expressed in slot heights. */
 const hourHeight = computed(
@@ -256,6 +266,9 @@ function shiftWeek(days: number) {
           >
             {{ slot.isHourStart ? slot.time : '' }}
           </span>
+          <!-- The grid has one label per row, so the closing edge of the last row has
+               none; without this the end of the day has to be counted out. -->
+          <span class="cal-week-time cal-week-time--last" data-hour>{{ endLabel }}</span>
         </div>
 
         <!-- One grid for every slot, rather than one grid container per row. -->
@@ -274,6 +287,7 @@ function shiftWeek(days: number) {
             :data-slot-key="cell.key"
             :data-enabled="cell.enabled || undefined"
             :data-own="cell.hasOwn || undefined"
+            :aria-selected="cell.hasOwn || undefined"
             :data-hour="cell.isHourStart || undefined"
             :data-drag="slotDragState(cell) || undefined"
             :style="{ gridColumn: cell.dayIndex + 1, gridRow: cell.slotIndex + 1 }"
@@ -295,9 +309,19 @@ function shiftWeek(days: number) {
               :data-kind="band.kind"
               :style="{ top: band.top, height: band.height, '--cal-band-strength': band.strength }"
             >
-              <span v-if="band.kind !== 'threshold' && band.count > 0" class="cal-band-count">
-                {{ band.count }}
-              </span>
+              <template v-if="band.kind !== 'threshold' && band.count > 0">
+                <span class="cal-band-count">{{ band.count }}/{{ threshold }}</span>
+                <!-- Same progress reading as a month cell: how close this span is to
+                     a workable date, without having to compare the two numbers. -->
+                <span class="cal-band-gauge">
+                  <span
+                    class="cal-band-gauge-fill"
+                    :style="{
+                      width: `${Math.min(100, Math.round((band.count / threshold) * 100))}%`,
+                    }"
+                  />
+                </span>
+              </template>
             </div>
           </div>
         </div>

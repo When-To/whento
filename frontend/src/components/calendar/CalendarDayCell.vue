@@ -33,22 +33,6 @@ const isInteractive = computed(
 /** Gauge width, capped at 100%. Repeats the density without relying on hue. */
 const gaugeWidth = computed(() => `${Math.round(props.day.density * 100)}%`);
 
-/**
- * A day can carry a one-off availability *and* be covered by a recurrence at the
- * same time. The previous grid collapsed the two into one exclusive status and the
- * recurrence simply disappeared; both are shown here.
- */
-const ownLabels = computed(() =>
-  props.day.ownAll.map(availability => ({
-    key: `${props.day.date}-${availability.start_time ?? 'all'}-${availability.end_time ?? 'day'}`,
-    label:
-      availability.start_time && availability.end_time
-        ? `${availability.start_time}-${availability.end_time}`
-        : t('availability.allDay'),
-    note: availability.note,
-  }))
-);
-
 const holidayTitle = computed(() => {
   if (props.day.isHoliday) return props.day.holidayName ?? t('calendar.publicHoliday');
   if (props.day.isHolidayEve) return t('calendar.holidayEve');
@@ -62,7 +46,9 @@ const holidayTitle = computed(() => {
     role="gridcell"
     :data-date="day.date"
     :data-status="day.status"
-    :data-density="day.densityStep || undefined"
+    :data-own="day.own !== null || undefined"
+    :data-recurring="day.recurrence !== null || undefined"
+    :data-threshold="day.meetsThreshold || undefined"
     :data-today="day.isToday || undefined"
     :data-holiday="day.isHoliday || undefined"
     :data-holiday-eve="(!day.isHoliday && day.isHolidayEve) || undefined"
@@ -88,7 +74,9 @@ const holidayTitle = computed(() => {
     </div>
 
     <!-- One-off availabilities: every time range for the day, not just the first. -->
-    <span v-for="own in ownLabels" :key="own.key" class="cal-tag" :title="own.note || own.label">
+    <!-- A day can carry a one-off availability *and* a recurrence at the same time;
+         the previous grid collapsed the two and the recurrence disappeared. -->
+    <span v-for="own in day.ownAll" :key="own.key" class="cal-tag" :title="own.note || own.label">
       <span class="cal-dot" />
       {{ own.label }}
     </span>
