@@ -364,48 +364,25 @@
             />
           </div>
 
-          <!-- Weekly grid - Display weeks (week view, classic style) -->
+          <!-- Week grids: one per displayed week, all sharing a single model -->
           <div v-else class="space-y-6">
-            <WeeklyCalendarGrid
-              v-for="(weekConfig, index) in weeksToDisplay"
-              :key="`${weekConfig.key}-${calendar?.id}`"
-              :initial-year="weekConfig.year"
-              :initial-month="weekConfig.month"
-              :initial-week="weekConfig.week"
-              :week-start-date="weekConfig.weekStartDate"
+            <CalendarWeekControls
+              v-model:start-hour="startHour"
+              v-model:end-hour="endHour"
+              v-model:slot-duration="slotDuration"
+            />
+            <CalendarWeekView
+              v-for="(weekModel, index) in weekModels"
+              :key="weekModel.key"
+              :model="weekModel"
+              :slot-duration-min="slotDuration"
+              :availabilities-for="availabilitiesForDate"
               :show-navigation="index === 0"
-              :show-time-controls="index === 0"
-              :show-legend="index === weeksToDisplay.length - 1"
-              :availabilities="availabilities"
-              :date-summaries="dateSummaries"
-              :participant-counts="participantCounts"
-              :threshold="calendar?.threshold || 1"
-              :allowed-weekdays="calendar?.allowed_weekdays"
-              :timezone="calendar?.timezone"
-              :holidays-policy="calendar?.holidays_policy"
-              :allow-holiday-eves="calendar?.allow_holiday_eves"
-              :weekday-times="(calendar as any)?.weekday_times"
-              :holiday-min-time="(calendar as any)?.holiday_min_time"
-              :holiday-max-time="(calendar as any)?.holiday_max_time"
-              :holiday-eve-min-time="(calendar as any)?.holiday_eve_min_time"
-              :holiday-eve-max-time="(calendar as any)?.holiday_eve_max_time"
-              :start-date="calendarStartDate"
-              :end-date="calendarEndDate"
-              :calendar-token="token"
-              :current-participant-id="participantId"
-              :current-participant-name="participant?.name || ''"
-              :highlighted-dates="selectedParticipantsCommonDates"
-              :initial-start-hour="startHour"
-              :initial-end-hour="endHour"
-              :initial-slot-duration="slotDuration"
-              @availability-create="handleWeeklyAvailabilityCreate"
-              @availability-delete="handleWeeklyAvailabilityDelete"
-              @availability-update="handleWeeklyAvailabilityUpdate"
               @batch-operations="handleBatchOperations"
-              @week-change="handleWeekChange"
-              @settings-change="handleWeeklySettingsChange"
-              @availability-updated="handleAvailabilityUpdated"
-              @view-style-change="handleViewStyleChange"
+              @split-refused="toastStore.error(t('availability.cannotSplitError'))"
+              @no-op="toastStore.error(t('errors.availabilityConflict'))"
+              @day-details="openDayDetails"
+              @week-change="handleWeekStartChange"
             />
           </div>
         </div>
@@ -1252,12 +1229,14 @@ import { availabilitiesApi } from '@/api/availabilities';
 import CalendarMonthView from '@/components/calendar/CalendarMonthView.vue';
 import ParticipantDetailsPopup from '@/components/ParticipantDetailsPopup.vue';
 import CalendarListView from '@/components/CalendarListView.vue';
-import WeeklyCalendarGrid, {
-  type AvailabilityOperation,
-} from '@/components/WeeklyCalendarGrid.vue';
+import CalendarWeekView from '@/components/calendar/CalendarWeekView.vue';
+import CalendarWeekControls from '@/components/calendar/CalendarWeekControls.vue';
+import type { AvailabilityOperation } from '@/types/calendar';
+import { buildCoverageMap } from '@/utils/calendar/segments';
+import { buildWeekModel } from '@/utils/calendar/weekModel';
 import TimeSelect from '@/components/TimeSelect.vue';
 import CollapsibleSection from '@/components/CollapsibleSection.vue';
-import { formatDateISO } from '@/utils/date/isoDate';
+import { formatDateISO, parseISODate } from '@/utils/date/isoDate';
 import { useParticipantCalendar } from '@/composables/calendar/useParticipantCalendar';
 import { addParticipantEmail, resendVerificationEmail } from '@/api/notify';
 import type {
@@ -1552,6 +1531,36 @@ const calendarModel = useParticipantCalendar({
       : []
   ),
 });
+
+// Coverage bands for the whole visible range, computed once for every week shown.
+const coverageMap = computed(() =>
+  buildCoverageMap(
+    dateSummaries.value,
+    participant.value?.name || '',
+    calendar.value?.threshold || 1
+  )
+);
+
+const weekModels = computed(() => {
+  if (displayMode.value !== 'week') return [];
+  return weeksToDisplay.value.map(week =>
+    buildWeekModel(formatDateISO(week.weekStartDate), calendarModel.deps.value, {
+      startHour: startHour.value,
+      endHour: endHour.value,
+      slotDurationMin: slotDuration.value,
+      coverage: coverageMap.value.coverage,
+      thresholds: coverageMap.value.thresholds,
+    })
+  );
+});
+
+function availabilitiesForDate(date: string) {
+  return availabilities.value.filter(a => a.date === date);
+}
+
+function handleWeekStartChange(startISO: string) {
+  handleWeekChange(parseISODate(startISO));
+}
 
 // Participant details popup, opened from any view and rendered once at this level.
 const detailsDate = ref<string | null>(null);
@@ -2382,87 +2391,6 @@ async function handleWeekChange(weekStartDate: Date) {
 
   // Reload participant counts
   await loadParticipantCounts(year, month);
-}
-
-function handleWeeklySettingsChange(settings: {
-  startHour?: number;
-  endHour?: number;
-  slotDuration?: number;
-}) {
-  // Update local refs
-  if (settings.startHour !== undefined) {
-    startHour.value = settings.startHour;
-  }
-  if (settings.endHour !== undefined) {
-    endHour.value = settings.endHour;
-  }
-  if (settings.slotDuration !== undefined) {
-    slotDuration.value = settings.slotDuration;
-  }
-
-  // Save to history
-  historyStore.updateDisplaySettings(token.value, settings);
-}
-
-async function handleWeeklyAvailabilityCreate(date: string, startTime: string, endTime: string) {
-  try {
-    const data: CreateAvailabilityRequest = {
-      date,
-      start_time: startTime,
-      end_time: endTime,
-    };
-
-    await availabilitiesApi.create(token.value, participantId.value, data);
-
-    // Reload participant counts (which includes all participants' availabilities)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
-
-    toastStore.success(t('availability.created', 'Availability created'));
-  } catch (err: any) {
-    // Check for specific error codes
-    if (err.code === 'CONFLICT') {
-      toastStore.error(t('errors.availabilityConflict'));
-    } else {
-      toastStore.error(err.message || 'Failed to create availability');
-    }
-  }
-}
-
-async function handleWeeklyAvailabilityDelete(date: string, _startTime: string, _endTime: string) {
-  try {
-    await availabilitiesApi.delete(token.value, participantId.value, date);
-
-    // Reload participant counts (which includes all participants' availabilities)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
-
-    toastStore.success(t('availability.deleted', 'Availability deleted'));
-  } catch (err: any) {
-    toastStore.error(err.message || 'Failed to delete availability');
-  }
-}
-
-async function handleWeeklyAvailabilityUpdate(
-  date: string,
-  _oldStartTime: string,
-  _oldEndTime: string,
-  newStartTime: string,
-  newEndTime: string
-) {
-  try {
-    const data: Partial<CreateAvailabilityRequest> = {
-      start_time: newStartTime,
-      end_time: newEndTime,
-    };
-
-    await availabilitiesApi.update(token.value, participantId.value, date, data);
-
-    // Reload participant counts (which includes all participants' availabilities)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
-
-    toastStore.success(t('availability.updated', 'Availability updated'));
-  } catch (err: any) {
-    toastStore.error(err.message || 'Failed to update availability');
-  }
 }
 
 async function handleBatchOperations(operations: AvailabilityOperation[]) {

@@ -244,6 +244,7 @@ describe('buildDayBands', () => {
         count: 1,
         top: '8.33%',
         height: '25.00%',
+        strength: 1,
         startMin: 540,
         endMin: 720,
       },
@@ -291,6 +292,26 @@ describe('buildDayBands', () => {
       geometry
     );
     expect(bands.map(b => b.kind)).toEqual(['others', 'threshold']);
+  });
+
+  it('weights a band by how close its count is to the threshold', () => {
+    const coverage = [
+      { startMin: 540, endMin: 600, count: 1, includesCurrent: false },
+      { startMin: 600, endMin: 660, count: 2, includesCurrent: false },
+      { startMin: 660, endMin: 720, count: 4, includesCurrent: false },
+    ];
+    const strengths = buildDayBands(coverage, [], geometry, 4).map(b => b.strength);
+
+    // Monotone, never fully transparent, saturating at the threshold.
+    expect(strengths[0]).toBeGreaterThan(0.3);
+    expect(strengths[0]).toBeLessThan(strengths[1]);
+    expect(strengths[1]).toBeLessThan(strengths[2]);
+    expect(strengths[2]).toBe(1);
+  });
+
+  it('paints threshold outlines at full weight', () => {
+    const bands = buildDayBands([], [{ startMin: 540, endMin: 600 }], geometry, 5);
+    expect(bands[0].strength).toBe(1);
   });
 
   it('returns nothing for a degenerate geometry', () => {

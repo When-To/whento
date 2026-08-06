@@ -8,6 +8,10 @@
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import CalendarMonthView from '../src/components/calendar/CalendarMonthView.vue';
+import CalendarWeekView from '../src/components/calendar/CalendarWeekView.vue';
+import { buildCoverageMap } from '../src/utils/calendar/segments';
+import { buildWeekModel } from '../src/utils/calendar/weekModel';
+import type { DateAvailabilitySummary } from '../src/types';
 import { useCalendarFormatters } from '../src/composables/calendar/useCalendarFormatters';
 import { buildCalendarRules } from '../src/utils/calendar/dateRules';
 import { buildDayIndex } from '../src/utils/calendar/dayIndex';
@@ -107,6 +111,65 @@ const deps = computed<ModelDeps>(() => ({
 
 const model = computed(() => buildMonthModel(YEAR, MONTH, deps.value));
 
+/** Per-participant detail for the week the availabilities above sit in. */
+const dateSummaries: DateAvailabilitySummary[] = [
+  {
+    date: iso(13),
+    total_count: 5,
+    participants: [
+      { participant_name: 'Bob', start_time: '09:00', end_time: '17:00' },
+      { participant_name: 'Cleo', start_time: '10:00', end_time: '12:00' },
+      { participant_name: 'Dee', start_time: '11:00', end_time: '16:00' },
+      { participant_name: 'Eve' },
+      { participant_name: 'Finn', start_time: '14:00', end_time: '18:00' },
+    ],
+  },
+  {
+    date: iso(15),
+    total_count: 3,
+    participants: [
+      { participant_name: 'Ada', start_time: '14:00', end_time: '18:00' },
+      { participant_name: 'Bob', start_time: '13:00', end_time: '16:00' },
+      { participant_name: 'Cleo', start_time: '15:00', end_time: '19:00' },
+    ],
+  },
+  {
+    date: iso(16),
+    total_count: 5,
+    participants: [
+      { participant_name: 'Ada', start_time: '09:00', end_time: '12:00' },
+      { participant_name: 'Bob', start_time: '09:00', end_time: '18:00' },
+      { participant_name: 'Cleo', start_time: '10:00', end_time: '17:00' },
+      { participant_name: 'Dee', start_time: '11:00', end_time: '15:00' },
+      { participant_name: 'Eve', start_time: '08:00', end_time: '20:00' },
+    ],
+  },
+  {
+    date: iso(17),
+    total_count: 2,
+    participants: [
+      { participant_name: 'Bob', start_time: '08:00', end_time: '10:00' },
+      { participant_name: 'Cleo', start_time: '10:00', end_time: '12:00' },
+    ],
+  },
+];
+
+const coverageMap = computed(() => buildCoverageMap(dateSummaries, 'Ada', THRESHOLD));
+
+const weekModel = computed(() =>
+  buildWeekModel(iso(15), deps.value, {
+    startHour: 8,
+    endHour: 20,
+    slotDurationMin: 30,
+    coverage: coverageMap.value.coverage,
+    thresholds: coverageMap.value.thresholds,
+  })
+);
+
+function availabilitiesFor(date: string) {
+  return availabilities.filter(a => a.date === date);
+}
+
 const dark = ref(false);
 function applyTheme() {
   document.documentElement.classList.toggle('dark', dark.value);
@@ -179,6 +242,14 @@ const RAMPS = [
       </section>
 
       <CalendarMonthView :model="model" show-navigation data-testid="month" />
+
+      <CalendarWeekView
+        :model="weekModel"
+        :slot-duration-min="30"
+        :availabilities-for="availabilitiesFor"
+        show-navigation
+        data-testid="week"
+      />
 
       <section class="card p-4 text-sm text-gray-600 dark:text-gray-400">
         <h2 class="mb-2 text-base text-gray-900 dark:text-gray-100">What to look for</h2>

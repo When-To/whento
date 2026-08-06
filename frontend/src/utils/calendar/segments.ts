@@ -171,8 +171,23 @@ export interface Band {
   /** Pre-stringified so the template does no arithmetic. */
   readonly top: string;
   readonly height: string;
+  /**
+   * How strongly to paint the band, 0..1, from the participant count relative to the
+   * threshold. Without it every span is the same flat colour and the reader has to
+   * read the numbers to see where the coverage actually is.
+   */
+  readonly strength: number;
   readonly startMin: number;
   readonly endMin: number;
+}
+
+/** Faintest a band may be, so a single participant is still clearly visible. */
+const MIN_BAND_STRENGTH = 0.35;
+
+function strengthFor(count: number, threshold: number): number {
+  if (count <= 0) return 1;
+  if (threshold <= 0) return 1;
+  return Math.min(1, MIN_BAND_STRENGTH + (1 - MIN_BAND_STRENGTH) * (count / threshold));
 }
 
 function pct(value: number): string {
@@ -191,7 +206,8 @@ function pct(value: number): string {
 export function buildDayBands(
   coverage: readonly CoverageSegment[],
   thresholds: readonly Interval[],
-  geometry: GridGeometry
+  geometry: GridGeometry,
+  threshold = 1
 ): Band[] {
   const { firstSlotMin, lastSlotEndMin } = geometry;
   const span = lastSlotEndMin - firstSlotMin;
@@ -208,6 +224,7 @@ export function buildDayBands(
       count,
       top: pct((clippedStart - firstSlotMin) / span),
       height: pct((clippedEnd - clippedStart) / span),
+      strength: kind === 'threshold' ? 1 : strengthFor(count, threshold),
       startMin: clippedStart,
       endMin: clippedEnd,
     });
