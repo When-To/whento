@@ -574,6 +574,8 @@ import TimeSelect from '@/components/TimeSelect.vue';
 import { formatWeekday, formatDayMonthShort } from '@/utils/dateFormatting';
 import { formatDateISO, todayISO } from '@/utils/date/isoDate';
 import { getHolidayIndex } from '@/utils/calendar/holidays';
+import { buildDayIndex } from '@/utils/calendar/dayIndex';
+import { coversTime, isFullDay } from '@/utils/date/timeRange';
 import {
   buildCalendarRules,
   isDayOpen,
@@ -603,6 +605,10 @@ const calendarRules = computed(() =>
     threshold: props.threshold,
   })
 );
+
+// Availabilities indexed by date, built once per data change instead of re-scanned
+// per cell and per header.
+const dayIndex = computed(() => buildDayIndex({ availabilities: props.availabilities }));
 
 function dayContext(date: Date): DayContext {
   const dateString = formatDateISO(date);
@@ -1440,30 +1446,12 @@ function isDateEnabled(date: Date): boolean {
 
 // Check if there's an availability at this time slot
 function hasAvailability(dateString: string, time: string): boolean {
-  return props.availabilities.some(av => {
-    if (av.date !== dateString) return false;
-
-    // If no times specified, it's all day
-    if (!av.start_time && !av.end_time) return true;
-
-    const startTime = av.start_time || '00:00';
-    const endTime = av.end_time || '23:59';
-
-    return time >= startTime && time < endTime;
-  });
+  return dayIndex.value.ownFor(dateString).some(av => coversTime(av, time));
 }
 
 // Check if a date has a full-day availability (no times or 00:00-23:59)
 function hasFullDayAvailability(dateString: string): boolean {
-  return props.availabilities.some(av => {
-    if (av.date !== dateString) return false;
-
-    // Full day if no times specified
-    if (!av.start_time && !av.end_time) return true;
-
-    // Full day if 00:00-23:59
-    return av.start_time === '00:00' && av.end_time === '23:59';
-  });
+  return dayIndex.value.ownFor(dateString).some(av => isFullDay(av.start_time, av.end_time));
 }
 
 // Get cell height - constant regardless of slot duration
@@ -1620,7 +1608,7 @@ function createOrExtendAvailability(
   newEndTime: string
 ): AvailabilityOperation | null {
   // Find existing availability for this date
-  const existingAvailability = props.availabilities.find(av => av.date === date);
+  const existingAvailability = dayIndex.value.ownFor(date)[0];
 
   if (!existingAvailability) {
     // No existing availability - create new
@@ -2245,9 +2233,7 @@ function handleHeaderPointerUp() {
           const day = weekDays.value[i];
           if (day && isDateEnabled(day.date)) {
             // Check if there's already an availability for this date
-            const existingAvailability = props.availabilities.find(
-              av => av.date === day.dateString
-            );
+            const existingAvailability = dayIndex.value.ownFor(day.dateString)[0];
 
             if (!existingAvailability) {
               // No existing availability - create new full-day
@@ -2277,9 +2263,7 @@ function handleHeaderPointerUp() {
           const day = weekDays.value[i];
           if (day && isDateEnabled(day.date)) {
             // Find existing availability for this date
-            const existingAvailability = props.availabilities.find(
-              av => av.date === day.dateString
-            );
+            const existingAvailability = dayIndex.value.ownFor(day.dateString)[0];
 
             if (existingAvailability) {
               operations.push({

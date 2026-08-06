@@ -803,6 +803,7 @@ import type { Availability, RecurrenceWithExceptions } from '@/types';
 import { formatDateISO, todayISO } from '@/utils/date/isoDate';
 import { getHolidayIndex } from '@/utils/calendar/holidays';
 import { buildCalendarRules, isDayAllowed, isInRange } from '@/utils/calendar/dateRules';
+import { buildDayIndex } from '@/utils/calendar/dayIndex';
 import TimeSelect from '@/components/TimeSelect.vue';
 
 interface Props {
@@ -1025,7 +1026,7 @@ interface CalendarDay {
   hasAvailability: boolean;
   hasRecurrence: boolean;
   meetsThreshold: boolean;
-  availabilities: Availability[];
+  availabilities: readonly Availability[];
   dayOfWeek: number;
   recurrenceId?: string;
   recurrenceStartTime?: string;
@@ -1048,6 +1049,16 @@ const checkDateAllowed = (dateString: string, dayOfWeek: number): boolean => {
     rules
   );
 };
+
+// Availabilities, recurrences and counts indexed by date, built once per data change
+// instead of re-scanned per day cell.
+const dayIndex = computed(() =>
+  buildDayIndex({
+    availabilities: props.availabilities,
+    recurrences: props.recurrences,
+    participantCounts: props.participantCounts,
+  })
+);
 
 const calendarDays = computed((): CalendarDay[] => {
   const year = currentDate.value.getFullYear();
@@ -1072,6 +1083,7 @@ const calendarDays = computed((): CalendarDay[] => {
   // "Today" follows the calendar's timezone, not the viewer's browser.
   const today = calendarRules.value.todayISO;
   const holidays = holidayIndex.value;
+  const index = dayIndex.value;
 
   // Previous month days
   for (let i = firstDayOfWeek - 1; i >= 0; i--) {
@@ -1107,33 +1119,13 @@ const calendarDays = computed((): CalendarDay[] => {
     const dayOfWeek = dateObj.getDay();
 
     // Check if this date has an availability
-    const dateAvailabilities = (props.availabilities || []).filter(a => a.date === dateString);
+    const dateAvailabilities = index.ownFor(dateString);
 
     // Check if this date matches any recurrence (and is not an exception)
-    let recurrenceId: string | undefined;
-    let recurrenceStartTime: string | undefined;
-    let recurrenceEndTime: string | undefined;
-    const hasRecurrence = (props.recurrences || []).some(rec => {
-      if (rec.day_of_week !== dayOfWeek) return false;
-
-      // Compare dates as strings to avoid timezone issues
-      if (dateString < rec.start_date) return false;
-      if (rec.end_date && dateString > rec.end_date) return false;
-
-      // Check if this date is in the exceptions
-      const isException = rec.exceptions?.some(ex => ex.excluded_date === dateString);
-
-      if (!isException) {
-        recurrenceId = rec.id;
-        recurrenceStartTime = rec.start_time;
-        recurrenceEndTime = rec.end_time;
-        return true;
-      }
-      return false;
-    });
+    const recurrence = index.recurrenceFor(dateString, dayOfWeek);
 
     // Check if this day meets the threshold
-    const participantCount = props.participantCounts?.[dateString] || 0;
+    const participantCount = index.countFor(dateString);
     const meetsThreshold = participantCount >= (props.threshold || 1);
 
     days.push({
@@ -1147,13 +1139,13 @@ const calendarDays = computed((): CalendarDay[] => {
       isHolidayEve: holidays.isHolidayEve(dateString),
       holidayName: holidays.getName(dateString) ?? undefined,
       hasAvailability: dateAvailabilities.length > 0,
-      hasRecurrence,
+      hasRecurrence: recurrence !== null,
       meetsThreshold,
       availabilities: dateAvailabilities,
       dayOfWeek,
-      recurrenceId,
-      recurrenceStartTime,
-      recurrenceEndTime,
+      recurrenceId: recurrence?.id,
+      recurrenceStartTime: recurrence?.startTime,
+      recurrenceEndTime: recurrence?.endTime,
       isHighlighted: props.highlightedDates?.has(dateString) || false,
     });
   }

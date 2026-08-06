@@ -272,6 +272,7 @@ import { formatWeekday, formatFullDate } from '@/utils/dateFormatting';
 import { formatDateISO, todayISO } from '@/utils/date/isoDate';
 import { getHolidayIndex } from '@/utils/calendar/holidays';
 import { buildCalendarRules, isDayOpen } from '@/utils/calendar/dateRules';
+import { buildDayIndex } from '@/utils/calendar/dayIndex';
 import type { Availability, RecurrenceWithExceptions } from '@/types';
 import ParticipantDetailsPopup from './ParticipantDetailsPopup.vue';
 
@@ -460,6 +461,16 @@ const rangeLabel = computed(() => {
   return `${firstDate.toLocaleDateString(localeCode, { month: 'short' })} — ${lastDate.toLocaleDateString(localeCode, { month: 'short', year: 'numeric' })}`;
 });
 
+// Availabilities, recurrences and counts indexed by date, built once per data change
+// instead of re-scanned per day.
+const dayIndex = computed(() =>
+  buildDayIndex({
+    availabilities: props.availabilities,
+    recurrences: props.recurrences,
+    participantCounts: props.participantCounts,
+  })
+);
+
 // Generate all dates in the displayed period, then filter to actionable ones
 const actionableDays = computed((): ListDay[] => {
   const allDates: Date[] = [];
@@ -485,6 +496,7 @@ const actionableDays = computed((): ListDay[] => {
   const rules = calendarRules.value;
   const today = rules.todayISO;
   const holidays = holidayIndex.value;
+  const index = dayIndex.value;
 
   // Deduplicate dates (month ranges may overlap with week ranges)
   const seen = new Set<string>();
@@ -506,24 +518,13 @@ const actionableDays = computed((): ListDay[] => {
     if (!isDayOpen({ date: dateString, dayOfWeek, isHoliday, isHolidayEve }, rules)) continue;
 
     // Check availability
-    const dateAvailabilities = (props.availabilities || []).filter(a => a.date === dateString);
+    const dateAvailabilities = index.ownFor(dateString);
     const hasAvailability = dateAvailabilities.length > 0;
 
     // Check recurrence
-    let hasRecurrence = false;
-    (props.recurrences || []).some(rec => {
-      if (rec.day_of_week !== dayOfWeek) return false;
-      if (dateString < rec.start_date) return false;
-      if (rec.end_date && dateString > rec.end_date) return false;
-      const isException = rec.exceptions?.some(ex => ex.excluded_date === dateString);
-      if (!isException) {
-        hasRecurrence = true;
-        return true;
-      }
-      return false;
-    });
+    const hasRecurrence = index.recurrenceFor(dateString, dayOfWeek) !== null;
 
-    const participantCount = props.participantCounts?.[dateString] || 0;
+    const participantCount = index.countFor(dateString);
     const meetsThreshold = participantCount >= (props.threshold || 1);
 
     // Build time label from availabilities
