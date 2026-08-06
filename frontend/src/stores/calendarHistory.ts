@@ -19,7 +19,11 @@ export interface CalendarHistoryItem {
   startHour?: number;
   endHour?: number;
   slotDuration?: number;
-  viewStyle?: 'classic' | 'list';
+  /**
+   * `grid` replaced `classic`/`compact` when the month grid started transposing itself
+   * in CSS. Both older values are still readable and normalize to `grid` on load.
+   */
+  viewStyle?: 'grid' | 'list' | 'classic' | 'compact';
 }
 
 const STORAGE_KEY = 'whento_visited_calendars';
@@ -163,7 +167,7 @@ export const useCalendarHistoryStore = defineStore('calendarHistory', () => {
       startHour?: number;
       endHour?: number;
       slotDuration?: number;
-      viewStyle?: 'classic' | 'list';
+      viewStyle?: 'grid' | 'list' | 'classic' | 'compact';
     }
   ) {
     const calendar = calendars.value.find(c => c.token === token);

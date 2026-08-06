@@ -318,34 +318,23 @@
             </p>
           </div>
 
-          <!-- List view (applies to both month and week display modes) -->
+          <!-- One switcher for the whole view; the grids no longer carry their own -->
+          <CalendarViewSwitcher
+            v-model:display-mode="displayMode"
+            v-model:view-style="viewStyle"
+            class="mb-4"
+          />
+
+          <!-- List view: the same model as the grids, laid out as rows -->
           <CalendarListView
             v-if="viewStyle === 'list'"
-            :display-mode="displayMode"
-            :months-to-display="monthsToDisplay"
-            :weeks-to-display="weeksToDisplay"
-            :availabilities="availabilities"
-            :recurrences="recurrences"
-            :participant-counts="participantCounts"
-            :threshold="calendar?.threshold || 1"
-            :allowed-weekdays="calendar?.allowed_weekdays"
-            :timezone="calendar?.timezone"
-            :holidays-policy="calendar?.holidays_policy"
-            :allow-holiday-eves="calendar?.allow_holiday_eves"
-            :start-date="calendarStartDate"
-            :end-date="calendarEndDate"
-            :displayed-year="displayedYear"
-            :displayed-month="displayedMonth"
-            :current-week-start-date="currentWeekStartDate"
-            :current-participant-id="participantId"
-            :current-participant-name="participant?.name || ''"
-            :calendar-token="token"
-            :highlighted-dates="selectedParticipantsCommonDates"
+            :days="calendarModel.listDays.value"
+            :label="listRangeLabel"
             @day-click="handleCalendarDayClick"
-            @month-change="handleMonthChange"
-            @week-change="handleWeekChange"
-            @view-style-change="handleViewStyleChange"
-            @availability-updated="handleAvailabilityUpdated"
+            @day-details="openDayDetails"
+            @add-exception="handleCalendarAddException"
+            @previous="displayMode === 'week' ? shiftWeeks(-1) : shiftMonths(-1)"
+            @next="displayMode === 'week' ? shiftWeeks(1) : shiftMonths(1)"
           />
 
           <!-- Month grids: one per displayed month, all sharing a single model -->
@@ -1228,9 +1217,10 @@ import { useToastStore } from '@/stores/toast';
 import { availabilitiesApi } from '@/api/availabilities';
 import CalendarMonthView from '@/components/calendar/CalendarMonthView.vue';
 import ParticipantDetailsPopup from '@/components/ParticipantDetailsPopup.vue';
-import CalendarListView from '@/components/CalendarListView.vue';
+import CalendarListView from '@/components/calendar/CalendarListView.vue';
 import CalendarWeekView from '@/components/calendar/CalendarWeekView.vue';
 import CalendarWeekControls from '@/components/calendar/CalendarWeekControls.vue';
+import CalendarViewSwitcher from '@/components/calendar/CalendarViewSwitcher.vue';
 import type { AvailabilityOperation } from '@/types/calendar';
 import { buildCoverageMap } from '@/utils/calendar/segments';
 import { buildWeekModel } from '@/utils/calendar/weekModel';
@@ -1238,6 +1228,7 @@ import TimeSelect from '@/components/TimeSelect.vue';
 import CollapsibleSection from '@/components/CollapsibleSection.vue';
 import { formatDateISO, parseISODate } from '@/utils/date/isoDate';
 import { useParticipantCalendar } from '@/composables/calendar/useParticipantCalendar';
+import { normalizeViewStyle, type ViewStyle } from '@/composables/calendar/useCalendarViewState';
 import { addParticipantEmail, resendVerificationEmail } from '@/api/notify';
 import type {
   Availability,
@@ -1285,11 +1276,11 @@ const displayMode = ref<'month' | 'week'>('month');
 
 // View style: 'classic' (grid) or 'list' (vertical card list)
 // Default to 'list' on mobile (screen width < 768px), 'classic' on desktop
-const getDefaultViewStyle = (): 'classic' | 'list' => {
-  if (typeof window === 'undefined') return 'classic';
-  return window.innerWidth < 768 ? 'list' : 'classic';
+const getDefaultViewStyle = (): ViewStyle => {
+  if (typeof window === 'undefined') return 'grid';
+  return window.innerWidth < 768 ? 'list' : 'grid';
 };
-const viewStyle = ref<'classic' | 'list'>(getDefaultViewStyle());
+const viewStyle = ref<ViewStyle>(getDefaultViewStyle());
 
 // Number of periods (months or weeks) to display (1-4 for weeks, 1-12 for months)
 const numberOfPeriods = ref(1);
@@ -1374,18 +1365,6 @@ const availabilities = computed((): Availability[] => {
     participant_email_verified: participantInfo.email_verified,
   }));
 });
-
-// Calendar date range as formatted strings (shared across grid components)
-const calendarStartDate = computed(() =>
-  calendar.value?.start_date
-    ? new Date(calendar.value.start_date).toISOString().split('T')[0]
-    : undefined
-);
-const calendarEndDate = computed(() =>
-  calendar.value?.end_date
-    ? new Date(calendar.value.end_date).toISOString().split('T')[0]
-    : undefined
-);
 
 // Generate an array of month configurations to display
 const monthsToDisplay = computed(() => {
@@ -1560,6 +1539,30 @@ function availabilitiesForDate(date: string) {
 
 function handleWeekStartChange(startISO: string) {
   handleWeekChange(parseISODate(startISO));
+}
+
+/** Header label for the list view, spanning whatever periods are displayed. */
+const listRangeLabel = computed(() => {
+  const months = calendarModel.months.value;
+  if (displayMode.value === 'month' && months.length > 0) {
+    return months.length === 1
+      ? months[0].label
+      : `${months[0].label} — ${months[months.length - 1].label}`;
+  }
+  const days = calendarModel.listDays.value;
+  if (days.length === 0) return '';
+  return `${days[0].dateShort} — ${days[days.length - 1].dateShort}`;
+});
+
+function shiftMonths(delta: number) {
+  const date = new Date(displayedYear.value, displayedMonth.value + delta, 1);
+  handleMonthChange(date.getFullYear(), date.getMonth());
+}
+
+function shiftWeeks(delta: number) {
+  const start = new Date(currentWeekStartDate.value);
+  start.setDate(start.getDate() + delta * 7);
+  handleWeekChange(start);
 }
 
 // Participant details popup, opened from any view and rendered once at this level.
@@ -1850,7 +1853,8 @@ async function loadCalendar() {
           slotDuration.value = savedSettings.slotDuration;
         }
         if (savedSettings.viewStyle !== undefined) {
-          viewStyle.value = savedSettings.viewStyle;
+          // Older entries hold 'classic' or 'compact'; both mean the grid now.
+          viewStyle.value = normalizeViewStyle(savedSettings.viewStyle);
         }
       }
     }
@@ -2394,11 +2398,8 @@ async function handleWeekChange(weekStartDate: Date) {
 }
 
 async function handleBatchOperations(operations: AvailabilityOperation[]) {
-  console.log('[handleBatchOperations] Received operations:', operations);
-
   // Execute all operations in parallel using allSettled to continue even if some fail
   const promises = operations.map(op => {
-    console.log(`[handleBatchOperations] Processing ${op.type} operation for ${op.date}`, op);
     switch (op.type) {
       case 'create':
         return availabilitiesApi.create(token.value, participantId.value, {
@@ -2417,7 +2418,6 @@ async function handleBatchOperations(operations: AvailabilityOperation[]) {
   });
 
   const results = await Promise.allSettled(promises);
-  console.log('[handleBatchOperations] Results:', results);
 
   // Count successes and failures
   const succeeded = results.filter(r => r.status === 'fulfilled').length;
@@ -2584,18 +2584,6 @@ watch(viewStyle, newStyle => {
   }
 });
 
-function handleViewStyleChange(style: 'classic' | 'compact' | 'list') {
-  if (style === 'list') {
-    viewStyle.value = 'list';
-  } else {
-    viewStyle.value = 'classic';
-    // When switching back to classic/compact in month mode, update CalendarGrid's localStorage
-    if (displayMode.value === 'month' && typeof window !== 'undefined') {
-      localStorage.setItem('calendar-view-mode', style);
-    }
-  }
-}
-
 // Watch for route changes to reload the calendar when navigating between calendars
 // The immediate flag ensures this runs on initial mount
 watch(
@@ -2634,8 +2622,9 @@ async function handleCancelFromEmail() {
 }
 
 onMounted(async () => {
-  await loadCalendar();
-  // Handle cancel from email notification after calendar is loaded
+  // The route watcher above already loads the calendar with { immediate: true }.
+  // Calling loadCalendar() here as well fetched the calendar, its recurrences and the
+  // whole range summary a second time on every mount.
   await handleCancelFromEmail();
 });
 </script>

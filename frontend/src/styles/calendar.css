@@ -464,6 +464,63 @@
     @apply text-gray-700 dark:text-gray-100;
   }
 
+  /* ------------------------------------------------------------- list view */
+
+  .cal-row {
+    @apply flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors;
+    @apply border-gray-200 bg-white text-gray-900;
+    @apply dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100;
+  }
+
+  .cal-row[data-density='1'] {
+    background-color: var(--cal-density-1);
+    color: var(--cal-density-1-ink);
+    @apply border-transparent;
+  }
+
+  .cal-row[data-density='2'] {
+    background-color: var(--cal-density-2);
+    color: var(--cal-density-2-ink);
+    @apply border-transparent;
+  }
+
+  .cal-row[data-density='3'] {
+    background-color: var(--cal-density-3);
+    color: var(--cal-density-3-ink);
+    @apply border-transparent;
+  }
+
+  .cal-row[data-density='4'] {
+    background-color: var(--cal-density-4);
+    color: var(--cal-density-4-ink);
+    @apply border-transparent;
+  }
+
+  .cal-row[data-today] {
+    @apply ring-2 ring-gray-400 dark:ring-gray-500;
+  }
+
+  .cal-row[data-highlight] {
+    @apply ring-2 ring-secondary-500;
+  }
+
+  .cal-row-main {
+    @apply flex min-w-0 flex-1 cursor-pointer items-center text-left;
+    @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600;
+  }
+
+  .cal-row-badge {
+    @apply rounded-full px-2 py-0.5 text-xs font-medium text-white;
+  }
+
+  .cal-row-badge[data-kind='holiday'] {
+    background-color: var(--cal-accent-holiday);
+  }
+
+  .cal-row-badge[data-kind='eve'] {
+    background-color: var(--cal-accent-eve);
+  }
+
   /* ---------------------------------------------------------------- legend */
 
   .cal-legend {
