@@ -20,6 +20,7 @@
     "format:check": "prettier --check \"src/**/*.{vue,ts,js,css,json}\""
   },
   "dependencies": {
+    "@vueuse/core": "^14.4.0",
     "axios": "^1.19.0",
     "countries-and-timezones": "^3.9.0",
     "date-fns": "^4.4.0",
@@ -37,7 +38,6 @@
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.1.2",
     "@vitejs/plugin-vue": "^6.0.8",
-    "@vueuse/core": "^14.4.0",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^10.10.0",

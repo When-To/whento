@@ -348,34 +348,19 @@
             @availability-updated="handleAvailabilityUpdated"
           />
 
-          <!-- Calendar grids - Display months vertically (month view, classic style) -->
+          <!-- Month grids: one per displayed month, all sharing a single model -->
           <div v-else-if="displayMode === 'month'" class="space-y-6">
-            <CalendarGrid
-              v-for="(monthConfig, index) in monthsToDisplay"
-              :key="`${monthConfig.key}-${calendar?.id}`"
-              :initial-year="monthConfig.year"
-              :initial-month="monthConfig.month"
+            <CalendarMonthView
+              v-for="(monthModel, index) in calendarModel.months.value"
+              :key="monthModel.key"
+              :model="monthModel"
               :show-navigation="index === 0"
-              :availabilities="availabilities"
-              :recurrences="recurrences"
-              :participant-counts="participantCounts"
-              :threshold="calendar?.threshold || 1"
-              :allowed-weekdays="calendar?.allowed_weekdays"
-              :timezone="calendar?.timezone"
-              :holidays-policy="calendar?.holidays_policy"
-              :allow-holiday-eves="calendar?.allow_holiday_eves"
-              :start-date="calendarStartDate"
-              :end-date="calendarEndDate"
-              :calendar-token="token"
-              :current-participant-id="participantId"
-              :current-participant-name="participant?.name || ''"
-              :highlighted-dates="selectedParticipantsCommonDates"
               @day-click="handleCalendarDayClick"
               @days-select="handleCalendarDaysSelect"
               @days-deselect="handleCalendarDaysDeselect"
+              @day-details="openDayDetails"
               @add-exception="handleCalendarAddException"
               @month-change="handleMonthChange"
-              @view-style-change="handleViewStyleChange"
             />
           </div>
 
@@ -424,6 +409,17 @@
             />
           </div>
         </div>
+
+        <ParticipantDetailsPopup
+          v-if="detailsDate && detailsAnchor && token && participantId"
+          :calendar-token="token"
+          :current-participant-id="participantId"
+          :current-participant-name="participant?.name || ''"
+          :date="detailsDate"
+          :anchor-rect="detailsAnchor"
+          @close="closeDayDetails"
+          @availability-updated="handleAvailabilityUpdated"
+        />
 
         <!-- Time Slot Form (only in month view) & Calendar Links - Side by side -->
         <div class="grid gap-6 mb-6" :class="{ 'lg:grid-cols-2': displayMode === 'month' }">
@@ -1253,14 +1249,16 @@ import { useAuthStore } from '@/stores/auth';
 import { useCalendarHistoryStore } from '@/stores/calendarHistory';
 import { useToastStore } from '@/stores/toast';
 import { availabilitiesApi } from '@/api/availabilities';
-import CalendarGrid from '@/components/CalendarGrid.vue';
+import CalendarMonthView from '@/components/calendar/CalendarMonthView.vue';
+import ParticipantDetailsPopup from '@/components/ParticipantDetailsPopup.vue';
 import CalendarListView from '@/components/CalendarListView.vue';
 import WeeklyCalendarGrid, {
   type AvailabilityOperation,
 } from '@/components/WeeklyCalendarGrid.vue';
 import TimeSelect from '@/components/TimeSelect.vue';
 import CollapsibleSection from '@/components/CollapsibleSection.vue';
-import { formatDateISO } from '@/utils/dateFormatting';
+import { formatDateISO } from '@/utils/date/isoDate';
+import { useParticipantCalendar } from '@/composables/calendar/useParticipantCalendar';
 import { addParticipantEmail, resendVerificationEmail } from '@/api/notify';
 import type {
   Availability,
@@ -1538,6 +1536,37 @@ const participantsStats = computed(() => {
 });
 
 // Compute common dates for selected participants
+// One model for the whole calendar: holiday lookup, date rules, the per-date index
+// and the formatters are built once here and shared by every rendered period.
+const calendarModel = useParticipantCalendar({
+  calendar,
+  availabilities,
+  recurrences,
+  participantCounts,
+  dateSummaries,
+  highlighted: computed(() => selectedParticipantsCommonDates.value),
+  months: computed(() => monthsToDisplay.value.map(m => ({ year: m.year, month: m.month }))),
+  weekStarts: computed(() =>
+    displayMode.value === 'week'
+      ? weeksToDisplay.value.map(w => formatDateISO(w.weekStartDate))
+      : []
+  ),
+});
+
+// Participant details popup, opened from any view and rendered once at this level.
+const detailsDate = ref<string | null>(null);
+const detailsAnchor = ref<DOMRect | null>(null);
+
+function openDayDetails(date: string, anchor: DOMRect) {
+  detailsDate.value = date;
+  detailsAnchor.value = anchor;
+}
+
+function closeDayDetails() {
+  detailsDate.value = null;
+  detailsAnchor.value = null;
+}
+
 const selectedParticipantsCommonDates = computed(() => {
   if (selectedParticipantNames.value.size === 0 || !dateSummaries.value) {
     return new Set<string>();

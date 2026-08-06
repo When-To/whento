@@ -242,6 +242,14 @@
     background-color: var(--cal-accent-recurring);
   }
 
+  /* Skip one occurrence of a recurrence. Its hit target is padded well beyond the
+     glyph so it stays usable on touch. */
+  .cal-tag-action {
+    @apply -m-1 ml-auto shrink-0 rounded p-1 leading-none opacity-60 transition-opacity;
+    @apply hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/20;
+    @apply focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-600;
+  }
+
   /* The gauge repeats the density without relying on hue, which is what makes the
      heatmap safe for colour vision deficiencies and in print. */
   .cal-gauge {
@@ -253,7 +261,9 @@
   }
 
   .cal-count {
-    @apply text-[0.65rem] leading-none tabular-nums opacity-80;
+    @apply -mx-1 -mb-1 self-start rounded px-1 py-0.5 text-[0.65rem] leading-none tabular-nums opacity-80 transition-opacity;
+    @apply hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/20;
+    @apply focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-600;
   }
 
   @media (max-width: 48rem) {

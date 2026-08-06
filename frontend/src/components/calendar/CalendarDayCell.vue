@@ -1,5 +1,8 @@
-/* * WhenTo - Collaborative event calendar for self-hosted environments * Copyright (C) 2025 WhenTo
-Contributors * SPDX-License-Identifier: BSL-1.1 */
+<!--
+  WhenTo - Collaborative event calendar for self-hosted environments
+  Copyright (C) 2025 WhenTo Contributors
+  SPDX-License-Identifier: BSL-1.1
+-->
 
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -15,6 +18,11 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), { drag: null, focused: false });
+
+const emit = defineEmits<{
+  (e: 'remove-recurrence', recurrenceId: string, date: string): void;
+  (e: 'show-details', date: string): void;
+}>();
 
 const { t } = useI18n();
 
@@ -92,7 +100,20 @@ const holidayTitle = computed(() => {
       :title="`${t('availability.recurring')} · ${day.recurrence.label}`"
     >
       <span class="cal-dot cal-dot--recurring" />
-      {{ day.recurrence.label }}
+      <span class="truncate">{{ day.recurrence.label }}</span>
+      <!-- Skip this one occurrence of the recurrence. -->
+      <button
+        v-if="!day.isPast"
+        type="button"
+        data-no-drag
+        class="cal-tag-action"
+        :title="t('availability.addException')"
+        :aria-label="t('availability.addException')"
+        @click.stop="emit('remove-recurrence', day.recurrence!.id, day.date)"
+        @pointerdown.stop
+      >
+        &times;
+      </button>
     </span>
 
     <div
@@ -103,8 +124,18 @@ const holidayTitle = computed(() => {
       <div class="cal-gauge-fill" :style="{ width: gaugeWidth }" />
     </div>
 
-    <span v-if="day.status !== 'outside' && day.status !== 'disabled'" class="cal-count">
+    <!-- Opening the per-participant breakdown needs its own affordance: the cell
+         itself belongs to the drag surface. -->
+    <button
+      v-if="day.status !== 'outside' && day.status !== 'disabled'"
+      type="button"
+      data-no-drag
+      class="cal-count"
+      :title="t('participant.participantsForDate')"
+      @click.stop="emit('show-details', day.date)"
+      @pointerdown.stop
+    >
       {{ day.participantCount }}/{{ day.threshold }}
-    </span>
+    </button>
   </div>
 </template>
