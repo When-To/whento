@@ -353,6 +353,7 @@
     "endHour": "Fin de journée",
     "slotDuration": "Durée des créneaux",
     "dateNotAllowed": "Cette date n'est pas autorisée",
+    "participantsAvailable": "{count} participants disponibles sur {threshold}",
     "previousWeek": "Semaine précédente",
     "nextWeek": "Semaine suivante",
     "thresholdMet": "Événement (seuil atteint)",

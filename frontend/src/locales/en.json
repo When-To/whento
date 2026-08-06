@@ -350,6 +350,7 @@
     "endHour": "End of the day",
     "slotDuration": "Slot duration",
     "dateNotAllowed": "This date is not allowed",
+    "participantsAvailable": "{count} of {threshold} participants available",
     "previousWeek": "Previous week",
     "nextWeek": "Next week",
     "thresholdMet": "Event (threshold met)",

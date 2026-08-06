@@ -1244,7 +1244,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watchEffect, watch } from 'vue';
+import { ref, shallowRef, reactive, computed, onMounted, watchEffect, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { getWeekStartDay } from '@/i18n';
@@ -1286,8 +1286,11 @@ const participantId = computed(() => route.params.participantId as string);
 
 const loading = ref(false);
 const recurrences = ref<RecurrenceWithExceptions[]>([]);
-const participantCounts = ref<Record<string, number>>({});
-const dateSummaries = ref<DateAvailabilitySummary[]>([]);
+// Both are replaced wholesale on every reload and only ever read, so they use
+// shallowRef: a deep ref would proxy every participant object of every date in the
+// range — thousands of proxies for a twelve-month calendar, rebuilt on each refetch.
+const participantCounts = shallowRef<Record<string, number>>({});
+const dateSummaries = shallowRef<DateAvailabilitySummary[]>([]);
 const addingAvailability = ref(false);
 const addingRecurrence = ref(false);
 const isAllDay = ref(true);
