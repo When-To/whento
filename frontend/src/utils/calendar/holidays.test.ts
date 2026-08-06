@@ -71,6 +71,41 @@ describe('isHoliday', () => {
   });
 });
 
+describe('multi-day holidays', () => {
+  // A handful of countries have genuine multi-day public holidays. `isHoliday(date)`
+  // matched any instant inside [start, end), so indexing by the first day alone
+  // would silently unblock the rest of the span.
+  it('covers every day of the Russian New Year week', () => {
+    const ru = getHolidayIndex('Europe/Moscow', 'en');
+    for (const day of ['02', '03', '04', '05', '06']) {
+      expect(ru.isHoliday(`2026-01-${day}`)).toBe(true);
+    }
+    expect(ru.isHoliday('2026-01-15')).toBe(false);
+  });
+
+  it('covers every day of the Turkish Eid holidays', () => {
+    const tr = getHolidayIndex('Europe/Istanbul', 'en');
+    for (const day of ['20', '21', '22', '23']) {
+      expect(tr.isHoliday(`2026-03-${day}`)).toBe(true);
+    }
+    expect(tr.isHoliday('2026-03-24')).toBe(false);
+  });
+
+  it('names every day of the span, not just the first', () => {
+    const ru = getHolidayIndex('Europe/Moscow', 'en');
+    expect(ru.getName('2026-01-05')).toBe(ru.getName('2026-01-02'));
+    expect(ru.getName('2026-01-05')).toBeTruthy();
+  });
+
+  it('treats the day before a multi-day holiday as an eve', () => {
+    const tr = getHolidayIndex('Europe/Istanbul', 'en');
+    expect(tr.isHolidayEve('2026-03-19')).toBe(true);
+    // Inside the span the next day is also a holiday, so it is an eve too.
+    expect(tr.isHolidayEve('2026-03-22')).toBe(true);
+    expect(tr.isHolidayEve('2026-03-23')).toBe(false);
+  });
+});
+
 describe('isHolidayEve', () => {
   it('detects the day before a holiday', () => {
     const fr = getHolidayIndex('Europe/Paris', 'fr');

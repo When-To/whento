@@ -70,14 +70,32 @@ function getCountryCache(countryCode: string, language: string): CountryCache {
   return cache;
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * How many calendar days a holiday covers. Almost always one, but several countries
+ * have genuine multi-day public holidays — Russia's New Year week, and the Eid
+ * holidays in Turkey and the UAE, all span three to five days.
+ */
+function spanInDays(holiday: HolidaysTypes.Holiday): number {
+  const start = holiday.start?.getTime();
+  const end = holiday.end?.getTime();
+  if (!start || !end || end <= start) return 1;
+  return Math.max(1, Math.round((end - start) / MS_PER_DAY));
+}
+
 /**
  * Build (once) the date -> name map for a single year.
  *
- * Keys come from `holiday.date`, which is the date **in the country's own timezone**.
+ * Keys start from `holiday.date`, which is the date **in the country's own timezone**.
  * Deriving them from `holiday.start`/`end` instead would re-introduce the bug this
  * refactor removes: those are instants, so a viewer in Tokyo looking at a French
  * calendar would see 1 January's holiday land on 2 January. A public holiday is a
  * property of the country's calendar date, not of the viewer's clock.
+ *
+ * The instants are still used, but only for their *duration*: a multi-day holiday is
+ * expanded over every day it covers, which is what `isHoliday(date)` did by testing
+ * the instant against `[start, end)`.
  */
 function loadYear(cache: CountryCache, year: number): Map<ISODate, string> {
   let index = cache.years.get(year);
@@ -88,9 +106,12 @@ function loadYear(cache: CountryCache, year: number): Map<ISODate, string> {
     const holidays: HolidaysTypes.Holiday[] = cache.instance.getHolidays(year) || [];
     for (const holiday of holidays) {
       if (holiday.type !== 'public') continue;
-      const date = holiday.date.slice(0, 10);
-      // First rule wins, matching the previous `find(h => h.type === 'public')`.
-      if (!index.has(date)) index.set(date, holiday.name);
+      let date = holiday.date.slice(0, 10);
+      for (let day = spanInDays(holiday); day > 0; day--) {
+        // First rule wins, matching the previous `find(h => h.type === 'public')`.
+        if (!index.has(date)) index.set(date, holiday.name);
+        date = addDaysISO(date, 1);
+      }
     }
   } catch (error) {
     // A broken country ruleset must not take the calendar down, but it should be

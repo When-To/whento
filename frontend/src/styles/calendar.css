@@ -1,0 +1,287 @@
+/*
+ * WhenTo - Collaborative event calendar for self-hosted environments
+ * Copyright (C) 2025 WhenTo Contributors
+ * SPDX-License-Identifier: BSL-1.1
+ *
+ * Calendar design system.
+ *
+ * Every calendar colour lives here, in CSS. Nothing is computed in JavaScript: the
+ * previous week grid read `document.documentElement.classList.contains('dark')` during
+ * render to pick `rgb()` strings, which was both expensive and non-reactive — toggling
+ * the theme left every fill stale until an unrelated re-render.
+ */
+
+/* --------------------------------------------------------------------------
+ * Density ramp
+ *
+ * An ordinal ramp on a single hue (the success scale), encoding progress toward the
+ * calendar's threshold. Validated against the four ordinal checks — monotone
+ * lightness, adjacent dL >= 0.06, near-surface end >= 2:1, single hue — in both
+ * modes. The ramp anchors to the surface, so it runs light-to-dark on a white cell
+ * and dark-to-light on a gray-800 one.
+ *
+ * Hue alone never carries the reading: the gauge width, the "n/threshold" count and
+ * the threshold outline all repeat it, and the ramp is monotone in lightness so the
+ * order survives any colour vision deficiency.
+ *
+ * The ink flips at the point where the fill gets too dark (or too light) to hold the
+ * default text colour; every pairing below clears 4.5:1.
+ * ----------------------------------------------------------------------- */
+
+:root {
+  --cal-density-1: var(--color-success-500); /* 7.79:1 with gray-900 */
+  --cal-density-2: var(--color-success-600); /* 5.38:1 with gray-900 */
+  --cal-density-3: var(--color-success-700); /* 5.02:1 with white     */
+  --cal-density-4: var(--color-success-800); /* 7.13:1 with white     */
+  --cal-density-1-ink: var(--color-gray-900, #111827);
+  --cal-density-2-ink: var(--color-gray-900, #111827);
+  --cal-density-3-ink: #ffffff;
+  --cal-density-4-ink: #ffffff;
+
+  --cal-accent-own: var(--color-primary-600);
+  --cal-accent-recurring: var(--color-secondary-500);
+  --cal-accent-holiday: #ea580c; /* orange-600 */
+  --cal-accent-eve: var(--color-secondary-400);
+
+  --cal-compact-row: 3.5rem;
+  --cal-gap: 0.25rem;
+}
+
+.dark {
+  --cal-density-1: var(--color-success-800); /* 6.48:1 with gray-100 */
+  --cal-density-2: var(--color-success-700); /* 4.56:1 with gray-100 */
+  --cal-density-3: var(--color-success-600); /* 5.38:1 with gray-900 */
+  --cal-density-4: var(--color-success-500); /* 7.79:1 with gray-900 */
+  --cal-density-1-ink: var(--color-gray-100, #f3f4f6);
+  --cal-density-2-ink: var(--color-gray-100, #f3f4f6);
+  --cal-density-3-ink: var(--color-gray-900, #111827);
+  --cal-density-4-ink: var(--color-gray-900, #111827);
+
+  --cal-accent-own: var(--color-primary-400);
+  --cal-accent-recurring: var(--color-secondary-400);
+  --cal-accent-holiday: #fb923c; /* orange-400 */
+  --cal-accent-eve: var(--color-secondary-300);
+}
+
+@layer components {
+  /* ---------------------------------------------------------------- layout */
+
+  /*
+   * The month grid holds its days in chronological order and switches between the
+   * two layouts in pure CSS. With `grid-auto-flow: column` over seven rows, day *i*
+   * lands on row `i % 7` (its weekday) and column `floor(i / 7)` (its week) — the
+   * transposed compact layout, with no JavaScript, no ResizeObserver and no
+   * per-cell index arithmetic.
+   */
+  .cal-month {
+    @apply flex flex-col;
+    gap: var(--cal-gap);
+  }
+
+  .cal-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: var(--cal-gap);
+  }
+
+  .cal-weekday {
+    @apply truncate py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400;
+  }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: var(--cal-gap);
+    flex: 1 1 auto;
+  }
+
+  @media (max-width: 48rem) {
+    .cal-month {
+      @apply flex-row items-start;
+    }
+
+    .cal-weekdays {
+      grid-template-columns: none;
+      grid-template-rows: repeat(7, var(--cal-compact-row));
+    }
+
+    .cal-weekday {
+      @apply flex items-center justify-center px-1 py-0;
+    }
+
+    .cal-grid {
+      grid-template-columns: none;
+      grid-template-rows: repeat(7, var(--cal-compact-row));
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(2.5rem, 1fr);
+      overflow-x: auto;
+    }
+  }
+
+  /* ------------------------------------------------------------------ cell */
+
+  .cal-cell {
+    @apply relative flex min-h-20 flex-col gap-1 overflow-hidden rounded-lg border p-2 text-left transition-colors duration-150;
+    /* Default surface; the density steps below override it. */
+    @apply border-gray-200 bg-white text-gray-900;
+    @apply dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100;
+  }
+
+  @media (max-width: 48rem) {
+    .cal-cell {
+      @apply min-h-0 gap-0.5 p-1.5;
+    }
+  }
+
+  .cal-cell[data-status='outside'] {
+    @apply pointer-events-none border-transparent bg-transparent opacity-0;
+  }
+
+  .cal-cell[data-status='disabled'] {
+    @apply cursor-not-allowed border-dashed border-gray-200 bg-gray-50 text-gray-400;
+    @apply dark:border-gray-800 dark:bg-gray-900 dark:text-gray-600;
+  }
+
+  .cal-cell:not([data-status='outside']):not([data-status='disabled']) {
+    @apply cursor-pointer;
+  }
+
+  .cal-cell:not([data-status='outside']):not([data-status='disabled']):hover {
+    @apply border-primary-400 dark:border-primary-500;
+  }
+
+  /* Heatmap steps. Step 0 keeps the default surface — an empty day should read as
+     empty, not as "the palest green". */
+  .cal-cell[data-density='1'] {
+    background-color: var(--cal-density-1);
+    color: var(--cal-density-1-ink);
+    @apply border-transparent;
+  }
+
+  .cal-cell[data-density='2'] {
+    background-color: var(--cal-density-2);
+    color: var(--cal-density-2-ink);
+    @apply border-transparent;
+  }
+
+  .cal-cell[data-density='3'] {
+    background-color: var(--cal-density-3);
+    color: var(--cal-density-3-ink);
+    @apply border-transparent;
+  }
+
+  .cal-cell[data-density='4'] {
+    background-color: var(--cal-density-4);
+    color: var(--cal-density-4-ink);
+    @apply border-transparent;
+  }
+
+  /* Rings, in ascending precedence: a later rule wins, and in practice only one
+     applies at a time. */
+  .cal-cell[data-today] {
+    @apply ring-2 ring-gray-400 dark:ring-gray-500;
+  }
+
+  .cal-cell[data-highlight] {
+    @apply ring-2 ring-secondary-500;
+  }
+
+  .cal-cell[data-drag='add'] {
+    @apply ring-2 ring-primary-500;
+  }
+
+  .cal-cell[data-drag='remove'] {
+    @apply ring-2 ring-danger-500;
+  }
+
+  .cal-cell:focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary-600 dark:outline-primary-400;
+  }
+
+  /* A holiday marks the top edge rather than taking another ring, so it can be read
+     at the same time as "today" or a drag selection. */
+  .cal-cell[data-holiday]::before,
+  .cal-cell[data-holiday-eve]::before {
+    content: '';
+    @apply absolute inset-x-0 top-0 h-1;
+  }
+
+  .cal-cell[data-holiday]::before {
+    background-color: var(--cal-accent-holiday);
+  }
+
+  .cal-cell[data-holiday-eve]::before {
+    background-color: var(--cal-accent-eve);
+  }
+
+  /* --------------------------------------------------------- cell contents */
+
+  .cal-cell-head {
+    @apply flex items-start justify-between gap-1;
+  }
+
+  .cal-day-num {
+    @apply text-sm font-semibold leading-none;
+  }
+
+  .cal-badge {
+    @apply text-xs leading-none opacity-80;
+  }
+
+  .cal-tag {
+    @apply flex items-center gap-1 truncate rounded px-1 py-0.5 text-[0.65rem] font-medium leading-tight;
+    @apply bg-white/70 text-gray-800 dark:bg-black/30 dark:text-gray-100;
+  }
+
+  .cal-dot {
+    @apply size-1.5 shrink-0 rounded-full;
+    background-color: var(--cal-accent-own);
+  }
+
+  .cal-dot--recurring {
+    background-color: var(--cal-accent-recurring);
+  }
+
+  /* The gauge repeats the density without relying on hue, which is what makes the
+     heatmap safe for colour vision deficiencies and in print. */
+  .cal-gauge {
+    @apply mt-auto h-1 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/15;
+  }
+
+  .cal-gauge-fill {
+    @apply h-full rounded-full bg-current transition-[width] duration-200;
+  }
+
+  .cal-count {
+    @apply text-[0.65rem] leading-none tabular-nums opacity-80;
+  }
+
+  @media (max-width: 48rem) {
+    .cal-tag,
+    .cal-count {
+      @apply hidden;
+    }
+  }
+
+  /* ---------------------------------------------------------------- legend */
+
+  .cal-legend {
+    @apply flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-600 dark:text-gray-400;
+  }
+
+  .cal-legend-item {
+    @apply flex items-center gap-1.5;
+  }
+
+  .cal-legend-swatch {
+    @apply size-3 rounded border border-gray-300 dark:border-gray-600;
+  }
+
+  .cal-legend-ramp {
+    @apply flex overflow-hidden rounded border border-gray-300 dark:border-gray-600;
+  }
+
+  .cal-legend-ramp > span {
+    @apply size-3;
+  }
+}

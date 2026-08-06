@@ -348,8 +348,36 @@ describe('differential: resolveTimeWindow + isSlotAllowed vs the legacy implemen
   const SLOT_TIMES = ['00:00', '07:45', '08:00', '09:00', '13:30', '16:45', '17:00', '23:45'];
   const SLOT_DURATION = 15;
 
-  it('agrees on every combination of day kind, policy, weekday set and time windows', () => {
+  /**
+   * The one place the port deliberately departs from the legacy function.
+   *
+   * Under the 'ignore' policy the legacy week grid stopped at the weekday check for a
+   * holiday and never reached the holiday-eve rescue. `IsDateAllowed` in
+   * pkg/datevalidation falls through to it, so the backend accepts a day the week grid
+   * refused: a public holiday that is also the eve of another one (25 December
+   * wherever Boxing Day exists, 30 April in the Netherlands), on a weekday the
+   * calendar does not otherwise allow.
+   */
+  function isIntendedDivergence(c: {
+    policy: HolidaysPolicy;
+    isHoliday: boolean;
+    isHolidayEve: boolean;
+    allowHolidayEves: boolean;
+    allowedWeekdays: number[];
+    dayOfWeek: number;
+  }): boolean {
+    return (
+      c.policy === 'ignore' &&
+      c.isHoliday &&
+      c.isHolidayEve &&
+      c.allowHolidayEves &&
+      !c.allowedWeekdays.includes(c.dayOfWeek)
+    );
+  }
+
+  it('agrees with the legacy implementation except on the one intended divergence', () => {
     let compared = 0;
+    let diverged = 0;
 
     for (const policy of POLICIES) {
       for (const allowHolidayEves of [false, true]) {
@@ -407,9 +435,19 @@ describe('differential: resolveTimeWindow + isSlotAllowed vs the legacy implemen
                     });
 
                     compared++;
-                    if (actual !== expected) {
+                    if (actual === expected) continue;
+
+                    const intended = isIntendedDivergence({
+                      policy,
+                      isHoliday,
+                      isHolidayEve,
+                      allowHolidayEves,
+                      allowedWeekdays,
+                      dayOfWeek,
+                    });
+                    if (!intended) {
                       throw new Error(
-                        `mismatch: policy=${policy} eves=${allowHolidayEves} ` +
+                        `unintended mismatch: policy=${policy} eves=${allowHolidayEves} ` +
                           `weekdays=[${allowedWeekdays}] dow=${dayOfWeek} ` +
                           `holiday=${isHoliday} eve=${isHolidayEve} time=${time} ` +
                           `weekday=${JSON.stringify(weekdayRange)} ` +
@@ -417,6 +455,10 @@ describe('differential: resolveTimeWindow + isSlotAllowed vs the legacy implemen
                           `-> got ${actual}, legacy ${expected}`
                       );
                     }
+                    // The divergence only ever opens a day the legacy code refused.
+                    expect(actual).toBe(true);
+                    expect(expected).toBe(false);
+                    diverged++;
                   }
                 }
               }
@@ -426,7 +468,50 @@ describe('differential: resolveTimeWindow + isSlotAllowed vs the legacy implemen
       }
     }
 
-    // Guard against the loops silently collapsing to nothing.
+    // Guard against the loops silently collapsing to nothing, and against the
+    // divergence set quietly growing or vanishing.
     expect(compared).toBeGreaterThan(100_000);
+    expect(diverged).toBeGreaterThan(0);
+    expect(diverged / compared).toBeLessThan(0.02);
+  });
+});
+
+describe('holiday-eve rescue on a day that is both a holiday and an eve', () => {
+  // 25 December is a public holiday and the eve of Boxing Day. Under 'ignore' with
+  // eves enabled the backend accepts it even on a weekday the calendar excludes;
+  // the previous frontend refused it.
+  const ctx = { date: '2026-12-25', dayOfWeek: 5, isHoliday: true, isHolidayEve: true };
+
+  it('accepts the day, and its time window follows', () => {
+    const opened = rules({
+      todayISO: '2026-01-01',
+      allowedWeekdays: [1, 2, 3],
+      holidaysPolicy: 'ignore',
+      allowHolidayEves: true,
+    });
+    expect(isDayAllowed(ctx, opened)).toBe(true);
+    expect(resolveTimeWindow(ctx, opened).allowed).toBe(true);
+  });
+
+  it('still refuses it when eves are not enabled', () => {
+    const closed = rules({
+      todayISO: '2026-01-01',
+      allowedWeekdays: [1, 2, 3],
+      holidaysPolicy: 'ignore',
+      allowHolidayEves: false,
+    });
+    expect(isDayAllowed(ctx, closed)).toBe(false);
+    expect(resolveTimeWindow(ctx, closed).allowed).toBe(false);
+  });
+
+  it('still refuses it under the block policy', () => {
+    const blocked = rules({
+      todayISO: '2026-01-01',
+      allowedWeekdays: [1, 2, 3],
+      holidaysPolicy: 'block',
+      allowHolidayEves: true,
+    });
+    expect(isDayAllowed(ctx, blocked)).toBe(false);
+    expect(resolveTimeWindow(ctx, blocked).allowed).toBe(false);
   });
 });

@@ -1,3 +1,9 @@
+/*
+ * WhenTo - Collaborative event calendar for self-hosted environments
+ * Copyright (C) 2025 WhenTo Contributors
+ * SPDX-License-Identifier: BSL-1.1
+ */
+
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath, URL } from 'node:url';
 

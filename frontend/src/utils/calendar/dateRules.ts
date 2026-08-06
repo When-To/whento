@@ -75,9 +75,12 @@ export function isPast(date: ISODate, rules: CalendarRules): boolean {
 /**
  * Whether the weekday itself is accepted.
  *
- * An empty list allows nothing, matching `IsWeekdayAllowed` in the backend. The shared
- * frontend composable used to treat an empty list as "no restriction", which enabled
- * days the backend then refused to write.
+ * An explicitly empty list allows nothing, matching `IsWeekdayAllowed` in the backend.
+ * The shared frontend composable used to treat an empty list as "no restriction",
+ * which enabled days the backend then refused to write.
+ *
+ * An *absent* list is a different case and is normalized to all seven days by
+ * {@link buildCalendarRules} — see the note there.
  */
 function isWeekdayAllowed(dayOfWeek: number, rules: CalendarRules): boolean {
   return rules.allowedWeekdays.includes(dayOfWeek);
@@ -90,17 +93,18 @@ function isWeekdayAllowed(dayOfWeek: number, rules: CalendarRules): boolean {
  * and {@link isInRange} for the full day-level gate.
  */
 export function isDayAllowed(ctx: DayContext, rules: CalendarRules): boolean {
+  // Mirrors IsDateAllowed in pkg/datevalidation: the policy can only short-circuit on
+  // a holiday; everything else falls through to the weekday check and then to the
+  // holiday-eve rescue. A day that is both a holiday and the eve of another one — 25
+  // December wherever Boxing Day exists, 30 April in the Netherlands — must still be
+  // rescued under the 'ignore' policy.
   if (ctx.isHoliday) {
     if (rules.holidaysPolicy === 'allow') return true;
     if (rules.holidaysPolicy === 'block') return false;
-    // 'ignore': a holiday is just another day.
-    return isWeekdayAllowed(ctx.dayOfWeek, rules);
   }
 
   if (isWeekdayAllowed(ctx.dayOfWeek, rules)) return true;
 
-  // A disallowed weekday is still accepted when it precedes a holiday and the
-  // calendar opts into eves.
   return rules.allowHolidayEves && ctx.isHolidayEve;
 }
 
@@ -155,36 +159,27 @@ function toWindow(range: TimeRange | undefined): DayTimeWindow {
  * two to four times, which is where the week grid's render cost came from.
  */
 export function resolveTimeWindow(ctx: DayContext, rules: CalendarRules): DayTimeWindow {
-  if (isPast(ctx.date, rules) || !isInRange(ctx.date, rules)) return DENIED;
+  // The day-level decision is delegated, so the week view can never disagree with the
+  // month and list views about which days are open — which is exactly how the four
+  // previous implementations drifted apart.
+  if (!isDayOpen(ctx, rules)) return DENIED;
 
   const weekdayAllowed = isWeekdayAllowed(ctx.dayOfWeek, rules);
   const weekdayRange = rules.weekdayTimes?.[String(ctx.dayOfWeek)];
 
   let range: TimeRange | undefined;
-
-  if (ctx.isHoliday) {
-    if (rules.holidaysPolicy === 'block') return DENIED;
-    if (rules.holidaysPolicy === 'allow') {
-      range = rules.holidayTimes;
-    } else {
-      // 'ignore': a holiday is just another day.
-      if (!weekdayAllowed) return DENIED;
-      range = weekdayRange;
-    }
-  } else if (ctx.isHolidayEve) {
-    if (rules.allowHolidayEves) {
-      range = rules.holidayEveTimes;
-    } else {
-      if (!weekdayAllowed) return DENIED;
-      range = weekdayRange;
-    }
+  if (ctx.isHoliday && rules.holidaysPolicy === 'allow') {
+    range = rules.holidayTimes;
+  } else if (!ctx.isHoliday && ctx.isHolidayEve && rules.allowHolidayEves) {
+    range = rules.holidayEveTimes;
   } else {
-    if (!weekdayAllowed) return DENIED;
+    // Under 'ignore', and for an eve the calendar does not opt into, the day keeps
+    // its ordinary weekday hours.
     range = weekdayRange;
   }
 
   // A day that is both special and a configured weekday gets the union of the two
-  // windows. This is a no-op on the branches that already took `weekdayRange`.
+  // windows. This is a no-op on the branch that already took `weekdayRange`.
   if (weekdayAllowed && weekdayRange) {
     range = widen(range, weekdayRange);
   }
@@ -222,7 +217,11 @@ export function buildCalendarRules(input: {
   return {
     timeZone: input.timeZone || 'UTC',
     todayISO: input.todayISO,
-    // An absent list means "unrestricted"; an explicitly empty one means "none".
+    // An explicitly empty list means "none", matching `IsWeekdayAllowed`. An *absent*
+    // list is normalized to all seven days instead: Go would read nil as "none", but
+    // `CreateCalendar` defaults it to {0..6} and a CHECK constraint forbids an empty
+    // array, so in practice absent only means "the calendar has not loaded yet" —
+    // where rendering a fully disabled grid would be misleading.
     allowedWeekdays: input.allowedWeekdays ?? ALL_WEEKDAYS,
     holidaysPolicy:
       policy === 'allow' || policy === 'block' || policy === 'ignore' ? policy : 'ignore',
