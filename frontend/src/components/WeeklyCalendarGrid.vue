@@ -571,15 +571,11 @@ import { useToastStore } from '@/stores/toast';
 import { availabilitiesApi } from '@/api/availabilities';
 import type { Availability, DateAvailabilitySummary } from '@/types';
 import TimeSelect from '@/components/TimeSelect.vue';
-import { useDateValidation, clearHolidaysCache } from '@/composables/useDateValidation';
+import { useDateValidation } from '@/composables/useDateValidation';
 import { formatDateISO, formatWeekday, formatDayMonthShort } from '@/utils/dateFormatting';
 
 const { t, locale } = useI18n();
 const toastStore = useToastStore();
-
-// IMPORTANT: Clear holidays cache on each component creation
-// to ensure computed properties use the correct data
-clearHolidaysCache();
 
 const { checkIsHoliday, checkIsHolidayEve, getHolidayName } = useDateValidation();
 

@@ -268,7 +268,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useDateValidation, clearHolidaysCache } from '@/composables/useDateValidation';
+import { useDateValidation } from '@/composables/useDateValidation';
 import { formatDateISO, formatWeekday, formatFullDate } from '@/utils/dateFormatting';
 import type { Availability, RecurrenceWithExceptions } from '@/types';
 import ParticipantDetailsPopup from './ParticipantDetailsPopup.vue';
@@ -446,8 +446,6 @@ const rangeLabel = computed(() => {
 
 // Generate all dates in the displayed period, then filter to actionable ones
 const actionableDays = computed((): ListDay[] => {
-  clearHolidaysCache();
-
   const allDates: Date[] = [];
 
   if (props.displayMode === 'month') {

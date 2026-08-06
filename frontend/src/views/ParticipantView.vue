@@ -1260,7 +1260,6 @@ import WeeklyCalendarGrid, {
 } from '@/components/WeeklyCalendarGrid.vue';
 import TimeSelect from '@/components/TimeSelect.vue';
 import CollapsibleSection from '@/components/CollapsibleSection.vue';
-import { clearHolidaysCache } from '@/composables/useDateValidation';
 import { formatDateISO } from '@/utils/dateFormatting';
 import { addParticipantEmail, resendVerificationEmail } from '@/api/notify';
 import type {
@@ -2589,9 +2588,6 @@ watch(
       oldVal.some(val => val !== undefined) &&
       JSON.stringify(newVal) !== JSON.stringify(oldVal)
     ) {
-      // Clear the holidays cache to force fresh data
-      clearHolidaysCache();
-
       // Reload the calendar to ensure we have the latest settings
       await calendarStore.fetchPublicCalendar(token.value, participantId.value);
     }
@@ -2645,8 +2641,6 @@ function handleViewStyleChange(style: 'classic' | 'compact' | 'list') {
 watch(
   () => [route.params.token, route.params.participantId],
   async () => {
-    // Clear holidays cache and reload calendar
-    clearHolidaysCache();
     await loadCalendar();
   },
   { immediate: true }

@@ -800,7 +800,7 @@ import { useI18n } from 'vue-i18n';
 import { getWeekStartDay } from '@/i18n';
 import { availabilitiesApi } from '@/api/availabilities';
 import type { Availability, RecurrenceWithExceptions } from '@/types';
-import { useDateValidation, clearHolidaysCache } from '@/composables/useDateValidation';
+import { useDateValidation } from '@/composables/useDateValidation';
 import { formatDateISO } from '@/utils/dateFormatting';
 import TimeSelect from '@/components/TimeSelect.vue';
 
@@ -837,10 +837,6 @@ interface Emits {
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const { t, locale } = useI18n();
-
-// IMPORTANT: Clear holidays cache on each component creation
-// to ensure computed properties use the correct data
-clearHolidaysCache();
 
 const { isDateAllowed, checkIsHoliday, checkIsHolidayEve, getHolidayName } = useDateValidation();
 
