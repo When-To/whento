@@ -360,14 +360,36 @@ async function saveNote() {
   }
 }
 
-// Outside-click / scroll / Escape handlers
+/**
+ * Whether an event started inside the popup.
+ *
+ * Uses `composedPath()` rather than `contains(event.target)`: a click that causes its
+ * own target to be removed — pressing Edit hides the pencil via `v-if` — leaves the
+ * target detached by the time this listener runs, and `contains` then reports it as
+ * outside. That is what made edit mode impossible to enter: the popup closed on the
+ * very click that opened the form. The composed path is captured at dispatch and
+ * survives the removal.
+ */
+const startedInsidePopup = (event: Event): boolean => {
+  const root = tooltipRef.value;
+  if (!root) return false;
+  const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+  if (path.includes(root)) return true;
+  const target = event.target as Node | null;
+  // A target already detached from the document cannot be judged; treat it as ours.
+  return !!target && (root.contains(target) || !(target as Element).isConnected);
+};
+
 const handleClickOutside = (event: Event) => {
-  if (tooltipRef.value && !tooltipRef.value.contains(event.target as Node)) {
-    emit('close');
-  }
+  // While editing, only Escape and the form's own buttons close the popup. `TimeSelect`
+  // teleports its dropdown to the body, so picking a time is an "outside" click by any
+  // DOM measure — and losing an unsaved note to a stray click is its own bug.
+  if (editingNote.value) return;
+  if (!startedInsidePopup(event)) emit('close');
 };
 
 const handleScroll = () => {
+  if (editingNote.value) return;
   emit('close');
 };
 

@@ -289,9 +289,17 @@
     @apply block;
   }
 
+  .cal-week-day-wrap {
+    @apply flex flex-col items-stretch gap-0.5;
+  }
+
   .cal-week-day {
     @apply flex flex-col items-center gap-0.5 rounded-lg border px-1 py-1.5 text-xs transition-colors;
     @apply border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800;
+  }
+
+  .cal-week-day-wrap .cal-count {
+    @apply mx-0 mb-0 self-center;
   }
 
   .cal-week-day[data-enabled] {

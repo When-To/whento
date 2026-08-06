@@ -149,6 +149,7 @@ interface DayTarget extends DragTarget {
 const headerDrag = useDragSelection<DayTarget>({
   container: headerRef,
   resolve: element => {
+    if (isDetailsControl(element)) return null;
     const node = element.closest<HTMLElement>('[data-day-index]');
     const index = node?.dataset.dayIndex;
     if (index === undefined) return null;
@@ -193,6 +194,11 @@ function openDetails(date: string, event: Event) {
   if (element) emit('day-details', date, element.getBoundingClientRect());
 }
 
+/** Header cells are a drag surface, so the details control must opt out of it. */
+function isDetailsControl(element: Element): boolean {
+  return !!element.closest('[data-no-drag]');
+}
+
 function shiftWeek(days: number) {
   const date = new Date(
     Number(props.model.startISO.slice(0, 4)),
@@ -234,25 +240,40 @@ function shiftWeek(days: number) {
       <!-- Day headers double as a full-day toggle, dragged across days. -->
       <div ref="headerRef" class="cal-week-header" @pointerdown="headerDrag.onPointerDown">
         <span class="cal-week-gutter" aria-hidden="true" />
-        <button
+        <div
           v-for="(column, index) in model.columns"
           :key="column.day.date"
-          type="button"
-          class="cal-week-day"
+          class="cal-week-day-wrap"
           :data-day-index="index"
-          :data-status="column.day.status"
-          :data-enabled="column.enabled || undefined"
-          :data-today="column.day.isToday || undefined"
-          :data-holiday="column.day.isHoliday || undefined"
-          :data-full-day="column.hasFullDayOwn || undefined"
-          :data-drag="headerDragState(column.day.date) || undefined"
-          :aria-label="column.day.ariaLabel"
-          :disabled="!column.enabled"
-          @contextmenu.prevent="openDetails(column.day.date, $event)"
         >
-          <span class="cal-week-day-name">{{ column.day.weekdayShort }}</span>
-          <span class="cal-week-day-num">{{ column.day.dayOfMonth }}</span>
-        </button>
+          <button
+            type="button"
+            class="cal-week-day"
+            :data-status="column.day.status"
+            :data-enabled="column.enabled || undefined"
+            :data-today="column.day.isToday || undefined"
+            :data-holiday="column.day.isHoliday || undefined"
+            :data-full-day="column.hasFullDayOwn || undefined"
+            :data-drag="headerDragState(column.day.date) || undefined"
+            :aria-label="column.day.ariaLabel"
+            :disabled="!column.enabled"
+            @contextmenu.prevent="openDetails(column.day.date, $event)"
+          >
+            <span class="cal-week-day-name">{{ column.day.weekdayShort }}</span>
+            <span class="cal-week-day-num">{{ column.day.dayOfMonth }}</span>
+          </button>
+          <button
+            type="button"
+            class="cal-count"
+            data-no-drag
+            :title="t('participant.participantsForDate')"
+            @click.stop="openDetails(column.day.date, $event)"
+            @pointerdown.stop
+          >
+            {{ column.day.participantCount }}/{{ column.day.threshold }}
+            <span v-if="column.day.meetsThreshold" aria-hidden="true"> &check;</span>
+          </button>
+        </div>
       </div>
 
       <div class="cal-week-body">

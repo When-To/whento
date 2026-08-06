@@ -241,6 +241,15 @@ test.describe('week grid', () => {
     await expect(page.locator('.cal-week-time--last')).toHaveText('20:00');
   });
 
+  test('offers a details control on every day header', async ({ page }) => {
+    await gotoPreview(page);
+    // Right-clicking the header was the only way in, which is undiscoverable and
+    // unusable on touch. The control also has to opt out of the header drag surface.
+    const controls = page.locator('.cal-week-day-wrap .cal-count');
+    await expect(controls).toHaveCount(7);
+    await expect(controls.first()).toHaveAttribute('data-no-drag', '');
+  });
+
   test('fills the slots this participant answered', async ({ page }) => {
     await gotoPreview(page);
     await expect(page.locator('.cal-slot[data-own]')).not.toHaveCount(0);
