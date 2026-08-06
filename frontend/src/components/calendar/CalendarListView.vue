@@ -26,7 +26,6 @@ defineProps<Props>();
 const emit = defineEmits<{
   (e: 'day-click', date: string): void;
   (e: 'day-details', date: string, anchor: DOMRect): void;
-  (e: 'add-exception', recurrenceId: string, date: string): void;
   (e: 'previous'): void;
   (e: 'next'): void;
 }>();
@@ -34,7 +33,9 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 function openDetails(date: string, event: Event) {
-  const row = (event.currentTarget as HTMLElement | null)?.closest<HTMLElement>('[data-date]');
+  const row =
+    (event.currentTarget as HTMLElement | null)?.closest<HTMLElement>('[data-date]') ??
+    (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-date]');
   if (row) emit('day-details', date, row.getBoundingClientRect());
 }
 </script>
@@ -76,6 +77,7 @@ function openDetails(date: string, event: Event) {
           :data-threshold="day.meetsThreshold || undefined"
           :data-today="day.isToday || undefined"
           :data-highlight="day.isHighlighted || undefined"
+          @contextmenu.prevent="openDetails(day.date, $event)"
         >
           <button
             type="button"
@@ -115,19 +117,9 @@ function openDetails(date: string, event: Event) {
 
           <div class="flex shrink-0 items-center gap-2">
             <button
-              v-if="day.recurrence"
-              type="button"
-              class="cal-tag-action"
-              :title="t('availability.addException')"
-              :aria-label="t('availability.addException')"
-              @click="emit('add-exception', day.recurrence.id, day.date)"
-            >
-              &times;
-            </button>
-            <button
               type="button"
               class="cal-count"
-              :title="t('participant.participantsForDate')"
+              :title="t('calendar.viewParticipantsFor', { date: day.dateLong })"
               @click="openDetails(day.date, $event)"
             >
               {{ day.participantCount }}/{{ day.threshold }}

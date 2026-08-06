@@ -340,7 +340,6 @@
             :label="listRangeLabel"
             @day-click="handleCalendarDayClick"
             @day-details="openDayDetails"
-            @add-exception="handleCalendarAddException"
             @previous="displayMode === 'week' ? shiftWeeks(-1) : shiftMonths(-1)"
             @next="displayMode === 'week' ? shiftWeeks(1) : shiftMonths(1)"
           />
@@ -356,7 +355,6 @@
               @days-select="handleCalendarDaysSelect"
               @days-deselect="handleCalendarDaysDeselect"
               @day-details="openDayDetails"
-              @add-exception="handleCalendarAddException"
               @month-change="handleMonthChange"
             />
           </div>
@@ -392,6 +390,7 @@
           :current-participant-name="participant?.name || ''"
           :date="detailsDate"
           :anchor-rect="detailsAnchor"
+          :from-recurrence="detailsFromRecurrence"
           @close="closeDayDetails"
           @availability-updated="handleAvailabilityUpdated"
         />
@@ -1234,7 +1233,7 @@ import { buildCoverageMap } from '@/utils/calendar/segments';
 import { buildWeekModel } from '@/utils/calendar/weekModel';
 import TimeSelect from '@/components/TimeSelect.vue';
 import CollapsibleSection from '@/components/CollapsibleSection.vue';
-import { formatDateISO, parseISODate } from '@/utils/date/isoDate';
+import { dayOfWeekISO, formatDateISO, parseISODate } from '@/utils/date/isoDate';
 import { useParticipantCalendar } from '@/composables/calendar/useParticipantCalendar';
 import { normalizeViewStyle, type ViewStyle } from '@/composables/calendar/useCalendarViewState';
 import { addParticipantEmail, resendVerificationEmail } from '@/api/notify';
@@ -1267,6 +1266,12 @@ const recurrences = ref<RecurrenceWithExceptions[]>([]);
 // range — thousands of proxies for a twelve-month calendar, rebuilt on each refetch.
 const participantCounts = shallowRef<Record<string, number>>({});
 const dateSummaries = shallowRef<DateAvailabilitySummary[]>([]);
+/**
+ * The participant's own explicit availabilities, as stored — not the recurrence-expanded
+ * view the range summary returns. This is what "I answered this day" means, and what
+ * separates a one-off answer from an occurrence of a rule.
+ */
+const ownAvailabilities = shallowRef<AvailabilityItem[]>([]);
 const addingAvailability = ref(false);
 const addingRecurrence = ref(false);
 const isAllDay = ref(true);
@@ -1322,29 +1327,7 @@ const participant = computed(() => {
 // Extract current participant's availabilities from dateSummaries (all participants data)
 // This replaces the need for a separate API call to /participant/{id}
 const availabilityData = computed((): ParticipantAvailabilitiesResponse | null => {
-  if (!dateSummaries.value || !participant.value) return null;
-
-  const participantName = participant.value.name;
-
-  // Extract availabilities for the current participant across all dates
-  const availabilitiesMap = new Map<string, AvailabilityItem>();
-
-  for (const summary of dateSummaries.value) {
-    const participantData = summary.participants.find(p => p.participant_name === participantName);
-
-    if (participantData) {
-      // Create a unique availability entry for this date
-      availabilitiesMap.set(summary.date, {
-        id: `${participantId.value}-${summary.date}`, // Generate stable ID
-        date: summary.date,
-        start_time: participantData.start_time,
-        end_time: participantData.end_time,
-        note: participantData.note,
-        created_at: '',
-        updated_at: '',
-      });
-    }
-  }
+  if (!participant.value) return null;
 
   return {
     participant: {
@@ -1353,9 +1336,7 @@ const availabilityData = computed((): ParticipantAvailabilitiesResponse | null =
       email: participant.value.email,
       email_verified: participant.value.email_verified || false,
     },
-    availabilities: Array.from(availabilitiesMap.values()).sort((a, b) =>
-      a.date.localeCompare(b.date)
-    ),
+    availabilities: [...ownAvailabilities.value].sort((a, b) => a.date.localeCompare(b.date)),
   };
 });
 
@@ -1581,6 +1562,11 @@ function openDayDetails(date: string, anchor: DOMRect) {
   detailsDate.value = date;
   detailsAnchor.value = anchor;
 }
+
+/** Whether the open popup's date is covered only by a recurrence. */
+const detailsFromRecurrence = computed(
+  () => !!detailsDate.value && recurrenceOnlyFor(detailsDate.value) !== null
+);
 
 function closeDayDetails() {
   detailsDate.value = null;
@@ -1928,7 +1914,14 @@ async function loadParticipantCounts(year?: number, month?: number) {
     const startStr = formatDateISO(startDate);
     const endStr = formatDateISO(endDate);
 
-    const summaries = await availabilitiesApi.getRangeSummary(token.value, startStr, endStr);
+    const [summaries, own] = await Promise.all([
+      availabilitiesApi.getRangeSummary(token.value, startStr, endStr),
+      // The participant's *explicit* answers. The range summary cannot stand in for
+      // them: the backend expands recurrences into it, so a day covered only by a rule
+      // is indistinguishable there from one the participant actually clicked.
+      availabilitiesApi.getByParticipant(token.value, participantId.value, startStr, endStr),
+    ]);
+    ownAvailabilities.value = own?.availabilities ?? [];
 
     // Ensure summaries is an array (handle null/undefined responses)
     const summariesArray = Array.isArray(summaries) ? summaries : [];
@@ -1945,6 +1938,7 @@ async function loadParticipantCounts(year?: number, month?: number) {
   } catch (err: any) {
     console.error('Failed to load participant counts:', err);
     participantCounts.value = {};
+    ownAvailabilities.value = [];
   }
 }
 
@@ -2198,7 +2192,25 @@ function isDateInFuture(dateStr: string): boolean {
   return date >= today;
 }
 
+/**
+ * The recurrence covering a date, when the participant has no one-off availability on
+ * it. A one-off answer always wins: it is the more specific of the two.
+ */
+function recurrenceOnlyFor(dateString: string) {
+  const index = calendarModel.deps.value.index;
+  if (index.ownFor(dateString).length > 0) return null;
+  return index.recurrenceFor(dateString, dayOfWeekISO(dateString));
+}
+
 async function handleCalendarDayClick(dateString: string) {
+  // A day the participant is only available on because of a recurrence has nothing to
+  // delete; clicking it means "not this time", which is an exception on the rule.
+  const recurrence = recurrenceOnlyFor(dateString);
+  if (recurrence) {
+    await handleCalendarAddException(recurrence.id, dateString);
+    return;
+  }
+
   // Check if availability already exists for this date
   const existingAvailability = availabilities.value.find(a => a.date === dateString);
   if (existingAvailability) {

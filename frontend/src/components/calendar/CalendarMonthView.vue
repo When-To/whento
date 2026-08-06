@@ -24,7 +24,6 @@ const emit = defineEmits<{
   (e: 'days-select', dates: string[]): void;
   (e: 'days-deselect', dates: string[]): void;
   (e: 'day-details', date: string, anchor: DOMRect): void;
-  (e: 'add-exception', recurrenceId: string, date: string): void;
   (e: 'month-change', year: number, month: number): void;
 }>();
 
@@ -213,7 +212,6 @@ defineExpose({ selectableDays });
           :day="day"
           :drag="dragStateFor(day, index)"
           :focused="index === nav.tabStopIndex.value"
-          @remove-recurrence="(id, date) => emit('add-exception', id, date)"
           @show-details="openDetails"
         />
       </div>

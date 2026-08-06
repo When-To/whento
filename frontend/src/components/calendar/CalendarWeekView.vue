@@ -194,6 +194,15 @@ function openDetails(date: string, event: Event) {
   if (element) emit('day-details', date, element.getBoundingClientRect());
 }
 
+/** Right-click on any slot opens the details for the day it belongs to. */
+function openDetailsFromSlot(event: Event) {
+  const node = (event.target as Element | null)?.closest<HTMLElement>('[data-slot-key]');
+  const cell = node?.dataset.slotKey ? cellByKey.value.get(node.dataset.slotKey) : undefined;
+  if (!cell) return;
+  const column = headerRef.value?.querySelector<HTMLElement>(`[data-day-index="${cell.dayIndex}"]`);
+  emit('day-details', cell.date, (column ?? node!).getBoundingClientRect());
+}
+
 /** Header cells are a drag surface, so the details control must opt out of it. */
 function isDetailsControl(element: Element): boolean {
   return !!element.closest('[data-no-drag]');
@@ -266,7 +275,7 @@ function shiftWeek(days: number) {
             type="button"
             class="cal-count"
             data-no-drag
-            :title="t('participant.participantsForDate')"
+            :title="t('calendar.viewParticipantsFor', { date: column.day.dateLong })"
             @click.stop="openDetails(column.day.date, $event)"
             @pointerdown.stop
           >
@@ -299,6 +308,7 @@ function shiftWeek(days: number) {
           role="grid"
           :style="{ '--cal-slot-count': slotCount, '--cal-hour-h': hourHeight }"
           @pointerdown="slotDrag.onPointerDown"
+          @contextmenu.prevent="openDetailsFromSlot"
         >
           <div
             v-for="cell in model.cells"

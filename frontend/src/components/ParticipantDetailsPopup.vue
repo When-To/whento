@@ -173,11 +173,27 @@
                 >
                   {{ t('availability.noNote', 'No note') }}
                 </div>
+
+                <!-- Says why there is nothing to edit here. -->
+                <p
+                  v-if="
+                    participant.participant_name === props.currentParticipantName &&
+                    props.fromRecurrence
+                  "
+                  class="mt-2 flex items-start gap-1.5 text-xs text-gray-500 dark:text-gray-400"
+                >
+                  <span class="cal-dot cal-dot--recurring mt-1" />
+                  {{ t('availability.fromRecurrenceHint') }}
+                </p>
               </div>
 
               <!-- Edit button for current participant -->
               <button
-                v-if="participant.participant_name === props.currentParticipantName && !editingNote"
+                v-if="
+                  participant.participant_name === props.currentParticipantName &&
+                  !editingNote &&
+                  !props.fromRecurrence
+                "
                 class="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 :title="t('common.edit', 'Edit')"
                 @click="
@@ -219,6 +235,12 @@ interface Props {
   currentParticipantName: string;
   date: string;
   anchorRect: DOMRect;
+  /**
+   * True when the participant is only available on this date because of a recurrence.
+   * There is no one-off record to edit, so the form is replaced by an explanation —
+   * saving would silently create a one-off availability shadowing the rule.
+   */
+  fromRecurrence?: boolean;
 }
 
 interface Emits {

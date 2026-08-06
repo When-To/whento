@@ -20,7 +20,6 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), { drag: null, focused: false });
 
 const emit = defineEmits<{
-  (e: 'remove-recurrence', recurrenceId: string, date: string): void;
   (e: 'show-details', date: string): void;
 }>();
 
@@ -89,19 +88,6 @@ const holidayTitle = computed(() => {
     >
       <span class="cal-dot cal-dot--recurring" />
       <span class="truncate">{{ day.recurrence.label }}</span>
-      <!-- Skip this one occurrence of the recurrence. -->
-      <button
-        v-if="!day.isPast"
-        type="button"
-        data-no-drag
-        class="cal-tag-action"
-        :title="t('availability.addException')"
-        :aria-label="t('availability.addException')"
-        @click.stop="emit('remove-recurrence', day.recurrence!.id, day.date)"
-        @pointerdown.stop
-      >
-        &times;
-      </button>
     </span>
 
     <div
@@ -119,7 +105,7 @@ const holidayTitle = computed(() => {
       type="button"
       data-no-drag
       class="cal-count"
-      :title="t('participant.participantsForDate')"
+      :title="t('calendar.viewParticipantsFor', { date: day.dateLong })"
       @click.stop="emit('show-details', day.date)"
       @pointerdown.stop
     >
