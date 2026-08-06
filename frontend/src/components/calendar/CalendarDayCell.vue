@@ -124,6 +124,15 @@ const holidayTitle = computed(() => {
       @pointerdown.stop
     >
       {{ day.participantCount }}/{{ day.threshold }}
+      <!-- A small glyph so the control reads as "open details" rather than a label. -->
+      <svg
+        class="size-2.5 shrink-0 opacity-70"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path d="M10 3a7 7 0 100 14 7 7 0 000-14zm.75 10.5h-1.5v-5h1.5v5zm0-6.5h-1.5V5.5h1.5V7z" />
+      </svg>
     </button>
   </div>
 </template>

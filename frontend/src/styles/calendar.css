@@ -258,15 +258,24 @@
     @apply h-full rounded-full bg-current transition-[width] duration-200;
   }
 
+  /*
+   * Opens the per-participant breakdown. It has to look like a control: as bare text it
+   * read as a label, and the only way anyone found the popup was by right-clicking a
+   * cell — which is undiscoverable and impossible on touch.
+   */
   .cal-count {
-    @apply -mx-1 -mb-1 self-start rounded px-1 py-0.5 text-[0.65rem] leading-none tabular-nums opacity-80 transition-opacity;
-    @apply hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/20;
+    @apply -mx-0.5 -mb-0.5 flex cursor-pointer items-center gap-0.5 self-start rounded border px-1 py-0.5;
+    @apply text-[0.65rem] leading-none tabular-nums transition-colors;
+    @apply border-current/25 hover:border-current/60 hover:bg-black/10 dark:hover:bg-white/20;
     @apply focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-600;
+    /* Comfortably tappable without inflating the cell. */
+    min-height: 1.25rem;
   }
 
   @media (max-width: 48rem) {
-    .cal-tag,
-    .cal-count {
+    /* The time chips do not fit a transposed cell, but the count must stay: hiding it
+       removed the only way to reach the popup on a phone. */
+    .cal-tag {
       @apply hidden;
     }
   }

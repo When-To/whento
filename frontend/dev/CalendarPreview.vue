@@ -9,6 +9,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import CalendarMonthView from '../src/components/calendar/CalendarMonthView.vue';
 import CalendarWeekView from '../src/components/calendar/CalendarWeekView.vue';
+import ParticipantDetailsPopup from '../src/components/ParticipantDetailsPopup.vue';
 import { buildCoverageMap } from '../src/utils/calendar/segments';
 import { buildWeekModel } from '../src/utils/calendar/weekModel';
 import type { DateAvailabilitySummary } from '../src/types';
@@ -170,6 +171,19 @@ function availabilitiesFor(date: string) {
   return availabilities.filter(a => a.date === date);
 }
 
+/**
+ * The details popup, so its behaviour is testable without a backend. It fetches the
+ * day summary itself, which the browser tests stub with a route interception — this
+ * component has had two regressions with no automated coverage at all.
+ */
+const detailsDate = ref<string | null>(null);
+const detailsAnchor = ref<DOMRect | null>(null);
+
+function openDetails(date: string, anchor: DOMRect) {
+  detailsDate.value = date;
+  detailsAnchor.value = anchor;
+}
+
 const dark = ref(false);
 function applyTheme() {
   document.documentElement.classList.toggle('dark', dark.value);
@@ -206,7 +220,22 @@ onMounted(() => {
         </div>
       </header>
 
-      <CalendarMonthView :model="model" show-navigation data-testid="month" />
+      <CalendarMonthView
+        :model="model"
+        show-navigation
+        data-testid="month"
+        @day-details="openDetails"
+      />
+
+      <ParticipantDetailsPopup
+        v-if="detailsDate && detailsAnchor"
+        calendar-token="preview-token"
+        current-participant-id="p1"
+        current-participant-name="Ada"
+        :date="detailsDate"
+        :anchor-rect="detailsAnchor"
+        @close="detailsDate = null"
+      />
 
       <CalendarWeekView
         :model="weekModel"

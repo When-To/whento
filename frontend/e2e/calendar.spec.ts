@@ -255,3 +255,73 @@ test.describe('week grid', () => {
     await expect(page.locator('.cal-slot[data-own]')).not.toHaveCount(0);
   });
 });
+
+test.describe('availability popup', () => {
+  /** The popup fetches its own day summary; the preview has no backend behind it. */
+  async function stubSummary(page: Page) {
+    await page.route('**/api/v1/availabilities/calendar/**/dates/**', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            date: '2026-04-08',
+            total_count: 2,
+            participants: [
+              { participant_name: 'Bob', start_time: '09:00', end_time: '17:00' },
+              { participant_name: 'Ada', start_time: '09:00', end_time: '12:00', note: '' },
+            ],
+          },
+        }),
+      })
+    );
+  }
+
+  function popup(page: Page) {
+    return page.locator('div.fixed.z-50').filter({ hasText: 'Participants for' });
+  }
+
+  async function openPopup(page: Page) {
+    await stubSummary(page);
+    await gotoPreview(page);
+    await cell(page, '2026-04-08').locator('.cal-count').click();
+    await expect(popup(page)).toBeVisible();
+  }
+
+  test('stays open when edit mode is entered', async ({ page }) => {
+    await openPopup(page);
+    // Pressing Edit removes the pencil via `v-if`, which detached the click target
+    // before the outside-click handler ran and closed the popup on its own trigger.
+    await popup(page).locator('button[title="Edit"]').click();
+    await expect(popup(page)).toBeVisible();
+    await expect(popup(page).locator('textarea')).toBeVisible();
+  });
+
+  test('survives picking a time from the teleported dropdown', async ({ page }) => {
+    await openPopup(page);
+    await popup(page).locator('button[title="Edit"]').click();
+    await popup(page).locator('input').first().click();
+    // `TimeSelect` teleports its list to the body, so this is an "outside" click by
+    // any DOM measure.
+    await expect(popup(page)).toBeVisible();
+  });
+
+  test('stays inside a short viewport once the edit form expands', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 420 });
+    await openPopup(page);
+    await popup(page).locator('button[title="Edit"]').click();
+    await expect(popup(page).locator('textarea')).toBeVisible();
+
+    const box = (await popup(page).boundingBox())!;
+    // It is `position: fixed`, so anything hanging off the bottom is unreachable —
+    // scrolling the page underneath does not move it.
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(420);
+
+    // And the overflow goes into the popup's own scroll area, not out of view.
+    const body = popup(page).locator('.overflow-y-auto').first();
+    await body.evaluate(el => el.scrollTo(0, el.scrollHeight));
+    await expect(popup(page).getByRole('button', { name: /^save$/i })).toBeVisible();
+  });
+});
