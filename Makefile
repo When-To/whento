@@ -80,8 +80,22 @@ dev-fullstack: ensure-dist-placeholder
 	@echo ""
 	@echo "Access the app at http://localhost:8080"
 	@echo ""
-	@trap 'kill 0' SIGINT; \
-	PORT=5173 go run -tags $(BUILD_TYPE) ./cmd/ & \
+	@# Three things had to be right for Ctrl+C to stop both halves, and none was:
+	@#  - `SIGINT` is not a valid trap name in POSIX sh. Recipes run under /bin/sh,
+	@#    which is dash on Debian and Ubuntu, so the old trap printed
+	@#    "trap: SIGINT: bad trap" and never installed. It has to be `INT`.
+	@#  - A background command in a non-interactive shell inherits SIGINT ignored,
+	@#    so Ctrl+C could never stop the backend even when it reached it. Only the
+	@#    foreground frontend died — exactly the reported symptom. SIGTERM is not
+	@#    ignored, which is what `pkill -TERM` and `kill` send.
+	@#  - `go run` is two processes: itself, and the compiled binary it execs, which
+	@#    is the one holding :5173. Killing only the parent orphans the server and
+	@#    leaves the port taken. `pkill -P` reaches the child first.
+	@# EXIT is trapped as well as INT, so quitting Vite with `q` — a normal exit that
+	@# sends no signal at all — cleans up too.
+	@PORT=5173 go run -tags $(BUILD_TYPE) ./cmd/ & \
+	BACKEND=$$!; \
+	trap 'pkill -TERM -P $$BACKEND 2>/dev/null; kill $$BACKEND 2>/dev/null' EXIT INT TERM; \
 	cd frontend && npm run dev:$(BUILD_TYPE)
 
 dev-backend: ensure-dist-placeholder
