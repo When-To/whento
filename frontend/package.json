@@ -17,6 +17,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:backend": "playwright test --config playwright.backend.config.ts",
     "type-check": "vue-tsc --noEmit",
     "format": "prettier --write \"src/**/*.{vue,ts,js,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{vue,ts,js,css,json}\""
