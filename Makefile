@@ -1,4 +1,4 @@
-.PHONY: dev dev-fullstack dev-backend dev-frontend dev-db dev-app test build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-build-multiarch docker-test-build docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-clean docs-serve docs-validate keys help hooks format format-go format-frontend format-check format-check-go format-check-frontend
+.PHONY: dev dev-fullstack dev-backend dev-frontend dev-db dev-app test test-root test-pkg test-coverage build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-build-multiarch docker-test-build docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-clean docs-serve docs-validate keys help hooks format format-go format-frontend format-check format-check-go format-check-frontend
 
 # BUILD_TYPE can be 'cloud' or 'selfhosted' (default: selfhosted)
 BUILD_TYPE ?= selfhosted
@@ -93,9 +93,25 @@ dev-frontend:
 	@cd frontend && npm run dev:$(BUILD_TYPE)
 
 # Testing
-test:
-	@echo "Running all tests ($(BUILD_TYPE) mode)..."
+#
+# go.work declares two modules, and `./...` only ever expands within the module it is
+# run from. Testing pkg/ therefore needs its own invocation from inside pkg/ — without
+# it, jwt, participanttoken, middleware, validator and httputil are never tested.
+test: test-root test-pkg
+
+test-root:
+	@echo "Running root module tests ($(BUILD_TYPE) mode)..."
 	go test -tags $(BUILD_TYPE) ./... -v
+
+test-pkg:
+	@echo "Running pkg module tests ($(BUILD_TYPE) mode)..."
+	cd pkg && go test -tags $(BUILD_TYPE) ./... -v
+
+# Coverage across both modules, reported per package.
+test-coverage:
+	@echo "Running all tests with coverage ($(BUILD_TYPE) mode)..."
+	go test -tags $(BUILD_TYPE) -cover ./...
+	cd pkg && go test -tags $(BUILD_TYPE) -cover ./...
 
 # Building
 build: swagger-generate
