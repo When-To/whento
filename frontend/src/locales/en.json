@@ -351,6 +351,17 @@
     "dateNotAllowed": "This date is not allowed",
     "participantsAvailable": "{count} of {threshold} participants available",
     "viewParticipantsFor": "Participants for {date}",
+    "legend": {
+      "title": "Legend",
+      "own": "My availability",
+      "recurring": "My recurrence",
+      "threshold": "Enough participants",
+      "coverage": "Everyone's availability",
+      "holiday": "Public holiday",
+      "holidayEve": "Day before a holiday",
+      "disabled": "Not available for booking",
+      "gauge": "Progress toward the threshold"
+    },
     "copyParticipantLink": "Copy the participant link",
     "linkCopied": "Link copied to the clipboard",
     "participantLinkCopied": "Participant link copied to the clipboard",

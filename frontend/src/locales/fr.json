@@ -354,6 +354,17 @@
     "dateNotAllowed": "Cette date n'est pas autorisée",
     "participantsAvailable": "{count} participants disponibles sur {threshold}",
     "viewParticipantsFor": "Participants pour le {date}",
+    "legend": {
+      "title": "Légende",
+      "own": "Ma disponibilité",
+      "recurring": "Ma récurrence",
+      "threshold": "Seuil atteint",
+      "coverage": "Disponibilité de tous",
+      "holiday": "Jour férié",
+      "holidayEve": "Veille de jour férié",
+      "disabled": "Date non ouverte",
+      "gauge": "Progression vers le seuil"
+    },
     "previousWeek": "Semaine précédente",
     "nextWeek": "Semaine suivante",
     "thresholdMet": "Événement (seuil atteint)",

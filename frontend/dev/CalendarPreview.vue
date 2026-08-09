@@ -9,6 +9,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import CalendarMonthView from '../src/components/calendar/CalendarMonthView.vue';
 import CalendarWeekView from '../src/components/calendar/CalendarWeekView.vue';
+import CalendarLegend from '../src/components/calendar/CalendarLegend.vue';
 import ParticipantDetailsPopup from '../src/components/ParticipantDetailsPopup.vue';
 import { buildCoverageMap } from '../src/utils/calendar/segments';
 import { buildWeekModel } from '../src/utils/calendar/weekModel';
@@ -220,6 +221,8 @@ onMounted(() => {
         </div>
       </header>
 
+      <CalendarLegend display-mode="month" data-testid="legend-month" />
+
       <CalendarMonthView
         :model="model"
         show-navigation
@@ -236,6 +239,8 @@ onMounted(() => {
         :anchor-rect="detailsAnchor"
         @close="detailsDate = null"
       />
+
+      <CalendarLegend display-mode="week" data-testid="legend-week" />
 
       <CalendarWeekView
         :model="weekModel"
