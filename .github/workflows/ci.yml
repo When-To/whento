@@ -316,7 +316,7 @@ jobs:
               cat /tmp/backend.log
               exit 1
             fi
-            if curl -sf http://127.0.0.1:5173/api/v1/health > /dev/null; then
+            if curl -sf http://127.0.0.1:5173/api/health > /dev/null; then
               echo "backend healthy"
               exit 0
             fi

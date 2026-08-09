@@ -82,8 +82,4 @@ export const calendarsApi = {
     const params = participantId ? { participant_id: participantId } : {};
     return apiClient.get<CalendarWithParticipants>(`/calendars/public/${token}`, { params });
   },
-
-  async getSummary(token: string): Promise<any> {
-    return apiClient.get<any>(`/calendars/public/${token}/summary`);
-  },
 };
