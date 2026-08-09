@@ -31,7 +31,7 @@ func NewHandler(service QuotaService, log *slog.Logger) *Handler {
 // HandleGetLimits returns quota limits and current usage
 //
 //	@Summary		Get quota limits and usage
-//	@Description	Returns current quota limits (per-user for Cloud, per-server for Self-hosted) and usage statistics. Includes whether user can create more calendars and upgrade URL.
+//	@Description	Returns current quota limits (per-user for Cloud, per-server for Self-hosted) and usage statistics, and whether the user can create more calendars.
 //	@Tags			Quota
 //	@Produce		json
 //	@Security		BearerAuth
@@ -77,14 +77,11 @@ func (h *Handler) HandleGetLimits(w http.ResponseWriter, r *http.Request) {
 	// Check if user can create more calendars
 	canCreate, _ := h.service.CanCreateCalendar(r.Context(), userID)
 
-	// Determine limitation type
+	// Which cap applies, if any. There is no upgrade path any more, so the response
+	// no longer carries one.
 	limitationType := "per_user"
-	upgradeURL := "/billing/upgrade" // Default for cloud
-
 	if serverLimit > 0 {
-		// Self-hosted
 		limitationType = "per_server"
-		upgradeURL = "https://whento.be/pricing"
 	} else if userLimit == 0 {
 		limitationType = "none"
 	}
@@ -96,7 +93,6 @@ func (h *Handler) HandleGetLimits(w http.ResponseWriter, r *http.Request) {
 		ServerUsage:    serverUsage,
 		CanCreate:      canCreate,
 		LimitationType: limitationType,
-		UpgradeURL:     upgradeURL,
 	}
 
 	httputil.JSON(w, http.StatusOK, response)

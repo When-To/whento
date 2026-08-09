@@ -95,11 +95,6 @@
           <p class="mb-4 text-gray-700 dark:text-gray-300">
             {{ t('legal.privacy.thirdParty.description') }}
           </p>
-          <ul class="mb-4 list-disc space-y-2 pl-6">
-            <li class="text-gray-700 dark:text-gray-300">
-              <strong>Stripe</strong> - {{ t('legal.privacy.thirdParty.stripe') }}
-            </li>
-          </ul>
 
           <!-- Cookies -->
           <h2 class="mt-8 mb-4 font-display text-2xl font-bold text-gray-900 dark:text-white">

@@ -1,4 +1,4 @@
-.PHONY: dev dev-fullstack dev-backend dev-frontend dev-db dev-app test build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-build-multiarch docker-test-build docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-clean docs-serve docs-validate build-licensegen keys help hooks format format-go format-frontend format-check format-check-go format-check-frontend
+.PHONY: dev dev-fullstack dev-backend dev-frontend dev-db dev-app test build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-build-multiarch docker-test-build docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-clean docs-serve docs-validate keys help hooks format format-go format-frontend format-check format-check-go format-check-frontend
 
 # BUILD_TYPE can be 'cloud' or 'selfhosted' (default: selfhosted)
 BUILD_TYPE ?= selfhosted
@@ -43,7 +43,6 @@ help:
 	@echo "  make swagger          - Generate Swagger documentation from Go comments"
 	@echo "  make swagger-clean    - Remove generated Swagger files"
 	@echo "  make docs-serve       - Info on accessing embedded Swagger UI"
-	@echo "  make build-licensegen - Build license generator tool (for e-commerce)"
 	@echo "  make hooks            - Enable the repo git hooks (format on commit)"
 	@echo "  make format           - Format Go (goimports) + frontend (prettier) files"
 	@echo "  make format-go        - Format Go files only"
@@ -108,16 +107,6 @@ build: swagger-generate
 	@mkdir -p bin
 	CGO_ENABLED=0 go build -tags $(BUILD_TYPE) -ldflags="-s -w" -o bin/whento ./cmd
 	@echo "✓ Binary built: bin/whento"
-
-build-licensegen:
-	@echo "Building License Generator tool..."
-	@mkdir -p bin
-	CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/licensegen ./cmd/licensegen
-	@echo "✓ License Generator built: bin/licensegen"
-	@echo ""
-	@echo "Usage:"
-	@echo "  bin/licensegen keygen                    # Generate key pair"
-	@echo "  bin/licensegen generate --help           # See license generation options"
 
 clean:
 	rm -rf bin/

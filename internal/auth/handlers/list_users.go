@@ -2,8 +2,6 @@
 // Copyright (C) 2025 WhenTo Contributors
 // SPDX-License-Identifier: BSL-1.1
 
-//go:build cloud
-
 package handlers
 
 import (
@@ -13,10 +11,10 @@ import (
 	"github.com/whento/whento/internal/auth/models"
 )
 
-// ListUsers returns all users with subscription info (admin only, cloud build)
+// ListUsers returns all users (admin only)
 //
 //	@Summary		List all users
-//	@Description	Returns all users. Admin only. Cloud version includes subscription info.
+//	@Description	Returns all users with their MFA status. Admin only.
 //	@Tags			Admin
 //	@Produce		json
 //	@Security		BearerAuth
@@ -25,7 +23,7 @@ import (
 //	@Failure		403	{object}	httputil.ErrorResponse	"Forbidden (requires admin role)"
 //	@Router			/api/v1/auth/admin/users [get]
 func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.authService.ListUsersWithSubscriptions(r.Context())
+	users, err := h.authService.ListUsers(r.Context())
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to list users")
 		return
@@ -33,7 +31,7 @@ func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	var responses []*models.UserResponse
 	for _, user := range users {
-		resp := user.ToResponseWithSubscription()
+		resp := user.ToResponse()
 
 		// Enrich with MFA status (TOTP + passkey count)
 		totpEnabled, _ := h.mfaRepo.IsEnabled(r.Context(), user.ID)
