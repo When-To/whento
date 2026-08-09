@@ -37,6 +37,15 @@ export default defineConfig({
         'src/main.ts',
         'src/vite-env.d.ts',
       ],
+      // A ratchet, not a target. Set just under what the suite currently reaches so
+      // that `npm run test:coverage` fails if coverage falls, without failing on the
+      // noise of a line or two. Raise it when the next batch of tests lands.
+      thresholds: {
+        statements: 50,
+        branches: 60,
+        functions: 38,
+        lines: 48,
+      },
     },
   },
 });

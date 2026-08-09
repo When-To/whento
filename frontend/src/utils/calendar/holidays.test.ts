@@ -92,9 +92,17 @@ describe('multi-day holidays', () => {
   });
 
   it('names every day of the span, not just the first', () => {
+    // toBeTruthy() would also pass on a stray "0" or on the wrong holiday's name; the
+    // point of the expansion is that day five carries the *same* name as day one, and
+    // that the name is the real one.
     const ru = getHolidayIndex('Europe/Moscow', 'en');
-    expect(ru.getName('2026-01-05')).toBe(ru.getName('2026-01-02'));
-    expect(ru.getName('2026-01-05')).toBeTruthy();
+    const name = ru.getName('2026-01-02');
+
+    expect(name).toBe('New Year Holiday');
+    expect(ru.getName('2026-01-05')).toBe(name);
+    expect(ru.getName('2026-01-03')).toBe(name);
+    // And a day outside the span carries no name at all.
+    expect(ru.getName('2026-01-15')).toBeNull();
   });
 
   it('treats the day before a multi-day holiday as an eve', () => {
