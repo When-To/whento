@@ -51,7 +51,6 @@ type UserRepository interface {
 	Count(ctx context.Context) (int, error)
 	DetermineRoleAtomically(ctx context.Context) (string, error)
 	List(ctx context.Context) ([]*models.User, error)
-	ListWithSubscriptions(ctx context.Context) ([]*models.UserWithSubscription, error)
 	UpdateRole(ctx context.Context, userID uuid.UUID, role string) error
 	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error
 }

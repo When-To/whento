@@ -12,14 +12,19 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-
-	"github.com/whento/whento/internal/subscription/service"
 )
 
-// CloudQuotaService implements QuotaService for the cloud version
+// CloudCalendarLimit is how many calendars a hosted account may own.
+//
+// It used to be read from the user's Stripe subscription, which is why this package
+// depended on internal/subscription. The hosted service now gives everyone the same
+// allowance, so the number lives here and the dependency is gone.
+const CloudCalendarLimit = 3
+
+// CloudQuotaService implements QuotaService for the cloud version.
+// Limits are per user; there is no server-wide cap.
 type CloudQuotaService struct {
-	subscriptionService *service.Service
-	calendarRepo        CalendarCounter
+	calendarRepo CalendarCounter
 }
 
 // CalendarCounter is an interface for counting calendars
@@ -29,45 +34,27 @@ type CalendarCounter interface {
 }
 
 // NewCloudService creates a new cloud quota service
-func NewCloudService(subscriptionService *service.Service, calendarRepo CalendarCounter) *CloudQuotaService {
-	return &CloudQuotaService{
-		subscriptionService: subscriptionService,
-		calendarRepo:        calendarRepo,
-	}
+func NewCloudService(calendarRepo CalendarCounter) *CloudQuotaService {
+	return &CloudQuotaService{calendarRepo: calendarRepo}
 }
 
-// CanCreateCalendar checks if a user can create a new calendar based on their subscription
+// CanCreateCalendar reports whether the user is below their calendar allowance
 func (s *CloudQuotaService) CanCreateCalendar(ctx context.Context, userID uuid.UUID) (bool, error) {
-	limit, err := s.GetUserLimit(ctx, userID)
-	if err != nil {
-		return false, err
-	}
-
-	// 0 means unlimited
-	if limit == 0 {
-		return true, nil
-	}
-
 	current, err := s.GetCurrentUsage(ctx, userID)
 	if err != nil {
 		return false, err
 	}
 
-	return current < limit, nil
+	return current < CloudCalendarLimit, nil
 }
 
-// GetUserLimit returns the calendar limit for a specific user based on their subscription
-func (s *CloudQuotaService) GetUserLimit(ctx context.Context, userID uuid.UUID) (int, error) {
-	limit, err := s.subscriptionService.GetCalendarLimit(ctx, userID)
-	if err != nil {
-		return 3, fmt.Errorf("failed to get calendar limit: %w", err)
-	}
-
-	return limit, nil
+// GetUserLimit returns the calendar limit for a specific user
+func (s *CloudQuotaService) GetUserLimit(_ context.Context, _ uuid.UUID) (int, error) {
+	return CloudCalendarLimit, nil
 }
 
 // GetServerLimit returns -1 as cloud version doesn't have server-wide limits
-func (s *CloudQuotaService) GetServerLimit(ctx context.Context) (int, error) {
+func (s *CloudQuotaService) GetServerLimit(_ context.Context) (int, error) {
 	return -1, nil // Not applicable for cloud
 }
 
@@ -96,56 +83,16 @@ func (s *CloudQuotaService) QuotaLockKey(userID uuid.UUID) int64 {
 	return int64(binary.BigEndian.Uint64(userID[:8]))
 }
 
-// IsOverQuota checks if user has exceeded their calendar limit
-// This happens when subscription expires/downgrades but user still has more calendars than allowed
+// IsOverQuota reports whether the user owns more calendars than the allowance.
+//
+// Reachable when the allowance is lowered, or when calendars were created before it
+// applied. Such a user keeps their calendars but cannot create more, and their ICS
+// feeds stop rendering.
 func (s *CloudQuotaService) IsOverQuota(ctx context.Context, userID uuid.UUID) (bool, error) {
-	limit, err := s.GetUserLimit(ctx, userID)
-	if err != nil {
-		return false, err
-	}
-
-	// Unlimited = can never be over quota
-	if limit == 0 {
-		return false, nil
-	}
-
 	current, err := s.GetCurrentUsage(ctx, userID)
 	if err != nil {
 		return false, err
 	}
 
-	// Over quota if current usage exceeds limit
-	return current > limit, nil
-}
-
-// GetLimitInfo returns detailed information about limits and usage
-func (s *CloudQuotaService) GetLimitInfo(ctx context.Context, userID uuid.UUID) (*LimitInfo, error) {
-	userLimit, err := s.GetUserLimit(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	userUsage, err := s.GetCurrentUsage(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	serverUsage, _ := s.GetServerUsage(ctx)
-
-	canCreate, _ := s.CanCreateCalendar(ctx, userID)
-
-	limitationType := "per_user"
-	if userLimit == 0 {
-		limitationType = "none"
-	}
-
-	return &LimitInfo{
-		UserLimit:      userLimit,
-		ServerLimit:    -1, // N/A for cloud
-		UserUsage:      userUsage,
-		ServerUsage:    serverUsage,
-		CanCreate:      canCreate,
-		LimitationType: limitationType,
-		UpgradeURL:     "/billing/upgrade",
-	}, nil
+	return current > CloudCalendarLimit, nil
 }

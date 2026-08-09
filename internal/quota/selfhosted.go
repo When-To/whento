@@ -11,14 +11,19 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-
-	"github.com/whento/whento/internal/licensing/service"
 )
 
-// SelfHostedQuotaService implements QuotaService for the self-hosted version
+// SelfHostedCalendarLimit is the server-wide calendar allowance. Zero means unlimited.
+//
+// It used to come from a signed licence file, which is why this package depended on
+// internal/licensing. Self-hosting is unrestricted now, so the number lives here and
+// the dependency is gone.
+const SelfHostedCalendarLimit = 0
+
+// SelfHostedQuotaService implements QuotaService for the self-hosted version.
+// Limits are server-wide rather than per user, and there are none.
 type SelfHostedQuotaService struct {
-	licensingService *service.Service
-	calendarRepo     CalendarCounter
+	calendarRepo CalendarCounter
 }
 
 // CalendarCounter is an interface for counting calendars
@@ -28,45 +33,23 @@ type CalendarCounter interface {
 }
 
 // NewSelfHostedService creates a new self-hosted quota service
-func NewSelfHostedService(licensingService *service.Service, calendarRepo CalendarCounter) *SelfHostedQuotaService {
-	return &SelfHostedQuotaService{
-		licensingService: licensingService,
-		calendarRepo:     calendarRepo,
-	}
+func NewSelfHostedService(calendarRepo CalendarCounter) *SelfHostedQuotaService {
+	return &SelfHostedQuotaService{calendarRepo: calendarRepo}
 }
 
-// CanCreateCalendar checks if a new calendar can be created based on server-wide license limits
-func (s *SelfHostedQuotaService) CanCreateCalendar(ctx context.Context, userID uuid.UUID) (bool, error) {
-	serverLimit, err := s.GetServerLimit(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	// 0 means unlimited
-	if serverLimit == 0 {
-		return true, nil
-	}
-
-	totalCalendars, err := s.GetServerUsage(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	// Return false without error if limit reached (not an internal error)
-	return totalCalendars < serverLimit, nil
+// CanCreateCalendar always allows creation: self-hosting is unrestricted
+func (s *SelfHostedQuotaService) CanCreateCalendar(_ context.Context, _ uuid.UUID) (bool, error) {
+	return true, nil
 }
 
 // GetUserLimit returns the server limit (self-hosted has server-wide limits, not per-user)
-func (s *SelfHostedQuotaService) GetUserLimit(ctx context.Context, userID uuid.UUID) (int, error) {
-	// In self-hosted, there's no per-user limit, only server-wide
+func (s *SelfHostedQuotaService) GetUserLimit(ctx context.Context, _ uuid.UUID) (int, error) {
 	return s.GetServerLimit(ctx)
 }
 
-// GetServerLimit returns the server-wide calendar limit based on the license
-func (s *SelfHostedQuotaService) GetServerLimit(ctx context.Context) (int, error) {
-	// License is loaded in RAM, no need for context
-	limit := s.licensingService.GetServerCalendarLimit()
-	return limit, nil
+// GetServerLimit returns 0, meaning unlimited
+func (s *SelfHostedQuotaService) GetServerLimit(_ context.Context) (int, error) {
+	return SelfHostedCalendarLimit, nil
 }
 
 // GetCurrentUsage returns the current calendar count for a user
@@ -94,60 +77,7 @@ func (s *SelfHostedQuotaService) QuotaLockKey(_ uuid.UUID) int64 {
 	return 0x57484E54_4F51 // "WHNTOQ" — fixed key for server-wide lock
 }
 
-// IsOverQuota checks if the server has exceeded its calendar limit
-// For self-hosted, this is a server-wide check (not per-user)
-// When license expires/downgrades, the server may have more calendars than allowed
-func (s *SelfHostedQuotaService) IsOverQuota(ctx context.Context, userID uuid.UUID) (bool, error) {
-	serverLimit, err := s.GetServerLimit(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	// Unlimited = can never be over quota
-	if serverLimit == 0 {
-		return false, nil
-	}
-
-	serverUsage, err := s.GetServerUsage(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	// Over quota if server usage exceeds limit
-	return serverUsage > serverLimit, nil
-}
-
-// GetLimitInfo returns detailed information about limits and usage
-func (s *SelfHostedQuotaService) GetLimitInfo(ctx context.Context, userID uuid.UUID) (*LimitInfo, error) {
-	serverLimit, err := s.GetServerLimit(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	userUsage, err := s.GetCurrentUsage(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	serverUsage, err := s.GetServerUsage(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	canCreate, _ := s.CanCreateCalendar(ctx, userID)
-
-	limitationType := "per_server"
-	if serverLimit == 0 {
-		limitationType = "none"
-	}
-
-	return &LimitInfo{
-		UserLimit:      serverLimit, // Same as server limit
-		ServerLimit:    serverLimit,
-		UserUsage:      userUsage,
-		ServerUsage:    serverUsage,
-		CanCreate:      canCreate,
-		LimitationType: limitationType,
-		UpgradeURL:     "https://whento.be/pricing",
-	}, nil
+// IsOverQuota always reports false: there is no limit to exceed
+func (s *SelfHostedQuotaService) IsOverQuota(_ context.Context, _ uuid.UUID) (bool, error) {
+	return false, nil
 }

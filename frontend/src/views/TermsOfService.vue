@@ -64,25 +64,22 @@
             </li>
           </ul>
 
-          <!-- Subscriptions -->
+          <!-- Pricing -->
           <h2 class="mt-8 mb-4 font-display text-2xl font-bold text-gray-900 dark:text-white">
-            {{ t('legal.terms.subscriptions.title') }}
+            {{ t('legal.terms.pricing.title') }}
           </h2>
           <p class="mb-4 text-gray-700 dark:text-gray-300">
-            {{ t('legal.terms.subscriptions.description') }}
+            {{ t('legal.terms.pricing.description') }}
           </p>
           <ul class="mb-4 list-disc space-y-2 pl-6">
             <li class="text-gray-700 dark:text-gray-300">
-              {{ t('legal.terms.subscriptions.billing') }}
+              {{ t('legal.terms.pricing.free') }}
             </li>
             <li class="text-gray-700 dark:text-gray-300">
-              {{ t('legal.terms.subscriptions.renewal') }}
+              {{ t('legal.terms.pricing.limit') }}
             </li>
             <li class="text-gray-700 dark:text-gray-300">
-              {{ t('legal.terms.subscriptions.cancellation') }}
-            </li>
-            <li class="text-gray-700 dark:text-gray-300">
-              {{ t('legal.terms.subscriptions.refunds') }}
+              {{ t('legal.terms.pricing.selfHosted') }}
             </li>
           </ul>
 

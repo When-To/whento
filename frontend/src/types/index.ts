@@ -21,14 +21,7 @@ export interface User {
   email_verified: boolean;
   created_at: string;
   updated_at: string;
-  subscription?: SubscriptionInfo; // Cloud builds only
   mfa_status?: MFAStatus; // Admin panel only
-}
-
-export interface SubscriptionInfo {
-  plan: 'free' | 'pro' | 'power';
-  status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid';
-  calendar_limit: number;
 }
 
 export interface MFAStatus {

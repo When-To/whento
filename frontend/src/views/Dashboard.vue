@@ -30,9 +30,6 @@
         </router-link>
       </div>
 
-      <!-- Upgrade Banner -->
-      <UpgradeBanner />
-
       <!-- Quota Usage -->
       <div class="mb-6">
         <QuotaUsage />
@@ -344,7 +341,6 @@ import { useCalendarStore } from '@/stores/calendar';
 import { useUnifiedFeedStore } from '@/stores/unifiedFeed';
 import { useToastStore } from '@/stores/toast';
 import QuotaUsage from '@/components/QuotaUsage.vue';
-import UpgradeBanner from '@/components/UpgradeBanner.vue';
 
 const router = useRouter();
 const { t } = useI18n();

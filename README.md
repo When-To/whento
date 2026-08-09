@@ -41,10 +41,10 @@ Self-hosted web application for organizing recurring events with friends through
 
 WhenTo supports **two distinct deployment modes**:
 
-| Mode             | Build Tag    | Quota Scope | Billing System                 |
-| ---------------- | ------------ | ----------- | ------------------------------ |
-| **Cloud** (SaaS) | `cloud`      | Per-user    | Stripe subscriptions           |
-| **Self-hosted**  | `selfhosted` | Server-wide | Ed25519 cryptographic licenses |
+| Mode             | Build Tag    | Quota Scope | Calendar Limit         |
+| ---------------- | ------------ | ----------- | ---------------------- |
+| **Cloud** (SaaS) | `cloud`      | Per-user    | 3 calendars per account |
+| **Self-hosted**  | `selfhosted` | Server-wide | Unlimited              |
 
 ---
 
@@ -156,39 +156,17 @@ Events sync automatically!
 
 ---
 
-## 💰 Pricing & Licensing
+## 💰 Pricing
 
-### Cloud Subscriptions (Per User)
+WhenTo is free.
 
-| Plan      | Calendars     | Price             | Features                                   |
-| --------- | ------------- | ----------------- | ------------------------------------------ |
-| **Free**  | 3 calendars   | Free              | Unlimited participants, iCal subscriptions |
-| **Pro**   | 100 calendars | 25€/year (+ VAT)  | Email support                              |
-| **Power** | Unlimited     | 100€/year (+ VAT) | Priority support                           |
+| Mode            | Calendars               | Price |
+| --------------- | ----------------------- | ----- |
+| **Cloud**       | 3 calendars per account | Free  |
+| **Self-hosted** | Unlimited               | Free  |
 
-All Cloud plans include:
-
-- Unlimited participants per calendar
-- iCal subscription feeds
-- Recurring availabilities
-- Email notifications
-
-### Self-Hosted Licenses (Per Server)
-
-| Tier           | Calendars     | Price                 | Support                            |
-| -------------- | ------------- | --------------------- | ---------------------------------- |
-| **Community**  | 30 calendars  | Free                  | Community support                  |
-| **Pro**        | 300 calendars | 100€ one-time (+ VAT) | 1 year included, 60€/year renewal  |
-| **Enterprise** | Unlimited     | 250€ one-time (+ VAT) | 2 years included, 60€/year renewal |
-
-All Self-hosted licenses are **perpetual** (lifetime) with optional support renewal.
-
-#### License Features
-
-- **Ed25519 Cryptographic Validation** — Offline verification, no phone-home
-- **Auto-activation** — Can be set via environment variable
-- **Manual Activation** — Admin UI for license management
-- **License Shop** — Integrated e-commerce for purchasing licenses
+There is no paid plan, no licence key and no payment integration. Every account on the
+hosted service gets the same allowance; self-hosting is unrestricted.
 
 ---
 
@@ -283,7 +261,6 @@ TRUSTED_PROXIES=                              # Comma-separated trusted reverse 
 # License — leave empty for Community tier (30 calendars).
 # JSON license key; auto-activates at startup if the DB has no license yet.
 # Can also be activated via the Admin UI.
-LICENSE_KEY=
 ```
 
 ---
@@ -298,15 +275,12 @@ whento/
 │   ├── main.go              # Single entry point
 │   ├── init_cloud.go        # Cloud-specific initialization (tag: cloud)
 │   ├── init_selfhosted.go   # Self-hosted initialization (tag: selfhosted)
-│   └── licensegen/          # License generator CLI tool
 ├── internal/                # Business modules
 │   ├── auth/                # JWT RS256, users, sessions
 │   ├── calendar/            # CRUD, participants
 │   ├── availability/        # Availabilities, recurrences
 │   ├── ics/                 # iCalendar feed generation
-│   ├── subscription/        # Cloud-only (tag: cloud)
-│   ├── licensing/           # Self-hosted only (tag: selfhosted)
-│   └── quota/               # Quota enforcement (both modes)
+│   └── quota/               # Calendar limits (both modes)
 ├── pkg/                     # Shared packages
 │   ├── cache/               # Redis wrapper
 │   ├── database/            # PostgreSQL + Redis
@@ -509,15 +483,9 @@ The `pre-commit` hook formats staged files automatically — see [CONTRIBUTING.m
 
 - `GET /feed/{ics_token}` — iCalendar subscription feed
 
-### License Routes (`/api/v1/license`)
-
-- `POST /activate` — Activate license with JSON key
-- `GET /status` — Get license status and quota
-- `DELETE /deactivate` — Deactivate license (admin only)
-
 ### Quota Routes - Both Modes (`/api/v1/quota`)
 
-- `GET /status` — Get quota status (user or server-wide)
+- `GET /limits` — Calendar limits and current usage
 
 ### Admin Routes (`/api/v1/admin`)
 
@@ -551,17 +519,15 @@ The `pre-commit` hook formats staged files automatically — see [CONTRIBUTING.m
 
 ### Cloud Mode (Per User)
 
-- **Free**: 3 calendars
-- **Pro**: 100 calendars
-- **Power**: Unlimited calendars
-
-**Subscription Expiry Lock**: If a subscription expires while over quota (e.g., 50 calendars on Free tier), the user cannot create new calendars or access ICS feeds until usage drops to ≤3.
+Every account may own **3 calendars**. There is no paid tier and no way to raise it.
 
 ### Self-Hosted Mode (Server-Wide)
 
-- **Community**: 30 calendars
-- **Pro**: 300 calendars
-- **Enterprise**: Unlimited calendars
+**Unlimited.** No licence, no key, no limit.
+
+**Over-quota lock**: a user who somehow holds more calendars than allowed keeps them,
+but cannot create more and their ICS feeds stop rendering until usage drops back within
+the allowance. Only reachable on the hosted service.
 
 ---
 

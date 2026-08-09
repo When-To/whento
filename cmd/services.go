@@ -8,14 +8,10 @@ import (
 	"github.com/whento/whento/internal/quota"
 )
 
-// Services holds all application services
+// Services holds the services whose construction differs between build variants.
 type Services struct {
-	QuotaService     quota.QuotaService
-	LicensingService interface{} // Used in selfhosted mode only (internal/licensing/service.Service)
-	EcommerceService interface{} // Used in cloud mode only (internal/ecommerce/service.Service)
-	VATService       interface{} // Used in cloud mode only (internal/vat/service.Service)
-	ShopService      interface{} // Used in cloud mode only (internal/shop/service.Service)
+	QuotaService quota.QuotaService
 }
 
-// Note: InitServices and RegisterBillingRoutes are implemented in
+// Note: InitServices and RegisterQuotaRoutes are implemented in
 // init_cloud.go and init_selfhosted.go with build tags
