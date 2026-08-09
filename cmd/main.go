@@ -59,7 +59,6 @@ import (
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
-	"github.com/whento/pkg/participanttoken"
 	"github.com/whento/whento/internal/config"
 
 	// Auth module
@@ -166,14 +165,6 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("JWT manager initialized")
-
-	// Initialize participant token signing (uses JWT private key as HMAC seed)
-	ptKeyBytes, err := os.ReadFile(cfg.JWTPrivateKeyPath)
-	if err != nil {
-		log.Error("Failed to read JWT private key for participant tokens", "error", err)
-		os.Exit(1)
-	}
-	participanttoken.Init(ptKeyBytes)
 
 	// Initialize cache (uses Redis if available, NoOp otherwise)
 	cacheInstance := cache.NewRedisCache(redisClient)
