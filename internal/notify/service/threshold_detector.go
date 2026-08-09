@@ -1,7 +1,6 @@
 // WhenTo - Collaborative event calendar for self-hosted environments
 // Copyright (C) 2025 WhenTo Contributors
-// Licensed under the Business Source License 1.1
-// See LICENSE file for details
+// SPDX-License-Identifier: BSL-1.1
 
 package service
 
@@ -12,18 +11,26 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/whento/whento/internal/availability/repository"
 	"github.com/whento/whento/internal/notify/models"
 )
 
+// ParticipantCounter is the one repository method this detector needs.
+//
+// Declared here rather than taking *repository.AvailabilityRepository directly so the
+// transition logic can be exercised without a database. Go interfaces are structural,
+// so the concrete repository satisfies it and no call site changes.
+type ParticipantCounter interface {
+	GetParticipantCountForDate(ctx context.Context, calendarID uuid.UUID, date time.Time) (int, error)
+}
+
 // ThresholdDetector handles threshold detection logic
 type ThresholdDetector struct {
-	availabilityRepo *repository.AvailabilityRepository
+	availabilityRepo ParticipantCounter
 	logger           *slog.Logger
 }
 
 // NewThresholdDetector creates a new threshold detector
-func NewThresholdDetector(availabilityRepo *repository.AvailabilityRepository, logger *slog.Logger) *ThresholdDetector {
+func NewThresholdDetector(availabilityRepo ParticipantCounter, logger *slog.Logger) *ThresholdDetector {
 	return &ThresholdDetector{
 		availabilityRepo: availabilityRepo,
 		logger:           logger,
