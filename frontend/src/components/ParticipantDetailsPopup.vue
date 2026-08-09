@@ -7,14 +7,14 @@
 <template>
   <div
     ref="tooltipRef"
-    class="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-[calc(100vw-2rem)] md:max-w-md p-4 md:p-6 border border-gray-200 dark:border-gray-700 pointer-events-auto"
+    class="fixed z-50 flex max-h-[calc(100vh-1.25rem)] flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-xl pointer-events-auto max-w-[calc(100vw-2rem)] md:max-w-md md:p-6 dark:border-gray-700 dark:bg-gray-800"
     :style="{
       left: `${popupPosition.x}px`,
       top: `${popupPosition.y}px`,
     }"
   >
-    <div>
-      <div class="mb-4 flex items-center justify-between">
+    <div class="flex min-h-0 flex-1 flex-col">
+      <div class="mb-4 flex shrink-0 items-center justify-between">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
           {{ t('participant.participantsForDate', 'Participants for') }}
           {{ formatSelectedDate }}
@@ -34,7 +34,7 @@
         </button>
       </div>
 
-      <div v-if="loadingDetails" class="text-center py-8">
+      <div v-if="loadingDetails" class="min-h-0 flex-1 overflow-y-auto py-8 text-center">
         <div
           class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary-600 border-r-transparent"
         />
@@ -43,7 +43,7 @@
         </p>
       </div>
 
-      <div v-else-if="participantDetails">
+      <div v-else-if="participantDetails" class="min-h-0 flex-1 overflow-y-auto">
         <div class="mb-4">
           <p class="text-sm text-gray-600 dark:text-gray-400">
             {{ participantDetails.total_count }}
@@ -173,11 +173,27 @@
                 >
                   {{ t('availability.noNote', 'No note') }}
                 </div>
+
+                <!-- Says why there is nothing to edit here. -->
+                <p
+                  v-if="
+                    participant.participant_name === props.currentParticipantName &&
+                    props.fromRecurrence
+                  "
+                  class="mt-2 flex items-start gap-1.5 text-xs text-gray-500 dark:text-gray-400"
+                >
+                  <span class="cal-dot cal-dot--recurring mt-1" />
+                  {{ t('availability.fromRecurrenceHint') }}
+                </p>
               </div>
 
               <!-- Edit button for current participant -->
               <button
-                v-if="participant.participant_name === props.currentParticipantName && !editingNote"
+                v-if="
+                  participant.participant_name === props.currentParticipantName &&
+                  !editingNote &&
+                  !props.fromRecurrence
+                "
                 class="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 :title="t('common.edit', 'Edit')"
                 @click="
@@ -198,7 +214,7 @@
         </div>
       </div>
 
-      <div v-else class="text-center py-8">
+      <div v-else class="min-h-0 flex-1 overflow-y-auto py-8 text-center">
         <p class="text-sm text-gray-600 dark:text-gray-400">
           {{ t('availability.noAvailabilities', 'No availabilities') }}
         </p>
@@ -219,6 +235,12 @@ interface Props {
   currentParticipantName: string;
   date: string;
   anchorRect: DOMRect;
+  /**
+   * True when the participant is only available on this date because of a recurrence.
+   * There is no one-off record to edit, so the form is replaced by an explanation —
+   * saving would silently create a one-off availability shadowing the rule.
+   */
+  fromRecurrence?: boolean;
 }
 
 interface Emits {
@@ -284,33 +306,28 @@ async function loadParticipantDetails() {
   }
 }
 
+/**
+ * Keep the popup inside the viewport.
+ *
+ * It is `position: fixed`, so the page scrolling underneath it does not move it and
+ * cannot reveal anything that hangs off the bottom of the screen. Clamping the
+ * position is therefore not optional — it is the only way the content stays reachable,
+ * together with the max-height and internal scroll on the element itself.
+ */
 function adjustTooltipPosition() {
   if (!tooltipRef.value) return;
 
-  const tooltip = tooltipRef.value;
-  const rect = tooltip.getBoundingClientRect();
+  const rect = tooltipRef.value.getBoundingClientRect();
   const offset = 10;
-
-  let { x, y } = popupPosition.value;
-
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
 
-  if (x + rect.width > viewportWidth - offset) {
-    x = viewportWidth - rect.width - offset;
-  }
+  let { x, y } = popupPosition.value;
 
-  if (y + rect.height > viewportHeight - offset) {
-    y = viewportHeight - rect.height - offset;
-  }
-
-  if (x < offset) {
-    x = offset;
-  }
-
-  if (y < offset) {
-    y = offset;
-  }
+  x = Math.min(x, viewportWidth - rect.width - offset);
+  y = Math.min(y, viewportHeight - rect.height - offset);
+  x = Math.max(x, offset);
+  y = Math.max(y, offset);
 
   if (x !== popupPosition.value.x || y !== popupPosition.value.y) {
     popupPosition.value = { x, y };
@@ -360,14 +377,36 @@ async function saveNote() {
   }
 }
 
-// Outside-click / scroll / Escape handlers
+/**
+ * Whether an event started inside the popup.
+ *
+ * Uses `composedPath()` rather than `contains(event.target)`: a click that causes its
+ * own target to be removed — pressing Edit hides the pencil via `v-if` — leaves the
+ * target detached by the time this listener runs, and `contains` then reports it as
+ * outside. That is what made edit mode impossible to enter: the popup closed on the
+ * very click that opened the form. The composed path is captured at dispatch and
+ * survives the removal.
+ */
+const startedInsidePopup = (event: Event): boolean => {
+  const root = tooltipRef.value;
+  if (!root) return false;
+  const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+  if (path.includes(root)) return true;
+  const target = event.target as Node | null;
+  // A target already detached from the document cannot be judged; treat it as ours.
+  return !!target && (root.contains(target) || !(target as Element).isConnected);
+};
+
 const handleClickOutside = (event: Event) => {
-  if (tooltipRef.value && !tooltipRef.value.contains(event.target as Node)) {
-    emit('close');
-  }
+  // While editing, only Escape and the form's own buttons close the popup. `TimeSelect`
+  // teleports its dropdown to the body, so picking a time is an "outside" click by any
+  // DOM measure — and losing an unsaved note to a stray click is its own bug.
+  if (editingNote.value) return;
+  if (!startedInsidePopup(event)) emit('close');
 };
 
 const handleScroll = () => {
+  if (editingNote.value) return;
   emit('close');
 };
 
@@ -378,6 +417,7 @@ const handleEscape = (event: KeyboardEvent) => {
 };
 
 let attachTimer: number | null = null;
+let resizeObserver: ResizeObserver | null = null;
 
 onMounted(async () => {
   // Initial anchored position (below the row, clamped to viewport width)
@@ -387,6 +427,15 @@ onMounted(async () => {
   };
 
   await loadParticipantDetails();
+
+  // Entering edit mode adds two time pickers, a note field and two buttons, which can
+  // push the popup off the bottom of the screen. Repositioning only after the initial
+  // load left it hanging there, unreachable because scrolling the page does not move a
+  // fixed element. Watching its own size covers every content change.
+  if (tooltipRef.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => adjustTooltipPosition());
+    resizeObserver.observe(tooltipRef.value);
+  }
 
   // Delay attaching so the opening pointer event doesn't immediately close
   attachTimer = window.setTimeout(() => {
@@ -401,6 +450,8 @@ onUnmounted(() => {
   if (attachTimer !== null) {
     window.clearTimeout(attachTimer);
   }
+  resizeObserver?.disconnect();
+  resizeObserver = null;
   document.removeEventListener('click', handleClickOutside);
   document.removeEventListener('touchstart', handleClickOutside);
   window.removeEventListener('scroll', handleScroll, true);

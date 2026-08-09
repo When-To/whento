@@ -55,19 +55,6 @@ func (u *User) IsAdmin() bool {
 	return u.Role == RoleAdmin
 }
 
-// SubscriptionInfo contains subscription details (cloud only)
-type SubscriptionInfo struct {
-	Plan          string `json:"plan"`
-	Status        string `json:"status"`
-	CalendarLimit int    `json:"calendar_limit"`
-}
-
-// UserWithSubscription extends User with subscription info (cloud builds only)
-type UserWithSubscription struct {
-	User
-	Subscription *SubscriptionInfo `json:"subscription,omitempty"`
-}
-
 // MFAStatus contains MFA/authentication status for a user
 type MFAStatus struct {
 	TOTPEnabled  bool `json:"totp_enabled"`

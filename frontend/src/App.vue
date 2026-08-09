@@ -58,13 +58,6 @@
             >
               {{ t('nav.whyWhento') }}
             </router-link>
-            <router-link
-              to="/pricing"
-              class="rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-              :class="route.name === 'pricing' ? 'bg-gray-100 dark:bg-gray-800' : ''"
-            >
-              {{ t('nav.pricing') }}
-            </router-link>
           </div>
 
           <!-- Public Navigation Links (not authenticated) - Self-hosted Mode -->
@@ -87,14 +80,6 @@
             >
               {{ t('nav.whyWhento') }}
             </a>
-            <a
-              :href="`${PUBLIC_APP_URL}/pricing`"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
-              {{ t('nav.pricing') }}
-            </a>
           </div>
 
           <!-- Authenticated Navigation Links -->
@@ -107,32 +92,12 @@
               {{ t('nav.dashboard') }}
             </router-link>
 
-            <!-- Cloud only: Billing/Subscription link -->
-            <router-link
-              v-if="isCloud"
-              to="/billing"
-              class="rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-              :class="route.name === 'billing' ? 'bg-gray-100 dark:bg-gray-800' : ''"
-            >
-              {{ t('nav.billing') }}
-            </router-link>
-
             <router-link
               to="/settings"
               class="rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
               :class="route.name === 'settings' ? 'bg-gray-100 dark:bg-gray-800' : ''"
             >
               {{ t('nav.settings') }}
-            </router-link>
-
-            <!-- Self-hosted only: License link (admin only) -->
-            <router-link
-              v-if="isSelfHosted && isAdmin"
-              to="/admin/license"
-              class="rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-              :class="route.name === 'admin-license' ? 'bg-gray-100 dark:bg-gray-800' : ''"
-            >
-              {{ t('nav.license') }}
             </router-link>
 
             <router-link
@@ -147,29 +112,6 @@
 
           <!-- User Menu (Desktop) -->
           <div class="hidden md:flex md:items-center md:space-x-4">
-            <!-- Cloud only: Shopping Cart (only for non-authenticated users) -->
-            <router-link
-              v-if="isCloud && !isAuthenticated"
-              to="/cart"
-              class="relative rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-              aria-label="Shopping cart"
-            >
-              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
-              <span
-                v-if="cartItemCount > 0"
-                class="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary-600 text-xs font-bold text-white"
-              >
-                {{ cartItemCount }}
-              </span>
-            </router-link>
-
             <!-- Theme Toggle -->
             <button
               class="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
@@ -312,14 +254,6 @@
             >
               {{ t('nav.whyWhento') }}
             </router-link>
-            <router-link
-              to="/pricing"
-              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-              :class="route.name === 'pricing' ? 'bg-gray-100 dark:bg-gray-800' : ''"
-              @click="closeMobileMenu"
-            >
-              {{ t('nav.pricing') }}
-            </router-link>
           </div>
 
           <!-- Navigation Links (not authenticated) - Self-hosted Mode -->
@@ -341,15 +275,6 @@
             >
               {{ t('nav.whyWhento') }}
             </a>
-            <a
-              :href="`${PUBLIC_APP_URL}/pricing`"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-              @click="closeMobileMenu"
-            >
-              {{ t('nav.pricing') }}
-            </a>
           </div>
 
           <!-- Authenticated Navigation Links -->
@@ -363,30 +288,12 @@
               {{ t('nav.dashboard') }}
             </router-link>
             <router-link
-              v-if="isCloud"
-              to="/billing"
-              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-              :class="route.name === 'billing' ? 'bg-gray-100 dark:bg-gray-800' : ''"
-              @click="closeMobileMenu"
-            >
-              {{ t('nav.billing') }}
-            </router-link>
-            <router-link
               to="/settings"
               class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
               :class="route.name === 'settings' ? 'bg-gray-100 dark:bg-gray-800' : ''"
               @click="closeMobileMenu"
             >
               {{ t('nav.settings') }}
-            </router-link>
-            <router-link
-              v-if="isSelfHosted && isAdmin"
-              to="/admin/license"
-              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-              :class="route.name === 'admin-license' ? 'bg-gray-100 dark:bg-gray-800' : ''"
-              @click="closeMobileMenu"
-            >
-              {{ t('nav.license') }}
             </router-link>
             <router-link
               v-if="isAdmin"
@@ -447,37 +354,6 @@
                 {{ locale.toUpperCase() }}
               </button>
             </div>
-
-            <!-- Cloud only: Shopping Cart -->
-            <router-link
-              v-if="isCloud && !isAuthenticated"
-              to="/cart"
-              class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-              @click="closeMobileMenu"
-            >
-              <span class="text-sm text-gray-600 dark:text-gray-400">{{ t('nav.cart') }}</span>
-              <div class="relative">
-                <svg
-                  class="h-6 w-6 text-gray-600 dark:text-gray-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
-                  />
-                </svg>
-                <span
-                  v-if="cartItemCount > 0"
-                  class="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary-600 text-xs font-bold text-white"
-                >
-                  {{ cartItemCount }}
-                </span>
-              </div>
-            </router-link>
           </div>
 
           <!-- Auth Actions -->
@@ -542,7 +418,6 @@ import { useI18n } from 'vue-i18n';
 import { SUPPORTED_LOCALES } from '@/i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useCalendarHistoryStore } from '@/stores/calendarHistory';
-import { useCartStore } from '@/stores/cart';
 import { useBuildType } from '@/composables/useBuildType';
 import { PUBLIC_APP_URL } from '@/config/constants';
 import Footer from '@/components/Footer.vue';
@@ -554,7 +429,6 @@ const router = useRouter();
 const { t, locale } = useI18n();
 const authStore = useAuthStore();
 const historyStore = useCalendarHistoryStore();
-const cartStore = useCartStore();
 const { isCloud, isSelfHosted } = useBuildType();
 
 const theme = ref<'light' | 'dark'>('light');
@@ -563,7 +437,6 @@ const mobileMenuOpen = ref(false);
 const isAuthenticated = computed(() => authStore.isAuthenticated);
 const isAdmin = computed(() => authStore.isAdmin);
 const user = computed(() => authStore.user);
-const cartItemCount = computed(() => cartStore.itemCount);
 const hasCalendarHistory = computed(() => historyStore.calendars.length > 0);
 const calendarHistoryCount = computed(() => historyStore.calendars.length);
 
@@ -622,13 +495,6 @@ onMounted(() => {
 
   // Initialize calendar history
   historyStore.init();
-
-  // Initialize cart (Cloud only, for non-authenticated users - guest checkout)
-  if (isCloud.value && !authStore.isAuthenticated) {
-    cartStore.initialize().catch(err => {
-      console.error('Failed to initialize cart:', err);
-    });
-  }
 
   // Auth initialization is handled in main.ts
 });

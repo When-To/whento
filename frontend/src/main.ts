@@ -12,6 +12,7 @@ import router from './router';
 import { i18n } from './i18n';
 import { useAuthStore } from './stores/auth';
 import './style.css';
+import './styles/calendar.css';
 
 const app = createApp(App);
 const pinia = createPinia();

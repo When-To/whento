@@ -13,11 +13,15 @@
     "build:docker": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "type-check": "vue-tsc --noEmit",
     "format": "prettier --write \"src/**/*.{vue,ts,js,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{vue,ts,js,css,json}\""
   },
   "dependencies": {
+    "@vueuse/core": "^14.4.0",
     "axios": "^1.19.0",
     "countries-and-timezones": "^3.9.0",
     "date-fns": "^4.4.0",
@@ -32,10 +36,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.1.2",
     "@vitejs/plugin-vue": "^6.0.8",
-    "@vueuse/core": "^14.4.0",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^10.10.0",
@@ -44,6 +48,7 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.66.0",
     "vite": "^8.2.0",
+    "vitest": "^4.1.10",
     "vue-tsc": "^3.3.9"
   }
 }

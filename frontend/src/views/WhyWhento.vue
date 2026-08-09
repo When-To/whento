@@ -537,9 +537,6 @@
             >
               {{ t('why.viewOnGithub') }}
             </a>
-            <router-link to="/pricing" class="btn btn-primary">
-              {{ t('why.seePricing') }}
-            </router-link>
           </div>
         </div>
       </div>

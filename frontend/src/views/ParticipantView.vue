@@ -282,6 +282,21 @@
                   </select>
                 </div>
 
+                <!-- Grid or list -->
+                <div class="flex items-center gap-2">
+                  <label for="viewStyle" class="text-sm text-gray-700 dark:text-gray-300 shrink-0">
+                    {{ t('calendar.viewStyle') }}
+                  </label>
+                  <select
+                    id="viewStyle"
+                    v-model="viewStyle"
+                    class="input text-sm flex-1 md:w-32 min-h-11 md:min-h-0"
+                  >
+                    <option value="grid">{{ t('calendar.viewClassic') }}</option>
+                    <option value="list">{{ t('calendar.listView') }}</option>
+                  </select>
+                </div>
+
                 <!-- Period count selector -->
                 <div class="flex items-center gap-2">
                   <label
@@ -318,112 +333,71 @@
             </p>
           </div>
 
-          <!-- List view (applies to both month and week display modes) -->
+          <!-- List view: the same model as the grids, laid out as rows -->
           <CalendarListView
             v-if="viewStyle === 'list'"
-            :display-mode="displayMode"
-            :months-to-display="monthsToDisplay"
-            :weeks-to-display="weeksToDisplay"
-            :availabilities="availabilities"
-            :recurrences="recurrences"
-            :participant-counts="participantCounts"
-            :threshold="calendar?.threshold || 1"
-            :allowed-weekdays="calendar?.allowed_weekdays"
-            :timezone="calendar?.timezone"
-            :holidays-policy="calendar?.holidays_policy"
-            :allow-holiday-eves="calendar?.allow_holiday_eves"
-            :start-date="calendarStartDate"
-            :end-date="calendarEndDate"
-            :displayed-year="displayedYear"
-            :displayed-month="displayedMonth"
-            :current-week-start-date="currentWeekStartDate"
-            :current-participant-id="participantId"
-            :current-participant-name="participant?.name || ''"
-            :calendar-token="token"
-            :highlighted-dates="selectedParticipantsCommonDates"
+            :days="calendarModel.listDays.value"
+            :label="listRangeLabel"
             @day-click="handleCalendarDayClick"
-            @month-change="handleMonthChange"
-            @week-change="handleWeekChange"
-            @view-style-change="handleViewStyleChange"
-            @availability-updated="handleAvailabilityUpdated"
+            @day-details="openDayDetails"
+            @previous="displayMode === 'week' ? shiftWeeks(-1) : shiftMonths(-1)"
+            @next="displayMode === 'week' ? shiftWeeks(1) : shiftMonths(1)"
           />
 
-          <!-- Calendar grids - Display months vertically (month view, classic style) -->
+          <!-- Month grids: one per displayed month, all sharing a single model -->
           <div v-else-if="displayMode === 'month'" class="space-y-6">
-            <CalendarGrid
-              v-for="(monthConfig, index) in monthsToDisplay"
-              :key="`${monthConfig.key}-${calendar?.id}`"
-              :initial-year="monthConfig.year"
-              :initial-month="monthConfig.month"
+            <CalendarMonthView
+              v-for="(monthModel, index) in calendarModel.months.value"
+              :key="monthModel.key"
+              :model="monthModel"
               :show-navigation="index === 0"
-              :availabilities="availabilities"
-              :recurrences="recurrences"
-              :participant-counts="participantCounts"
-              :threshold="calendar?.threshold || 1"
-              :allowed-weekdays="calendar?.allowed_weekdays"
-              :timezone="calendar?.timezone"
-              :holidays-policy="calendar?.holidays_policy"
-              :allow-holiday-eves="calendar?.allow_holiday_eves"
-              :start-date="calendarStartDate"
-              :end-date="calendarEndDate"
-              :calendar-token="token"
-              :current-participant-id="participantId"
-              :current-participant-name="participant?.name || ''"
-              :highlighted-dates="selectedParticipantsCommonDates"
               @day-click="handleCalendarDayClick"
               @days-select="handleCalendarDaysSelect"
               @days-deselect="handleCalendarDaysDeselect"
-              @add-exception="handleCalendarAddException"
+              @day-details="openDayDetails"
               @month-change="handleMonthChange"
-              @view-style-change="handleViewStyleChange"
             />
           </div>
 
-          <!-- Weekly grid - Display weeks (week view, classic style) -->
+          <!-- Week grids: one per displayed week, all sharing a single model -->
           <div v-else class="space-y-6">
-            <WeeklyCalendarGrid
-              v-for="(weekConfig, index) in weeksToDisplay"
-              :key="`${weekConfig.key}-${calendar?.id}`"
-              :initial-year="weekConfig.year"
-              :initial-month="weekConfig.month"
-              :initial-week="weekConfig.week"
-              :week-start-date="weekConfig.weekStartDate"
-              :show-navigation="index === 0"
-              :show-time-controls="index === 0"
-              :show-legend="index === weeksToDisplay.length - 1"
-              :availabilities="availabilities"
-              :date-summaries="dateSummaries"
-              :participant-counts="participantCounts"
+            <CalendarWeekControls
+              v-model:start-hour="startHour"
+              v-model:end-hour="endHour"
+              v-model:slot-duration="slotDuration"
+            />
+            <CalendarWeekView
+              v-for="(weekModel, index) in weekModels"
+              :key="weekModel.key"
+              :model="weekModel"
+              :slot-duration-min="slotDuration"
               :threshold="calendar?.threshold || 1"
-              :allowed-weekdays="calendar?.allowed_weekdays"
-              :timezone="calendar?.timezone"
-              :holidays-policy="calendar?.holidays_policy"
-              :allow-holiday-eves="calendar?.allow_holiday_eves"
-              :weekday-times="(calendar as any)?.weekday_times"
-              :holiday-min-time="(calendar as any)?.holiday_min_time"
-              :holiday-max-time="(calendar as any)?.holiday_max_time"
-              :holiday-eve-min-time="(calendar as any)?.holiday_eve_min_time"
-              :holiday-eve-max-time="(calendar as any)?.holiday_eve_max_time"
-              :start-date="calendarStartDate"
-              :end-date="calendarEndDate"
-              :calendar-token="token"
-              :current-participant-id="participantId"
-              :current-participant-name="participant?.name || ''"
-              :highlighted-dates="selectedParticipantsCommonDates"
-              :initial-start-hour="startHour"
-              :initial-end-hour="endHour"
-              :initial-slot-duration="slotDuration"
-              @availability-create="handleWeeklyAvailabilityCreate"
-              @availability-delete="handleWeeklyAvailabilityDelete"
-              @availability-update="handleWeeklyAvailabilityUpdate"
+              :availabilities-for="availabilitiesForDate"
+              :show-navigation="index === 0"
               @batch-operations="handleBatchOperations"
-              @week-change="handleWeekChange"
-              @settings-change="handleWeeklySettingsChange"
-              @availability-updated="handleAvailabilityUpdated"
-              @view-style-change="handleViewStyleChange"
+              @split-refused="toastStore.error(t('availability.cannotSplitError'))"
+              @no-op="toastStore.error(t('errors.availabilityConflict'))"
+              @day-details="openDayDetails"
+              @week-change="handleWeekStartChange"
             />
           </div>
+
+          <!-- One legend for whichever view is showing; the rewrite had left the
+               colour vocabulary undocumented on screen. -->
+          <CalendarLegend :display-mode="displayMode" class="mt-4" />
         </div>
+
+        <ParticipantDetailsPopup
+          v-if="detailsDate && detailsAnchor && token && participantId"
+          :calendar-token="token"
+          :current-participant-id="participantId"
+          :current-participant-name="participant?.name || ''"
+          :date="detailsDate"
+          :anchor-rect="detailsAnchor"
+          :from-recurrence="detailsFromRecurrence"
+          @close="closeDayDetails"
+          @availability-updated="handleAvailabilityUpdated"
+        />
 
         <!-- Time Slot Form (only in month view) & Calendar Links - Side by side -->
         <div class="grid gap-6 mb-6" :class="{ 'lg:grid-cols-2': displayMode === 'month' }">
@@ -1244,7 +1218,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watchEffect, watch } from 'vue';
+import { ref, shallowRef, reactive, computed, onMounted, watchEffect, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { getWeekStartDay } from '@/i18n';
@@ -1253,15 +1227,20 @@ import { useAuthStore } from '@/stores/auth';
 import { useCalendarHistoryStore } from '@/stores/calendarHistory';
 import { useToastStore } from '@/stores/toast';
 import { availabilitiesApi } from '@/api/availabilities';
-import CalendarGrid from '@/components/CalendarGrid.vue';
-import CalendarListView from '@/components/CalendarListView.vue';
-import WeeklyCalendarGrid, {
-  type AvailabilityOperation,
-} from '@/components/WeeklyCalendarGrid.vue';
+import CalendarMonthView from '@/components/calendar/CalendarMonthView.vue';
+import ParticipantDetailsPopup from '@/components/ParticipantDetailsPopup.vue';
+import CalendarListView from '@/components/calendar/CalendarListView.vue';
+import CalendarWeekView from '@/components/calendar/CalendarWeekView.vue';
+import CalendarWeekControls from '@/components/calendar/CalendarWeekControls.vue';
+import CalendarLegend from '@/components/calendar/CalendarLegend.vue';
+import type { AvailabilityOperation } from '@/types/calendar';
+import { buildCoverageMap } from '@/utils/calendar/segments';
+import { buildWeekModel } from '@/utils/calendar/weekModel';
 import TimeSelect from '@/components/TimeSelect.vue';
 import CollapsibleSection from '@/components/CollapsibleSection.vue';
-import { clearHolidaysCache } from '@/composables/useDateValidation';
-import { formatDateISO } from '@/utils/dateFormatting';
+import { dayOfWeekISO, formatDateISO, parseISODate } from '@/utils/date/isoDate';
+import { useParticipantCalendar } from '@/composables/calendar/useParticipantCalendar';
+import { normalizeViewStyle, type ViewStyle } from '@/composables/calendar/useCalendarViewState';
 import { addParticipantEmail, resendVerificationEmail } from '@/api/notify';
 import type {
   Availability,
@@ -1287,8 +1266,17 @@ const participantId = computed(() => route.params.participantId as string);
 
 const loading = ref(false);
 const recurrences = ref<RecurrenceWithExceptions[]>([]);
-const participantCounts = ref<Record<string, number>>({});
-const dateSummaries = ref<DateAvailabilitySummary[]>([]);
+// Both are replaced wholesale on every reload and only ever read, so they use
+// shallowRef: a deep ref would proxy every participant object of every date in the
+// range — thousands of proxies for a twelve-month calendar, rebuilt on each refetch.
+const participantCounts = shallowRef<Record<string, number>>({});
+const dateSummaries = shallowRef<DateAvailabilitySummary[]>([]);
+/**
+ * The participant's own explicit availabilities, as stored — not the recurrence-expanded
+ * view the range summary returns. This is what "I answered this day" means, and what
+ * separates a one-off answer from an occurrence of a rule.
+ */
+const ownAvailabilities = shallowRef<AvailabilityItem[]>([]);
 const addingAvailability = ref(false);
 const addingRecurrence = ref(false);
 const isAllDay = ref(true);
@@ -1306,11 +1294,11 @@ const displayMode = ref<'month' | 'week'>('month');
 
 // View style: 'classic' (grid) or 'list' (vertical card list)
 // Default to 'list' on mobile (screen width < 768px), 'classic' on desktop
-const getDefaultViewStyle = (): 'classic' | 'list' => {
-  if (typeof window === 'undefined') return 'classic';
-  return window.innerWidth < 768 ? 'list' : 'classic';
+const getDefaultViewStyle = (): ViewStyle => {
+  if (typeof window === 'undefined') return 'grid';
+  return window.innerWidth < 768 ? 'list' : 'grid';
 };
-const viewStyle = ref<'classic' | 'list'>(getDefaultViewStyle());
+const viewStyle = ref<ViewStyle>(getDefaultViewStyle());
 
 // Number of periods (months or weeks) to display (1-4 for weeks, 1-12 for months)
 const numberOfPeriods = ref(1);
@@ -1344,29 +1332,7 @@ const participant = computed(() => {
 // Extract current participant's availabilities from dateSummaries (all participants data)
 // This replaces the need for a separate API call to /participant/{id}
 const availabilityData = computed((): ParticipantAvailabilitiesResponse | null => {
-  if (!dateSummaries.value || !participant.value) return null;
-
-  const participantName = participant.value.name;
-
-  // Extract availabilities for the current participant across all dates
-  const availabilitiesMap = new Map<string, AvailabilityItem>();
-
-  for (const summary of dateSummaries.value) {
-    const participantData = summary.participants.find(p => p.participant_name === participantName);
-
-    if (participantData) {
-      // Create a unique availability entry for this date
-      availabilitiesMap.set(summary.date, {
-        id: `${participantId.value}-${summary.date}`, // Generate stable ID
-        date: summary.date,
-        start_time: participantData.start_time,
-        end_time: participantData.end_time,
-        note: participantData.note,
-        created_at: '',
-        updated_at: '',
-      });
-    }
-  }
+  if (!participant.value) return null;
 
   return {
     participant: {
@@ -1375,9 +1341,7 @@ const availabilityData = computed((): ParticipantAvailabilitiesResponse | null =
       email: participant.value.email,
       email_verified: participant.value.email_verified || false,
     },
-    availabilities: Array.from(availabilitiesMap.values()).sort((a, b) =>
-      a.date.localeCompare(b.date)
-    ),
+    availabilities: [...ownAvailabilities.value].sort((a, b) => a.date.localeCompare(b.date)),
   };
 });
 
@@ -1395,18 +1359,6 @@ const availabilities = computed((): Availability[] => {
     participant_email_verified: participantInfo.email_verified,
   }));
 });
-
-// Calendar date range as formatted strings (shared across grid components)
-const calendarStartDate = computed(() =>
-  calendar.value?.start_date
-    ? new Date(calendar.value.start_date).toISOString().split('T')[0]
-    : undefined
-);
-const calendarEndDate = computed(() =>
-  calendar.value?.end_date
-    ? new Date(calendar.value.end_date).toISOString().split('T')[0]
-    : undefined
-);
 
 // Generate an array of month configurations to display
 const monthsToDisplay = computed(() => {
@@ -1536,6 +1488,96 @@ const participantsStats = computed(() => {
 });
 
 // Compute common dates for selected participants
+// One model for the whole calendar: holiday lookup, date rules, the per-date index
+// and the formatters are built once here and shared by every rendered period.
+const calendarModel = useParticipantCalendar({
+  calendar,
+  availabilities,
+  recurrences,
+  participantCounts,
+  dateSummaries,
+  highlighted: computed(() => selectedParticipantsCommonDates.value),
+  months: computed(() => monthsToDisplay.value.map(m => ({ year: m.year, month: m.month }))),
+  weekStarts: computed(() =>
+    displayMode.value === 'week'
+      ? weeksToDisplay.value.map(w => formatDateISO(w.weekStartDate))
+      : []
+  ),
+});
+
+// Coverage bands for the whole visible range, computed once for every week shown.
+const coverageMap = computed(() =>
+  buildCoverageMap(
+    dateSummaries.value,
+    participant.value?.name || '',
+    calendar.value?.threshold || 1
+  )
+);
+
+const weekModels = computed(() => {
+  if (displayMode.value !== 'week') return [];
+  return weeksToDisplay.value.map(week =>
+    buildWeekModel(formatDateISO(week.weekStartDate), calendarModel.deps.value, {
+      startHour: startHour.value,
+      endHour: endHour.value,
+      slotDurationMin: slotDuration.value,
+      coverage: coverageMap.value.coverage,
+      thresholds: coverageMap.value.thresholds,
+    })
+  );
+});
+
+function availabilitiesForDate(date: string) {
+  return availabilities.value.filter(a => a.date === date);
+}
+
+function handleWeekStartChange(startISO: string) {
+  handleWeekChange(parseISODate(startISO));
+}
+
+/** Header label for the list view, spanning whatever periods are displayed. */
+const listRangeLabel = computed(() => {
+  const months = calendarModel.months.value;
+  if (displayMode.value === 'month' && months.length > 0) {
+    return months.length === 1
+      ? months[0].label
+      : `${months[0].label} — ${months[months.length - 1].label}`;
+  }
+  const days = calendarModel.listDays.value;
+  if (days.length === 0) return '';
+  return `${days[0].dateShort} — ${days[days.length - 1].dateShort}`;
+});
+
+function shiftMonths(delta: number) {
+  const date = new Date(displayedYear.value, displayedMonth.value + delta, 1);
+  handleMonthChange(date.getFullYear(), date.getMonth());
+}
+
+function shiftWeeks(delta: number) {
+  const start = new Date(currentWeekStartDate.value);
+  start.setDate(start.getDate() + delta * 7);
+  handleWeekChange(start);
+}
+
+// Participant details popup, opened from any view and rendered once at this level.
+const detailsDate = ref<string | null>(null);
+const detailsAnchor = ref<DOMRect | null>(null);
+
+function openDayDetails(date: string, anchor: DOMRect) {
+  detailsDate.value = date;
+  detailsAnchor.value = anchor;
+}
+
+/** Whether the open popup's date is covered only by a recurrence. */
+const detailsFromRecurrence = computed(
+  () => !!detailsDate.value && recurrenceOnlyFor(detailsDate.value) !== null
+);
+
+function closeDayDetails() {
+  detailsDate.value = null;
+  detailsAnchor.value = null;
+}
+
 const selectedParticipantsCommonDates = computed(() => {
   if (selectedParticipantNames.value.size === 0 || !dateSummaries.value) {
     return new Set<string>();
@@ -1810,7 +1852,8 @@ async function loadCalendar() {
           slotDuration.value = savedSettings.slotDuration;
         }
         if (savedSettings.viewStyle !== undefined) {
-          viewStyle.value = savedSettings.viewStyle;
+          // Older entries hold 'classic' or 'compact'; both mean the grid now.
+          viewStyle.value = normalizeViewStyle(savedSettings.viewStyle);
         }
       }
     }
@@ -1876,7 +1919,14 @@ async function loadParticipantCounts(year?: number, month?: number) {
     const startStr = formatDateISO(startDate);
     const endStr = formatDateISO(endDate);
 
-    const summaries = await availabilitiesApi.getRangeSummary(token.value, startStr, endStr);
+    const [summaries, own] = await Promise.all([
+      availabilitiesApi.getRangeSummary(token.value, startStr, endStr),
+      // The participant's *explicit* answers. The range summary cannot stand in for
+      // them: the backend expands recurrences into it, so a day covered only by a rule
+      // is indistinguishable there from one the participant actually clicked.
+      availabilitiesApi.getByParticipant(token.value, participantId.value, startStr, endStr),
+    ]);
+    ownAvailabilities.value = own?.availabilities ?? [];
 
     // Ensure summaries is an array (handle null/undefined responses)
     const summariesArray = Array.isArray(summaries) ? summaries : [];
@@ -1893,6 +1943,7 @@ async function loadParticipantCounts(year?: number, month?: number) {
   } catch (err: any) {
     console.error('Failed to load participant counts:', err);
     participantCounts.value = {};
+    ownAvailabilities.value = [];
   }
 }
 
@@ -2146,7 +2197,25 @@ function isDateInFuture(dateStr: string): boolean {
   return date >= today;
 }
 
+/**
+ * The recurrence covering a date, when the participant has no one-off availability on
+ * it. A one-off answer always wins: it is the more specific of the two.
+ */
+function recurrenceOnlyFor(dateString: string) {
+  const index = calendarModel.deps.value.index;
+  if (index.ownFor(dateString).length > 0) return null;
+  return index.recurrenceFor(dateString, dayOfWeekISO(dateString));
+}
+
 async function handleCalendarDayClick(dateString: string) {
+  // A day the participant is only available on because of a recurrence has nothing to
+  // delete; clicking it means "not this time", which is an exception on the rule.
+  const recurrence = recurrenceOnlyFor(dateString);
+  if (recurrence) {
+    await handleCalendarAddException(recurrence.id, dateString);
+    return;
+  }
+
   // Check if availability already exists for this date
   const existingAvailability = availabilities.value.find(a => a.date === dateString);
   if (existingAvailability) {
@@ -2192,9 +2261,13 @@ async function handleCalendarDayClick(dateString: string) {
 }
 
 async function handleCalendarDaysSelect(dates: string[]) {
-  // Filter out dates that already have availability
+  // Skip dates that are already covered — by an explicit answer, or by a recurrence.
+  // A recurrence-covered day already counts the participant as available, so adding a
+  // one-off there would shadow the rule with a duplicate. It would also contradict the
+  // single click, which on such a day creates an exception rather than an availability.
   const datesToAdd = dates.filter(
-    dateString => !availabilities.value.find(a => a.date === dateString)
+    dateString =>
+      !availabilities.value.find(a => a.date === dateString) && !recurrenceOnlyFor(dateString)
   );
 
   if (datesToAdd.length === 0) {
@@ -2353,93 +2426,9 @@ async function handleWeekChange(weekStartDate: Date) {
   await loadParticipantCounts(year, month);
 }
 
-function handleWeeklySettingsChange(settings: {
-  startHour?: number;
-  endHour?: number;
-  slotDuration?: number;
-}) {
-  // Update local refs
-  if (settings.startHour !== undefined) {
-    startHour.value = settings.startHour;
-  }
-  if (settings.endHour !== undefined) {
-    endHour.value = settings.endHour;
-  }
-  if (settings.slotDuration !== undefined) {
-    slotDuration.value = settings.slotDuration;
-  }
-
-  // Save to history
-  historyStore.updateDisplaySettings(token.value, settings);
-}
-
-async function handleWeeklyAvailabilityCreate(date: string, startTime: string, endTime: string) {
-  try {
-    const data: CreateAvailabilityRequest = {
-      date,
-      start_time: startTime,
-      end_time: endTime,
-    };
-
-    await availabilitiesApi.create(token.value, participantId.value, data);
-
-    // Reload participant counts (which includes all participants' availabilities)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
-
-    toastStore.success(t('availability.created', 'Availability created'));
-  } catch (err: any) {
-    // Check for specific error codes
-    if (err.code === 'CONFLICT') {
-      toastStore.error(t('errors.availabilityConflict'));
-    } else {
-      toastStore.error(err.message || 'Failed to create availability');
-    }
-  }
-}
-
-async function handleWeeklyAvailabilityDelete(date: string, _startTime: string, _endTime: string) {
-  try {
-    await availabilitiesApi.delete(token.value, participantId.value, date);
-
-    // Reload participant counts (which includes all participants' availabilities)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
-
-    toastStore.success(t('availability.deleted', 'Availability deleted'));
-  } catch (err: any) {
-    toastStore.error(err.message || 'Failed to delete availability');
-  }
-}
-
-async function handleWeeklyAvailabilityUpdate(
-  date: string,
-  _oldStartTime: string,
-  _oldEndTime: string,
-  newStartTime: string,
-  newEndTime: string
-) {
-  try {
-    const data: Partial<CreateAvailabilityRequest> = {
-      start_time: newStartTime,
-      end_time: newEndTime,
-    };
-
-    await availabilitiesApi.update(token.value, participantId.value, date, data);
-
-    // Reload participant counts (which includes all participants' availabilities)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
-
-    toastStore.success(t('availability.updated', 'Availability updated'));
-  } catch (err: any) {
-    toastStore.error(err.message || 'Failed to update availability');
-  }
-}
-
 async function handleBatchOperations(operations: AvailabilityOperation[]) {
-  console.log('[handleBatchOperations] Received operations:', operations);
-
   // Execute all operations in parallel using allSettled to continue even if some fail
   const promises = operations.map(op => {
-    console.log(`[handleBatchOperations] Processing ${op.type} operation for ${op.date}`, op);
     switch (op.type) {
       case 'create':
         return availabilitiesApi.create(token.value, participantId.value, {
@@ -2458,7 +2447,6 @@ async function handleBatchOperations(operations: AvailabilityOperation[]) {
   });
 
   const results = await Promise.allSettled(promises);
-  console.log('[handleBatchOperations] Results:', results);
 
   // Count successes and failures
   const succeeded = results.filter(r => r.status === 'fulfilled').length;
@@ -2589,9 +2577,6 @@ watch(
       oldVal.some(val => val !== undefined) &&
       JSON.stringify(newVal) !== JSON.stringify(oldVal)
     ) {
-      // Clear the holidays cache to force fresh data
-      clearHolidaysCache();
-
       // Reload the calendar to ensure we have the latest settings
       await calendarStore.fetchPublicCalendar(token.value, participantId.value);
     }
@@ -2622,31 +2607,29 @@ watch(numberOfPeriods, async newCount => {
   }
 });
 
+// The week grid used to emit these and the parent persisted them; now that the parent
+// owns the values it has to save them itself, or they reset on every visit.
+watch([startHour, endHour, slotDuration], ([newStart, newEnd, newDuration]) => {
+  if (token.value) {
+    historyStore.updateDisplaySettings(token.value, {
+      startHour: newStart,
+      endHour: newEnd,
+      slotDuration: newDuration,
+    });
+  }
+});
+
 watch(viewStyle, newStyle => {
   if (calendar.value) {
     historyStore.updateDisplaySettings(token.value, { viewStyle: newStyle });
   }
 });
 
-function handleViewStyleChange(style: 'classic' | 'compact' | 'list') {
-  if (style === 'list') {
-    viewStyle.value = 'list';
-  } else {
-    viewStyle.value = 'classic';
-    // When switching back to classic/compact in month mode, update CalendarGrid's localStorage
-    if (displayMode.value === 'month' && typeof window !== 'undefined') {
-      localStorage.setItem('calendar-view-mode', style);
-    }
-  }
-}
-
 // Watch for route changes to reload the calendar when navigating between calendars
 // The immediate flag ensures this runs on initial mount
 watch(
   () => [route.params.token, route.params.participantId],
   async () => {
-    // Clear holidays cache and reload calendar
-    clearHolidaysCache();
     await loadCalendar();
   },
   { immediate: true }
@@ -2680,8 +2663,9 @@ async function handleCancelFromEmail() {
 }
 
 onMounted(async () => {
-  await loadCalendar();
-  // Handle cancel from email notification after calendar is loaded
+  // The route watcher above already loads the calendar with { immediate: true }.
+  // Calling loadCalendar() here as well fetched the calendar, its recurrences and the
+  // whole range summary a second time on every mount.
   await handleCancelFromEmail();
 });
 </script>

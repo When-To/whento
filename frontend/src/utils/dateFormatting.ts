@@ -1,20 +1,18 @@
 /*
  * WhenTo - Collaborative event calendar for self-hosted environments
  * Copyright (C) 2025 WhenTo Contributors
- * Licensed under the Business Source License 1.1
- * See LICENSE file for details
+ * SPDX-License-Identifier: BSL-1.1
  */
 
 /**
- * Format a Date as an ISO date string (YYYY-MM-DD) using local time.
- * Used when building API payloads or map keys keyed by calendar date.
+ * @deprecated Compatibility shim. Import from `@/utils/date/isoDate` and
+ * `@/utils/date/intlFormatters` instead. This file is deleted once the calendar
+ * components stop importing it.
  */
-export function formatDateISO(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
+
+import { formatDate } from './date/intlFormatters';
+
+export { formatDateISO } from './date/isoDate';
 
 /**
  * Format the weekday name for the given date in the given locale.
@@ -25,26 +23,19 @@ export function formatWeekday(
   locale: string,
   style: 'long' | 'short' = 'long'
 ): string {
-  return new Intl.DateTimeFormat(locale, { weekday: style }).format(date);
+  return formatDate(date, locale, style === 'long' ? 'weekdayLong' : 'weekdayShort');
 }
 
 /**
  * Day + short month (no year), e.g. "5 Apr".
  */
 export function formatDayMonthShort(date: Date, locale: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    month: 'short',
-  }).format(date);
+  return formatDate(date, locale, 'dayMonthShort');
 }
 
 /**
  * Day + full month + year, e.g. "5 April 2026".
  */
 export function formatFullDate(date: Date, locale: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(date);
+  return formatDate(date, locale, 'fullDate');
 }

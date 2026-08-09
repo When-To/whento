@@ -1,0 +1,269 @@
+<!--
+  WhenTo - Collaborative event calendar for self-hosted environments
+  Copyright (C) 2025 WhenTo Contributors
+  SPDX-License-Identifier: BSL-1.1
+-->
+
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
+import CalendarMonthView from '../src/components/calendar/CalendarMonthView.vue';
+import CalendarWeekView from '../src/components/calendar/CalendarWeekView.vue';
+import CalendarLegend from '../src/components/calendar/CalendarLegend.vue';
+import ParticipantDetailsPopup from '../src/components/ParticipantDetailsPopup.vue';
+import { buildCoverageMap } from '../src/utils/calendar/segments';
+import { buildWeekModel } from '../src/utils/calendar/weekModel';
+import type { DateAvailabilitySummary } from '../src/types';
+import { useCalendarFormatters } from '../src/composables/calendar/useCalendarFormatters';
+import { buildCalendarRules } from '../src/utils/calendar/dateRules';
+import { buildDayIndex } from '../src/utils/calendar/dayIndex';
+import { buildMonthModel, type ModelDeps } from '../src/utils/calendar/dayModel';
+import { getHolidayIndex } from '../src/utils/calendar/holidays';
+import { getWeekStartDay } from '../src/i18n';
+import type { Availability, RecurrenceWithExceptions } from '../src/types';
+
+const { locale } = useI18n();
+const { formatters } = useCalendarFormatters();
+
+/** Fixed so screenshots are stable across runs. */
+const YEAR = 2026;
+const MONTH = 3; // April
+const THRESHOLD = 5;
+const TODAY = '2026-04-06';
+
+function iso(day: number): string {
+  return `2026-04-${String(day).padStart(2, '0')}`;
+}
+
+function availability(day: number, start?: string, end?: string, note?: string): Availability {
+  return {
+    id: `av-${day}`,
+    participant_id: 'p1',
+    participant_name: 'Ada',
+    participant_email_verified: false,
+    date: iso(day),
+    start_time: start,
+    end_time: end,
+    note,
+    created_at: '',
+    updated_at: '',
+  };
+}
+
+/** One of every state the cell can be in, laid out across a real month. */
+const availabilities: Availability[] = [
+  availability(8, '09:00', '12:00'),
+  availability(9),
+  availability(15, '14:00', '18:00', 'after the standup'),
+  availability(16, '09:00', '12:00'),
+  availability(16, '14:00', '18:00'),
+  availability(23, '08:00', '10:00'),
+];
+
+const recurrences: RecurrenceWithExceptions[] = [
+  {
+    id: 'r1',
+    participant_id: 'p1',
+    day_of_week: 4, // Thursday
+    start_time: '10:00',
+    end_time: '11:00',
+    start_date: '2026-04-01',
+    created_at: '',
+    exceptions: [{ id: 'e1', recurrence_id: 'r1', excluded_date: iso(23), created_at: '' }],
+  },
+];
+
+/** A spread of counts so every density step is represented. */
+const participantCounts: Record<string, number> = {
+  [iso(7)]: 1,
+  [iso(8)]: 2,
+  [iso(9)]: 3,
+  [iso(10)]: 4,
+  [iso(13)]: 5,
+  [iso(14)]: 1,
+  [iso(15)]: 3,
+  [iso(16)]: 5,
+  [iso(17)]: 6,
+  [iso(20)]: 2,
+  [iso(21)]: 4,
+  [iso(22)]: 5,
+  [iso(23)]: 2,
+  [iso(24)]: 1,
+  [iso(27)]: 3,
+  [iso(28)]: 5,
+  [iso(29)]: 4,
+  [iso(30)]: 2,
+};
+
+const deps = computed<ModelDeps>(() => ({
+  rules: buildCalendarRules({
+    timeZone: 'Europe/Paris',
+    todayISO: TODAY,
+    allowedWeekdays: [1, 2, 3, 4, 5],
+    holidaysPolicy: 'ignore',
+    allowHolidayEves: true,
+    threshold: THRESHOLD,
+  }),
+  holidays: getHolidayIndex('Europe/Paris', locale.value),
+  index: buildDayIndex({ availabilities, recurrences, participantCounts }),
+  fmt: formatters.value,
+  weekStartDay: getWeekStartDay(locale.value),
+  highlighted: new Set([iso(22)]),
+}));
+
+const model = computed(() => buildMonthModel(YEAR, MONTH, deps.value));
+
+/** Per-participant detail for the week the availabilities above sit in. */
+const dateSummaries: DateAvailabilitySummary[] = [
+  {
+    date: iso(13),
+    total_count: 5,
+    participants: [
+      { participant_name: 'Bob', start_time: '09:00', end_time: '17:00' },
+      { participant_name: 'Cleo', start_time: '10:00', end_time: '12:00' },
+      { participant_name: 'Dee', start_time: '11:00', end_time: '16:00' },
+      { participant_name: 'Eve' },
+      { participant_name: 'Finn', start_time: '14:00', end_time: '18:00' },
+    ],
+  },
+  {
+    date: iso(15),
+    total_count: 3,
+    participants: [
+      { participant_name: 'Ada', start_time: '14:00', end_time: '18:00' },
+      { participant_name: 'Bob', start_time: '13:00', end_time: '16:00' },
+      { participant_name: 'Cleo', start_time: '15:00', end_time: '19:00' },
+    ],
+  },
+  {
+    date: iso(16),
+    total_count: 5,
+    participants: [
+      { participant_name: 'Ada', start_time: '09:00', end_time: '12:00' },
+      { participant_name: 'Bob', start_time: '09:00', end_time: '18:00' },
+      { participant_name: 'Cleo', start_time: '10:00', end_time: '17:00' },
+      { participant_name: 'Dee', start_time: '11:00', end_time: '15:00' },
+      { participant_name: 'Eve', start_time: '08:00', end_time: '20:00' },
+    ],
+  },
+  {
+    date: iso(17),
+    total_count: 2,
+    participants: [
+      { participant_name: 'Bob', start_time: '08:00', end_time: '10:00' },
+      { participant_name: 'Cleo', start_time: '10:00', end_time: '12:00' },
+    ],
+  },
+];
+
+const coverageMap = computed(() => buildCoverageMap(dateSummaries, 'Ada', THRESHOLD));
+
+const weekModel = computed(() =>
+  buildWeekModel(iso(15), deps.value, {
+    startHour: 8,
+    endHour: 20,
+    slotDurationMin: 30,
+    coverage: coverageMap.value.coverage,
+    thresholds: coverageMap.value.thresholds,
+  })
+);
+
+function availabilitiesFor(date: string) {
+  return availabilities.filter(a => a.date === date);
+}
+
+/**
+ * The details popup, so its behaviour is testable without a backend. It fetches the
+ * day summary itself, which the browser tests stub with a route interception — this
+ * component has had two regressions with no automated coverage at all.
+ */
+const detailsDate = ref<string | null>(null);
+const detailsAnchor = ref<DOMRect | null>(null);
+
+function openDetails(date: string, anchor: DOMRect) {
+  detailsDate.value = date;
+  detailsAnchor.value = anchor;
+}
+
+const dark = ref(false);
+function applyTheme() {
+  document.documentElement.classList.toggle('dark', dark.value);
+}
+function toggleTheme() {
+  dark.value = !dark.value;
+  applyTheme();
+}
+
+onMounted(() => {
+  const params = new URLSearchParams(window.location.search);
+  dark.value = params.get('theme') === 'dark';
+  applyTheme();
+});
+</script>
+
+<template>
+  <main class="min-h-screen bg-gray-50 p-6 dark:bg-gray-950">
+    <div class="mx-auto max-w-5xl space-y-6">
+      <header class="flex items-center justify-between">
+        <div>
+          <h1 class="text-xl">Calendar preview</h1>
+          <p class="text-sm text-gray-500 dark:text-gray-400">
+            April 2026 · threshold {{ THRESHOLD }} · today {{ TODAY }} · weekdays Mon–Fri
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn btn-secondary" @click="locale = locale === 'en' ? 'fr' : 'en'">
+            {{ locale }}
+          </button>
+          <button class="btn btn-secondary" @click="toggleTheme">
+            {{ dark ? 'dark' : 'light' }}
+          </button>
+        </div>
+      </header>
+
+      <CalendarLegend display-mode="month" data-testid="legend-month" />
+
+      <CalendarMonthView
+        :model="model"
+        show-navigation
+        data-testid="month"
+        @day-details="openDetails"
+      />
+
+      <ParticipantDetailsPopup
+        v-if="detailsDate && detailsAnchor"
+        calendar-token="preview-token"
+        current-participant-id="p1"
+        current-participant-name="Ada"
+        :date="detailsDate"
+        :anchor-rect="detailsAnchor"
+        @close="detailsDate = null"
+      />
+
+      <CalendarLegend display-mode="week" data-testid="legend-week" />
+
+      <CalendarWeekView
+        :model="weekModel"
+        :slot-duration-min="30"
+        :threshold="THRESHOLD"
+        :availabilities-for="availabilitiesFor"
+        show-navigation
+        data-testid="week"
+      />
+
+      <section class="card p-4 text-sm text-gray-600 dark:text-gray-400">
+        <h2 class="mb-2 text-base text-gray-900 dark:text-gray-100">What to look for</h2>
+        <ul class="list-inside list-disc space-y-1">
+          <li>Weekends and the first week are disabled — dashed border, no gauge.</li>
+          <li>8 and 9 April carry a one-off availability; 16 April carries two.</li>
+          <li>Every Thursday carries a recurrence, except 23 April which is an exception.</li>
+          <li>16 April also carries a recurrence — both chips must be visible.</li>
+          <li>13, 16, 22 and 28 April meet the threshold — check mark and top ramp step.</li>
+          <li>22 April is highlighted; 6 April is today.</li>
+          <li>1 May is a public holiday and 30 April its eve — check the next month.</li>
+          <li>Narrow the window below 768px: the grid transposes with no JavaScript.</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+</template>

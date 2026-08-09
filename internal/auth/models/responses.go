@@ -16,16 +16,15 @@ type AuthResponse struct {
 
 // UserResponse represents a user response (public data)
 type UserResponse struct {
-	ID            string            `json:"id"`
-	Email         string            `json:"email"`
-	DisplayName   string            `json:"display_name"`
-	Role          string            `json:"role"`
-	Locale        string            `json:"locale"`
-	Timezone      string            `json:"timezone"`
-	EmailVerified bool              `json:"email_verified"`
-	CreatedAt     string            `json:"created_at"`
-	Subscription  *SubscriptionInfo `json:"subscription,omitempty"` // Cloud only
-	MFAStatus     *MFAStatus        `json:"mfa_status,omitempty"`   // MFA/auth status
+	ID            string     `json:"id"`
+	Email         string     `json:"email"`
+	DisplayName   string     `json:"display_name"`
+	Role          string     `json:"role"`
+	Locale        string     `json:"locale"`
+	Timezone      string     `json:"timezone"`
+	EmailVerified bool       `json:"email_verified"`
+	CreatedAt     string     `json:"created_at"`
+	MFAStatus     *MFAStatus `json:"mfa_status,omitempty"` // MFA/auth status
 }
 
 // ToResponse converts a User to UserResponse
@@ -39,16 +38,8 @@ func (u *User) ToResponse() *UserResponse {
 		Timezone:      u.Timezone,
 		EmailVerified: u.EmailVerified,
 		CreatedAt:     u.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		Subscription:  nil, // Not included by default
 		MFAStatus:     nil, // Not included by default
 	}
-}
-
-// ToResponseWithSubscription converts UserWithSubscription to UserResponse (cloud only)
-func (u *UserWithSubscription) ToResponseWithSubscription() *UserResponse {
-	resp := u.User.ToResponse()
-	resp.Subscription = u.Subscription
-	return resp
 }
 
 // UsersListResponse represents a list of users

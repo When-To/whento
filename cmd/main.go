@@ -199,16 +199,13 @@ func main() {
 		log.Info("Email service not configured (email features disabled)")
 	}
 
-	// ========== LICENSING/SUBSCRIPTION MODULE ==========
-	// Initialize build-specific services (Cloud: Stripe subscriptions, Self-hosted: License management)
+	// ========== QUOTA MODULE ==========
+	// Initialize build-specific services (Cloud: per-user limit, Self-hosted: unlimited)
 	services, err := InitServices(ctx, cfg, pool)
 	if err != nil {
-		log.Error("Failed to initialize licensing/subscription services", "error", err)
+		log.Error("Failed to initialize quota services", "error", err)
 		os.Exit(1)
 	}
-
-	// Start VAT refresh background task (Cloud only - no-op in self-hosted)
-	StartVATRefreshTask(context.Background(), services)
 
 	// ========== AUTH MODULE ==========
 	// Initialize auth repositories
@@ -710,9 +707,8 @@ func main() {
 		})
 	})
 
-	// ========== BILLING/LICENSING ROUTES ==========
-	// Register build-specific routes (Cloud: Stripe billing, Self-hosted: License management)
-	RegisterBillingRoutes(r, services, cfg, pool, jwtManager, cacheInstance)
+	// ========== QUOTA ROUTES ==========
+	RegisterQuotaRoutes(r, services, jwtManager, cacheInstance)
 
 	// ========== ICS ROUTES ==========
 	r.Route("/api/v1/ics", func(r chi.Router) {

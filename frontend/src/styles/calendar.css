@@ -1,0 +1,612 @@
+/*
+ * WhenTo - Collaborative event calendar for self-hosted environments
+ * Copyright (C) 2025 WhenTo Contributors
+ * SPDX-License-Identifier: BSL-1.1
+ *
+ * Calendar design system.
+ *
+ * Every calendar colour lives here, in CSS. Nothing is computed in JavaScript: the
+ * previous week grid read `document.documentElement.classList.contains('dark')` during
+ * render to pick `rgb()` strings, which was both expensive and non-reactive — toggling
+ * the theme left every fill stale until an unrelated re-render.
+ *
+ * Loaded from `main.ts` rather than `@import`ed here from `style.css`: Vite does not
+ * invalidate a CSS `@import` when the imported file changes, so every edit to this
+ * file needed a dev-server restart to show up. `@reference` pulls in the theme and the
+ * `dark` variant for `@apply` without re-emitting the framework.
+ */
+
+@reference '../style.css';
+
+/* --------------------------------------------------------------------------
+ * Selection colour
+ *
+ * The cell background answers one question only: has *this* participant marked this
+ * day or slot? A density heatmap was tried first and read badly — the eye spent its
+ * effort decoding a shade instead of finding the user's own answers, and the collective
+ * count was already carried, more precisely, by the gauge and the "n/threshold" label
+ * right below it.
+ *
+ * So: filled means mine, outlined means covered by one of my recurrences, and
+ * everything collective stays in the gauge, the count and the threshold outline.
+ * ----------------------------------------------------------------------- */
+
+:root {
+  --cal-own: var(--color-primary-600); /* 4.98:1 with white */
+  --cal-own-ink: #ffffff;
+  --cal-recurring: var(--color-secondary-600);
+  --cal-recurring-ink: #ffffff;
+  --cal-threshold: #16a34a; /* green-600 */
+  --cal-threshold-wash: rgb(22 163 74 / 0.18);
+
+  --cal-accent-own: var(--color-primary-600);
+  --cal-hour-line: var(--color-gray-300, #d1d5db);
+  --cal-accent-recurring: var(--color-secondary-500);
+  --cal-accent-holiday: #ea580c; /* orange-600 */
+  --cal-accent-eve: var(--color-secondary-400);
+
+  --cal-compact-row: 3.5rem;
+  --cal-gap: 0.25rem;
+}
+
+.dark {
+  --cal-own: var(--color-primary-500);
+  --cal-own-ink: #08131c;
+  --cal-recurring: var(--color-secondary-500);
+  --cal-recurring-ink: #150525;
+  --cal-threshold: #4ade80; /* green-400 — has to stay visible over the blue fill */
+  --cal-threshold-wash: rgb(74 222 128 / 0.22);
+
+  --cal-accent-own: var(--color-primary-400);
+  --cal-hour-line: var(--color-gray-600, #4b5563);
+  --cal-accent-recurring: var(--color-secondary-400);
+  --cal-accent-holiday: #fb923c; /* orange-400 */
+  --cal-accent-eve: var(--color-secondary-300);
+}
+
+@layer components {
+  /* ---------------------------------------------------------------- layout */
+
+  /*
+   * The month grid holds its days in chronological order and switches between the
+   * two layouts in pure CSS. With `grid-auto-flow: column` over seven rows, day *i*
+   * lands on row `i % 7` (its weekday) and column `floor(i / 7)` (its week) — the
+   * transposed compact layout, with no JavaScript, no ResizeObserver and no
+   * per-cell index arithmetic.
+   */
+  .cal-month {
+    @apply flex flex-col;
+    gap: var(--cal-gap);
+  }
+
+  .cal-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: var(--cal-gap);
+  }
+
+  .cal-weekday {
+    @apply truncate py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400;
+  }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: var(--cal-gap);
+    flex: 1 1 auto;
+  }
+
+  @media (max-width: 48rem) {
+    .cal-month {
+      @apply flex-row items-start;
+    }
+
+    .cal-weekdays {
+      grid-template-columns: none;
+      grid-template-rows: repeat(7, var(--cal-compact-row));
+    }
+
+    .cal-weekday {
+      @apply flex items-center justify-center px-1 py-0;
+    }
+
+    .cal-grid {
+      grid-template-columns: none;
+      grid-template-rows: repeat(7, var(--cal-compact-row));
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(2.5rem, 1fr);
+      overflow-x: auto;
+    }
+  }
+
+  /* ------------------------------------------------------------------ cell */
+
+  .cal-cell {
+    @apply relative flex min-h-20 flex-col gap-1 overflow-hidden rounded-lg border p-2 text-left transition-colors duration-150;
+    /* Default surface; the density steps below override it. */
+    @apply border-gray-200 bg-white text-gray-900;
+    @apply dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100;
+  }
+
+  @media (max-width: 48rem) {
+    .cal-cell {
+      @apply min-h-0 gap-0.5 p-1.5;
+    }
+  }
+
+  .cal-cell[data-status='outside'] {
+    @apply pointer-events-none border-transparent bg-transparent opacity-0;
+  }
+
+  .cal-cell[data-status='disabled'] {
+    @apply cursor-not-allowed border-dashed border-gray-200 bg-gray-50 text-gray-400;
+    @apply dark:border-gray-800 dark:bg-gray-900 dark:text-gray-600;
+  }
+
+  .cal-cell:not([data-status='outside']):not([data-status='disabled']) {
+    @apply cursor-pointer;
+  }
+
+  .cal-cell:not([data-status='outside']):not([data-status='disabled']):hover {
+    @apply border-primary-400 dark:border-primary-500;
+  }
+
+  /* The one thing the fill encodes: this participant answered here. */
+  .cal-cell[data-own] {
+    background-color: var(--cal-own);
+    color: var(--cal-own-ink);
+    @apply border-transparent;
+  }
+
+  /* Covered by a recurrence rather than an explicit answer: outlined, not filled, so
+     the two are distinguishable at a glance. */
+  .cal-cell[data-recurring]:not([data-own]) {
+    @apply border-2;
+    border-color: var(--cal-recurring);
+  }
+
+  /*
+   * Enough participants overall. A 2px inset ring was almost invisible against the
+   * blue fill it sits on; this is a thicker ring separated from the fill by a gap in
+   * the surface colour, so it reads at a glance on filled and empty cells alike.
+   */
+  .cal-cell[data-threshold] {
+    @apply outline-3 -outline-offset-1 outline-[var(--cal-threshold)];
+  }
+
+  /* Rings, in ascending precedence: a later rule wins, and in practice only one
+     applies at a time. */
+  .cal-cell[data-today] {
+    @apply ring-2 ring-gray-400 dark:ring-gray-500;
+  }
+
+  .cal-cell[data-highlight] {
+    @apply ring-2 ring-secondary-500;
+  }
+
+  .cal-cell[data-drag='add'] {
+    @apply ring-2 ring-primary-500;
+  }
+
+  .cal-cell[data-drag='remove'] {
+    @apply ring-2 ring-danger-500;
+  }
+
+  .cal-cell:focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary-600 dark:outline-primary-400;
+  }
+
+  /* A holiday marks the top edge rather than taking another ring, so it can be read
+     at the same time as "today" or a drag selection. */
+  .cal-cell[data-holiday]::before,
+  .cal-cell[data-holiday-eve]::before {
+    content: '';
+    @apply absolute inset-x-0 top-0 h-1;
+  }
+
+  .cal-cell[data-holiday]::before {
+    background-color: var(--cal-accent-holiday);
+  }
+
+  .cal-cell[data-holiday-eve]::before {
+    background-color: var(--cal-accent-eve);
+  }
+
+  /* --------------------------------------------------------- cell contents */
+
+  .cal-cell-head {
+    @apply flex items-start justify-between gap-1;
+  }
+
+  .cal-day-num {
+    @apply text-sm font-semibold leading-none;
+  }
+
+  .cal-badge {
+    @apply text-xs leading-none opacity-80;
+  }
+
+  .cal-tag {
+    @apply flex items-center gap-1 truncate rounded px-1 py-0.5 text-[0.65rem] font-medium leading-tight;
+    @apply bg-white/70 text-gray-800 dark:bg-black/30 dark:text-gray-100;
+  }
+
+  .cal-dot {
+    @apply size-1.5 shrink-0 rounded-full;
+    background-color: var(--cal-accent-own);
+  }
+
+  .cal-dot--recurring {
+    background-color: var(--cal-accent-recurring);
+  }
+
+  /* The gauge repeats the density without relying on hue, which is what makes the
+     heatmap safe for colour vision deficiencies and in print. */
+  .cal-gauge {
+    @apply mt-auto h-1 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/15;
+  }
+
+  .cal-gauge-fill {
+    @apply h-full rounded-full bg-current transition-[width] duration-200;
+  }
+
+  /*
+   * Opens the per-participant breakdown. It has to look like a control: as bare text it
+   * read as a label, and the only way anyone found the popup was by right-clicking a
+   * cell — which is undiscoverable and impossible on touch.
+   */
+  .cal-count {
+    @apply -mx-0.5 -mb-0.5 flex cursor-pointer items-center gap-0.5 self-start rounded border px-1 py-0.5;
+    @apply text-[0.65rem] leading-none tabular-nums transition-colors;
+    @apply border-current/25 hover:border-current/60 hover:bg-black/10 dark:hover:bg-white/20;
+    @apply focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-600;
+    /* Comfortably tappable without inflating the cell. */
+    min-height: 1.25rem;
+  }
+
+  @media (max-width: 48rem) {
+    /* The time chips do not fit a transposed cell, but the count must stay: hiding it
+       removed the only way to reach the popup on a phone. */
+    .cal-tag {
+      @apply hidden;
+    }
+  }
+
+  /* ------------------------------------------------------------ week view */
+
+  .cal-week {
+    @apply flex flex-col gap-1;
+    --cal-slot-h: 1.25rem;
+    --cal-gutter-w: 3.25rem;
+  }
+
+  .cal-week-header {
+    display: grid;
+    grid-template-columns: var(--cal-gutter-w) repeat(7, minmax(0, 1fr));
+    gap: var(--cal-gap);
+  }
+
+  .cal-week-gutter {
+    @apply block;
+  }
+
+  .cal-week-day-wrap {
+    @apply flex flex-col items-stretch gap-0.5;
+  }
+
+  .cal-week-day {
+    @apply flex flex-col items-center gap-0.5 rounded-lg border px-1 py-1.5 text-xs transition-colors;
+    @apply border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800;
+  }
+
+  .cal-week-day-wrap .cal-count {
+    @apply mx-0 mb-0 self-center;
+  }
+
+  .cal-week-day[data-enabled] {
+    @apply cursor-pointer hover:border-primary-400 dark:hover:border-primary-500;
+  }
+
+  .cal-week-day:not([data-enabled]) {
+    @apply cursor-not-allowed border-dashed opacity-50;
+  }
+
+  .cal-week-day[data-full-day] {
+    background-color: var(--cal-accent-own);
+    @apply border-transparent text-white;
+  }
+
+  .cal-week-day[data-today] {
+    @apply ring-2 ring-gray-400 dark:ring-gray-500;
+  }
+
+  .cal-week-day[data-holiday] {
+    border-top-color: var(--cal-accent-holiday);
+    @apply border-t-4;
+  }
+
+  .cal-week-day[data-drag='add'] {
+    @apply ring-2 ring-primary-500;
+  }
+
+  .cal-week-day[data-drag='remove'] {
+    @apply ring-2 ring-danger-500;
+  }
+
+  .cal-week-day:focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary-600;
+  }
+
+  .cal-week-day-num {
+    @apply font-semibold;
+  }
+
+  .cal-week-body {
+    display: grid;
+    grid-template-columns: var(--cal-gutter-w) minmax(0, 1fr);
+    gap: var(--cal-gap);
+  }
+
+  .cal-week-times {
+    display: grid;
+    grid-auto-rows: var(--cal-slot-h);
+  }
+
+  .cal-week-time {
+    @apply -translate-y-1/2 pr-1 text-right text-[0.65rem] leading-none text-gray-400 tabular-nums dark:text-gray-500;
+  }
+
+  /* Sits on the closing edge of the last row rather than on a row of its own. */
+  .cal-week-time--last {
+    @apply text-gray-500 dark:text-gray-400;
+  }
+
+  /*
+   * One grid for the whole week. The previous markup nested a separate grid container
+   * per time slot — forty-eight of them — each re-deriving its own cell state.
+   */
+  .cal-week-grid {
+    @apply relative isolate;
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-rows: repeat(var(--cal-slot-count), var(--cal-slot-h));
+    gap: 0;
+  }
+
+  .cal-slot {
+    @apply border-b border-r border-gray-100 dark:border-gray-800;
+  }
+
+  /* A run of answered slots has to read as one block. Keeping the per-slot bottom
+     border striped it every half hour; the hour separators are drawn on the grid
+     above, so nothing is lost by dropping it here. */
+  .cal-slot[data-own] + .cal-slot[data-own],
+  .cal-slot[data-own] {
+    @apply border-b-transparent;
+  }
+
+  /*
+   * Hour separators are drawn on the grid itself, above the bands. Keeping them on
+   * the cells would put them underneath, and a continuous availability would swallow
+   * the hour marks it spans.
+   */
+  .cal-week-grid::after {
+    content: '';
+    @apply pointer-events-none absolute inset-0 z-[15];
+    background-image: repeating-linear-gradient(
+      to bottom,
+      var(--cal-hour-line) 0,
+      var(--cal-hour-line) 1px,
+      transparent 1px,
+      transparent var(--cal-hour-h)
+    );
+  }
+
+  .cal-slot:not([data-enabled]) {
+    @apply bg-gray-50 dark:bg-gray-900/60;
+  }
+
+  .cal-slot[data-enabled] {
+    @apply cursor-pointer;
+  }
+
+  /*
+   * Drag feedback sits above the bands so the selection stays visible over a fill, and
+   * uses the same ring as the month cells. A translucent wash alone was invisible over
+   * the saturated blue of an answered slot — which is exactly the case that matters,
+   * since removing always starts on one.
+   */
+  .cal-slot[data-drag] {
+    @apply relative z-20;
+  }
+
+  .cal-slot[data-drag='add'] {
+    @apply bg-primary-500/40 ring-2 ring-inset ring-primary-500;
+  }
+
+  .cal-slot[data-drag='remove'] {
+    @apply bg-danger-500/40 ring-2 ring-inset ring-danger-500;
+  }
+
+  /*
+   * Bands sit between the slot backgrounds and the hour separators, so a continuous
+   * availability reads as one block while the hour lines stay visible over it.
+   */
+  .cal-week-bands {
+    @apply pointer-events-none relative z-10;
+  }
+
+  /* Counts and gauges must clear the fills underneath them, so they sit above the
+     hour separators too. */
+  .cal-band-count,
+  .cal-band-gauge {
+    @apply z-20;
+  }
+
+  .cal-band {
+    @apply absolute inset-x-0.5 rounded-sm;
+  }
+
+  /*
+   * Coverage spans carry no fill. A wash behind them — of any colour — competed with
+   * the two things worth seeing: the slots this participant answered, and the spans
+   * where enough people are free. Those two paint; everything else is a number.
+   */
+  .cal-band[data-kind='coverage'] {
+    @apply bg-transparent;
+  }
+
+  /* The one thing a participant is looking for, so it reads as a zone rather than a
+     hairline: a tinted block with a thick border that survives sitting on top of the
+     solid blue fill underneath. */
+  .cal-band[data-kind='threshold'] {
+    @apply rounded;
+    border: 3px solid var(--cal-threshold);
+    background-color: var(--cal-threshold-wash);
+  }
+
+  /* Count and gauge ride together at the top of the band. Pinning the gauge to the
+     bottom of a tall band divorced it from the number it explains, and left a stray
+     white line floating mid-grid. */
+  .cal-band-count {
+    @apply absolute right-1 top-0.5 rounded px-1 text-[0.6rem] font-semibold leading-tight tabular-nums;
+    @apply bg-white/85 text-gray-800 dark:bg-gray-900/80 dark:text-gray-100;
+  }
+
+  .cal-band-gauge {
+    @apply absolute right-1 top-[1.15rem] block h-1 w-8 overflow-hidden rounded-full;
+    @apply bg-white/70 dark:bg-gray-900/70;
+  }
+
+  .cal-band-gauge-fill {
+    @apply block h-full rounded-full;
+    background-color: var(--cal-threshold);
+  }
+
+  /* This participant's own answer. Solid, and beneath the translucent coverage bands
+     so both readings survive: the block is mine, the tint over it is everyone's. */
+  .cal-slot[data-own] {
+    @apply relative z-[5];
+    background-color: var(--cal-own);
+  }
+
+  /* ------------------------------------------------------------- list view */
+
+  .cal-row {
+    @apply flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors;
+    @apply border-gray-200 bg-white text-gray-900;
+    @apply dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100;
+  }
+
+  .cal-row[data-own] {
+    background-color: var(--cal-own);
+    color: var(--cal-own-ink);
+    @apply border-transparent;
+  }
+
+  .cal-row[data-recurring]:not([data-own]) {
+    @apply border-2;
+    border-color: var(--cal-recurring);
+  }
+
+  .cal-row[data-threshold] {
+    @apply outline-3 -outline-offset-1 outline-[var(--cal-threshold)];
+  }
+
+  .cal-row[data-today] {
+    @apply ring-2 ring-gray-400 dark:ring-gray-500;
+  }
+
+  .cal-row[data-highlight] {
+    @apply ring-2 ring-secondary-500;
+  }
+
+  .cal-row-main {
+    @apply flex min-w-0 flex-1 cursor-pointer items-center text-left;
+    @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600;
+  }
+
+  .cal-row-badge {
+    @apply rounded-full px-2 py-0.5 text-xs font-medium text-white;
+  }
+
+  .cal-row-badge[data-kind='holiday'] {
+    background-color: var(--cal-accent-holiday);
+  }
+
+  .cal-row-badge[data-kind='eve'] {
+    background-color: var(--cal-accent-eve);
+  }
+
+  /* ---------------------------------------------------------------- legend */
+
+  .cal-legend {
+    @apply flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-600 dark:text-gray-400;
+  }
+
+  .cal-legend-item {
+    @apply flex items-center gap-1.5;
+  }
+
+  /*
+   * Each swatch is drawn with the same custom properties as the thing it explains, so
+   * the legend cannot drift from the grid: change a token and both move together.
+   */
+  .cal-legend-swatch {
+    @apply size-3.5 shrink-0 rounded-sm border border-gray-300 dark:border-gray-600;
+  }
+
+  .cal-legend-swatch[data-kind='own'] {
+    background-color: var(--cal-own);
+    @apply border-transparent;
+  }
+
+  .cal-legend-swatch[data-kind='recurring'] {
+    @apply border-2 bg-transparent;
+    border-color: var(--cal-recurring);
+  }
+
+  .cal-legend-swatch[data-kind='threshold'] {
+    @apply border-2 bg-transparent;
+    border-color: var(--cal-threshold);
+  }
+
+  .cal-legend-swatch[data-kind='coverage'] {
+    @apply relative overflow-hidden border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800;
+  }
+
+  .cal-legend-swatch[data-kind='coverage']::after {
+    content: '';
+    @apply absolute inset-x-0 bottom-0 h-1/2;
+    background-color: var(--cal-threshold);
+    opacity: 0.35;
+  }
+
+  .cal-legend-swatch[data-kind='disabled'] {
+    @apply border-dashed bg-gray-50 dark:bg-gray-900;
+  }
+
+  /* Holiday and eve are edge marks on a cell, so the swatch shows an edge too. */
+  .cal-legend-swatch[data-kind='holiday'],
+  .cal-legend-swatch[data-kind='eve'] {
+    @apply border-t-4 bg-white dark:bg-gray-800;
+  }
+
+  .cal-legend-swatch[data-kind='holiday'] {
+    border-top-color: var(--cal-accent-holiday);
+  }
+
+  .cal-legend-swatch[data-kind='eve'] {
+    border-top-color: var(--cal-accent-eve);
+  }
+
+  /* A miniature of the real gauge, reusing its classes. */
+  .cal-legend-gauge {
+    @apply block h-1 w-8 shrink-0 overflow-hidden rounded-full bg-black/15 dark:bg-white/20;
+  }
+
+  .cal-legend-gauge > span {
+    @apply block h-full rounded-full;
+    background-color: var(--cal-threshold);
+  }
+}
