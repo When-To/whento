@@ -37,9 +37,14 @@ describe('formatDate', () => {
   it('accepts the bare vue-i18n locale codes', () => {
     // `locale.value` is 'fr' | 'en', never 'fr-FR'. The old code compared against
     // 'fr-FR' in one place, a branch that could never be taken.
-    expect(() => formatDate(date, 'fr', 'fullDate')).not.toThrow();
-    expect(() => formatDate(date, 'en', 'fullDate')).not.toThrow();
-    expect(formatDate(date, 'fr', 'fullDate')).toContain('2026');
+    //
+    // Asserting the exact strings rather than not.toThrow(): Intl never throws on a
+    // well-formed tag, so the old form passed even if both locales silently produced
+    // the same output — which is precisely the bug it was meant to catch. `2026` is
+    // no better, since it appears in both.
+    expect(formatDate(date, 'fr', 'fullDate')).toBe('5 avril 2026');
+    expect(formatDate(date, 'en', 'fullDate')).toBe('April 5, 2026');
+    expect(formatDate(date, 'fr', 'fullDate')).not.toBe(formatDate(date, 'en', 'fullDate'));
   });
 
   it('formats month and year', () => {

@@ -38,7 +38,19 @@ function getVisitedCalendars(): CalendarHistoryItem[] {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     if (!data) return [];
-    return JSON.parse(data);
+
+    // JSON.parse succeeding says nothing about the shape. A stored `42` or `{}` parses
+    // fine and then breaks the store on first access, because `sortedCalendars` spreads
+    // the value and `[...42]` throws — and `init()` runs when the store is created, so
+    // the failure takes the page down rather than degrading. Anything that is not an
+    // array of entries carrying a token is discarded.
+    const parsed: unknown = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter(
+      (entry): entry is CalendarHistoryItem =>
+        typeof entry === 'object' && entry !== null && typeof entry.token === 'string'
+    );
   } catch {
     return [];
   }

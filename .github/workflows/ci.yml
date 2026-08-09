@@ -43,9 +43,11 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      # Runs with coverage so the thresholds in vitest.config.ts are enforced here and
+      # not only when someone remembers to ask for them locally.
       - name: Unit tests
         working-directory: frontend
-        run: npm run test
+        run: npm run test:coverage
 
       - name: Install Playwright browser
         working-directory: frontend
