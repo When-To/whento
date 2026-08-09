@@ -410,17 +410,22 @@
     @apply cursor-pointer;
   }
 
-  /* Drag feedback sits above the bands so the selection stays visible over a fill. */
+  /*
+   * Drag feedback sits above the bands so the selection stays visible over a fill, and
+   * uses the same ring as the month cells. A translucent wash alone was invisible over
+   * the saturated blue of an answered slot — which is exactly the case that matters,
+   * since removing always starts on one.
+   */
   .cal-slot[data-drag] {
     @apply relative z-20;
   }
 
   .cal-slot[data-drag='add'] {
-    @apply bg-primary-500/40;
+    @apply bg-primary-500/40 ring-2 ring-inset ring-primary-500;
   }
 
   .cal-slot[data-drag='remove'] {
-    @apply bg-danger-500/40;
+    @apply bg-danger-500/40 ring-2 ring-inset ring-danger-500;
   }
 
   /*
@@ -543,15 +548,65 @@
     @apply flex items-center gap-1.5;
   }
 
+  /*
+   * Each swatch is drawn with the same custom properties as the thing it explains, so
+   * the legend cannot drift from the grid: change a token and both move together.
+   */
   .cal-legend-swatch {
-    @apply size-3 rounded border border-gray-300 dark:border-gray-600;
+    @apply size-3.5 shrink-0 rounded-sm border border-gray-300 dark:border-gray-600;
   }
 
-  .cal-legend-ramp {
-    @apply flex overflow-hidden rounded border border-gray-300 dark:border-gray-600;
+  .cal-legend-swatch[data-kind='own'] {
+    background-color: var(--cal-own);
+    @apply border-transparent;
   }
 
-  .cal-legend-ramp > span {
-    @apply size-3;
+  .cal-legend-swatch[data-kind='recurring'] {
+    @apply border-2 bg-transparent;
+    border-color: var(--cal-recurring);
+  }
+
+  .cal-legend-swatch[data-kind='threshold'] {
+    @apply border-2 bg-transparent;
+    border-color: var(--cal-threshold);
+  }
+
+  .cal-legend-swatch[data-kind='coverage'] {
+    @apply relative overflow-hidden border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800;
+  }
+
+  .cal-legend-swatch[data-kind='coverage']::after {
+    content: '';
+    @apply absolute inset-x-0 bottom-0 h-1/2;
+    background-color: var(--cal-threshold);
+    opacity: 0.35;
+  }
+
+  .cal-legend-swatch[data-kind='disabled'] {
+    @apply border-dashed bg-gray-50 dark:bg-gray-900;
+  }
+
+  /* Holiday and eve are edge marks on a cell, so the swatch shows an edge too. */
+  .cal-legend-swatch[data-kind='holiday'],
+  .cal-legend-swatch[data-kind='eve'] {
+    @apply border-t-4 bg-white dark:bg-gray-800;
+  }
+
+  .cal-legend-swatch[data-kind='holiday'] {
+    border-top-color: var(--cal-accent-holiday);
+  }
+
+  .cal-legend-swatch[data-kind='eve'] {
+    border-top-color: var(--cal-accent-eve);
+  }
+
+  /* A miniature of the real gauge, reusing its classes. */
+  .cal-legend-gauge {
+    @apply block h-1 w-8 shrink-0 overflow-hidden rounded-full bg-black/15 dark:bg-white/20;
+  }
+
+  .cal-legend-gauge > span {
+    @apply block h-full rounded-full;
+    background-color: var(--cal-threshold);
   }
 }

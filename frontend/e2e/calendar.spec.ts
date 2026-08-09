@@ -325,3 +325,37 @@ test.describe('availability popup', () => {
     await expect(popup(page).getByRole('button', { name: /^save$/i })).toBeVisible();
   });
 });
+
+test.describe('legend', () => {
+  test('explains every sign the grid uses', async ({ page }) => {
+    await gotoPreview(page);
+    // The rewrite replaced three views that each had a legend and brought none back,
+    // leaving the whole colour vocabulary undocumented on screen.
+    const legend = page.locator('[data-testid="legend-month"]');
+    await expect(legend).toBeVisible();
+    for (const kind of ['own', 'recurring', 'threshold', 'holiday', 'eve', 'disabled']) {
+      await expect(legend.locator(`.cal-legend-swatch[data-kind="${kind}"]`)).toHaveCount(1);
+    }
+    await expect(legend.locator('.cal-legend-gauge')).toHaveCount(1);
+  });
+
+  test('mentions collective coverage only where it is painted', async ({ page }) => {
+    await gotoPreview(page);
+    const coverage = '.cal-legend-swatch[data-kind="coverage"]';
+    // Only the week grid paints coverage bands.
+    await expect(page.locator(`[data-testid="legend-month"] ${coverage}`)).toHaveCount(0);
+    await expect(page.locator(`[data-testid="legend-week"] ${coverage}`)).toHaveCount(1);
+  });
+
+  test('draws its swatches from the same tokens as the cells', async ({ page }) => {
+    await gotoPreview(page);
+    // A hand-picked colour would drift the first time a token changed.
+    const swatch = await page
+      .locator('[data-testid="legend-month"] .cal-legend-swatch[data-kind="own"]')
+      .evaluate(el => getComputedStyle(el).backgroundColor);
+    const cellFill = await cell(page, '2026-04-08').evaluate(
+      el => getComputedStyle(el).backgroundColor
+    );
+    expect(swatch).toBe(cellFill);
+  });
+});

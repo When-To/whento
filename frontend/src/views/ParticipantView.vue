@@ -381,6 +381,10 @@
               @week-change="handleWeekStartChange"
             />
           </div>
+
+          <!-- One legend for whichever view is showing; the rewrite had left the
+               colour vocabulary undocumented on screen. -->
+          <CalendarLegend :display-mode="displayMode" class="mt-4" />
         </div>
 
         <ParticipantDetailsPopup
@@ -1228,6 +1232,7 @@ import ParticipantDetailsPopup from '@/components/ParticipantDetailsPopup.vue';
 import CalendarListView from '@/components/calendar/CalendarListView.vue';
 import CalendarWeekView from '@/components/calendar/CalendarWeekView.vue';
 import CalendarWeekControls from '@/components/calendar/CalendarWeekControls.vue';
+import CalendarLegend from '@/components/calendar/CalendarLegend.vue';
 import type { AvailabilityOperation } from '@/types/calendar';
 import { buildCoverageMap } from '@/utils/calendar/segments';
 import { buildWeekModel } from '@/utils/calendar/weekModel';
@@ -2256,9 +2261,13 @@ async function handleCalendarDayClick(dateString: string) {
 }
 
 async function handleCalendarDaysSelect(dates: string[]) {
-  // Filter out dates that already have availability
+  // Skip dates that are already covered — by an explicit answer, or by a recurrence.
+  // A recurrence-covered day already counts the participant as available, so adding a
+  // one-off there would shadow the rule with a duplicate. It would also contradict the
+  // single click, which on such a day creates an exception rather than an availability.
   const datesToAdd = dates.filter(
-    dateString => !availabilities.value.find(a => a.date === dateString)
+    dateString =>
+      !availabilities.value.find(a => a.date === dateString) && !recurrenceOnlyFor(dateString)
   );
 
   if (datesToAdd.length === 0) {
