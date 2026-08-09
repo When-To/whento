@@ -277,17 +277,43 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
-      # web/dist is embedded by web/embed.go, so the binary needs *something* there.
-      # The browser tests are served by Vite, not by this, so a placeholder is enough.
+      # keys/ is git-ignored and generated on first run, which on a developer machine
+      # means .devcontainer/post-create.sh. A runner starts from a bare checkout, so
+      # nothing creates them and the server exits on "failed to load private key".
+      # The same script is used here, so there is one source of truth.
       #
-      # Both servers are started detached with nohup, and each step waits for its health
-      # check before finishing. Without the wait the next step races the startup; without
-      # nohup the process can go with the step's shell.
-      - name: Start backend
+      # A fresh pair per run is correct: pkg/participanttoken seeds its HMAC from this
+      # key, and no token outlives the job.
+      - name: Generate JWT keys
+        run: ./scripts/generate-keys.sh
+
+      # Built as its own step rather than left to `go run` in the background, so a
+      # compile or link failure reports itself instead of surfacing later as "the
+      # backend did not become healthy".
+      #
+      # ensure-dist-placeholder must come first: web/embed.go resolves its //go:embed
+      # at compile time and will not build against an empty web/dist. The browser
+      # tests are served by Vite, so a placeholder is all this needs.
+      - name: Build backend
         run: |
           make ensure-dist-placeholder
-          PORT=5173 nohup go run -tags selfhosted ./cmd/ > /tmp/backend.log 2>&1 &
+          go build -tags selfhosted -o /tmp/whento ./cmd/
+
+      # Both servers are started detached with nohup, and each step waits for its own
+      # health check before finishing — without the wait the next step races startup,
+      # and without nohup the process can go with the step's shell. The kill -0 check
+      # ends the wait as soon as the process dies, rather than polling a corpse for
+      # two minutes.
+      - name: Start backend
+        run: |
+          PORT=5173 nohup /tmp/whento > /tmp/backend.log 2>&1 &
+          echo $! > /tmp/backend.pid
           for _ in $(seq 1 60); do
+            if ! kill -0 "$(cat /tmp/backend.pid)" 2>/dev/null; then
+              echo "backend exited early; log follows"
+              cat /tmp/backend.log
+              exit 1
+            fi
             if curl -sf http://127.0.0.1:5173/api/v1/health > /dev/null; then
               echo "backend healthy"
               exit 0
@@ -302,7 +328,13 @@ jobs:
         working-directory: frontend
         run: |
           nohup npm run dev:selfhosted > /tmp/frontend.log 2>&1 &
+          echo $! > /tmp/frontend.pid
           for _ in $(seq 1 60); do
+            if ! kill -0 "$(cat /tmp/frontend.pid)" 2>/dev/null; then
+              echo "frontend exited early; log follows"
+              cat /tmp/frontend.log
+              exit 1
+            fi
             if curl -sf http://127.0.0.1:8080/ > /dev/null; then
               echo "frontend healthy"
               exit 0
