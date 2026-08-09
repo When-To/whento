@@ -23,15 +23,32 @@ func Init(key []byte) {
 }
 
 // Generate creates an HMAC token for the given participant ID.
+//
+// It returns "" when Init has not run. HMAC accepts a nil key and still produces a
+// stable digest, so without this guard an uninitialised process would mint tokens
+// signed with the all-zero key — a key every attacker also knows.
 func Generate(participantID string) string {
+	if len(secret) == 0 {
+		return ""
+	}
+
 	mac := hmac.New(sha256.New, secret)
 	mac.Write([]byte(participantID))
+
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
 // Validate checks that the token matches the expected HMAC for the participant ID.
+//
+// Fails closed on an uninitialised secret or an empty token, either of which would
+// otherwise compare equal to the "" that Generate returns in that state.
 func Validate(participantID, token string) bool {
+	if len(secret) == 0 || token == "" {
+		return false
+	}
+
 	expected := Generate(participantID)
+
 	return hmac.Equal([]byte(expected), []byte(token))
 }
 

@@ -1,163 +1,105 @@
 // WhenTo - Collaborative event calendar for self-hosted environments
 // Copyright (C) 2025 WhenTo Contributors
-// Licensed under the Business Source License 1.1
-// See LICENSE file for details
+// SPDX-License-Identifier: BSL-1.1
 
 package service
 
 import (
+	"strings"
 	"testing"
+	"time"
+
+	calendarModels "github.com/whento/whento/internal/calendar/models"
+	"github.com/whento/whento/internal/notify/models"
 )
 
-func TestEmailDeduplication(t *testing.T) {
+// TestBuildNotificationMessage drives the real formatter.
+//
+// This file previously held a "deduplication" test that built a map of e-mail
+// addresses inside the test body and counted it — production code was never called,
+// and the package reported 0% coverage. The dedup it claimed to cover lives inside
+// sendDeduplicatedEmailNotifications, a method that queries the database and sends
+// mail; it is not reachable from a unit test as written, and is called out as still
+// uncovered rather than papered over with another self-referential test.
+func TestBuildNotificationMessage(t *testing.T) {
+	calendar := &calendarModels.Calendar{Name: "Board game night"}
+	date := time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC)
+
 	tests := []struct {
-		name                   string
-		ownerEmail             string
-		participantEmails      []string
-		expectedRecipientCount int
-		description            string
+		name           string
+		transitionType string
+		newCount       int
+		threshold      int
+		wantContains   []string
+		wantAbsent     []string
 	}{
 		{
-			name:                   "Owner not in participants",
-			ownerEmail:             "owner@example.com",
-			participantEmails:      []string{"alice@example.com", "bob@example.com"},
-			expectedRecipientCount: 3, // owner + 2 participants
-			description:            "Should have 3 unique emails when owner is not a participant",
+			name:           "threshold reached",
+			transitionType: "threshold_reached",
+			newCount:       5, threshold: 5,
+			wantContains: []string{"Board game night", "2026-03-05", "5/5", "Threshold reached"},
 		},
 		{
-			name:                   "Owner is also participant (email deduplication)",
-			ownerEmail:             "owner@example.com",
-			participantEmails:      []string{"owner@example.com", "alice@example.com"}, // owner email duplicated
-			expectedRecipientCount: 2,                                                  // owner deduplicated + alice
-			description:            "Should deduplicate when owner email matches participant email",
+			name:           "threshold lost",
+			transitionType: "threshold_lost",
+			newCount:       4, threshold: 5,
+			wantContains: []string{"Board game night", "2026-03-05", "4/5", "Threshold lost"},
+			wantAbsent:   []string{"Threshold reached"},
 		},
 		{
-			name:                   "Multiple participants same email (edge case)",
-			ownerEmail:             "owner@example.com",
-			participantEmails:      []string{"shared@example.com", "shared@example.com"}, // duplicate
-			expectedRecipientCount: 2,                                                    // owner + 1 deduplicated shared email
-			description:            "Should deduplicate when multiple participants share same email",
+			name:           "no transition falls back to a neutral message",
+			transitionType: "none",
+			newCount:       3, threshold: 5,
+			wantContains: []string{"Board game night", "2026-03-05", "3/5", "Availability changed"},
+			wantAbsent:   []string{"Threshold reached", "Threshold lost"},
 		},
 		{
-			name:                   "Only owner (no participants)",
-			ownerEmail:             "owner@example.com",
-			participantEmails:      []string{},
-			expectedRecipientCount: 1, // owner only
-			description:            "Should have only owner when no participants",
+			name:           "an unrecognised transition type also falls back",
+			transitionType: "something_else",
+			newCount:       1, threshold: 2,
+			wantContains: []string{"Availability changed", "1/2"},
 		},
 	}
+
+	service := &NotifyService{}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Simulate email deduplication logic using a map
-			emailMap := make(map[string]bool)
+			got := service.buildNotificationMessage(calendar, &models.ThresholdTransition{
+				Date:           date,
+				TransitionType: tt.transitionType,
+				NewCount:       tt.newCount,
+				Threshold:      tt.threshold,
+			})
 
-			// Add owner email
-			emailMap[tt.ownerEmail] = true
-
-			// Add participant emails
-			for _, email := range tt.participantEmails {
-				emailMap[email] = true
-			}
-
-			if len(emailMap) != tt.expectedRecipientCount {
-				t.Errorf("Email deduplication failed: got %d unique emails, want %d (description: %s)",
-					len(emailMap), tt.expectedRecipientCount, tt.description)
-			}
-		})
-	}
-}
-
-func TestNotificationMessageContent(t *testing.T) {
-	tests := []struct {
-		name             string
-		transitionType   string
-		locale           string
-		shouldContain    []string
-		shouldNotContain []string
-		description      string
-	}{
-		{
-			name:             "Threshold reached - English",
-			transitionType:   "threshold_reached",
-			locale:           "en",
-			shouldContain:    []string{"Threshold reached"},
-			shouldNotContain: []string{"Seuil atteint", "Threshold lost"},
-			description:      "English message should contain correct phrases",
-		},
-		{
-			name:             "Threshold reached - French",
-			transitionType:   "threshold_reached",
-			locale:           "fr",
-			shouldContain:    []string{"Seuil atteint"},
-			shouldNotContain: []string{"Threshold reached", "Threshold lost"},
-			description:      "French message should contain correct phrases",
-		},
-		{
-			name:             "Threshold lost - English",
-			transitionType:   "threshold_lost",
-			locale:           "en",
-			shouldContain:    []string{"Threshold lost"},
-			shouldNotContain: []string{"Threshold reached", "Seuil atteint"},
-			description:      "Lost transition should indicate loss",
-		},
-		{
-			name:             "Threshold lost - French",
-			transitionType:   "threshold_lost",
-			locale:           "fr",
-			shouldContain:    []string{"Seuil perdu"},
-			shouldNotContain: []string{"Seuil atteint", "Threshold"},
-			description:      "Lost transition in French should use correct wording",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Simulate building text message (simplified version)
-			var message string
-			if tt.transitionType == "threshold_reached" {
-				if tt.locale == "fr" {
-					message = "Seuil atteint pour le calendrier"
-				} else {
-					message = "Threshold reached for calendar"
-				}
-			} else if tt.transitionType == "threshold_lost" {
-				if tt.locale == "fr" {
-					message = "Seuil perdu pour le calendrier"
-				} else {
-					message = "Threshold lost for calendar"
+			for _, want := range tt.wantContains {
+				if !strings.Contains(got, want) {
+					t.Errorf("message %q does not contain %q", got, want)
 				}
 			}
-
-			// Check required strings
-			for _, required := range tt.shouldContain {
-				if !contains(message, required) {
-					t.Errorf("Message missing required string '%s': %s (description: %s)",
-						required, message, tt.description)
-				}
-			}
-
-			// Check forbidden strings
-			for _, forbidden := range tt.shouldNotContain {
-				if contains(message, forbidden) {
-					t.Errorf("Message contains forbidden string '%s': %s (description: %s)",
-						forbidden, message, tt.description)
+			for _, absent := range tt.wantAbsent {
+				if strings.Contains(got, absent) {
+					t.Errorf("message %q unexpectedly contains %q", got, absent)
 				}
 			}
 		})
 	}
 }
 
-// Helper function
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && indexOf(s, substr) >= 0)
-}
+// TestBuildNotificationMessageEscapesNothing records that the plain-text message is not
+// escaped — a calendar named with markup passes through verbatim. That is correct for
+// text/plain delivery, and is the reason the HTML variant exists separately.
+func TestBuildNotificationMessageEscapesNothing(t *testing.T) {
+	calendar := &calendarModels.Calendar{Name: `<script>alert(1)</script>`}
+	service := &NotifyService{}
 
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
+	got := service.buildNotificationMessage(calendar, &models.ThresholdTransition{
+		Date:           time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC),
+		TransitionType: "threshold_reached",
+		NewCount:       1, Threshold: 1,
+	})
+
+	if !strings.Contains(got, `<script>alert(1)</script>`) {
+		t.Errorf("the plain-text builder altered the calendar name: %q", got)
 	}
-	return -1
 }

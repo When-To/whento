@@ -1,7 +1,6 @@
 // WhenTo - Collaborative event calendar for self-hosted environments
 // Copyright (C) 2025 WhenTo Contributors
-// Licensed under the Business Source License 1.1
-// See LICENSE file for details
+// SPDX-License-Identifier: BSL-1.1
 
 package handlers_test
 
@@ -134,6 +133,20 @@ var _ service.UserRepository = (*mockUserRepository)(nil)
 var _ service.TokenRepository = (*mockTokenRepository)(nil)
 var _ service.MFARepository = (*mockMFARepository)(nil)
 
-func TestAuthHandler_Placeholder(t *testing.T) {
-	t.Skip("Service-level tests provide coverage")
+// TestAuthHandlerIsNotConstructibleHere records why this package has no handler test,
+// so that the gap is a known one rather than an oversight.
+//
+// The previous skip reason — "Service-level tests provide coverage" — was not true:
+// internal/auth/service sits at 0% of its own statements. The real obstacle is
+// NewAuthHandler's signature. It takes *service.AuthService, *repository.UserRepository,
+// *email.Service and *config.Config, all concrete, and the two repositories wrap a
+// *pgxpool.Pool. There is no seam to substitute, so the handler cannot be built without
+// a live database and SMTP configuration.
+//
+// The mocks above are still worth their keep: the var _ assertions are compile-time
+// checks that they continue to satisfy the service interfaces, so they are ready for
+// whichever comes first — a constructor that accepts interfaces, or a database-backed
+// integration suite.
+func TestAuthHandlerIsNotConstructibleHere(t *testing.T) {
+	t.Skip("NewAuthHandler requires concrete pgx-backed repositories; see the comment above")
 }

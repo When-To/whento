@@ -162,7 +162,11 @@ jobs:
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/whento_test?sslmode=disable
           REDIS_URL: redis://localhost:6379
-        run: go test -tags selfhosted -race ./...
+        # go.work has two modules; `./...` never crosses a module boundary, so pkg/
+        # needs its own invocation or it is silently untested in CI.
+        run: |
+          go test -tags selfhosted -race ./...
+          cd pkg && go test -tags selfhosted -race ./...
 
   build-check:
     name: Build Check
