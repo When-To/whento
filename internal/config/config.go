@@ -66,37 +66,6 @@ type Config struct {
 	TOTPIssuer string
 	TOTPPeriod uint
 	TOTPDigits uint
-
-	// Stripe (Cloud only - for Subscription Service)
-	Stripe StripeConfig
-
-	// Shop (Cloud only - for License Sales)
-	Shop ShopConfig
-
-	// License (Self-hosted only - for Licensing Service)
-	License LicenseConfig
-}
-
-// StripeConfig holds Stripe-related configuration (Cloud only)
-type StripeConfig struct {
-	SecretKey                 string
-	WebhookSubscriptionSecret string
-	PricePro                  string
-	PricePower                string
-}
-
-// ShopConfig holds shop-related configuration (Cloud only)
-type ShopConfig struct {
-	StripePriceProLicense        string // Stripe price ID for Pro license (one-time payment)
-	StripePriceEnterpriseLicense string // Stripe price ID for Enterprise license (one-time payment)
-	StripeWebhookLicenceSecret   string // Stripe webhook secret for shop webhooks (license sales)
-	StripeWebhookPriceSecret     string // Stripe webhook secret for price/product updates
-	LicensePrivateKeyBase64      string // Ed25519 private key for signing licenses (base64 encoded)
-}
-
-// LicenseConfig holds license-related configuration (Self-hosted only)
-type LicenseConfig struct {
-	Key string
 }
 
 // EmailConfig holds email-related configuration
@@ -181,28 +150,6 @@ func Load() *Config {
 		TOTPIssuer: getEnv("TOTP_ISSUER", "WhenTo"),
 		TOTPPeriod: uint(getInt("TOTP_PERIOD", 30)),
 		TOTPDigits: uint(getInt("TOTP_DIGITS", 6)),
-
-		// Stripe (Cloud only)
-		Stripe: StripeConfig{
-			SecretKey:                 getEnv("STRIPE_SECRET_KEY", ""),
-			WebhookSubscriptionSecret: getEnv("STRIPE_WEBHOOK_SUBSCRIPTION_SECRET", ""),
-			PricePro:                  getEnv("STRIPE_PRICE_PRO", ""),
-			PricePower:                getEnv("STRIPE_PRICE_POWER", ""),
-		},
-
-		// Shop (Cloud only)
-		Shop: ShopConfig{
-			StripePriceProLicense:        getEnv("STRIPE_PRICE_PRO_LICENSE", ""),
-			StripePriceEnterpriseLicense: getEnv("STRIPE_PRICE_ENTERPRISE_LICENSE", ""),
-			StripeWebhookLicenceSecret:   getEnv("STRIPE_WEBHOOK_LICENCE_SECRET", ""),
-			StripeWebhookPriceSecret:     getEnv("STRIPE_WEBHOOK_PRICE_SECRET", ""),
-			LicensePrivateKeyBase64:      getEnv("LICENSE_PRIVATE_KEY_BASE64", ""),
-		},
-
-		// License (Self-hosted only)
-		License: LicenseConfig{
-			Key: getEnv("LICENSE_KEY", ""),
-		},
 	}
 }
 

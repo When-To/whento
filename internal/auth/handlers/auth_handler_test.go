@@ -71,18 +71,6 @@ func (m *mockUserRepository) List(ctx context.Context) ([]*models.User, error) {
 	return m.users, nil
 }
 
-func (m *mockUserRepository) ListWithSubscriptions(ctx context.Context) ([]*models.UserWithSubscription, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	// Convert users to UserWithSubscription format
-	var result []*models.UserWithSubscription
-	for _, u := range m.users {
-		result = append(result, &models.UserWithSubscription{User: *u})
-	}
-	return result, nil
-}
-
 func (m *mockUserRepository) UpdateRole(ctx context.Context, userID uuid.UUID, role string) error {
 	return m.err
 }

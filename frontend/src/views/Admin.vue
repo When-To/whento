@@ -17,30 +17,6 @@
             {{ t('admin.totalUsers') }}: {{ users.length }}
           </p>
         </div>
-        <div v-if="isCloud" class="flex gap-3">
-          <router-link :to="{ name: 'admin-accounting' }" class="btn btn-primary">
-            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-              />
-            </svg>
-            {{ t('admin.accounting') }}
-          </router-link>
-          <router-link :to="{ name: 'admin-license-search' }" class="btn btn-secondary">
-            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
-              />
-            </svg>
-            {{ t('admin.licenseSearch') }}
-          </router-link>
-        </div>
       </div>
 
       <!-- Loading state -->
@@ -75,12 +51,6 @@
                   class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
                 >
                   {{ t('admin.role') }}
-                </th>
-                <th
-                  v-if="isCloud"
-                  class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
-                >
-                  {{ t('admin.subscription') }}
                 </th>
                 <th
                   class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
@@ -152,36 +122,6 @@
                       />
                     </label>
                   </div>
-                </td>
-
-                <!-- Subscription (Cloud only) -->
-                <td v-if="isCloud" class="whitespace-nowrap px-6 py-4">
-                  <div v-if="user.subscription" class="text-sm">
-                    <span
-                      :class="[
-                        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                        user.subscription.plan === 'free'
-                          ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                          : user.subscription.plan === 'pro'
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                            : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-                      ]"
-                    >
-                      {{ t(`admin.plans.${user.subscription.plan}`) }}
-                    </span>
-                    <span
-                      v-if="user.subscription.status !== 'active'"
-                      :class="[
-                        'ml-2 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                        user.subscription.status === 'canceled'
-                          ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                          : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-                      ]"
-                    >
-                      {{ t(`admin.status.${user.subscription.status}`) }}
-                    </span>
-                  </div>
-                  <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
                 </td>
 
                 <!-- Authentication -->
@@ -335,7 +275,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, computed } from 'vue';
+import { ref, onMounted, reactive } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
@@ -347,10 +287,6 @@ const { t } = useI18n();
 const router = useRouter();
 const authStore = useAuthStore();
 const toastStore = useToastStore();
-
-// Check if we're in Cloud mode
-const buildType = import.meta.env.VITE_BUILD_TYPE || 'cloud';
-const isCloud = computed(() => buildType === 'cloud');
 
 const loading = ref(true);
 const users = ref<User[]>([]);

@@ -30,9 +30,10 @@ type QuotaService interface {
 	// GetServerUsage returns the total calendar count across all users
 	GetServerUsage(ctx context.Context) (int, error)
 
-	// IsOverQuota checks if a user has exceeded their allowed calendar limit
-	// This happens when subscription/license expires but user still has more calendars than allowed
-	// When over quota, users should be blocked from creating calendars and accessing ICS feeds
+	// IsOverQuota checks if a user has exceeded their allowed calendar limit.
+	// Reachable when the allowance is lowered, or when calendars predate it.
+	// When over quota, users are blocked from creating calendars and their ICS feeds
+	// stop rendering.
 	IsOverQuota(ctx context.Context, userID uuid.UUID) (bool, error)
 
 	// QuotaLockKey returns the advisory lock key to use for quota enforcement.
@@ -48,5 +49,4 @@ type LimitInfo struct {
 	ServerUsage    int    `json:"server_usage"`
 	CanCreate      bool   `json:"can_create"`
 	LimitationType string `json:"limitation_type"` // "per_user", "per_server", "none"
-	UpgradeURL     string `json:"upgrade_url"`
 }

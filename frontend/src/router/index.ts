@@ -10,7 +10,6 @@ import { useAuthStore } from '@/stores/auth';
 // Get build type from environment
 const buildType = import.meta.env.VITE_BUILD_TYPE || 'cloud';
 const isCloud = buildType === 'cloud';
-const isSelfHosted = buildType === 'selfhosted';
 
 export const routes: RouteRecordRaw[] = [
   {
@@ -97,29 +96,7 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/MagicLinkVerify.vue'),
     meta: { public: true },
   },
-  // Cloud only: Stripe billing
-  ...(isCloud
-    ? [
-        {
-          path: '/billing',
-          name: 'billing',
-          component: () => import('@/views/Billing.vue'),
-          meta: { requiresAuth: true },
-        },
-      ]
-    : []),
-  // Cloud only: Pricing page (both Cloud subscriptions and Self-hosted licenses)
-  ...(isCloud
-    ? [
-        {
-          path: '/pricing',
-          name: 'pricing',
-          component: () => import('@/views/Pricing.vue'),
-          meta: { public: true },
-        },
-      ]
-    : []),
-  // Cloud only: Why WhenTo page
+  // Cloud only: marketing page
   ...(isCloud
     ? [
         {
@@ -127,69 +104,6 @@ export const routes: RouteRecordRaw[] = [
           name: 'why-whento',
           component: () => import('@/views/WhyWhento.vue'),
           meta: { public: true },
-        },
-      ]
-    : []),
-  // Cloud only: Shop (guest checkout for self-hosted licenses)
-  ...(isCloud
-    ? [
-        {
-          path: '/cart',
-          name: 'cart',
-          component: () => import('@/views/Cart.vue'),
-          meta: { public: true },
-        },
-      ]
-    : []),
-  ...(isCloud
-    ? [
-        {
-          path: '/checkout',
-          name: 'checkout',
-          component: () => import('@/views/Checkout.vue'),
-          meta: { public: true },
-        },
-      ]
-    : []),
-  ...(isCloud
-    ? [
-        {
-          path: '/success',
-          name: 'success',
-          component: () => import('@/views/Success.vue'),
-          meta: { public: true },
-        },
-      ]
-    : []),
-  ...(isCloud
-    ? [
-        {
-          path: '/shop/orders/:orderId',
-          name: 'order',
-          component: () => import('@/views/Order.vue'),
-          meta: { public: true },
-        },
-      ]
-    : []),
-  // Cloud only: Admin license search (for self-hosted license sales management)
-  ...(isCloud
-    ? [
-        {
-          path: '/admin/licenses',
-          name: 'admin-license-search',
-          component: () => import('@/views/AdminLicenseSearch.vue'),
-          meta: { requiresAuth: true, requiresAdmin: true },
-        },
-      ]
-    : []),
-  // Cloud only: Admin accounting (revenue reports)
-  ...(isCloud
-    ? [
-        {
-          path: '/admin/accounting',
-          name: 'admin-accounting',
-          component: () => import('@/views/Accounting.vue'),
-          meta: { requiresAuth: true, requiresAdmin: true },
         },
       ]
     : []),
@@ -222,17 +136,6 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/AdminUserCalendars.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
-  // Self-hosted only: License management
-  ...(isSelfHosted
-    ? [
-        {
-          path: '/admin/license',
-          name: 'admin-license',
-          component: () => import('@/views/License.vue'),
-          meta: { requiresAuth: true, requiresAdmin: true },
-        },
-      ]
-    : []),
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
