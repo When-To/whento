@@ -38,6 +38,9 @@
   --cal-recurring-ink: #ffffff;
   --cal-threshold: #16a34a; /* green-600 */
   --cal-threshold-wash: rgb(22 163 74 / 0.18);
+  /* Outline for a coverage span. Deliberately not a fill: it marks where other
+     people's availability starts *and* ends without washing over the cells. */
+  --cal-coverage-edge: rgb(71 85 105 / 0.55);
 
   --cal-accent-own: var(--color-primary-600);
   --cal-hour-line: var(--color-gray-300, #d1d5db);
@@ -56,6 +59,7 @@
   --cal-recurring-ink: #150525;
   --cal-threshold: #4ade80; /* green-400 — has to stay visible over the blue fill */
   --cal-threshold-wash: rgb(74 222 128 / 0.22);
+  --cal-coverage-edge: rgb(148 163 184 / 0.7);
 
   --cal-accent-own: var(--color-primary-400);
   --cal-hour-line: var(--color-gray-600, #4b5563);
@@ -180,8 +184,17 @@
     @apply ring-2 ring-gray-400 dark:ring-gray-500;
   }
 
+  /*
+   * Common dates for the participants picked in the list.
+   *
+   * This uses the same outline treatment as the threshold rather than a ring, so that
+   * it *replaces* the green frame instead of drawing a second one around it. The rule
+   * sits after [data-threshold] deliberately: equal specificity, so source order
+   * decides, and the answer to the question the participant just asked should outrank
+   * the standing one.
+   */
   .cal-cell[data-highlight] {
-    @apply ring-2 ring-secondary-500;
+    @apply outline-3 -outline-offset-1 outline-secondary-500;
   }
 
   .cal-cell[data-drag='add'] {
@@ -451,9 +464,26 @@
    * Coverage spans carry no fill. A wash behind them — of any colour — competed with
    * the two things worth seeing: the slots this participant answered, and the spans
    * where enough people are free. Those two paint; everything else is a number.
+   *
+   * They are still delimited, though. With only a count chip pinned to the top edge,
+   * a span announced where other people's availability *began* and gave no hint where
+   * it ended — a 15:00-23:59 answer looked identical to a 15:00-16:00 one. The rules
+   * below bound it: a spine down the left for the extent at a glance, and a hairline
+   * at each end for the exact boundary. All outline, no fill.
    */
   .cal-band[data-kind='coverage'] {
     @apply bg-transparent;
+    border-top: 1px solid var(--cal-coverage-edge);
+    border-bottom: 1px solid var(--cal-coverage-edge);
+    border-left: 3px solid var(--cal-coverage-edge);
+    border-top-left-radius: 0.125rem;
+    border-bottom-left-radius: 0.125rem;
+  }
+
+  /* A span that includes the current participant is their own answer seen from the
+     group's side, so it takes the "mine" hue rather than the neutral one. */
+  .cal-band[data-kind='coverage'][data-mine] {
+    border-color: var(--cal-accent-own);
   }
 
   /* The one thing a participant is looking for, so it reads as a zone rather than a
@@ -517,8 +547,10 @@
     @apply ring-2 ring-gray-400 dark:ring-gray-500;
   }
 
+  /* Same precedence as the month cell: the common-dates outline replaces the green
+     threshold one rather than stacking with it. */
   .cal-row[data-highlight] {
-    @apply ring-2 ring-secondary-500;
+    @apply outline-3 -outline-offset-1 outline-secondary-500;
   }
 
   .cal-row-main {

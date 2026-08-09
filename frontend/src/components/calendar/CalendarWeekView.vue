@@ -338,6 +338,7 @@ function shiftWeek(days: number) {
               :key="`${band.kind}-${band.startMin}-${bandIndex}`"
               class="cal-band"
               :data-kind="band.kind"
+              :data-mine="band.includesCurrent ? '' : undefined"
               :style="{ top: band.top, height: band.height }"
             >
               <template v-if="band.kind !== 'threshold' && band.count > 0">
