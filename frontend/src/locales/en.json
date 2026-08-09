@@ -354,8 +354,8 @@
     "legend": {
       "title": "Legend",
       "own": "My availability",
-      "recurring": "My recurrence",
       "threshold": "Enough participants",
+      "shared": "Common dates of the selected participants",
       "coverage": "Everyone's availability",
       "holiday": "Public holiday",
       "holidayEve": "Day before a holiday",

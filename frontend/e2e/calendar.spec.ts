@@ -52,12 +52,25 @@ test.describe('month grid', () => {
     await expect(cell(page, '2026-04-13')).toHaveAttribute('data-threshold', 'true');
   });
 
-  test('outlines a day covered only by a recurrence', async ({ page }) => {
+  test('fills a day covered only by a recurrence, like any other availability', async ({
+    page,
+  }) => {
     await gotoPreview(page);
     // 2 April onwards is a Thursday recurrence; 9 April also has an explicit answer.
     await expect(cell(page, '2026-04-30')).toHaveAttribute('data-recurring', 'true');
     await expect(cell(page, '2026-04-30')).not.toHaveAttribute('data-own', /.*/);
     await expect(cell(page, '2026-04-09')).toHaveAttribute('data-own', 'true');
+
+    // An occurrence reads as an availability rather than as a rule: same fill as a day
+    // the participant answered explicitly. The violet outline it used to carry now
+    // means something else entirely — the common dates of selected participants.
+    const occurrence = await cell(page, '2026-04-30').evaluate(
+      el => getComputedStyle(el).backgroundColor
+    );
+    const explicit = await cell(page, '2026-04-09').evaluate(
+      el => getComputedStyle(el).backgroundColor
+    );
+    expect(occurrence).toBe(explicit);
   });
 
   test('shows a gauge and a count on every open day', async ({ page }) => {
@@ -333,7 +346,7 @@ test.describe('legend', () => {
     // leaving the whole colour vocabulary undocumented on screen.
     const legend = page.locator('[data-testid="legend-month"]');
     await expect(legend).toBeVisible();
-    for (const kind of ['own', 'recurring', 'threshold', 'holiday', 'eve', 'disabled']) {
+    for (const kind of ['own', 'shared', 'threshold', 'holiday', 'eve', 'disabled']) {
       await expect(legend.locator(`.cal-legend-swatch[data-kind="${kind}"]`)).toHaveCount(1);
     }
     await expect(legend.locator('.cal-legend-gauge')).toHaveCount(1);
