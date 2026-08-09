@@ -7,8 +7,6 @@
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath, URL } from 'node:url';
 
-// Unit tests cover the framework-free calendar layer only (src/utils/**).
-// Nothing here imports Vue, so the suite runs in plain Node in well under a second.
 export default defineConfig({
   resolve: {
     alias: {
@@ -16,8 +14,29 @@ export default defineConfig({
     },
   },
   test: {
+    // Two environments on purpose.
+    //
+    // src/utils/** is framework-free and its date tests drive process.env.TZ, which
+    // jsdom does not carry; those stay in plain Node, and it keeps the pure layer fast.
+    // Files that need a DOM — stores, composables, the API client — opt in with a
+    // `@vitest-environment jsdom` docblock at the top. That is per-file rather than
+    // path-matched on purpose: environmentMatchGlobs was removed in Vitest 4, and the
+    // docblock makes each file's requirement visible where it is read.
     environment: 'node',
     include: ['src/**/*.test.ts'],
     reporters: ['dot'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary', 'html', 'lcov'],
+      include: ['src/**/*.ts'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/test/**',
+        'src/types/**',
+        'src/locales/**',
+        'src/main.ts',
+        'src/vite-env.d.ts',
+      ],
+    },
   },
 });

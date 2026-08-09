@@ -246,8 +246,38 @@ describe('buildDayBands', () => {
         height: '25.00%',
         startMin: 540,
         endMin: 720,
+        includesCurrent: true,
       },
     ]);
+  });
+
+  it('carries includesCurrent through to the band, so the outline can be hued', () => {
+    const [mine] = buildDayBands(
+      [{ startMin: 540, endMin: 720, count: 2, includesCurrent: true }],
+      [],
+      geometry
+    );
+    const [theirs] = buildDayBands(
+      [{ startMin: 540, endMin: 720, count: 2, includesCurrent: false }],
+      [],
+      geometry
+    );
+
+    expect(mine.includesCurrent).toBe(true);
+    expect(theirs.includesCurrent).toBe(false);
+  });
+
+  it('marks threshold bands as not the current participant', () => {
+    // A threshold band is a property of the group, so it never takes the "mine" hue
+    // whatever the coverage underneath it says.
+    const bands = buildDayBands(
+      [{ startMin: 540, endMin: 720, count: 2, includesCurrent: true }],
+      [{ startMin: 540, endMin: 720 }],
+      geometry
+    );
+
+    const threshold = bands.find(band => band.kind === 'threshold');
+    expect(threshold?.includesCurrent).toBe(false);
   });
 
   it('fills the column for a segment covering the whole visible range', () => {

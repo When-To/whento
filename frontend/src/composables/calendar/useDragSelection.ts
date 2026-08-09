@@ -113,7 +113,15 @@ export function useDragSelection<T extends DragTarget>(
 
   const selected = computed<ReadonlySet<string>>(() => {
     if (!dragging.value || !anchor.value || !focus.value) return new Set<string>();
-    return new Set(options.rectangle(anchor.value, focus.value).map(target => target.key));
+    // Filtered the same way `finish` filters, so the highlight shown during the drag
+    // is exactly the set that will be committed — a disabled cell inside the span is
+    // spanned over, never painted.
+    return new Set(
+      options
+        .rectangle(anchor.value, focus.value)
+        .filter(options.canStart)
+        .map(target => target.key)
+    );
   });
 
   /** Resolve the target under a point, so touch drags can leave the origin element. */
@@ -168,8 +176,14 @@ export function useDragSelection<T extends DragTarget>(
     rafHandle = requestAnimationFrame(() => {
       rafHandle = null;
       if (!dragging.value) return;
+      // The focus follows the pointer onto *any* cell, including disabled ones.
+      // Gating this on canStart pinned the focus to the last enabled cell crossed, so
+      // releasing over a disabled cell silently truncated the rectangle — dragging
+      // from Monday to Friday across a closed Wednesday selected only up to Tuesday.
+      // Disabled cells are dropped from the result instead, in `selected` for the
+      // preview and in `finish` for the commit.
       const target = targetAt(clientX, clientY);
-      if (target && options.canStart(target)) focus.value = target;
+      if (target) focus.value = target;
     });
   });
 

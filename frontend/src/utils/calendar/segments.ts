@@ -180,6 +180,12 @@ export interface Band {
   readonly height: string;
   readonly startMin: number;
   readonly endMin: number;
+  /**
+   * Whether the current participant is inside this span. Only meaningful for
+   * `coverage`; it selects the outline hue, so a span that is partly the participant's
+   * own answer reads as theirs rather than as the group's.
+   */
+  readonly includesCurrent: boolean;
 }
 
 function pct(value: number): string {
@@ -206,7 +212,13 @@ export function buildDayBands(
 
   const bands: Band[] = [];
 
-  const push = (kind: Band['kind'], startMin: number, endMin: number, count: number) => {
+  const push = (
+    kind: Band['kind'],
+    startMin: number,
+    endMin: number,
+    count: number,
+    includesCurrent: boolean
+  ) => {
     const clippedStart = Math.max(startMin, firstSlotMin);
     const clippedEnd = Math.min(endMin, lastSlotEndMin);
     if (clippedEnd <= clippedStart) return;
@@ -217,16 +229,17 @@ export function buildDayBands(
       height: pct((clippedEnd - clippedStart) / span),
       startMin: clippedStart,
       endMin: clippedEnd,
+      includesCurrent,
     });
   };
 
   for (const segment of coverage) {
-    push('coverage', segment.startMin, segment.endMin, segment.count);
+    push('coverage', segment.startMin, segment.endMin, segment.count, segment.includesCurrent);
   }
 
   // Threshold bands are outlines drawn over the fills, so they come last.
   for (const interval of thresholds) {
-    push('threshold', interval.startMin, interval.endMin, 0);
+    push('threshold', interval.startMin, interval.endMin, 0, false);
   }
 
   return bands;
