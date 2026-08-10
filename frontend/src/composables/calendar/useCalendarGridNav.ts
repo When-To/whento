@@ -50,6 +50,9 @@ export interface GridNav {
 
 const COMPACT_QUERY = '(max-width: 48rem)';
 
+/** Columns in the wide grid, and rows in the transposed one. */
+const DAYS_PER_WEEK = 7;
+
 export function useCalendarGridNav(options: GridNavOptions): GridNav {
   const focusedIndex = ref(-1);
   const anchorIndex = ref<number | null>(null);
@@ -58,8 +61,8 @@ export function useCalendarGridNav(options: GridNavOptions): GridNav {
   // one day in the wide layout. Reading the media query keeps the arrows matching what
   // the user actually sees.
   const isCompact = useMediaQuery(options.compactQuery ?? COMPACT_QUERY);
-  const horizontalStep = computed(() => (isCompact.value ? 7 : 1));
-  const verticalStep = computed(() => (isCompact.value ? 1 : 7));
+  const horizontalStep = computed(() => (isCompact.value ? DAYS_PER_WEEK : 1));
+  const verticalStep = computed(() => (isCompact.value ? 1 : DAYS_PER_WEEK));
 
   const rangeIndices = computed<ReadonlySet<number>>(() => {
     if (anchorIndex.value === null || focusedIndex.value < 0) return new Set<number>();
@@ -71,6 +74,36 @@ export function useCalendarGridNav(options: GridNavOptions): GridNav {
     }
     return indices;
   });
+
+  /**
+   * How many cells a visual row holds.
+   *
+   * Seven in the wide grid — a week across. In the transposed compact layout a row is a
+   * weekday running down the months, so it holds one cell per week on screen.
+   */
+  const perRow = computed(() =>
+    isCompact.value ? Math.ceil(options.count.value / 7) : DAYS_PER_WEEK
+  );
+
+  /**
+   * The first and last index of the visual row containing `index`.
+   *
+   * Home and End used to subtract `index % 7` unconditionally, which describes the row
+   * only in the wide layout. Transposed, a row gathers the indices sharing `index % 7`
+   * — every Monday, say — spaced seven apart, so the old arithmetic jumped to an
+   * unrelated cell. Both layouts are derived from the same horizontal step the arrow
+   * keys already use, so the two cannot disagree again.
+   */
+  function rowBounds(index: number): { first: number; last: number } {
+    const step = horizontalStep.value;
+    const offset = isCompact.value ? Math.floor(index / DAYS_PER_WEEK) : index % DAYS_PER_WEEK;
+
+    const first = index - offset * step;
+    let last = first + step * (perRow.value - 1);
+    while (last >= options.count.value) last -= step;
+
+    return { first, last };
+  }
 
   /** First focusable index at or after `from`, walking in `direction`. */
   function seek(from: number, direction: number): number {
@@ -123,12 +156,16 @@ export function useCalendarGridNav(options: GridNavOptions): GridNav {
       case 'ArrowUp':
         move(-verticalStep.value, extend);
         break;
-      case 'Home':
-        focus(seek(focusedIndex.value - (focusedIndex.value % 7), 1));
+      case 'Home': {
+        const { first } = rowBounds(focusedIndex.value < 0 ? seek(0, 1) : focusedIndex.value);
+        focus(seek(first, 1));
         break;
-      case 'End':
-        focus(seek(focusedIndex.value - (focusedIndex.value % 7) + 6, -1));
+      }
+      case 'End': {
+        const { last } = rowBounds(focusedIndex.value < 0 ? seek(0, 1) : focusedIndex.value);
+        focus(seek(last, -1));
         break;
+      }
       case 'PageDown':
         options.shiftPeriod(1);
         break;
