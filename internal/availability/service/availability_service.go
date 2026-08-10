@@ -844,7 +844,10 @@ func (s *AvailabilityService) GetRangeSummary(ctx context.Context, token, startD
 	}
 
 	// Build response (with min_duration_hours filter if configured)
-	var summaries []models.PublicDateAvailabilitySummary
+	// Initialised rather than left nil so an empty range serialises as [] and not null.
+	// The frontend carried an Array.isArray guard purely to absorb that, and any client
+	// calling .map() on the payload would have thrown.
+	summaries := make([]models.PublicDateAvailabilitySummary, 0, len(dateMap))
 	for date, participants := range dateMap {
 		// Apply min_duration_hours filter if configured
 		if calendarInfo.MinDurationHours > 0 {
@@ -1791,15 +1794,25 @@ func recurrencesOverlap(startDateA, endDateA, startDateB, endDateB string) bool 
 // Unlike getAllowedTimeRangeForDate, this doesn't check for holidays since recurrences
 // span multiple dates and holiday logic can't be consistently applied.
 func getAllowedTimeRangeForWeekday(dayOfWeek int, calendarInfo *repository.Calendar) repository.TimeRange {
+	// A weekday the calendar does not accept has no window at all. Returning an empty
+	// range here means "do not clamp", which is right: the weekday is rejected earlier,
+	// by validation, and a range invented for it would only obscure that.
+	if !datevalidation.IsWeekdayAllowed(dayOfWeek, calendarInfo.AllowedWeekdays) {
+		return repository.TimeRange{}
+	}
+
 	weekdayStr := fmt.Sprintf("%d", dayOfWeek)
 
-	// Check if this weekday has specific allowed hours configured
 	if tr, ok := calendarInfo.AllowedHours.Weekdays[weekdayStr]; ok {
 		return tr
 	}
 
-	// No specific hours configured for this day, return empty (no restrictions)
-	return repository.TimeRange{}
+	// An allowed weekday with no configured hours is open all day — the same answer
+	// getAllowedTimeRangeForDate gives. It used to return an empty range instead, so an
+	// untimed recurrence was stored with NULL times while an untimed one-off on the very
+	// same day became 00:00-23:59. Both render as "all day", which is why it went
+	// unnoticed, but the two were not the same row.
+	return repository.TimeRange{Start: "00:00", End: "23:59"}
 }
 
 // adjustTimesByAllowedHoursForWeekday adjusts times based on the calendar's allowed hours for a specific weekday.

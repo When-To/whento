@@ -275,21 +275,34 @@ describe('useCalendarGridNav', () => {
     });
 
     /**
-     * Home and End divide by a hard-coded 7 rather than by the layout's horizontal
-     * step. In the wide grid that is the row, which is right. In the compact grid a
-     * "row" is a column and the step is 7, so the same arithmetic no longer describes
-     * the visual row — Home lands on whatever index happens to share a residue.
-     *
-     * Pinned as documentation rather than fixed: correcting it means deciding what
-     * Home should mean in a transposed grid, which is a design question.
+     * Home and End used to subtract `index % 7` unconditionally, which describes a row
+     * only in the wide grid. The compact layout is transposed — a row gathers the
+     * indices sharing `index % 7`, spaced seven apart — so the old arithmetic jumped to
+     * an unrelated cell. Both are now derived from the same horizontal step the arrows
+     * use.
      */
-    it('use the same arithmetic in the compact layout, where it no longer means the row', () => {
+    it('follow the transposed row in the compact layout', () => {
       harness = setup({ compact: true });
 
+      // 35 cells, so a transposed row holds 5: 3, 10, 17, 24, 31.
       harness.nav.focus(17);
-      press(harness.nav, 'Home');
 
-      expect(harness.nav.focusedIndex.value).toBe(14);
+      press(harness.nav, 'Home');
+      expect(harness.nav.focusedIndex.value).toBe(3);
+
+      press(harness.nav, 'End');
+      expect(harness.nav.focusedIndex.value).toBe(31);
+    });
+
+    it('stay inside the grid when a transposed row is short', () => {
+      // 38 cells: the row through index 5 is 5, 12, 19, 26, 33 — index 40 does not
+      // exist, so End must stop at 33 rather than running past the end.
+      harness = setup({ compact: true, count: 38 });
+
+      harness.nav.focus(12);
+      press(harness.nav, 'End');
+
+      expect(harness.nav.focusedIndex.value).toBe(33);
     });
   });
 

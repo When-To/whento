@@ -193,9 +193,9 @@ export async function fetchAvailabilities(
 /**
  * Read the range summary, which is what the calendar views render from.
  *
- * The array coercion is load-bearing: a range with nothing in it serialises as
- * `"data": null`, not `[]`. ParticipantView compensates with its own `Array.isArray`
- * guard for the same reason.
+ * The array coercion is now belt and braces: the server returns [] for an empty range.
+ * It used to serialise as `"data": null`, which is why this and ParticipantView both
+ * carry a guard.
  */
 export async function fetchRangeSummary(
   publicToken: string,

@@ -554,15 +554,13 @@ func TestGetAllowedTimeRangeForWeekday(t *testing.T) {
 		want    repository.TimeRange
 	}{
 		{name: "configured hours are returned", weekday: 2, want: repository.TimeRange{Start: "09:00", End: "17:00"}},
-		// Note the divergence from getAllowedTimeRangeForDate, which returns
-		// 00:00-23:59 for an allowed weekday carrying no hours. This function
-		// returns an empty range instead, and an empty range means "do not clamp".
-		// See TestWeekdayAndDatedWindowsDivergeWithoutHours for what that costs.
-		{name: "an unconfigured weekday yields an empty range, not a full day", weekday: 4, want: repository.TimeRange{}},
-		// It also never consults AllowedWeekdays: a weekday that the calendar
-		// forbids is indistinguishable here from one that simply has no hours.
-		{name: "a forbidden weekday is not distinguished", weekday: 3, want: repository.TimeRange{}},
-		{name: "sunday is zero", weekday: 0, want: repository.TimeRange{}},
+		// An allowed weekday with no configured hours is open all day — the same
+		// answer getAllowedTimeRangeForDate gives for it.
+		{name: "an allowed weekday with no hours is open all day", weekday: 4, want: repository.TimeRange{Start: "00:00", End: "23:59"}},
+		// A weekday the calendar rejects has no window: an empty range means "do not
+		// clamp", and inventing one would only obscure that validation refuses it.
+		{name: "a forbidden weekday yields no window", weekday: 3, want: repository.TimeRange{}},
+		{name: "sunday is zero, and also forbidden here", weekday: 0, want: repository.TimeRange{}},
 	}
 
 	for _, tt := range tests {
@@ -713,43 +711,59 @@ func TestCalculateDurationForDate(t *testing.T) {
 
 func ptr(s string) *string { return &s }
 
-// TestWeekdayAndDatedWindowsDivergeWithoutHours documents a real difference between the
-// two clamps, so that it is a known quantity rather than a surprise.
+// TestWeekdayAndDatedWindowsAgree covers a divergence that used to exist.
 //
-// For a weekday the calendar allows but for which no hours are configured, the dated
-// path treats the day as 00:00-23:59 and therefore fills in both bounds of an all-day
-// request. The weekday path — used for recurrences — returns an empty range, which
-// means "do not clamp", and leaves the request untouched.
-//
-// The practical effect: an all-day one-off is stored as 00:00-23:59, while an all-day
-// recurrence on the same weekday is stored with NULL times. Both render as "all day",
-// which is why this has gone unnoticed; it matters to anything comparing the two.
-func TestWeekdayAndDatedWindowsDivergeWithoutHours(t *testing.T) {
+// For a weekday the calendar allowed but left unconfigured, the dated path treated the
+// day as 00:00-23:59 while the weekday path — used for recurrences — returned an empty
+// range meaning "do not clamp". An all-day one-off was therefore stored as 00:00-23:59
+// while an all-day recurrence on the same weekday kept NULL times. Both render as "all
+// day", which is why it went unnoticed, but they were not the same row.
+func TestWeekdayAndDatedWindowsAgree(t *testing.T) {
 	// Thursday (4) is allowed, but only Tuesday (2) has configured hours.
 	calendar := calendarWith([]int{2, 4}, repository.AllowedHours{
 		Weekdays: map[string]repository.TimeRange{"2": {Start: "09:00", End: "17:00"}},
 	}, "ignore", false)
 
-	// 2026-03-19 is a Thursday, and not a holiday in France.
-	datedStart, datedEnd := adjustTimesByAllowedHours(mustDate(t, "2026-03-19"), nil, nil, calendar)
-	weekdayStart, weekdayEnd := adjustTimesByAllowedHoursForWeekday(4, nil, nil, calendar)
-
-	if deref(datedStart) != "00:00" || deref(datedEnd) != "23:59" {
-		t.Errorf("the dated clamp gave %s-%s, want 00:00-23:59", deref(datedStart), deref(datedEnd))
+	cases := []struct {
+		name    string
+		iso     string
+		weekday int
+	}{
+		// 2026-03-19 is a Thursday: allowed, no configured hours.
+		{name: "an allowed weekday with no configured hours", iso: "2026-03-19", weekday: 4},
+		// 2026-03-17 is a Tuesday: allowed, with hours.
+		{name: "an allowed weekday with configured hours", iso: "2026-03-17", weekday: 2},
 	}
-	if weekdayStart != nil || weekdayEnd != nil {
-		t.Errorf("the weekday clamp gave %s-%s, want both nil", deref(weekdayStart), deref(weekdayEnd))
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			datedStart, datedEnd := adjustTimesByAllowedHours(mustDate(t, tt.iso), nil, nil, calendar)
+			weekdayStart, weekdayEnd := adjustTimesByAllowedHoursForWeekday(tt.weekday, nil, nil, calendar)
+
+			if deref(datedStart) != deref(weekdayStart) || deref(datedEnd) != deref(weekdayEnd) {
+				t.Errorf(
+					"the dated and weekday clamps disagree: %s-%s vs %s-%s",
+					deref(datedStart), deref(datedEnd), deref(weekdayStart), deref(weekdayEnd),
+				)
+			}
+		})
 	}
 
-	// Where hours *are* configured, the two agree — which is what makes the case
-	// above a gap in the weekday path rather than a deliberate difference.
-	sameStart, sameEnd := adjustTimesByAllowedHours(mustDate(t, "2026-03-17"), nil, nil, calendar)
-	sameWeekdayStart, sameWeekdayEnd := adjustTimesByAllowedHoursForWeekday(2, nil, nil, calendar)
+	t.Run("an untimed request on an unconfigured weekday becomes a full day", func(t *testing.T) {
+		start, end := adjustTimesByAllowedHoursForWeekday(4, nil, nil, calendar)
 
-	if deref(sameStart) != deref(sameWeekdayStart) || deref(sameEnd) != deref(sameWeekdayEnd) {
-		t.Errorf(
-			"configured hours should agree, got %s-%s vs %s-%s",
-			deref(sameStart), deref(sameEnd), deref(sameWeekdayStart), deref(sameWeekdayEnd),
-		)
-	}
+		if deref(start) != "00:00" || deref(end) != "23:59" {
+			t.Errorf("got %s-%s, want 00:00-23:59", deref(start), deref(end))
+		}
+	})
+
+	t.Run("a weekday the calendar refuses is left unclamped", func(t *testing.T) {
+		// Wednesday (3) is not allowed. Validation rejects it before this matters;
+		// inventing a window here would only obscure that.
+		start, end := adjustTimesByAllowedHoursForWeekday(3, ptr("06:00"), ptr("23:00"), calendar)
+
+		if deref(start) != "06:00" || deref(end) != "23:00" {
+			t.Errorf("got %s-%s, want the request unchanged", deref(start), deref(end))
+		}
+	})
 }

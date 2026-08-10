@@ -1928,7 +1928,8 @@ async function loadParticipantCounts(year?: number, month?: number) {
     ]);
     ownAvailabilities.value = own?.availabilities ?? [];
 
-    // Ensure summaries is an array (handle null/undefined responses)
+    // The backend returns [] for an empty range now; this stays as cheap insurance
+    // against an older self-hosted server, which sent null and made .map() throw.
     const summariesArray = Array.isArray(summaries) ? summaries : [];
 
     // Store full summaries for weekly view

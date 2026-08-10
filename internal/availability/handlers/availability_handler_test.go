@@ -302,17 +302,12 @@ func TestGetRangeSummaryResponseShape(t *testing.T) {
 	}
 }
 
-// TestGetRangeSummaryEmptySerialisesAsNull pins a wart rather than a virtue.
+// TestGetRangeSummaryEmptySerialisesAsArray covers what used to be a wart.
 //
-// GetRangeSummary accumulates into a nil slice, so a calendar with nothing in range
-// serialises as `null`, not `[]`. ParticipantView already compensates —
-// `Array.isArray(summaries) ? summaries : []`, commented "handle null/undefined
-// responses" — so nothing is broken today, but the guard exists because of this.
-//
-// Left as-is deliberately: changing it alters an API response shape, which is a
-// decision to take on its own terms rather than as a side effect of adding tests. If it
-// is ever changed, this test fails and points at the frontend guard that can then go.
-func TestGetRangeSummaryEmptySerialisesAsNull(t *testing.T) {
+// GetRangeSummary accumulated into a nil slice, so a calendar with nothing in range
+// serialised as `null` rather than `[]` — and any client calling .map() on the payload
+// threw. ParticipantView carried an Array.isArray guard purely to absorb it.
+func TestGetRangeSummaryEmptySerialisesAsArray(t *testing.T) {
 	calendar := &repository.Calendar{
 		ID:              uuid.New(),
 		AllowedWeekdays: []int{0, 1, 2, 3, 4, 5, 6},
@@ -341,11 +336,7 @@ func TestGetRangeSummaryEmptySerialisesAsNull(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if string(body.Data) != "null" {
-		t.Errorf(
-			"data = %s, want null — if this now serialises as [], the ParticipantView "+
-				"Array.isArray guard is no longer needed and this test should be updated",
-			body.Data,
-		)
+	if string(body.Data) != "[]" {
+		t.Errorf("data = %s, want []", body.Data)
 	}
 }
