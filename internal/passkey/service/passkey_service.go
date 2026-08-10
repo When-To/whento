@@ -18,10 +18,8 @@ import (
 
 	"github.com/whento/pkg/cache"
 	authModels "github.com/whento/whento/internal/auth/models"
-	authRepo "github.com/whento/whento/internal/auth/repository"
 	"github.com/whento/whento/internal/config"
 	"github.com/whento/whento/internal/passkey/models"
-	"github.com/whento/whento/internal/passkey/repository"
 )
 
 var (
@@ -76,9 +74,29 @@ func (u *WebAuthnUser) WebAuthnIcon() string {
 }
 
 // PasskeyService handles passkey business logic
+// PasskeyStore is the slice of the passkey repository this service needs.
+//
+// Declared here rather than taking *repository.PasskeyRepository directly so the
+// service can be exercised without a database — it was at 0% for exactly that reason.
+// Go interfaces are structural, so the concrete repository satisfies it and no call
+// site changes.
+type PasskeyStore interface {
+	Create(ctx context.Context, passkey *models.Passkey) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Passkey, error)
+	GetByCredentialID(ctx context.Context, credentialID []byte) (*models.Passkey, error)
+	ListByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Passkey, error)
+	Update(ctx context.Context, passkey *models.Passkey) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// UserLookup is the one thing this service asks of the user repository.
+type UserLookup interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*authModels.User, error)
+}
+
 type PasskeyService struct {
-	repo     *repository.PasskeyRepository
-	userRepo *authRepo.UserRepository
+	repo     PasskeyStore
+	userRepo UserLookup
 	webAuthn *webauthn.WebAuthn
 	cache    cache.Cache
 	logger   *slog.Logger
@@ -86,8 +104,8 @@ type PasskeyService struct {
 
 // NewPasskeyService creates a new passkey service
 func NewPasskeyService(
-	repo *repository.PasskeyRepository,
-	userRepo *authRepo.UserRepository,
+	repo PasskeyStore,
+	userRepo UserLookup,
 	cfg *config.Config,
 	cacheService cache.Cache,
 	logger *slog.Logger,
