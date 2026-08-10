@@ -341,3 +341,52 @@ test.describe('display settings persist', () => {
     await expect(page.locator('.cal-week')).toBeVisible();
   });
 });
+
+test.describe('unknown API routes', () => {
+  test('answer 404 with the error envelope, not the SPA', async ({ request, baseURL }) => {
+    // This used to return 200 and a page of HTML, because every unmatched path fell
+    // through to the SPA handler. A typo in a route therefore looked like a success to
+    // any client checking only the status — it hid a broken seed script here, and a CI
+    // health check pointing at /api/v1/health, which has never been a route.
+    const misses = [
+      // No sub-router prefix matches: caught by the "/api/*" handler.
+      '/api/v1/nope',
+      '/api/whatever',
+      // A sub-router prefix matches but no route inside it does: caught by the
+      // NotFound propagated to that sub-router.
+      '/api/v1/auth/nonexistent',
+      '/api/v1/calendars/public/xyz/summary',
+    ];
+
+    for (const path of misses) {
+      const response = await request.get(`${baseURL}${path}`);
+
+      expect(response.status(), `${path} should be 404`).toBe(404);
+      expect(response.headers()['content-type'], `${path} should be JSON`).toContain(
+        'application/json'
+      );
+      expect(await response.json()).toMatchObject({
+        success: false,
+        error: { code: 'NOT_FOUND' },
+      });
+    }
+  });
+
+  test('the health route the CI job waits on exists', async ({ request, baseURL }) => {
+    // /api/health, not /api/v1/health. Pinned because the difference was invisible for
+    // as long as the SPA answered both.
+    expect((await request.get(`${baseURL}/api/health`)).status()).toBe(200);
+    expect((await request.get(`${baseURL}/api/v1/health`)).status()).toBe(404);
+  });
+
+  test('SPA deep links still render the app', async ({ request, baseURL }) => {
+    // The other half of the change: non-API paths must keep reaching the SPA, or every
+    // bookmarked calendar link breaks.
+    for (const path of ['/', '/dashboard', '/c/some-token/p/some-participant']) {
+      const response = await request.get(`${baseURL}${path}`);
+
+      expect(response.status(), `${path} should serve the app`).toBe(200);
+      expect(response.headers()['content-type']).toContain('text/html');
+    }
+  });
+});

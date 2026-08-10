@@ -56,10 +56,10 @@ import (
 	"github.com/whento/pkg/cache"
 	"github.com/whento/pkg/database"
 	"github.com/whento/pkg/email"
+	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
-	"github.com/whento/pkg/participanttoken"
 	"github.com/whento/whento/internal/config"
 
 	// Auth module
@@ -166,14 +166,6 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("JWT manager initialized")
-
-	// Initialize participant token signing (uses JWT private key as HMAC seed)
-	ptKeyBytes, err := os.ReadFile(cfg.JWTPrivateKeyPath)
-	if err != nil {
-		log.Error("Failed to read JWT private key for participant tokens", "error", err)
-		os.Exit(1)
-	}
-	participanttoken.Init(ptKeyBytes)
 
 	// Initialize cache (uses Redis if available, NoOp otherwise)
 	cacheInstance := cache.NewRedisCache(redisClient)
@@ -762,6 +754,28 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("Frontend embedded and ready to serve")
+
+	// An unmatched /api path is a mistake, not a deep link. Serving the SPA for it —
+	// 200, and a page of HTML — makes a typo in a route look like success to any
+	// client that checks the status and not the content type. It hid a broken seed
+	// script, and it hid a health check in this repository's own CI pointing at
+	// /api/v1/health, a route that has never existed.
+	apiNotFound := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Endpoint not found")
+	})
+
+	// Two registrations are needed, because a miss arrives by one of two paths.
+	// A path with no matching sub-router prefix (/api/v1/nope) falls through to the
+	// "/*" catch-all below, so it has to be intercepted here first.
+	r.Handle("/api/*", apiNotFound)
+
+	// A path that *does* match a sub-router prefix but no route inside it
+	// (/api/v1/calendars/xyz/summary) is answered by that sub-router's NotFound, which
+	// otherwise defaults to chi's plain-text one. Setting it here, after every route is
+	// registered, propagates it to the sub-routers that do not already have one — so
+	// every /api miss now answers with the same JSON envelope. Non-API paths never
+	// reach it: "/*" matches them first.
+	r.NotFound(apiNotFound)
 
 	// Serve frontend on all non-API routes (SPA fallback)
 	r.Handle("/*", spaHandler)

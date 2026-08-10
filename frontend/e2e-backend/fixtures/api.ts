@@ -26,8 +26,10 @@ export interface RequestOptions {
  *
  * - **429 as text/plain.** The auth endpoints are rate limited per IP — register at 3
  *   per minute, login at 5 — and the limiter answers in plain text.
- * - **200 with HTML.** An unknown `/api` path falls through to the SPA rather than
- *   404ing, so a typo in a route reads as success and writes nothing.
+ * - **200 with HTML.** An unknown `/api` path used to fall through to the SPA rather
+ *   than 404ing, so a typo in a route read as success and wrote nothing. That is fixed
+ *   at the router now, but the check is kept: it is the cheapest guard against the
+ *   behaviour coming back, and against a proxy in front doing the same thing.
  */
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = options.method ?? 'GET';

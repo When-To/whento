@@ -162,11 +162,22 @@
     @apply border-transparent;
   }
 
-  /* Covered by a recurrence rather than an explicit answer: outlined, not filled, so
-     the two are distinguishable at a glance. */
+  /*
+   * A recurrence occurrence is an availability, and now reads as one: filled, in the
+   * same hue as an explicit answer.
+   *
+   * It used to be an outline, on the reasoning that a rule and an answer are different
+   * things. They are, to the code — but not to the participant looking at the grid,
+   * who simply wants to know which days they are free. Clicking one still creates an
+   * exception rather than deleting an availability; that difference lives in the
+   * popup, which says so, not in the colour.
+   *
+   * Freeing the outline matters as much as the fill: violet now means one thing only,
+   * the common dates of the participants selected below the calendar.
+   */
   .cal-cell[data-recurring]:not([data-own]) {
-    @apply border-2;
-    border-color: var(--cal-recurring);
+    background-color: var(--cal-own);
+    color: var(--cal-own-ink);
   }
 
   /*
@@ -534,9 +545,11 @@
     @apply border-transparent;
   }
 
+  /* Same reading as the month cell: an occurrence is an availability. */
   .cal-row[data-recurring]:not([data-own]) {
-    @apply border-2;
-    border-color: var(--cal-recurring);
+    background-color: var(--cal-own);
+    color: var(--cal-own-ink);
+    @apply border-transparent;
   }
 
   .cal-row[data-threshold] {
@@ -593,9 +606,10 @@
     @apply border-transparent;
   }
 
-  .cal-legend-swatch[data-kind='recurring'] {
+  /* The violet outline, matching what [data-highlight] draws on a cell. */
+  .cal-legend-swatch[data-kind='shared'] {
     @apply border-2 bg-transparent;
-    border-color: var(--cal-recurring);
+    border-color: var(--color-secondary-500);
   }
 
   .cal-legend-swatch[data-kind='threshold'] {

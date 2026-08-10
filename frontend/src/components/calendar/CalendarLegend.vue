@@ -28,13 +28,16 @@ const props = withDefaults(defineProps<Props>(), { displayMode: 'month' });
 
 const { t } = useI18n();
 
-type SwatchKind = 'own' | 'recurring' | 'threshold' | 'coverage' | 'holiday' | 'eve' | 'disabled';
+type SwatchKind = 'own' | 'shared' | 'threshold' | 'coverage' | 'holiday' | 'eve' | 'disabled';
 
 const items = computed<{ kind: SwatchKind; label: string }[]>(() => {
   const entries: { kind: SwatchKind; label: string }[] = [
     { kind: 'own', label: t('calendar.legend.own') },
-    { kind: 'recurring', label: t('calendar.legend.recurring') },
     { kind: 'threshold', label: t('calendar.legend.threshold') },
+    // The violet outline. Only meaningful once participants are picked in the list
+    // below the calendar, but listing it unconditionally is what makes the selection
+    // discoverable in the first place.
+    { kind: 'shared', label: t('calendar.legend.shared') },
   ];
 
   if (props.displayMode === 'week') {

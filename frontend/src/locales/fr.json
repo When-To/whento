@@ -357,8 +357,8 @@
     "legend": {
       "title": "Légende",
       "own": "Ma disponibilité",
-      "recurring": "Ma récurrence",
       "threshold": "Seuil atteint",
+      "shared": "Dates communes des participants sélectionnés",
       "coverage": "Disponibilité de tous",
       "holiday": "Jour férié",
       "holidayEve": "Veille de jour férié",

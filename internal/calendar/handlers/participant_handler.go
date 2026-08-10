@@ -12,7 +12,6 @@ import (
 
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/middleware"
-	"github.com/whento/pkg/participanttoken"
 	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/calendar/models"
 	"github.com/whento/whento/internal/calendar/service"
@@ -142,20 +141,14 @@ func (h *ParticipantHandler) AddAnonymousParticipant(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Generate and set participant token for future mutation authorization
-	ptToken := participanttoken.Generate(participant.ID.String())
-	participanttoken.SetCookie(w, r, participant.ID.String(), ptToken)
-
-	// Return participant with token in response
 	httputil.JSON(w, http.StatusCreated, map[string]interface{}{
-		"id":                participant.ID,
-		"calendar_id":       participant.CalendarID,
-		"name":              participant.Name,
-		"email":             participant.Email,
-		"email_verified":    participant.EmailVerified,
-		"locale":            participant.Locale,
-		"created_at":        participant.CreatedAt,
-		"participant_token": ptToken,
+		"id":             participant.ID,
+		"calendar_id":    participant.CalendarID,
+		"name":           participant.Name,
+		"email":          participant.Email,
+		"email_verified": participant.EmailVerified,
+		"locale":         participant.Locale,
+		"created_at":     participant.CreatedAt,
 	})
 }
 
