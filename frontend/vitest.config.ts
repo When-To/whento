@@ -41,10 +41,10 @@ export default defineConfig({
       // that `npm run test:coverage` fails if coverage falls, without failing on the
       // noise of a line or two. Raise it when the next batch of tests lands.
       thresholds: {
-        statements: 50,
-        branches: 60,
-        functions: 38,
-        lines: 48,
+        statements: 54,
+        branches: 64,
+        functions: 43,
+        lines: 52,
       },
     },
   },

@@ -11,6 +11,8 @@ import router from '@/router';
 class ApiClient {
   private client: AxiosInstance;
   private accessToken: string | null = null;
+  /** The one refresh in progress, shared by every caller that needs it. */
+  private refreshInFlight: Promise<void> | null = null;
 
   constructor() {
     this.client = axios.create({
@@ -118,7 +120,31 @@ class ApiClient {
     }
   }
 
+  /**
+   * Refresh the access token, at most once at a time.
+   *
+   * Every request that 401s calls this, and a page load fires several at once — the
+   * calendar alone issues three. Without the shared promise each of them started its
+   * own `/auth/refresh`, so one expired token produced a burst of refreshes against an
+   * endpoint rate limited to 5 per minute per IP. The later ones then raced: refresh
+   * rotates the token, so whichever landed last could invalidate the token an earlier
+   * one had just stored, logging the user out mid-session.
+   *
+   * Callers all await the same in-flight request and continue with the token it stored.
+   */
   async refreshToken(): Promise<void> {
+    if (this.refreshInFlight) {
+      return this.refreshInFlight;
+    }
+
+    this.refreshInFlight = this.performRefresh().finally(() => {
+      this.refreshInFlight = null;
+    });
+
+    return this.refreshInFlight;
+  }
+
+  private async performRefresh(): Promise<void> {
     const response = await this.client.post<ApiResponse<{ access_token: string }>>('/auth/refresh');
     const newToken = response.data.data?.access_token;
     if (newToken) {
