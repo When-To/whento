@@ -408,9 +408,17 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # An image built for a pull request is tagged PR<number>, so that several open
+          # PRs no longer overwrite one another under a single shared `dev` tag — with it,
+          # whichever PR built last was the one you pulled, whatever you meant to test.
+          # `dev` is kept for the manual workflow_dispatch builds, which have no PR to
+          # name themselves after.
           tags: |
-            type=raw,value=dev
+            type=raw,value=PR${{ github.event.pull_request.number }},enable=${{ github.event_name == 'pull_request' }}
+            type=raw,value=dev,enable=${{ github.event_name != 'pull_request' }}
           labels: |
+            org.opencontainers.image.version=${{ github.event_name == 'pull_request' && format('PR{0}', github.event.pull_request.number) || 'dev' }}
+            org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.description=WhenTo - Self-hosted scheduling and calendar application
             org.opencontainers.image.url=https://github.com/${{ github.repository }}
             org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
@@ -425,7 +433,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Baked into the binary as main.Version, so `whento` reports the PR it came
+          # from rather than an anonymous "dev".
           build-args: |
-            VERSION=dev
+            VERSION=${{ github.event_name == 'pull_request' && format('PR{0}', github.event.pull_request.number) || 'dev' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
