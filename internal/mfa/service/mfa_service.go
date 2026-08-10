@@ -20,7 +20,7 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 	"golang.org/x/crypto/bcrypt"
 
-	authRepo "github.com/whento/whento/internal/auth/repository"
+	authModels "github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/config"
 	"github.com/whento/whento/internal/mfa/models"
 	"github.com/whento/whento/internal/mfa/repository"
@@ -35,15 +35,33 @@ var (
 	ErrAllBackupCodesUsed = errors.New("all backup codes have been used")
 )
 
-// MFAService handles MFA business logic
 // TokenRepository defines the interface for revoking refresh tokens when MFA is enabled
 type TokenRepository interface {
 	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
 }
 
+// MFAStore is the slice of the MFA repository this service needs.
+//
+// Declared here rather than taking *repository.MFARepository directly so the service
+// can be exercised without a database — it was at 0% for exactly that reason. Go
+// interfaces are structural, so the concrete repository satisfies it and no call site
+// changes.
+type MFAStore interface {
+	Create(ctx context.Context, mfa *models.UserMFA) error
+	GetByUserID(ctx context.Context, userID uuid.UUID) (*models.UserMFA, error)
+	Update(ctx context.Context, mfa *models.UserMFA) error
+	Delete(ctx context.Context, userID uuid.UUID) error
+}
+
+// UserLookup is the one thing this service asks of the user repository.
+type UserLookup interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*authModels.User, error)
+}
+
+// MFAService handles MFA business logic
 type MFAService struct {
-	repo       *repository.MFARepository
-	userRepo   *authRepo.UserRepository
+	repo       MFAStore
+	userRepo   UserLookup
 	tokenRepo  TokenRepository
 	issuer     string
 	period     uint
@@ -54,8 +72,8 @@ type MFAService struct {
 
 // NewMFAService creates a new MFA service
 func NewMFAService(
-	repo *repository.MFARepository,
-	userRepo *authRepo.UserRepository,
+	repo MFAStore,
+	userRepo UserLookup,
 	tokenRepo TokenRepository,
 	cfg *config.Config,
 	logger *slog.Logger,
