@@ -377,7 +377,8 @@ func (r *UserRepository) GetByVerificationToken(ctx context.Context, token strin
 		       magic_link_token, magic_link_token_expires_at,
 		       created_at, updated_at
 		FROM users
-		WHERE verification_token = $1`
+		WHERE verification_token = $1
+		  AND verification_token_expires_at > NOW()`
 
 	user := &models.User{}
 	err := r.pool.QueryRow(ctx, query, token).Scan(

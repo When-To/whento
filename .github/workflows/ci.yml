@@ -160,6 +160,20 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      # The repository tests need a schema. They skip when DATABASE_URL is unset — so a
+      # laptop without Postgres still runs `make test` green — which means CI is the
+      # only place they actually execute, and it has to migrate first.
+      - name: Install golang-migrate
+        run: |
+          curl -sSL https://github.com/golang-migrate/migrate/releases/download/v4.17.1/migrate.linux-amd64.tar.gz \
+            | tar xvz migrate
+          sudo mv migrate /usr/local/bin/
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/whento_test?sslmode=disable
+        run: make migrate-up BUILD_TYPE=selfhosted
+
       - name: Run tests
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/whento_test?sslmode=disable
