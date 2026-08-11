@@ -5,6 +5,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -15,20 +16,31 @@ import (
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/middleware"
 	"github.com/whento/pkg/validator"
-	calendarRepo "github.com/whento/whento/internal/calendar/repository"
+	calendarModels "github.com/whento/whento/internal/calendar/models"
 	"github.com/whento/whento/internal/notify/models"
 	notifyService "github.com/whento/whento/internal/notify/service"
 )
 
+// CalendarStore is the slice of the calendar repository this handler needs.
+//
+// Declared here rather than taking *calendarRepo.CalendarRepository directly so the
+// handler can be exercised without a database — it was at 0% for exactly that reason,
+// and the SSRF checks below are worth a test. Go interfaces are structural, so the
+// concrete repository satisfies it and no call site changes.
+type CalendarStore interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*calendarModels.Calendar, error)
+	UpdateNotifyConfig(ctx context.Context, id uuid.UUID, notifyConfig string, enabled bool) error
+}
+
 // NotifyConfigHandler handles notification configuration HTTP requests
 type NotifyConfigHandler struct {
-	calendarRepo *calendarRepo.CalendarRepository
+	calendarRepo CalendarStore
 	logger       *slog.Logger
 }
 
 // NewNotifyConfigHandler creates a new notification config handler
 func NewNotifyConfigHandler(
-	calendarRepo *calendarRepo.CalendarRepository,
+	calendarRepo CalendarStore,
 	logger *slog.Logger,
 ) *NotifyConfigHandler {
 	return &NotifyConfigHandler{
