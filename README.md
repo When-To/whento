@@ -269,13 +269,9 @@ TRUSTED_PROXIES=                              # Comma-separated trusted reverse 
 # TOTP_DIGITS=6
 ```
 
-#### Self-Hosted Only (build tag `selfhosted`)
-
-```bash
-# License — leave empty for Community tier (30 calendars).
-# JSON license key; auto-activates at startup if the DB has no license yet.
-# Can also be activated via the Admin UI.
-```
+The two build variants read the same environment. There is nothing to configure that is
+specific to one of them: the only difference is the calendar allowance, which is compiled
+in rather than configured.
 
 ---
 
