@@ -8,11 +8,19 @@ WhenTo uses a conditional migration system to support both Cloud (SaaS) and Self
 migrations/
 ├── common/          # Migrations applied to both cloud and selfhosted
 │   └── 001_init.*   # Initial schema (users, calendars, etc.)
-├── cloud/           # Cloud-only migrations (Stripe subscriptions)
-│   └── 002_subscriptions.*
-└── selfhosted/      # Self-hosted only migrations (License management)
-    └── 003_licenses.*
+├── cloud/           # Cloud-only migrations
+│   ├── 005_ecommerce.*
+│   ├── 011_order_shop_session.*
+│   └── 013_drop_billing.*
+└── selfhosted/      # Self-hosted only migrations
+    ├── 005_licenses.*
+    └── 013_drop_licensing.*
 ```
+
+Both variant directories now exist largely to undo themselves. Licensing, subscriptions
+and payments were removed from the product, and `013_drop_billing` / `013_drop_licensing`
+are what take the tables out of a database that already ran the earlier ones. Neither
+variant has anything left to add on top of `common/`.
 
 ## How It Works
 
@@ -77,11 +85,16 @@ migrate create -ext sql -dir migrations/selfhosted -seq migration_name
 
 ## Migration Naming
 
-- **Common**: `001_init`, `004_add_notifications`, etc.
-- **Cloud**: `002_subscriptions`, `005_stripe_webhooks`, etc.
-- **Self-hosted**: `003_licenses`, `006_license_audit_log`, etc.
+- **Common**: `001_init`, `008_notification_log`, `012_unified_ics_feed`
+- **Cloud**: `005_ecommerce`, `011_order_shop_session`, `013_drop_billing`
+- **Self-hosted**: `005_licenses`, `013_drop_licensing`
 
-> **Note**: Migration numbers should be unique across all directories to avoid conflicts when they're combined.
+> **Note**: the numbering space is shared, but only one variant directory is ever copied
+> into a build, so a number may be reused between `cloud/` and `selfhosted/` — `005` and
+> `013` both are. It must stay unique against `common/`.
+
+The latest common migration is `012`, so **the next common migration is `014`**: `013` is
+taken by the two per-variant drop migrations.
 
 ## Testing
 

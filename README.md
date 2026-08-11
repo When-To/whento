@@ -269,13 +269,9 @@ TRUSTED_PROXIES=                              # Comma-separated trusted reverse 
 # TOTP_DIGITS=6
 ```
 
-#### Self-Hosted Only (build tag `selfhosted`)
-
-```bash
-# License — leave empty for Community tier (30 calendars).
-# JSON license key; auto-activates at startup if the DB has no license yet.
-# Can also be activated via the Admin UI.
-```
+The two build variants read the same environment. There is nothing to configure that is
+specific to one of them: the only difference is the calendar allowance, which is compiled
+in rather than configured.
 
 ---
 
@@ -289,17 +285,29 @@ whento/
 │   ├── main.go              # Single entry point
 │   ├── init_cloud.go        # Cloud-specific initialization (tag: cloud)
 │   ├── init_selfhosted.go   # Self-hosted initialization (tag: selfhosted)
-├── internal/                # Business modules
-│   ├── auth/                # JWT RS256, users, sessions
+├── internal/                # Business modules, each {handlers,models,repository,service}
+│   ├── auth/                # JWT RS256, users, sessions, magic links
 │   ├── calendar/            # CRUD, participants
 │   ├── availability/        # Availabilities, recurrences
+│   ├── mfa/                 # TOTP and backup codes
+│   ├── passkey/             # WebAuthn registration and sign-in
+│   ├── notify/              # Threshold notifications, webhooks
 │   ├── ics/                 # iCalendar feed generation
-│   └── quota/               # Calendar limits (both modes)
-├── pkg/                     # Shared packages
-│   ├── cache/               # Redis wrapper
+│   ├── seo/                 # robots.txt and sitemap.xml
+│   ├── config/              # Environment parsing
+│   ├── quota/               # Calendar limits (both modes)
+│   └── testutil/            # Test helpers, including the database harness
+├── pkg/                     # Shared packages, a separate Go module
+│   ├── broadcast/           # Live-update notices, Redis-backed or process-local
+│   ├── cache/               # Redis wrapper with a no-op fallback
 │   ├── database/            # PostgreSQL + Redis
+│   ├── datevalidation/      # Holidays, weekdays, opening hours
+│   ├── email/               # SMTP delivery
+│   ├── httputil/            # The {data, error} response envelope
 │   ├── jwt/                 # RS256 token management
-│   ├── middleware/          # Auth, rate limiting, CORS
+│   ├── logger/              # Structured logging with request ids
+│   ├── middleware/          # Auth, rate limiting, CORS, security headers
+│   ├── models/              # Shared entities
 │   └── validator/           # Input validation
 ├── frontend/                # Vue 3 SPA
 │   └── src/
@@ -314,8 +322,8 @@ whento/
 
 | Layer                   | Technology                                         |
 | ----------------------- | -------------------------------------------------- |
-| Backend                 | Go 1.25+, Chi router, pgx/v5, go-redis/v9          |
-| Frontend                | Vue 3, Vite 7, TypeScript, Tailwind CSS 4, Pinia 3 |
+| Backend                 | Go 1.26, Chi router, pgx/v5, go-redis/v9           |
+| Frontend                | Vue 3, Vite 8, TypeScript, Tailwind CSS 4, Pinia 4 |
 | Database                | PostgreSQL 16, Redis 7                             |
 | Auth                    | JWT RS256 (asymmetric keys), bcrypt                |
 | Licensing (Self-hosted) | Ed25519 cryptographic signatures                   |
@@ -385,8 +393,8 @@ your-domain.com {
 
 ### Prerequisites
 
-- Go 1.25+
-- Node.js 20+
+- Go 1.26
+- Node.js 24
 - Docker & Docker Compose
 
 ### Running in Development Mode
