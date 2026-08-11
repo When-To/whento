@@ -14,7 +14,7 @@
  */
 
 import { computed, type ComputedRef, type Ref } from 'vue';
-import { getWeekStartDay } from '@/i18n';
+import { resolveWeekStart } from '@/utils/weekStart';
 import type {
   Availability,
   CalendarWithParticipants,
@@ -72,8 +72,11 @@ export function useParticipantCalendar(
 ): ParticipantCalendarModel {
   const { formatters, locale } = useCalendarFormatters();
 
-  const weekStartDay = computed(() => getWeekStartDay(locale.value));
   const timeZone = computed(() => options.calendar.value?.timezone || 'Europe/Paris');
+  // The calendar's timezone rather than the reader's language: every participant must
+  // see the same grid, and a shared link is opened by people in several locales. It also
+  // works for anonymous participants, who have no account to carry a preference.
+  const weekStartDay = computed(() => resolveWeekStart(timeZone.value, locale.value));
   const today = computed(() => todayISO(timeZone.value));
 
   const rules = computed(() => {

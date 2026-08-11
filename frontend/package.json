@@ -25,7 +25,7 @@
   "dependencies": {
     "@vueuse/core": "^14.4.0",
     "axios": "^1.19.0",
-    "countries-and-timezones": "^3.9.0",
+    "countries-and-timezones": "^3.10.0",
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
     "date-holidays": "^3.34.1",
