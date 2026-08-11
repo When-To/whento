@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -332,7 +333,7 @@ func TestCalendarHandler_CreateCalendar_QuotaExceeded(t *testing.T) {
 	mockCalRepo := &mockCalendarRepository{}
 	mockPartRepo := &mockParticipantRepository{}
 	mockCache := &mockCache{}
-	mockQuota := &mockQuotaService{canCreate: false} // Quota exceeded
+	mockQuota := &mockQuotaService{canCreate: false, userLimit: 3} // Quota exceeded
 
 	calendarSvc := service.NewCalendarService(mockCalRepo, mockPartRepo, nil, mockCache)
 	cfg := &config.Config{Email: config.EmailConfig{VerificationEnabled: false}}
@@ -350,6 +351,20 @@ func TestCalendarHandler_CreateCalendar_QuotaExceeded(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Errorf("Expected status 403, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// The frontend prints this message verbatim, so what it says is the whole of what a
+	// blocked user is told. quota_message_test.go covers the wording; this is the half
+	// that proves it reaches the response at all.
+	body := w.Body.String()
+	if !strings.Contains(body, "3 calendars") {
+		t.Errorf("the response does not say what the limit is: %s", body)
+	}
+	if !strings.Contains(body, "Host your own instance") {
+		t.Errorf("the response does not offer the way out: %s", body)
+	}
+	if strings.Contains(strings.ToLower(body), "subscription") || strings.Contains(strings.ToLower(body), "licen") {
+		t.Errorf("the response still offers something the product no longer has: %s", body)
 	}
 }
 

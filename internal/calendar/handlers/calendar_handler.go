@@ -6,6 +6,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -63,6 +64,27 @@ func NewCalendarHandler(
 //	@Failure		401		{object}	httputil.ErrorResponse	"Unauthorized"
 //	@Failure		403		{object}	httputil.ErrorResponse	"Quota exceeded"
 //	@Router			/api/v1/calendars [post]
+//
+// quotaMessage explains a refused calendar creation.
+//
+// Only the hosted service caps anything: the self-hosted build reports an unlimited
+// allowance and never refuses, so a positive limit means this is the cloud. Saying how
+// many, and what the way out is, beats a bare refusal — and the way out is running your
+// own instance, since there is no paid tier to move to.
+//
+// Extracted so it can be tested: the handler around it takes a database transaction
+// before it ever reaches here. The message it replaced ("upgrade your subscription", and
+// on the other branch "upgrade your license") outlived both by a good margin.
+func quotaMessage(limit int) string {
+	if limit <= 0 {
+		return "Calendar limit reached."
+	}
+
+	return fmt.Sprintf(
+		"You have reached the limit of %d calendars on the hosted service. "+
+			"Host your own instance of WhenTo for unlimited calendars.", limit)
+}
+
 func (h *CalendarHandler) CreateCalendar(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -172,22 +194,9 @@ func (h *CalendarHandler) CreateCalendar(w http.ResponseWriter, r *http.Request)
 	}
 
 	if !canCreate {
-		// Get limit info for better error message
-		userLimit, _ := h.quotaService.GetUserLimit(r.Context(), userUUID)
-		serverLimit, _ := h.quotaService.GetServerLimit(r.Context())
+		limit, _ := h.quotaService.GetUserLimit(r.Context(), userUUID)
 
-		var errorMsg string
-		if serverLimit > 0 {
-			// Self-hosted: server-wide limit
-			errorMsg = "Server calendar limit reached. Please upgrade your license at https://whento.be/pricing"
-		} else if userLimit > 0 {
-			// Cloud: per-user limit
-			errorMsg = "Calendar limit reached for your plan. Please upgrade your subscription."
-		} else {
-			errorMsg = "Calendar limit reached"
-		}
-
-		httputil.Error(w, http.StatusForbidden, "quota_exceeded", errorMsg)
+		httputil.Error(w, http.StatusForbidden, "quota_exceeded", quotaMessage(limit))
 		return
 	}
 
