@@ -1240,6 +1240,7 @@ import TimeSelect from '@/components/TimeSelect.vue';
 import CollapsibleSection from '@/components/CollapsibleSection.vue';
 import { dayOfWeekISO, formatDateISO, parseISODate } from '@/utils/date/isoDate';
 import { useParticipantCalendar } from '@/composables/calendar/useParticipantCalendar';
+import { useCalendarStream } from '@/composables/calendar/useCalendarStream';
 import { normalizeViewStyle, type ViewStyle } from '@/composables/calendar/useCalendarViewState';
 import { addParticipantEmail, resendVerificationEmail } from '@/api/notify';
 import type {
@@ -2662,6 +2663,22 @@ async function handleCancelFromEmail() {
     toastStore.error(err.message || 'Failed to cancel participation');
   }
 }
+
+// Live updates. The server sends a notice, never data, so this reloads through the same
+// path a navigation would — which keeps one read model and means a notice cannot carry a
+// field this viewer is not entitled to.
+//
+// It reloads after the viewer's own writes too. That is one extra request per answer,
+// and it is what reconciles the optimistic update with what the server actually stored.
+useCalendarStream({
+  token,
+  onChange: async () => {
+    await Promise.all([
+      loadRecurrences(),
+      loadParticipantCounts(displayedYear.value, displayedMonth.value),
+    ]);
+  },
+});
 
 onMounted(async () => {
   // The route watcher above already loads the calendar with { immediate: true }.
