@@ -173,6 +173,7 @@ defineExpose({ selectableDays });
       <button
         type="button"
         class="btn btn-ghost px-2 py-1"
+        data-testid="month-prev"
         :aria-label="t('calendar.previousMonth')"
         @click="goToPreviousMonth"
       >
@@ -182,6 +183,7 @@ defineExpose({ selectableDays });
       <button
         type="button"
         class="btn btn-ghost px-2 py-1"
+        data-testid="month-next"
         :aria-label="t('calendar.nextMonth')"
         @click="goToNextMonth"
       >
