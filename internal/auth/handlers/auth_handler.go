@@ -29,7 +29,6 @@ import (
 	"github.com/whento/pkg/middleware"
 	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/auth/models"
-	"github.com/whento/whento/internal/auth/repository"
 	"github.com/whento/whento/internal/auth/service"
 	"github.com/whento/whento/internal/config"
 )
@@ -43,14 +42,34 @@ var emailVerificationTranslationsJSON string
 // AuthHandler handles authentication HTTP requests
 type AuthHandler struct {
 	authService              *service.AuthService
-	userRepo                 *repository.UserRepository
-	emailService             *email.Service
+	userRepo                 UserStore
+	emailService             EmailSender
 	cfg                      *config.Config
 	logger                   *slog.Logger
 	verificationTemplate     *template.Template
 	verificationTranslations map[string]map[string]string
 	mfaRepo                  MFARepository
 	passkeyRepo              PasskeyRepository
+}
+
+// UserStore is the slice of the user repository this handler needs.
+//
+// Declared here rather than taking *repository.UserRepository directly so the package
+// can be exercised without a database — it was at 0% for exactly that reason. Go
+// interfaces are structural, so the concrete repository satisfies it and no call site
+// changes.
+type UserStore interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*models.User, error)
+	GetByVerificationToken(ctx context.Context, token string) (*models.User, error)
+	SetVerificationToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) error
+	VerifyEmail(ctx context.Context, userID uuid.UUID) error
+}
+
+// EmailSender is the slice of pkg/email this handler needs. Sending a real message is
+// out of reach in a test; deciding whether to send one is not.
+type EmailSender interface {
+	Send(message email.Email) error
+	IsConfigured() bool
 }
 
 // MFARepository interface for MFA status checking
@@ -92,8 +111,8 @@ func clearRefreshTokenCookie(w http.ResponseWriter, r *http.Request) {
 // NewAuthHandler creates a new auth handler
 func NewAuthHandler(
 	authService *service.AuthService,
-	userRepo *repository.UserRepository,
-	emailService *email.Service,
+	userRepo UserStore,
+	emailService EmailSender,
 	cfg *config.Config,
 	logger *slog.Logger,
 	mfaRepo MFARepository,
