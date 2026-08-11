@@ -1,0 +1,177 @@
+# WhenTo - Collaborative event calendar for self-hosted environments
+# Copyright (C) 2025 WhenTo Contributors
+# SPDX-License-Identifier: BSL-1.1
+
+name: Clean up container images
+
+# Every PR build pushes a PR<number> image to GHCR, and every push to that PR leaves the
+# previous manifest behind untagged. Nothing removed them, so the package grew without
+# bound. This runs weekly and removes what is provably no longer referenced.
+#
+# The delicate part is the untagged versions. Release images are built for
+# linux/amd64,linux/arm64, and a multi-architecture image is stored as a manifest list
+# whose per-platform children are themselves untagged versions. Deleting untagged
+# versions blindly would destroy those children and break `docker pull …:latest` on one
+# architecture, with every tag still present and nothing to show what went wrong. So the
+# job resolves each retained tag's manifest and treats its children as retained too.
+
+on:
+  schedule:
+    # Mondays, 04:00 UTC — after the week's merges, before anyone needs the registry.
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List what would be deleted without deleting it'
+        type: boolean
+        default: true
+
+permissions:
+  packages: write
+  pull-requests: read
+
+env:
+  # How long a pull request stays closed before its image is removed. Long enough that
+  # reopening a PR to chase a regression still finds its image.
+  CLOSED_PR_GRACE_DAYS: '14'
+  # Untagged manifests are only ever leftovers from a re-push, but a build in flight has
+  # a window where its manifest exists and its tag does not.
+  UNTAGGED_GRACE_DAYS: '2'
+
+jobs:
+  cleanup:
+    name: Remove images for long-closed pull requests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete stale versions
+        uses: actions/github-script@v7
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          # github-script does not put the token in the environment; the registry API
+          # needs it as a bearer to read manifests.
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const pkg = context.repo.repo;
+            const dryRun = process.env.DRY_RUN === 'true';
+            const closedGrace = Number(process.env.CLOSED_PR_GRACE_DAYS) * 86400000;
+            const untaggedGrace = Number(process.env.UNTAGGED_GRACE_DAYS) * 86400000;
+            const now = Date.now();
+
+            // Tags that are never removed, whatever their age. `dev` is a single rolling
+            // tag from the manual build; the rest are releases people pull by name.
+            const isProtectedTag = tag =>
+              tag === 'latest' || tag === 'dev' || /^v?\d+\.\d+\.\d+/.test(tag);
+
+            const versions = await github.paginate(
+              github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg,
+              { package_type: 'container', package_name: pkg, org: owner, per_page: 100 }
+            );
+            core.info(`${versions.length} versions in ${owner}/${pkg}`);
+
+            // Which pull requests are closed, and since when.
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner, repo: pkg, state: 'all', per_page: 100,
+            });
+            const closedAt = new Map(
+              pulls.filter(p => p.closed_at).map(p => [p.number, Date.parse(p.closed_at)])
+            );
+
+            // Decide which tagged versions stay before touching anything untagged: the
+            // retained set is what protects the manifest children below.
+            const retained = new Set();
+            const doomed = [];
+
+            for (const version of versions) {
+              const tags = version.metadata?.container?.tags ?? [];
+              if (tags.length === 0) continue;
+
+              if (tags.some(isProtectedTag)) {
+                retained.add(version.name);
+                continue;
+              }
+
+              // A PR tag goes once its pull request has been closed for the grace period.
+              // Anything else tagged is unrecognised, so it is left alone rather than
+              // guessed at.
+              const prTags = tags.map(t => /^PR(\d+)$/.exec(t)).filter(Boolean);
+              if (prTags.length !== tags.length) {
+                core.warning(`keeping ${tags.join(', ')}: not a tag this job knows how to age out`);
+                retained.add(version.name);
+                continue;
+              }
+
+              const stillWanted = prTags.some(([, number]) => {
+                const closed = closedAt.get(Number(number));
+                return closed === undefined || now - closed < closedGrace;
+              });
+
+              if (stillWanted) {
+                retained.add(version.name);
+              } else {
+                doomed.push({ version, reason: `pull requests ${prTags.map(m => m[1]).join(', ')} closed over ${process.env.CLOSED_PR_GRACE_DAYS} days ago` });
+              }
+            }
+
+            // Resolve the retained manifests. A multi-architecture image is an index
+            // whose children are stored as untagged versions of the same package, and
+            // those children must survive with their parent.
+            const referenced = new Set();
+            const token = Buffer.from(process.env.GHCR_TOKEN ?? '').toString('base64');
+            const accept = [
+              'application/vnd.oci.image.index.v1+json',
+              'application/vnd.docker.distribution.manifest.list.v2+json',
+              'application/vnd.oci.image.manifest.v1+json',
+              'application/vnd.docker.distribution.manifest.v2+json',
+            ].join(', ');
+
+            for (const digest of retained) {
+              const url = `https://ghcr.io/v2/${owner.toLowerCase()}/${pkg.toLowerCase()}/manifests/${digest}`;
+              const response = await fetch(url, {
+                headers: { Accept: accept, Authorization: `Bearer ${token}` },
+              });
+              if (!response.ok) {
+                // Refusing to guess: if a manifest cannot be read, its children cannot be
+                // identified, so nothing untagged is safe to remove this run.
+                core.setFailed(`could not read the manifest for ${digest} (${response.status}); no untagged version can be shown to be unreferenced, so nothing was deleted`);
+                return;
+              }
+              const manifest = await response.json();
+              // Only the index children are separate package versions; config and layer
+              // blobs are not listed by the packages API and need no protecting.
+              for (const child of manifest.manifests ?? []) referenced.add(child.digest);
+            }
+            core.info(`${referenced.size} manifests are referenced by a retained tag`);
+
+            for (const version of versions) {
+              const tags = version.metadata?.container?.tags ?? [];
+              if (tags.length > 0) continue;
+              if (referenced.has(version.name)) continue;
+              if (now - Date.parse(version.updated_at) < untaggedGrace) continue;
+
+              doomed.push({ version, reason: 'untagged and referenced by no retained tag' });
+            }
+
+            if (doomed.length === 0) {
+              core.info('nothing to remove');
+              return;
+            }
+
+            for (const { version, reason } of doomed) {
+              const label = `${version.name.slice(0, 19)} (${(version.metadata?.container?.tags ?? ['untagged']).join(', ')})`;
+              if (dryRun) {
+                core.info(`would delete ${label}: ${reason}`);
+                continue;
+              }
+              await github.rest.packages.deletePackageVersionForOrg({
+                package_type: 'container', package_name: pkg, org: owner,
+                package_version_id: version.id,
+              });
+              core.info(`deleted ${label}: ${reason}`);
+            }
+
+            core.summary
+              .addHeading('Container image cleanup', 2)
+              .addRaw(`${dryRun ? 'Would remove' : 'Removed'} ${doomed.length} of ${versions.length} versions.`)
+              .write();
