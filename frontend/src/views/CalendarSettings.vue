@@ -849,7 +849,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { getWeekStartDay } from '@/i18n';
+import { resolveWeekStart } from '@/utils/weekStart';
 import { useCalendarStore } from '@/stores/calendar';
 import { useToastStore } from '@/stores/toast';
 import TimezoneSelector from '@/components/TimezoneSelector.vue';
@@ -973,7 +973,7 @@ const errors = reactive({
 });
 
 // Weekdays (0=Sunday, 6=Saturday)
-// Order depends on locale: Monday-first (fr) or Sunday-first (en)
+// Order follows the calendar's timezone, resolved through CLDR.
 const weekdays = computed(() => {
   const days = [
     { value: 0, short: t('weekdays.short.sunday') },
@@ -985,13 +985,13 @@ const weekdays = computed(() => {
     { value: 6, short: t('weekdays.short.saturday') },
   ];
 
-  // For locales that start the week on Monday, move Sunday to the end
-  if (getWeekStartDay(locale.value) === 1) {
-    return [...days.slice(1), days[0]];
-  }
+  // Rotated rather than special-cased: CLDR has weeks starting on Saturday in fourteen
+  // countries and on Friday in the Maldives, which a Sunday-or-Monday branch cannot
+  // express. The selector follows the timezone being chosen, so picking a German city
+  // reorders it to Monday-first straight away.
+  const first = resolveWeekStart(form.timezone, locale.value);
 
-  // For locales that start on Sunday (en, US)
-  return days;
+  return [...days.slice(first), ...days.slice(0, first)];
 });
 
 // Check if all weekdays are selected

@@ -1221,7 +1221,7 @@
 import { ref, shallowRef, reactive, computed, onMounted, watchEffect, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { getWeekStartDay } from '@/i18n';
+import { resolveWeekStart } from '@/utils/weekStart';
 import { useCalendarStore } from '@/stores/calendar';
 import { useAuthStore } from '@/stores/auth';
 import { useCalendarHistoryStore } from '@/stores/calendarHistory';
@@ -1403,7 +1403,7 @@ const weeksToDisplay = computed(() => {
 });
 
 const weekDaysOptions = computed(() => {
-  const firstDayOfWeek = getWeekStartDay(locale.value); // Monday for fr, Sunday for en
+  const firstDayOfWeek = resolveWeekStart(calendar.value?.timezone, locale.value);
 
   const daysOrder = [];
   for (let i = 0; i < 7; i++) {
@@ -1863,7 +1863,7 @@ async function loadCalendar() {
 
     // Initialize current week start date
     const today = new Date();
-    const firstDayOfWeek = getWeekStartDay(locale.value); // Monday for fr, Sunday for en
+    const firstDayOfWeek = resolveWeekStart(calendar.value?.timezone, locale.value);
     const dayOfWeek = today.getDay();
     const diff = (dayOfWeek - firstDayOfWeek + 7) % 7;
     const weekStart = new Date(today);
