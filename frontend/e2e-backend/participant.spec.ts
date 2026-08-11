@@ -17,12 +17,50 @@ import { fetchAvailabilities, fetchRangeSummary, seedCalendar } from './fixtures
  * the component believes.
  */
 
-/** Wait for the view to be interactive rather than merely mounted. */
-async function openCalendar(page: Page, url: string) {
+/**
+ * Wait for the view to be interactive rather than merely mounted, and bring the
+ * fixture's month into view.
+ *
+ * Pass `anchor` whenever the test reads cells out of the grid. The month view opens on
+ * today's month and renders one month at a time, so a fixture anchored in the next month
+ * is present only as trailing overflow: cells that exist and carry the right `data-date`
+ * but are inert. Clicking one waits for an element that never becomes enabled, and an
+ * expectNotMarked assertion against one passes for the wrong reason.
+ */
+async function openCalendar(page: Page, url: string, anchor?: string) {
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#displayMode', { timeout: 30_000 });
   // The grid renders from the range summary, so wait for a real cell.
   await page.waitForSelector('.cal-cell[data-date]');
+
+  if (anchor) await showMonthOf(page, anchor);
+}
+
+/**
+ * Step the month grid forward until `date` is a cell of the month itself.
+ *
+ * `:not([data-status="outside"])` is the whole question: overflow cells match on date
+ * alone. The fixture keeps its rendered span inside one month, so bringing the anchor
+ * into view brings every date the tests touch with it.
+ */
+async function showMonthOf(page: Page, date: string) {
+  const live = page.locator(`.cal-cell[data-date="${date}"]:not([data-status="outside"])`);
+
+  for (let step = 0; step < 12; step += 1) {
+    if ((await live.count()) > 0) return;
+
+    const shown = await page
+      .locator('.cal-month .cal-cell[data-date]')
+      .first()
+      .getAttribute('data-date');
+    await page.getByTestId('month-next').click();
+    // The grid reloads from a fresh range summary; wait for it rather than racing it.
+    await expect
+      .poll(() => page.locator('.cal-month .cal-cell[data-date]').first().getAttribute('data-date'))
+      .not.toBe(shown);
+  }
+
+  throw new Error(`${date} never came into view after twelve months of stepping forward`);
 }
 
 function cell(page: Page, date: string) {
@@ -47,7 +85,7 @@ async function expectNotMarked(page: Page, date: string, marker: string) {
 test.describe('adding and removing availability', () => {
   test('a click adds an availability and it survives a reload', async ({ page, baseURL }) => {
     const seed = await seedCalendar();
-    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'));
+    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'), seed.monday);
 
     // Tuesday of the following week: allowed, empty, and in the future.
     const target = seed.day(8);
@@ -67,12 +105,16 @@ test.describe('adding and removing availability', () => {
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.cal-cell[data-date]');
+    // The displayed month is not persisted the way the display mode is, so a reload
+    // lands back on today's — which is the point of the assertion below, but it means
+    // navigating again first.
+    await showMonthOf(page, seed.monday);
     await expectMarked(page, target, 'data-own');
   });
 
   test('a second click removes it again', async ({ page, baseURL }) => {
     const seed = await seedCalendar();
-    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'));
+    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'), seed.monday);
 
     const target = seed.day(8);
 
@@ -93,7 +135,7 @@ test.describe('adding and removing availability', () => {
 
   test('a closed day cannot be answered', async ({ page, baseURL }) => {
     const seed = await seedCalendar();
-    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'));
+    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'), seed.monday);
 
     // Wednesday is not in allowed_weekdays.
     const wednesday = seed.day(2);
@@ -117,7 +159,7 @@ test.describe('dragging across days', () => {
     // The regression this suite exists to catch end to end: a drag that crosses a
     // disabled cell must still cover everything on both sides of it.
     const seed = await seedCalendar();
-    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'));
+    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'), seed.monday);
 
     const from = seed.day(8); // Tuesday, open
     const across = seed.day(9); // Wednesday, closed
@@ -161,7 +203,7 @@ test.describe('recurrences', () => {
     baseURL,
   }) => {
     const seed = await seedCalendar();
-    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'));
+    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'), seed.monday);
 
     const friday = seed.day(4);
     await expectMarked(page, friday, 'data-recurring');
@@ -182,7 +224,7 @@ test.describe('recurrences', () => {
 
   test('an excepted occurrence is absent', async ({ page, baseURL }) => {
     const seed = await seedCalendar();
-    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'));
+    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'), seed.monday);
 
     const excepted = seed.day(11);
     await expectNotMarked(page, excepted, 'data-recurring');
@@ -196,7 +238,7 @@ test.describe('recurrences', () => {
     baseURL,
   }) => {
     const seed = await seedCalendar();
-    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'));
+    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'), seed.monday);
 
     const friday = seed.day(4);
     await expectMarked(page, friday, 'data-recurring');
@@ -224,7 +266,7 @@ test.describe('what the grid reports', () => {
     baseURL,
   }) => {
     const seed = await seedCalendar();
-    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'));
+    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'), seed.monday);
 
     // Monday has two participants overlapping, against a threshold of two.
     await expectMarked(page, seed.monday, 'data-threshold');
@@ -239,7 +281,7 @@ test.describe('what the grid reports', () => {
     // weekday. On this calendar that is 08:00-20:00, so "all day" means "all of the
     // hours this calendar is open", not "midnight to midnight".
     const seed = await seedCalendar();
-    await openCalendar(page, seed.participantUrl(baseURL!, 'Grace'));
+    await openCalendar(page, seed.participantUrl(baseURL!, 'Grace'), seed.monday);
 
     const untimed = seed.day(3);
     await expectMarked(page, untimed, 'data-own');
@@ -290,7 +332,7 @@ test.describe('the server is the authority', () => {
     // UNIQUE(participant_id, date) lives in the database. A mocked backend would never
     // reject anything, so this constraint has no other way of being exercised.
     const seed = await seedCalendar();
-    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'));
+    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'), seed.monday);
 
     const target = seed.day(8);
     await cell(page, target).click();
@@ -329,7 +371,7 @@ test.describe('the server is the authority', () => {
 test.describe('display settings persist', () => {
   test('the chosen view survives a reload', async ({ page, baseURL }) => {
     const seed = await seedCalendar();
-    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'));
+    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'), seed.monday);
 
     await page.selectOption('#displayMode', 'week');
     await expect(page.locator('.cal-week')).toBeVisible();

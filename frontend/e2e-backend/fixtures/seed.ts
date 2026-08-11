@@ -46,15 +46,44 @@ function iso(date: Date): string {
 }
 
 /**
- * The Monday of the week after next.
+ * The furthest offset from the anchor that any test reads out of the DOM.
  *
- * Far enough ahead that nothing in the fixture is in the past — the calendar refuses
- * edits to past dates — and never so far that it leaves the range the view loads.
+ * `day(11)` is asserted with expectNotMarked, which counts zero matches — so a cell that
+ * is simply not rendered would make it pass for the wrong reason. Range queries reach
+ * further (`day(20)`, `day(400)`) but go straight to the API and never touch the grid.
+ */
+const RENDERED_SPAN_DAYS = 11;
+
+/**
+ * A Monday whose following two weeks all fall inside one calendar month.
+ *
+ * The starting point is the Monday of the week after next: far enough ahead that nothing
+ * in the fixture is in the past, since the calendar refuses edits to past dates.
+ *
+ * The single-month constraint is what the month grid imposes. It renders one month at a
+ * time, and a date in the next month is present only as trailing overflow — a cell that
+ * exists, carries the right `data-date`, and is inert. Clicking it waits sixty seconds
+ * for an element that will never become enabled.
+ *
+ * Anchoring alone is not enough, because the view always opens on today's month; the
+ * tests navigate to the anchor's month. But navigation alone is not enough either, since
+ * the drag test spans day(8) to day(10) and no single month shows all three once they
+ * straddle a boundary. Both halves are needed.
  */
 function upcomingMonday(): Date {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
   date.setDate(date.getDate() + ((8 - date.getDay()) % 7) + 7);
+
+  // Step a week at a time until the whole rendered span fits in one month. A Monday
+  // early in a month always satisfies this, so at most a few steps are needed.
+  for (let step = 0; step < 6; step += 1) {
+    const last = new Date(date);
+    last.setDate(last.getDate() + RENDERED_SPAN_DAYS);
+    if (last.getMonth() === date.getMonth()) break;
+    date.setDate(date.getDate() + 7);
+  }
+
   return date;
 }
 
