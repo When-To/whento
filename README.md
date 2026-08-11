@@ -298,6 +298,7 @@ whento/
 │   ├── quota/               # Calendar limits (both modes)
 │   └── testutil/            # Test helpers, including the database harness
 ├── pkg/                     # Shared packages, a separate Go module
+│   ├── broadcast/           # Live-update notices, Redis-backed or process-local
 │   ├── cache/               # Redis wrapper with a no-op fallback
 │   ├── database/            # PostgreSQL + Redis
 │   ├── datevalidation/      # Holidays, weekdays, opening hours
