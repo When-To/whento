@@ -5,7 +5,12 @@
  */
 
 import { expect, test, type Page } from '@playwright/test';
-import { fetchAvailabilities, fetchRangeSummary, seedCalendar } from './fixtures/seed';
+import {
+  addAvailability,
+  fetchAvailabilities,
+  fetchRangeSummary,
+  seedCalendar,
+} from './fixtures/seed';
 
 /**
  * The write paths, driven through the real ParticipantView against a real server.
@@ -430,5 +435,53 @@ test.describe('unknown API routes', () => {
       expect(response.status(), `${path} should serve the app`).toBe(200);
       expect(response.headers()['content-type']).toContain('text/html');
     }
+  });
+});
+
+test.describe('live updates', () => {
+  test("another participant's answer reaches the grid without a reload", async ({
+    page,
+    baseURL,
+  }) => {
+    // The whole of issue #49. Ada is looking at the calendar; Grace answers from
+    // somewhere else. Ada's grid has to notice, and the only thing this test does to it
+    // is wait — no reload, no navigation, no click.
+    const seed = await seedCalendar();
+    await openCalendar(page, seed.participantUrl(baseURL!, 'Ada'), seed.monday);
+
+    // Tuesday has one answer against a threshold of two, so it does not meet it yet.
+    const target = seed.day(1);
+    await expectNotMarked(page, target, 'data-threshold');
+
+    await addAvailability(seed.publicToken, seed.participants.Grace.id, target);
+
+    // The composable coalesces for 250ms before refetching; the assertion's own timeout
+    // covers that without a sleep.
+    await expectMarked(page, target, 'data-threshold');
+  });
+
+  test('the stream survives the calendar being watched by two browsers', async ({
+    browser,
+    baseURL,
+  }) => {
+    // Two viewers is the case the feature exists for, and the one where a per-topic
+    // subscription that overwrote its predecessor would look fine in single-browser
+    // testing and fail here.
+    const seed = await seedCalendar();
+
+    const first = await browser.newPage();
+    const second = await browser.newPage();
+
+    await openCalendar(first, seed.participantUrl(baseURL!, 'Ada'), seed.monday);
+    await openCalendar(second, seed.participantUrl(baseURL!, 'Grace'), seed.monday);
+
+    const target = seed.day(1);
+    await addAvailability(seed.publicToken, seed.participants.Grace.id, target);
+
+    await expectMarked(first, target, 'data-threshold');
+    await expectMarked(second, target, 'data-threshold');
+
+    await first.close();
+    await second.close();
   });
 });

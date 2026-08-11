@@ -53,6 +53,7 @@ import (
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 
+	"github.com/whento/pkg/broadcast"
 	"github.com/whento/pkg/cache"
 	"github.com/whento/pkg/database"
 	"github.com/whento/pkg/email"
@@ -344,6 +345,13 @@ func main() {
 
 	// Initialize rate limiter
 	rateLimiter := middleware.NewRateLimiter(redisClient)
+
+	// Live calendar updates. Redis fans the notices out across instances; without it a
+	// single-instance deployment still updates its own viewers, which is the whole of a
+	// normal self-hosted install.
+	broker := broadcast.NewRedisBroker(redisClient, log)
+	defer func() { _ = broker.Close() }()
+	eventsHandler := availabilityHandlers.NewEventsHandler(availCalendarRepo, broker)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -676,6 +684,14 @@ func main() {
 					KeyFunc:  middleware.IPKeyFunc,
 				}))
 			}
+
+			// One notice per successful write, for every route below. Placed here
+			// rather than in the nine service methods so a tenth write route cannot
+			// silently stop notifying anyone.
+			r.Use(availabilityHandlers.PublishChanges(broker))
+
+			// Live updates: the browser subscribes here and refetches on each notice.
+			r.Get("/calendar/{token}/events", eventsHandler.Stream)
 
 			// Participant availability management
 			r.Get("/calendar/{token}/participant/{pid}", availabilityHandler.GetParticipantAvailabilities)

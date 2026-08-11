@@ -202,6 +202,25 @@ export async function seedCalendar(options: SeedOptions = {}): Promise<SeededCal
   };
 }
 
+/**
+ * Answer for a participant from outside the browser under test.
+ *
+ * This is how a test plays "somebody else, somewhere else": the write goes straight to
+ * the API, so the page has no way of knowing about it except through the live stream.
+ */
+export async function addAvailability(
+  publicToken: string,
+  participantId: string,
+  date: string,
+  start?: string,
+  end?: string
+): Promise<void> {
+  await api(`/availabilities/calendar/${publicToken}/participant/${participantId}`, {
+    method: 'POST',
+    body: { date, start_time: start, end_time: end },
+  });
+}
+
 /** Read a participant's stored availabilities back, to assert what actually persisted. */
 export async function fetchAvailabilities(
   publicToken: string,
