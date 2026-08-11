@@ -19,21 +19,35 @@ Self-hosted web application for organizing recurring events with friends through
 - **Configurable Threshold** — Define minimum participants required for an event to be confirmed
 - **iCalendar Subscription** — Sync URL for Google Calendar, Apple Calendar, Outlook, and more
 - **Smart Recurrence** — Set weekly availability once with exceptions for special weeks
+- **Live Updates** — Another participant's answer appears without reloading the page
 - **Multi-channel Notifications** — Get notified when threshold is reached/lost via Email, Discord, Slack, or Telegram
 - **Participant Email Verification** — Optional email verification for participants to receive notifications
 - **Multi-language** — Interface available in French and English (including emails)
-- **Timezone Support** — Each calendar can have its own timezone
+- **Timezone Support** — Each calendar can have its own timezone, which also decides the
+  first day of the week (Monday in Berlin, Sunday in New York, Saturday in Cairo) so every
+  participant sees the same grid whatever their own language
 - **Holiday Policies** — Configure how public holidays are handled (ignore/allow/block)
-- **Participant Locking** — Option to disable public view and require direct participant links
-- **Anonymous Participant Registration** — Allow anyone with the public link to self-register as a participant without authentication (mutually exclusive with participant locking)
+- **Participant Locking** — Masks participant ids in the public view, so a visitor cannot
+  answer in somebody else's name
+- **Anonymous Participant Registration** — Allow anyone with the public link to
+  self-register as a participant without authentication. The interface presents this and
+  participant locking as mutually exclusive; the API does not enforce that, so a script
+  setting both gets both
 - **Self-hosted** — Your data stays on your infrastructure
 
 ### Authentication & Security
 
 - **Email Verification** — Required before creating calendars
-- **JWT Authentication** — RS256 asymmetric keys with refresh tokens
+- **JWT Authentication** — RS256 asymmetric keys with refresh tokens, held in httpOnly
+  cookies rather than in the response body
+- **Passkeys (WebAuthn)** — Passwordless sign-in, including usernameless discoverable
+  credentials
+- **Two-factor Authentication** — TOTP with single-use backup codes, and a per-user
+  attempt limit on verification
+- **Magic Links** — Sign in from an emailed link, when SMTP is configured
 - **Password Security** — Bcrypt hashing with strict password requirements
-- **Rate Limiting** — Protection on public endpoints and API routes
+- **Rate Limiting** — Protection on public endpoints and API routes, backed by Redis when
+  available and by an in-process limiter when it is not
 - **Regenerable Tokens** — Public and ICS tokens can be regenerated if compromised
 - **Security Headers** — HSTS, CSP, X-Frame-Options protection
 
@@ -395,18 +409,55 @@ make dev            # Backend on :8080
 ### Testing
 
 ```bash
-# Run all tests
+# Everything, for the default build (selfhosted)
 make test
+make test BUILD_TYPE=cloud
 
-# Test specific module
-go test ./internal/auth/... -v
-
-# Test with coverage
+# With coverage
 make test-coverage
-
-# Build-specific tests
-go test -tags selfhosted ./...
 ```
+
+Two things about running Go tests here catch people out.
+
+**Always pass a build tag.** Whole packages are excluded without one, so a bare
+`go test ./...` compiles a different program from the one that ships and can pass while
+the real build is broken:
+
+```bash
+go test -tags selfhosted ./internal/auth/... -v
+```
+
+**`./...` does not reach `pkg/`.** It is a separate module wired in through a `replace`,
+so it needs its own invocation — which is why `make test` runs both:
+
+```bash
+cd pkg && go test -tags selfhosted ./...
+```
+
+Some repository tests need a real PostgreSQL. They read `DATABASE_URL` and **skip
+cleanly when it is unset**, so `make test` stays green on a machine without a database;
+CI supplies one. Point it at a throwaway database rather than your development one — the
+tests create and delete their own rows, but they run against whatever you give them:
+
+```bash
+make dev-db                       # postgres + redis via docker-compose.dev.yml
+DATABASE_URL=... make test
+```
+
+Frontend and browser tests live under `frontend/`:
+
+```bash
+cd frontend
+npm run test                      # unit tests (Vitest)
+npm run test:coverage
+npx playwright test               # component and rendering tests, no server needed
+npm run test:e2e:backend          # drives a real server; see the note below
+```
+
+`test:e2e:backend` expects `make dev-fullstack` running, and the **server must be started
+with `RATE_LIMIT_ENABLED=false`**. The limiter is per IP, and a suite driving a real
+calendar from one address is exactly the traffic it exists to refuse — leaving it on
+turns every test into a 429.
 
 ### Migrations
 
@@ -456,6 +507,26 @@ The `pre-commit` hook formats staged files automatically — see [CONTRIBUTING.m
 - `GET /me` — Get current user profile
 - `PATCH /me` — Update profile (display name, locale, timezone)
 - `PATCH /me/password` — Change password
+- `POST /forgot-password`, `POST /reset-password` — Password reset by email
+- `POST /send-verification`, `GET /verify-email/{token}` — Email verification
+- `POST /magic-link/request`, `GET /magic-link/verify/{token}` — Sign in from an emailed
+  link. `GET /magic-link/available` reports whether SMTP is configured
+- `POST /mfa/verify` — Complete a login that requires a second factor
+- `POST /passkey/login/begin`, `POST /passkey/login/finish` — Passwordless sign-in
+
+### Two-Factor Authentication (`/api/v1/mfa`)
+
+- `POST /setup/begin`, `POST /setup/finish` — Enrol an authenticator app
+- `GET /status` — Whether 2FA is enabled
+- `POST /disable` — Turn 2FA off
+- `POST /backup-codes/regenerate` — Issue new single-use backup codes
+
+### Passkey Routes (`/api/v1/passkey`)
+
+- `POST /register/begin`, `POST /register/finish` — Register a passkey
+- `GET /list` — List this account's passkeys
+- `PATCH /{id}/name` — Rename a passkey
+- `DELETE /{id}` — Remove a passkey
 
 ### Calendar Routes (`/api/v1/calendars`)
 
@@ -478,10 +549,23 @@ The `pre-commit` hook formats staged files automatically — see [CONTRIBUTING.m
 - `POST/DELETE .../recurrence/{rid}/exception[/{date}]` — Manage exceptions
 - `GET /calendar/{token}/dates/{date}` — Get summary for specific date
 - `GET /calendar/{token}/range` — Get summary for date range
+- `GET /calendar/{token}/events` — Server-sent events announcing that the calendar
+  changed. Each notice carries no payload: fetch the range summary again
 
 ### iCalendar Routes (`/api/v1/ics`)
 
-- `GET /feed/{ics_token}` — iCalendar subscription feed
+- `GET /feed/{token}` — iCalendar subscription feed for one calendar
+- `GET /unified/{token}` — One feed combining several of your calendars
+- `GET /unified-feed`, `POST /unified-feed` — Read or create the unified feed
+- `PATCH /unified-feed/calendars` — Choose which calendars it includes
+- `POST /unified-feed/regenerate-token` — Rotate its URL, revoking the previous one
+
+### Notification Routes (`/api/v1/calendars`)
+
+- `GET /{id}/notify-config`, `PATCH /{id}/notify-config` — Notification settings, owner
+  only. Webhook URLs are validated against SSRF before they are stored
+- `POST /{token}/participants/{pid}/email` — Add an address to a participant
+- `GET /participants/verify-email/{token}` — Verify a participant's address
 
 ### Quota Routes - Both Modes (`/api/v1/quota`)
 
@@ -493,6 +577,12 @@ The `pre-commit` hook formats staged files automatically — see [CONTRIBUTING.m
 - `PATCH /users/{id}/role` — Update user role
 - `DELETE /users/{id}` — Delete user
 - `GET /users/{id}/calendars` — View user's calendars
+- `POST /users/{id}/disable-2fa` — Clear a locked-out user's second factor
+
+### Health
+
+- `GET /api/health` — Liveness. Note the path: there is no `/api/v1/health`
+- `GET /api/ready` — Readiness, including the database
 
 ---
 
@@ -509,9 +599,32 @@ The `pre-commit` hook formats staged files automatically — see [CONTRIBUTING.m
   - ICS feed: 30 req/min/IP
   - Authenticated: 100 req/min/user
 - **Token Regeneration** — Separate public and ICS tokens can be regenerated
-- **CORS Protection** — Configurable allowed origins
+- **Trusted Proxies** — `X-Forwarded-For` and `X-Real-IP` are only believed when the
+  connection comes from an address listed in `TRUSTED_PROXIES`. Without that, anyone
+  could pick their own rate-limit bucket by setting a header
+- **Webhook Validation** — Discord and Slack webhook URLs are checked before they are
+  stored, so a notification cannot be pointed at a cloud metadata endpoint or an
+  address inside your network
+- **CORS Protection** — Configurable allowed origins. A wildcard is treated as
+  same-origin only, since a wildcard combined with credentials would let any site make
+  authenticated calls
 - **Security Headers** — HSTS, CSP, X-Frame-Options
 - **SQL Injection Protection** — Parameterized queries via pgx
+
+### One thing to understand about participant links
+
+Participant access is **capability-based**: possession of the calendar's public link,
+plus a participant's id, is the authorisation. There is no per-participant secret, so
+anyone holding a link can answer as that participant. That is deliberate — it is what
+lets you invite people without asking them to create an account — but it means the link
+should be shared the way you would share a door key.
+
+If a link gets out, regenerate the public token: the old URL stops working immediately.
+
+`lock_participants` narrows the exposure rather than removing it: the public view still
+loads, but participant ids are masked out of it, so a visitor cannot discover somebody
+else's id and answer in their name. Anyone holding a direct participant link can still
+use it.
 
 ---
 
