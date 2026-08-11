@@ -52,7 +52,6 @@ func (h *Handler) HandleRobotsTxt(w http.ResponseWriter, r *http.Request) {
 
 		// Cloud-specific public routes
 		if h.buildType == "cloud" {
-			content.WriteString("Allow: /pricing\n")
 			content.WriteString("Allow: /why-whento\n")
 			content.WriteString("Allow: /privacy\n")
 			content.WriteString("Allow: /terms\n")
@@ -70,12 +69,6 @@ func (h *Handler) HandleRobotsTxt(w http.ResponseWriter, r *http.Request) {
 		content.WriteString("Disallow: /admin/\n")
 		content.WriteString("Disallow: /api/\n")
 
-		if h.buildType == "cloud" {
-			content.WriteString("Disallow: /billing\n")
-			content.WriteString("Disallow: /cart\n")
-			content.WriteString("Disallow: /checkout\n")
-		}
-
 		content.WriteString("\n# Sitemap\n")
 		content.WriteString("Sitemap: " + h.appURL + "/sitemap.xml\n")
 	}
@@ -88,7 +81,7 @@ func (h *Handler) HandleRobotsTxt(w http.ResponseWriter, r *http.Request) {
 // HandleSitemapXML serves a dynamic sitemap.xml file
 //
 //	@Summary		Get sitemap.xml
-//	@Description	Returns a dynamically generated XML sitemap. For Cloud builds, includes public marketing pages (home, pricing, why-whento, legal). For Self-hosted builds, returns an empty sitemap for privacy.
+//	@Description	Returns a dynamically generated XML sitemap. For Cloud builds, includes public marketing pages (home, why-whento, legal). For Self-hosted builds, returns an empty sitemap for privacy.
 //	@Tags			SEO
 //	@Produce		xml
 //	@Success		200	{string}	string	"XML sitemap content"
@@ -132,13 +125,6 @@ func (h *Handler) HandleSitemapXML(w http.ResponseWriter, r *http.Request) {
 
 	// Cloud-specific pages
 	if h.buildType == "cloud" {
-		content.WriteString("  <url>\n")
-		content.WriteString("    <loc>" + h.appURL + "/pricing</loc>\n")
-		content.WriteString("    <changefreq>monthly</changefreq>\n")
-		content.WriteString("    <priority>0.9</priority>\n")
-		content.WriteString("    <lastmod>" + today + "</lastmod>\n")
-		content.WriteString("  </url>\n\n")
-
 		content.WriteString("  <url>\n")
 		content.WriteString("    <loc>" + h.appURL + "/why-whento</loc>\n")
 		content.WriteString("    <changefreq>monthly</changefreq>\n")

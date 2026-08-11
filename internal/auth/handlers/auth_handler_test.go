@@ -6,7 +6,6 @@ package handlers_test
 
 import (
 	"context"
-	"testing"
 
 	"github.com/google/uuid"
 
@@ -22,9 +21,15 @@ type mockUserRepository struct {
 	users []*models.User
 	count int
 	err   error
+	// createErr is separate from err so a test can fail the insert without also
+	// failing the count that decides whether the account is the bootstrap admin.
+	createErr error
 }
 
 func (m *mockUserRepository) Create(ctx context.Context, user *models.User) error {
+	if m.createErr != nil {
+		return m.createErr
+	}
 	if m.err != nil {
 		return m.err
 	}
@@ -133,20 +138,7 @@ var _ service.UserRepository = (*mockUserRepository)(nil)
 var _ service.TokenRepository = (*mockTokenRepository)(nil)
 var _ service.MFARepository = (*mockMFARepository)(nil)
 
-// TestAuthHandlerIsNotConstructibleHere records why this package has no handler test,
-// so that the gap is a known one rather than an oversight.
-//
-// The previous skip reason — "Service-level tests provide coverage" — was not true:
-// internal/auth/service sits at 0% of its own statements. The real obstacle is
-// NewAuthHandler's signature. It takes *service.AuthService, *repository.UserRepository,
-// *email.Service and *config.Config, all concrete, and the two repositories wrap a
-// *pgxpool.Pool. There is no seam to substitute, so the handler cannot be built without
-// a live database and SMTP configuration.
-//
-// The mocks above are still worth their keep: the var _ assertions are compile-time
-// checks that they continue to satisfy the service interfaces, so they are ready for
-// whichever comes first — a constructor that accepts interfaces, or a database-backed
-// integration suite.
-func TestAuthHandlerIsNotConstructibleHere(t *testing.T) {
-	t.Skip("NewAuthHandler requires concrete pgx-backed repositories; see the comment above")
-}
+// The mocks above satisfy the service interfaces; the var _ assertions keep them
+// honest as those interfaces change. The handler tests themselves live in
+// auth_handler_http_test.go, which became possible once NewAuthHandler started taking
+// UserStore and EmailSender instead of concrete pgx-backed repositories.

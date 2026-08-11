@@ -24,7 +24,6 @@ import (
 	"github.com/whento/pkg/email"
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/middleware"
-	"github.com/whento/whento/internal/auth/repository"
 	"github.com/whento/whento/internal/auth/service"
 	"github.com/whento/whento/internal/config"
 )
@@ -38,8 +37,8 @@ var emailVerificationTranslationsEV string
 // EmailVerificationHandler handles email verification HTTP requests
 type EmailVerificationHandler struct {
 	authService              *service.AuthService
-	userRepo                 *repository.UserRepository
-	emailService             *email.Service
+	userRepo                 UserStore
+	emailService             EmailSender
 	cfg                      *config.Config
 	logger                   *slog.Logger
 	verificationTemplate     *template.Template
@@ -49,8 +48,8 @@ type EmailVerificationHandler struct {
 // NewEmailVerificationHandler creates a new email verification handler
 func NewEmailVerificationHandler(
 	authService *service.AuthService,
-	userRepo *repository.UserRepository,
-	emailService *email.Service,
+	userRepo UserStore,
+	emailService EmailSender,
 	cfg *config.Config,
 	logger *slog.Logger,
 ) *EmailVerificationHandler {

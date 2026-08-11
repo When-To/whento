@@ -20,6 +20,7 @@ import (
 	authModels "github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/config"
 	"github.com/whento/whento/internal/passkey/models"
+	"github.com/whento/whento/internal/passkey/repository"
 )
 
 var (
@@ -355,6 +356,13 @@ func (s *PasskeyService) List(ctx context.Context, userID uuid.UUID) ([]*models.
 func (s *PasskeyService) Rename(ctx context.Context, passkeyID, userID uuid.UUID, name string) error {
 	passkey, err := s.repo.GetByID(ctx, passkeyID)
 	if err != nil {
+		// The repository has its own sentinel with the same text as this package's.
+		// Returning it unwrapped left the handler's errors.Is check against
+		// ErrPasskeyNotFound permanently false, so a missing passkey answered 500.
+		if errors.Is(err, repository.ErrPasskeyNotFound) {
+			return ErrPasskeyNotFound
+		}
+
 		return err
 	}
 
@@ -371,6 +379,10 @@ func (s *PasskeyService) Rename(ctx context.Context, passkeyID, userID uuid.UUID
 func (s *PasskeyService) Delete(ctx context.Context, passkeyID, userID uuid.UUID) error {
 	passkey, err := s.repo.GetByID(ctx, passkeyID)
 	if err != nil {
+		if errors.Is(err, repository.ErrPasskeyNotFound) {
+			return ErrPasskeyNotFound
+		}
+
 		return err
 	}
 
