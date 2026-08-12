@@ -70,9 +70,15 @@ updates:
       actions:
         patterns: ['*']
 
-  # ── Image tags in the production and devcontainer Dockerfiles ───────────
+  # ── Image tags in every Dockerfile ──────────────────────────────────────
+  # build/selfhosted and build/cloud are the ones CI and the release workflow
+  # actually build; the root Dockerfile only backs the make docker-* targets.
   - package-ecosystem: docker
-    directories: ['/', '/.devcontainer']
+    directories:
+      - /
+      - /.devcontainer
+      - /build/selfhosted
+      - /build/cloud
     schedule:
       interval: weekly
       day: monday

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Build stage
-FROM golang:1.26-alpine3.23 AS builder
+FROM golang:1.26-alpine3.24 AS builder
 
 WORKDIR /build
 
@@ -34,18 +34,18 @@ RUN go build \
     ./cmd/
 
 # Download migrate CLI (use BUILDPLATFORM to avoid QEMU issues)
-FROM --platform=$BUILDPLATFORM alpine:3.23 AS migrate-builder
+FROM --platform=$BUILDPLATFORM alpine:3.24 AS migrate-builder
 
 ARG TARGETARCH
 
 # Download golang-migrate binary for target architecture
 RUN apk add --no-cache curl && \
-    curl -fsSL https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-${TARGETARCH}.tar.gz | tar xvz && \
+    curl -fsSL https://github.com/golang-migrate/migrate/releases/download/v4.19.1/migrate.linux-${TARGETARCH}.tar.gz | tar xvz && \
     mv migrate /usr/local/bin/migrate && \
     chmod +x /usr/local/bin/migrate
 
 # Runtime stage
-FROM alpine:3.23
+FROM alpine:3.24
 
 LABEL org.opencontainers.image.title="WhenTo" \
     org.opencontainers.image.description="Self-hosted scheduling and calendar application" \
