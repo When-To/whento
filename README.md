@@ -368,6 +368,38 @@ SMTP_FROM=whento@example.com
 
 > **Note:** with this compose file, `DATABASE_URL` and `REDIS_URL` are constructed automatically from `DB_*` / `REDIS_PASSWORD`. Setting them directly in `.env` has no effect here — they only apply to standalone / binary deployments.
 
+### JWT signing keys must be persisted
+
+On first start the container generates an RSA-4096 key pair in `/app/keys` and signs
+every access and refresh token with it. **That directory has to survive container
+recreation.** If it does not, a new key pair is minted on the next start, every token
+already issued stops verifying, and every signed-in user is logged out — on an image
+update, on an `.env` change, on anything that makes Compose recreate the container.
+
+The shipped `docker-compose.yml` handles this with a named volume:
+
+```yaml
+services:
+  app:
+    volumes:
+      - whento_keys:/app/keys
+
+volumes:
+  whento_keys:
+    driver: local
+```
+
+Consequences worth knowing:
+
+- **Back up `whento_keys` alongside the database.** Restoring the database without the
+  keys works, but logs everyone out.
+- **Deleting the volume is the way to rotate the keys** — a deliberate, global logout.
+- **Calendar participant links are not affected.** They authorise by possession of the
+  link itself, not by a signed token, so they keep working across a key rotation.
+- Running the binary outside Docker: point `JWT_PRIVATE_KEY_PATH` /
+  `JWT_PUBLIC_KEY_PATH` at a directory that persists across deployments, and keep the
+  private key at mode `600`.
+
 ### Building from Source
 
 ```bash
@@ -386,6 +418,12 @@ your-domain.com {
     reverse_proxy localhost:8080
 }
 ```
+
+Behind a proxy, set `TRUSTED_PROXIES` to the address the proxy connects from (for the
+compose stack, the Docker bridge range, e.g. `172.16.0.0/12`). `X-Forwarded-For` and
+`X-Real-IP` are ignored for every other source, by design: believing them
+unconditionally would let any client choose its own rate-limit bucket. Until it is set,
+per-IP rate limits count all proxied traffic as one client.
 
 ---
 

@@ -239,8 +239,18 @@ func handleAvailabilityError(w http.ResponseWriter, r *http.Request, err error, 
 		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Availability not found")
 	case errors.Is(err, service.ErrAvailabilityExists):
 		httputil.Error(w, http.StatusConflict, httputil.ErrCodeConflict, "Availability already exists for this date")
+	case errors.Is(err, service.ErrInvalidParticipantID):
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid participant ID")
 	case errors.Is(err, service.ErrInvalidDate):
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid date format, expected YYYY-MM-DD")
+	// A range with the two ends the wrong way round is a request the caller got wrong,
+	// not a fault on our side: without this case it fell through to the 500 below.
+	case errors.Is(err, service.ErrInvalidDateRange):
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "End date must be after start date")
+	case errors.Is(err, service.ErrDateBeforeCalendarStart):
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Date is before the calendar start date")
+	case errors.Is(err, service.ErrDateAfterCalendarEnd):
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Date is after the calendar end date")
 	case errors.Is(err, service.ErrInvalidTime):
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid time format, expected HH:MM")
 	case errors.Is(err, service.ErrInvalidTimeRange):

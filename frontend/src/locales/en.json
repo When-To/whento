@@ -422,6 +422,8 @@
     "saturday": "Saturday",
     "availabilityAdded": "Availability added",
     "availabilityDeleted": "Availability deleted",
+    "confirmDelete": "Delete this availability?",
+    "confirmDeleteRecurrence": "Delete this recurrence?",
     "created": "Availability created",
     "deleted": "Availability deleted",
     "updated": "Availability updated",

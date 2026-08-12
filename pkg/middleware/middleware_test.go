@@ -23,6 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/whento/pkg/cache"
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/logger"
@@ -190,6 +193,194 @@ func TestLoggerPassesTheRequestThrough(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)
 	}
+}
+
+// captureLogs redirects the package logger into a buffer for the duration of one test.
+func captureLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+
+	original := logger.Default()
+	t.Cleanup(func() { logger.SetDefault(original) })
+
+	var buf bytes.Buffer
+	logger.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+
+	return &buf
+}
+
+// TestLoggerNeverLogsTheRequestPath is the whole point of logging a route pattern.
+// Access to a calendar is capability-based: whoever holds the link is the participant,
+// and the link is entirely contained in the path. A log line carrying the path is a
+// credential sitting in a log file, replayable by anyone who can read it — support
+// staff, a log shipper, a backup, an aggregator.
+func TestLoggerNeverLogsTheRequestPath(t *testing.T) {
+	const (
+		calendarToken  = "Xk3f9QvR2mNbT7wLpZ4sYd8H"
+		participantID  = "6f9619ff-8b86-d011-b42d-00c04fc964ff"
+		verifyToken    = "e1ee9c1f5f6c4a3b9d0e2f7a8b6c5d4e"
+		magicLinkToken = "a94a8fe5ccb19ba61c4c0873d391e987"
+	)
+
+	tests := []struct {
+		name      string
+		pattern   string
+		target    string
+		wantRoute string
+		secrets   []string
+	}{
+		{
+			name:      "a participant availability link",
+			pattern:   "/availabilities/calendar/{token}/participant/{pid}",
+			target:    "/availabilities/calendar/" + calendarToken + "/participant/" + participantID,
+			wantRoute: "/availabilities/calendar/{token}/participant/{pid}",
+			secrets:   []string{calendarToken, participantID},
+		},
+		{
+			name:      "a magic link",
+			pattern:   "/magic-link/verify/{token}",
+			target:    "/magic-link/verify/" + magicLinkToken,
+			wantRoute: "/magic-link/verify/{token}",
+			secrets:   []string{magicLinkToken},
+		},
+		{
+			name:      "an email verification link",
+			pattern:   "/verify-email/{token}",
+			target:    "/verify-email/" + verifyToken,
+			wantRoute: "/verify-email/{token}",
+			secrets:   []string{verifyToken},
+		},
+		{
+			// A query string is no safer than a path segment; nothing but the pattern
+			// is logged, so it cannot leak either.
+			name:      "a token in the query string",
+			pattern:   "/calendars/{token}",
+			target:    "/calendars/" + calendarToken + "?invite=" + verifyToken,
+			wantRoute: "/calendars/{token}",
+			secrets:   []string{calendarToken, verifyToken},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := captureLogs(t)
+
+			router := chi.NewRouter()
+			router.Use(Logger)
+			router.Get(tt.pattern, func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.target, nil))
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200 — the route did not match", rec.Code)
+			}
+
+			line := decodeLogLine(t, buf)
+			if got, _ := line["route"].(string); got != tt.wantRoute {
+				t.Errorf("route = %q, want %q", got, tt.wantRoute)
+			}
+			for _, secret := range tt.secrets {
+				if strings.Contains(buf.String(), secret) {
+					t.Errorf("the log line leaks %q: %s", secret, buf.String())
+				}
+			}
+			// The line is still worth keeping: it says what was called and how it went.
+			if got, _ := line["method"].(string); got != http.MethodGet {
+				t.Errorf("method = %q, want GET", got)
+			}
+			if got, ok := line["status"].(float64); !ok || int(got) != http.StatusOK {
+				t.Errorf("status = %v, want 200", line["status"])
+			}
+		})
+	}
+}
+
+// TestLoggerFallsBackWhenNoRouteMatched covers the case the deferred read cannot serve:
+// chi only fills the pattern in once it has matched a route, so a 404 has none. Falling
+// back to the raw path there would put every mistyped or probed credential in the log.
+func TestLoggerFallsBackWhenNoRouteMatched(t *testing.T) {
+	const stolenToken = "Xk3f9QvR2mNbT7wLpZ4sYd8H"
+
+	tests := []struct {
+		name  string
+		serve func(w http.ResponseWriter, r *http.Request)
+	}{
+		{
+			name: "a request no route matches",
+			serve: func(w http.ResponseWriter, r *http.Request) {
+				router := chi.NewRouter()
+				router.Use(Logger)
+				router.Get("/calendars/{token}", func(w http.ResponseWriter, _ *http.Request) {})
+				router.ServeHTTP(w, r)
+			},
+		},
+		{
+			// Logger is also usable outside a chi router, where there is no routing
+			// context at all. RouteContext and RoutePattern are both nil-safe.
+			name: "no chi router at all",
+			serve: func(w http.ResponseWriter, r *http.Request) {
+				Logger(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				})).ServeHTTP(w, r)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := captureLogs(t)
+
+			target := "/does/not/exist/" + stolenToken
+			tt.serve(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, target, nil))
+
+			line := decodeLogLine(t, buf)
+			if got, _ := line["route"].(string); got != unroutedLabel {
+				t.Errorf("route = %q, want %q", got, unroutedLabel)
+			}
+			if strings.Contains(buf.String(), stolenToken) {
+				t.Errorf("the fallback leaked the raw path: %s", buf.String())
+			}
+		})
+	}
+}
+
+// TestLoggerLogsNeitherIPNorUserAgent pins a deliberate omission. The owner's constraint
+// is that no personal data is stored, and an access log is storage like any other.
+func TestLoggerLogsNeitherIPNorUserAgent(t *testing.T) {
+	buf := captureLogs(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "198.51.100.23:44321"
+	req.Header.Set("User-Agent", "Mozilla/5.0 (a very distinguishing fingerprint)")
+
+	var reached bool
+	Logger(okHandler(&reached)).ServeHTTP(httptest.NewRecorder(), req)
+
+	for _, unwanted := range []string{"198.51.100.23", "Mozilla/5.0", "distinguishing"} {
+		if strings.Contains(buf.String(), unwanted) {
+			t.Errorf("the log line contains %q: %s", unwanted, buf.String())
+		}
+	}
+}
+
+func decodeLogLine(t *testing.T, buf *bytes.Buffer) map[string]any {
+	t.Helper()
+
+	raw := bytes.TrimSpace(buf.Bytes())
+	if len(raw) == 0 {
+		t.Fatal("nothing was logged")
+	}
+	// Only the request line is of interest; take the last one written.
+	lines := bytes.Split(raw, []byte("\n"))
+
+	var line map[string]any
+	if err := json.Unmarshal(lines[len(lines)-1], &line); err != nil {
+		t.Fatalf("the log line is not JSON: %v (%q)", err, buf.String())
+	}
+
+	return line
 }
 
 func TestCORS(t *testing.T) {
@@ -466,16 +657,24 @@ func newManagerWithExpiry(t *testing.T, accessExpiry time.Duration) *jwt.Manager
 }
 
 // stubCache answers Get from a fixed map. Everything else is a no-op, since Auth only
-// ever reads.
+// ever reads. A failure set on the stub is returned instead of a lookup, which is how
+// the outage cases below are written.
 type stubCache struct {
 	enabled bool
 	values  map[string]int64
+	failure error
 }
 
 func (c *stubCache) Get(_ context.Context, key string, dest interface{}) error {
+	if c.failure != nil {
+		return c.failure
+	}
+
 	value, ok := c.values[key]
 	if !ok {
-		return errors.New("miss")
+		// redis.Nil is the miss sentinel throughout this codebase, and Auth has to tell
+		// a miss (nothing revoked) from an outage (nothing known).
+		return redis.Nil
 	}
 	target, ok := dest.(*int64)
 	if !ok {
@@ -506,6 +705,7 @@ func TestAuthHonoursAPasswordChange(t *testing.T) {
 		name        string
 		cache       cache.Cache
 		wantReached bool
+		wantStatus  int
 	}{
 		{
 			name:        "no cache at all",
@@ -528,14 +728,28 @@ func TestAuthHonoursAPasswordChange(t *testing.T) {
 			wantReached: true,
 		},
 		{
-			name:        "the password changed after the token was issued",
-			cache:       &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).Unix()}},
-			wantReached: false,
+			name:       "the password changed after the token was issued",
+			cache:      &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).Unix()}},
+			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			name:        "somebody else changed their password",
 			cache:       &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-2"): time.Now().Add(time.Hour).Unix()}},
 			wantReached: true,
+		},
+		{
+			// The whole point of the check: an unreadable cache cannot answer "nothing
+			// was revoked". Letting the request through would quietly resurrect every
+			// token a password change had killed, for as long as the outage lasts.
+			name:       "the cache is unreachable",
+			cache:      &stubCache{enabled: true, failure: errors.New("dial tcp: connection refused")},
+			wantStatus: http.StatusServiceUnavailable,
+		},
+		{
+			// A stored value that cannot be decoded is an error, not a miss.
+			name:       "the stored value is unusable",
+			cache:      &stubCache{enabled: true, failure: errors.New("json: cannot unmarshal string into int64")},
+			wantStatus: http.StatusServiceUnavailable,
 		},
 	}
 
@@ -552,8 +766,8 @@ func TestAuthHonoursAPasswordChange(t *testing.T) {
 			if reached != tt.wantReached {
 				t.Errorf("reached = %v, want %v (status %d)", reached, tt.wantReached, rec.Code)
 			}
-			if !tt.wantReached && rec.Code != http.StatusUnauthorized {
-				t.Errorf("status = %d, want 401", rec.Code)
+			if !tt.wantReached && rec.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
 			}
 		})
 	}
@@ -631,6 +845,143 @@ func TestContextKeysAreNotPlainStrings(t *testing.T) {
 
 	if reached || rec.Code != http.StatusUnauthorized {
 		t.Errorf("a plain string context value passed the role check (status %d)", rec.Code)
+	}
+}
+
+// TestErrorResponsesUseTheStandardEnvelope covers every refusal the middleware chain can
+// produce. A client that meets {"success":false,"error":{...}} everywhere else and bare
+// text/plain here has to special-case the middleware, and the frontend's axios client —
+// which unwraps the envelope — cannot show the reason at all.
+func TestErrorResponsesUseTheStandardEnvelope(t *testing.T) {
+	manager := newManager(t)
+	token, err := manager.GenerateAccessToken("user-1", "ada@example.test", "user")
+	if err != nil {
+		t.Fatalf("GenerateAccessToken: %v", err)
+	}
+
+	authed := func() *http.Request {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		return req
+	}
+
+	tests := []struct {
+		name       string
+		handler    http.Handler
+		request    *http.Request
+		wantStatus int
+		wantCode   string
+	}{
+		{
+			name:       "no authorization header",
+			handler:    Auth(manager, nil)(okHandler(new(bool))),
+			request:    httptest.NewRequest(http.MethodGet, "/", nil),
+			wantStatus: http.StatusUnauthorized,
+			wantCode:   "UNAUTHORIZED",
+		},
+		{
+			name:    "a malformed authorization header",
+			handler: Auth(manager, nil)(okHandler(new(bool))),
+			request: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, "/", nil)
+				req.Header.Set("Authorization", "Basic nope")
+				return req
+			}(),
+			wantStatus: http.StatusUnauthorized,
+			wantCode:   "UNAUTHORIZED",
+		},
+		{
+			name:    "an invalid token",
+			handler: Auth(manager, nil)(okHandler(new(bool))),
+			request: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, "/", nil)
+				req.Header.Set("Authorization", "Bearer not-a-jwt")
+				return req
+			}(),
+			wantStatus: http.StatusUnauthorized,
+			wantCode:   "UNAUTHORIZED",
+		},
+		{
+			name: "a token killed by a password change",
+			handler: Auth(manager, &stubCache{
+				enabled: true,
+				values:  map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).Unix()},
+			})(okHandler(new(bool))),
+			request:    authed(),
+			wantStatus: http.StatusUnauthorized,
+			wantCode:   "UNAUTHORIZED",
+		},
+		{
+			name:       "a revocation check that could not run",
+			handler:    Auth(manager, &stubCache{enabled: true, failure: errors.New("connection refused")})(okHandler(new(bool))),
+			request:    authed(),
+			wantStatus: http.StatusServiceUnavailable,
+			wantCode:   errCodeUnavailable,
+		},
+		{
+			name:       "a request that never authenticated",
+			handler:    RequireRole("admin")(okHandler(new(bool))),
+			request:    httptest.NewRequest(http.MethodGet, "/", nil),
+			wantStatus: http.StatusUnauthorized,
+			wantCode:   "UNAUTHORIZED",
+		},
+		{
+			name:    "the wrong role",
+			handler: RequireRole("admin")(okHandler(new(bool))),
+			request: httptest.NewRequest(http.MethodGet, "/", nil).WithContext(
+				context.WithValue(context.Background(), UserRoleKey, "user"),
+			),
+			wantStatus: http.StatusForbidden,
+			wantCode:   "FORBIDDEN",
+		},
+		{
+			name: "a recovered panic",
+			handler: Recoverer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				panic("boom")
+			})),
+			request:    httptest.NewRequest(http.MethodGet, "/", nil),
+			wantStatus: http.StatusInternalServerError,
+			wantCode:   "INTERNAL_ERROR",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			tt.handler.ServeHTTP(rec, tt.request)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.wantStatus)
+			}
+			if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+				t.Errorf("Content-Type = %q, want application/json", got)
+			}
+
+			// Decoded against the wire shape rather than httputil's struct: what matters
+			// is what a client actually receives.
+			var body struct {
+				Success bool `json:"success"`
+				Error   *struct {
+					Code    string `json:"code"`
+					Message string `json:"message"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("the body is not JSON: %v (%q)", err, rec.Body.String())
+			}
+			if body.Success {
+				t.Error("success = true on an error response")
+			}
+			if body.Error == nil {
+				t.Fatalf("no error object in %q", rec.Body.String())
+			}
+			if body.Error.Code != tt.wantCode {
+				t.Errorf("error code = %q, want %q", body.Error.Code, tt.wantCode)
+			}
+			if body.Error.Message == "" {
+				t.Error("the error carries no message")
+			}
+		})
 	}
 }
 

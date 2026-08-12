@@ -25,11 +25,18 @@ COPY frontend/dist ./web/dist
 RUN chmod +x scripts/build-migrations.sh && \
     sh scripts/build-migrations.sh cloud ./migrations-build
 
-# Build with cloud tag
+# Build with cloud tag.
+#
+# The -X targets must match the variables declared in cmd/buildinfo.go: the linker
+# silently ignores -X for an unknown symbol, so a typo here costs nothing at build
+# time and reports "dev" forever at runtime.
+# The build type is not injected — it comes from the -tags value above.
 ARG VERSION=dev
+ARG BUILD_DATE=unknown
+ARG VCS_REF=unknown
 RUN go build \
     -tags cloud \
-    -ldflags "-X main.Version=${VERSION} -X main.BuildType=cloud" \
+    -ldflags "-X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE} -X main.VCSRef=${VCS_REF}" \
     -o whento \
     ./cmd/
 

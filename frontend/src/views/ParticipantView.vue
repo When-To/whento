@@ -1950,7 +1950,7 @@ async function loadParticipantCounts(year?: number, month?: number) {
 }
 
 async function handleDeleteAvailability(date: string) {
-  if (!confirm(t('common.delete', 'Delete this availability?'))) return;
+  if (!confirm(t('availability.confirmDelete'))) return;
 
   try {
     await availabilitiesApi.delete(token.value, participantId.value, date);
@@ -1998,7 +1998,7 @@ async function handleAddRecurrence() {
 }
 
 async function handleDeleteRecurrence(recurrenceId: string) {
-  if (!confirm(t('common.delete', 'Delete this recurrence?'))) return;
+  if (!confirm(t('availability.confirmDeleteRecurrence'))) return;
 
   try {
     await availabilitiesApi.deleteRecurrence(token.value, participantId.value, recurrenceId);

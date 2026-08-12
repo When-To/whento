@@ -5,11 +5,33 @@
 package email
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/smtp"
+	"strconv"
 	"strings"
+	"time"
+)
+
+const (
+	// defaultDialTimeout bounds the TCP connect and, on port 465, the TLS handshake.
+	// Without it a host that accepts the connection and then says nothing holds the
+	// caller for as long as the operating system's own connect timeout — minutes — and
+	// the callers here are detached goroutines nobody is waiting on, so they simply
+	// accumulate, one per notification.
+	defaultDialTimeout = 10 * time.Second
+
+	// defaultTimeout bounds the whole SMTP conversation, greeting included. Reaching a
+	// host is not the same as it answering: a server that completes the TCP handshake
+	// and never sends its 220 banner would otherwise park the goroutine for ever.
+	defaultTimeout = 30 * time.Second
+
+	// implicitTLSPort speaks TLS from the first byte, rather than upgrading with
+	// STARTTLS the way 587 does.
+	implicitTLSPort = 465
 )
 
 // Service handles email sending via SMTP
@@ -20,6 +42,8 @@ type Service struct {
 	password    string
 	fromAddress string
 	fromName    string
+	dialTimeout time.Duration
+	timeout     time.Duration
 	logger      *slog.Logger
 }
 
@@ -31,10 +55,25 @@ type Config struct {
 	Password    string
 	FromAddress string
 	FromName    string
+
+	// DialTimeout bounds the connection attempt. Zero means defaultDialTimeout.
+	DialTimeout time.Duration
+	// Timeout bounds the whole conversation. Zero means defaultTimeout.
+	Timeout time.Duration
 }
 
 // NewService creates a new email service
 func NewService(cfg Config, logger *slog.Logger) *Service {
+	dialTimeout := cfg.DialTimeout
+	if dialTimeout <= 0 {
+		dialTimeout = defaultDialTimeout
+	}
+
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+
 	return &Service{
 		host:        cfg.Host,
 		port:        cfg.Port,
@@ -42,6 +81,8 @@ func NewService(cfg Config, logger *slog.Logger) *Service {
 		password:    cfg.Password,
 		fromAddress: cfg.FromAddress,
 		fromName:    cfg.FromName,
+		dialTimeout: dialTimeout,
+		timeout:     timeout,
 		logger:      logger,
 	}
 }
@@ -54,8 +95,16 @@ type Email struct {
 	HTML    bool
 }
 
-// Send sends an email via SMTP
+// Send sends an email via SMTP, bounded by the service's own timeout.
 func (s *Service) Send(email Email) error {
+	return s.SendContext(context.Background(), email)
+}
+
+// SendContext sends an email via SMTP, giving up when ctx does.
+//
+// A caller with a deadline of its own keeps it; anything else is bounded by the service
+// timeout, so no send can outlive it.
+func (s *Service) SendContext(ctx context.Context, email Email) error {
 	// Validate configuration
 	if s.host == "" {
 		return fmt.Errorf("SMTP host not configured")
@@ -82,8 +131,14 @@ func (s *Service) Send(email Email) error {
 			email.Body + "\r\n",
 	)
 
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, s.timeout)
+		defer cancel()
+	}
+
 	// Connect to SMTP server
-	addr := fmt.Sprintf("%s:%d", s.host, s.port)
+	addr := net.JoinHostPort(s.host, strconv.Itoa(s.port))
 
 	// Setup authentication
 	var auth smtp.Auth
@@ -92,7 +147,7 @@ func (s *Service) Send(email Email) error {
 	}
 
 	// Try to send with TLS first (port 465 or explicit STARTTLS)
-	err := s.sendWithTLS(addr, auth, s.fromAddress, email.To, message)
+	err := s.sendWithTLS(ctx, addr, auth, s.fromAddress, email.To, message)
 	if err != nil {
 		s.logger.Error("Failed to send email",
 			slog.String("error", err.Error()),
@@ -110,66 +165,90 @@ func (s *Service) Send(email Email) error {
 }
 
 // sendWithTLS attempts to send email with TLS/STARTTLS
-func (s *Service) sendWithTLS(addr string, auth smtp.Auth, from string, to []string, msg []byte) error {
-	// For port 465 (implicit TLS)
-	if s.port == 465 {
-		// Create TLS config
-		tlsConfig := &tls.Config{
-			ServerName: s.host,
-		}
+func (s *Service) sendWithTLS(ctx context.Context, addr string, auth smtp.Auth, from string, to []string, msg []byte) error {
+	conn, err := s.dial(ctx, addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
 
-		// Connect with TLS
-		conn, err := tls.Dial("tcp", addr, tlsConfig)
-		if err != nil {
+	// One deadline for the whole conversation. net/smtp has no context of its own, so
+	// this is what keeps a silent server from parking the goroutine on a read.
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := conn.SetDeadline(deadline); err != nil {
 			return err
 		}
-		defer conn.Close()
-
-		// Create SMTP client
-		client, err := smtp.NewClient(conn, s.host)
-		if err != nil {
-			return err
-		}
-		defer client.Quit()
-
-		// Authenticate
-		if auth != nil {
-			if err = client.Auth(auth); err != nil {
-				return err
-			}
-		}
-
-		// Set sender
-		if err = client.Mail(from); err != nil {
-			return err
-		}
-
-		// Set recipients
-		for _, recipient := range to {
-			if err = client.Rcpt(recipient); err != nil {
-				return err
-			}
-		}
-
-		// Send message
-		w, err := client.Data()
-		if err != nil {
-			return err
-		}
-		_, err = w.Write(msg)
-		if err != nil {
-			return err
-		}
-		err = w.Close()
-		if err != nil {
-			return err
-		}
-
-		return nil
 	}
 
-	// For port 587 or others (STARTTLS)
-	return smtp.SendMail(addr, auth, from, to, msg)
+	// Create SMTP client
+	client, err := smtp.NewClient(conn, s.host)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	// For anything but implicit TLS, upgrade the plain connection when the server
+	// offers it — this is what port 587 expects.
+	if s.port != implicitTLSPort {
+		if ok, _ := client.Extension("STARTTLS"); ok {
+			if err := client.StartTLS(&tls.Config{ServerName: s.host}); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Authenticate
+	if auth != nil {
+		if ok, _ := client.Extension("AUTH"); !ok {
+			return fmt.Errorf("smtp: server does not support AUTH")
+		}
+		if err := client.Auth(auth); err != nil {
+			return err
+		}
+	}
+
+	// Set sender
+	if err := client.Mail(from); err != nil {
+		return err
+	}
+
+	// Set recipients
+	for _, recipient := range to {
+		if err := client.Rcpt(recipient); err != nil {
+			return err
+		}
+	}
+
+	// Send message
+	w, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(msg); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+
+	return client.Quit()
+}
+
+// dial opens the connection, in TLS from the first byte on port 465 and in the clear
+// elsewhere. Both paths carry a timeout: the dialer's, and the context's on top of it.
+func (s *Service) dial(ctx context.Context, addr string) (net.Conn, error) {
+	dialer := &net.Dialer{Timeout: s.dialTimeout}
+
+	if s.port == implicitTLSPort {
+		tlsDialer := &tls.Dialer{
+			NetDialer: dialer,
+			Config:    &tls.Config{ServerName: s.host},
+		}
+
+		return tlsDialer.DialContext(ctx, "tcp", addr)
+	}
+
+	return dialer.DialContext(ctx, "tcp", addr)
 }
 
 // buildFromHeader builds the From header with optional name

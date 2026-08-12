@@ -253,10 +253,17 @@ func handleRecurrenceError(w http.ResponseWriter, r *http.Request, err error, de
 		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Participant not found")
 	case errors.Is(err, service.ErrInvalidParticipantID):
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid participant ID")
+	case errors.Is(err, service.ErrInvalidRecurrenceID):
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid recurrence ID")
 	case errors.Is(err, service.ErrRecurrenceNotFound):
 		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Recurrence not found")
+	case errors.Is(err, service.ErrExceptionNotFound):
+		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Exception not found")
 	case errors.Is(err, service.ErrInvalidDate):
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid date format, expected YYYY-MM-DD")
+	// The end of a recurrence before its start is user input, not a server fault.
+	case errors.Is(err, service.ErrInvalidDateRange):
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "End date must be after start date")
 	case errors.Is(err, service.ErrInvalidTime):
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid time format, expected HH:MM")
 	case errors.Is(err, service.ErrInvalidTimeRange):

@@ -6,6 +6,10 @@ package middleware
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
@@ -15,6 +19,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/time/rate"
+
+	"github.com/whento/pkg/httputil"
 )
 
 // trustedProxyIPs holds exact trusted proxy IPs.
@@ -113,7 +119,11 @@ func (rl *RateLimiter) Limit(cfg RateLimitConfig) func(http.Handler) http.Handle
 				return
 			}
 
-			allowed, remaining, resetAt, backend, err := rl.check(r.Context(), key, cfg.Requests, cfg.Window)
+			// The raw key identifies a person: an IP address, a user id, or a
+			// request path that in this API carries a calendar token and a
+			// participant UUID. None of it may be written to Redis or held in
+			// the in-memory map, so only its digest ever reaches a backend.
+			allowed, remaining, resetAt, backend, err := rl.check(r.Context(), hashRateLimitKey(key), cfg.Requests, cfg.Window)
 			if err != nil {
 				// Should not happen: memory backend never errors. Allow the
 				// request rather than block on an unexpected internal error.
@@ -128,7 +138,7 @@ func (rl *RateLimiter) Limit(cfg RateLimitConfig) func(http.Handler) http.Handle
 
 			if !allowed {
 				w.Header().Set("Retry-After", fmt.Sprintf("%d", resetAt-time.Now().Unix()))
-				http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+				httputil.Error(w, http.StatusTooManyRequests, httputil.ErrCodeRateLimited, "Rate limit exceeded")
 				return
 			}
 
@@ -283,6 +293,49 @@ func (b *memoryBackend) stop() {
 	b.once.Do(func() { close(b.done) })
 }
 
+// rateLimitKeySalt keys the HMAC that turns a rate limit key into a bucket
+// name. It is random per process, so a stolen Redis dump cannot be matched
+// back to an IP, a user id or a calendar token by hashing candidates: without
+// the salt there is nothing to compare against.
+var rateLimitKeySalt = newRateLimitKeySalt()
+
+func newRateLimitKeySalt() []byte {
+	salt := make([]byte, 32)
+	if _, err := rand.Read(salt); err != nil {
+		// crypto/rand does not fail on any platform Go supports. Refusing to
+		// start beats silently limiting with a predictable all-zero salt.
+		panic("middleware: cannot generate the rate limit key salt: " + err.Error())
+	}
+	return salt
+}
+
+// SetRateLimitKeySalt pins the salt used to derive bucket names, which several
+// instances sharing one Redis must do to share their buckets: with the default
+// per-process random salt each instance hashes the same client to a different
+// bucket, so N instances grant N times the configured allowance. Pass a secret
+// with at least as much entropy as the limit is worth, and call this before
+// serving any request.
+func SetRateLimitKeySalt(secret string) {
+	if secret == "" {
+		return
+	}
+	sum := sha256.Sum256([]byte(secret))
+	rateLimitKeySalt = sum[:]
+}
+
+// hashRateLimitKey derives the stored bucket name from a rate limit key.
+//
+// The key itself is personal data — an IP address, a user id, or a path such
+// as /calendar/{token}/participant/{pid} whose values are the credential — and
+// the owner's constraint is that none of it is stored. 128 bits of a salted
+// HMAC keeps collisions out of reach (a collision would merge two clients'
+// budgets) while storing nothing that can be read back.
+func hashRateLimitKey(key string) string {
+	mac := hmac.New(sha256.New, rateLimitKeySalt)
+	mac.Write([]byte(key))
+	return hex.EncodeToString(mac.Sum(nil)[:16])
+}
+
 // IPKeyFunc returns the real client IP as rate limit key.
 // X-Forwarded-For and X-Real-IP are only trusted when the direct
 // connection comes from a configured trusted proxy.
@@ -344,7 +397,10 @@ func UserKeyFunc(r *http.Request) string {
 	return GetUserID(r.Context())
 }
 
-// CombinedKeyFunc combines path and IP for endpoint-specific limiting
+// CombinedKeyFunc combines path and IP for endpoint-specific limiting.
+// The path is deliberately the exact one, not the route pattern, so that two
+// calendars do not share a budget. It is never stored as such: Limit hashes
+// the key before any backend sees it (see hashRateLimitKey).
 func CombinedKeyFunc(r *http.Request) string {
 	return fmt.Sprintf("%s:%s", r.URL.Path, IPKeyFunc(r))
 }

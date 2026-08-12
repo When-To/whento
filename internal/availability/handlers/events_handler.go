@@ -6,6 +6,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -46,11 +47,15 @@ type CalendarLookup interface {
 type EventsHandler struct {
 	calendars CalendarLookup
 	broker    broadcast.Broker
+
+	// heartbeat is heartbeatInterval in production. It is a field only so that a test
+	// can watch several heartbeats go by without taking half a minute over it.
+	heartbeat time.Duration
 }
 
 // NewEventsHandler creates the SSE handler for participant calendars.
 func NewEventsHandler(calendars CalendarLookup, broker broadcast.Broker) *EventsHandler {
-	return &EventsHandler{calendars: calendars, broker: broker}
+	return &EventsHandler{calendars: calendars, broker: broker, heartbeat: heartbeatInterval}
 }
 
 // Stream handles GET /api/v1/availabilities/calendar/{token}/events
@@ -84,6 +89,21 @@ func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The server arms a write deadline once, when it reads the request headers, and
+	// nothing rearms it. For an ordinary answer that is the whole point; for a stream
+	// meant to stay open for hours it is fatal — every write after WriteTimeout fails,
+	// starting with the first heartbeat, and the browser reconnects on the retry hint
+	// for ever. Clearing the deadline is what makes this connection long-lived.
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+		if errors.Is(err, http.ErrNotSupported) {
+			// A ResponseWriter that cannot be unwrapped down to the connection: the
+			// stream still works, it just keeps whatever deadline the server set.
+			log.Debug("events: write deadlines are not supported by this response writer", "token", token)
+		} else {
+			log.Warn("events: could not clear the write deadline", "token", token, "error", err)
+		}
+	}
+
 	// Subscribe before announcing the stream is open. A write landing in between would
 	// otherwise be missed by a browser that believes it is now up to date.
 	notices, stop := h.broker.Subscribe(r.Context(), token)
@@ -99,7 +119,12 @@ func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "retry: %d\n\n", retryHint.Milliseconds())
 	flusher.Flush()
 
-	heartbeat := time.NewTicker(heartbeatInterval)
+	interval := h.heartbeat
+	if interval <= 0 {
+		interval = heartbeatInterval
+	}
+
+	heartbeat := time.NewTicker(interval)
 	defer heartbeat.Stop()
 
 	for {

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: BSL-1.1
 
 //	@title						WhenTo API
-//	@version					1.0.0
+//	@version					1.6.3
 //	@description				WhenTo is a self-hosted web application for organizing events among friends through collaborative calendars.
 //	@description				Each calendar answers a simple question: **when can we meet?** Participants indicate their availability, and time slots reaching a defined threshold become events accessible via an **iCalendar subscription URL** — automatic synchronization in Google Calendar, Apple Calendar, Outlook, etc.
 //	@description
@@ -18,6 +18,7 @@
 //	@description				- **Public auth endpoints**: 3-5 requests/minute/IP
 //	@description				- **Public calendar endpoints**: 60 requests/minute/IP
 //	@description				- **ICS feed endpoints**: 30 requests/minute/IP
+//	@description				- **Live availability stream (SSE)**: 300 connections/minute/IP per calendar
 //	@description				- **Authenticated endpoints**: 100 requests/minute/user
 //	@description
 //	@description				Rate limit headers are included in responses: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
@@ -50,7 +51,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 
 	"github.com/whento/pkg/broadcast"
@@ -105,7 +105,7 @@ import (
 	"github.com/whento/whento/web"
 
 	// Swagger docs (generated)
-	_ "github.com/whento/whento/docs/swagger"
+	swaggerDocs "github.com/whento/whento/docs/swagger"
 )
 
 func main() {
@@ -122,7 +122,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	logBuildInfo(log)
 	log.Info("Starting WhenTo Application", "port", cfg.Port, "env", cfg.AppEnv)
+
+	// The generated spec carries the version frozen into the annotation at the last
+	// `make swagger`; the linker knows the real one. Overriding it here keeps
+	// /swagger honest for the binary that is serving it.
+	swaggerDocs.SwaggerInfo.Version = Version
 
 	// Context for initialization
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -343,7 +349,19 @@ func main() {
 	availabilityHandler := availabilityHandlers.NewAvailabilityHandler(availabilitySvc)
 	recurrenceHandler := availabilityHandlers.NewRecurrenceHandler(availabilitySvc)
 
-	// Initialize rate limiter
+	// Initialize rate limiter.
+	//
+	// Buckets are stored under a salted hash so that Redis never holds an IP, a
+	// calendar token or a participant id. That salt has to be shared by every
+	// instance pointing at the same Redis: with a per-process one, the same
+	// client hashes to a different bucket on each instance and N instances hand
+	// out N times the configured allowance. A single instance is unaffected,
+	// which is why an empty salt is allowed rather than fatal.
+	middleware.SetRateLimitKeySalt(cfg.RateLimitKeySalt)
+	if cfg.RateLimitEnabled && cfg.RateLimitKeySalt == "" && redisClient != nil {
+		log.Warn("RATE_LIMIT_KEY_SALT is unset; rate limit buckets are per-instance. " +
+			"Set it to a shared secret if more than one instance uses this Redis.")
+	}
 	rateLimiter := middleware.NewRateLimiter(redisClient)
 
 	// Live calendar updates. Redis fans the notices out across instances; without it a
@@ -356,8 +374,15 @@ func main() {
 	// Setup router
 	r := chi.NewRouter()
 
-	// Global middleware
-	r.Use(chiMiddleware.RealIP)
+	// Global middleware.
+	//
+	// chi's RealIP is deliberately absent, and must stay absent: it overwrites
+	// r.RemoteAddr from X-Forwarded-For / X-Real-IP for *every* request, before
+	// anything gets to ask whether the connection came from a trusted proxy. That
+	// turns TRUSTED_PROXIES (below) into decoration and makes every per-IP rate
+	// limit a client-chosen header away from being bypassed. Proxy headers are
+	// honoured in exactly one place instead — middleware.IPKeyFunc — and only for
+	// connections that actually originate from a configured proxy.
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -674,6 +699,27 @@ func main() {
 
 	// ========== AVAILABILITY ROUTES ==========
 	r.Route("/api/v1/availabilities", func(r chi.Router) {
+		// Live updates: the browser subscribes here and refetches on each notice.
+		//
+		// Kept out of the 60/min bucket below. An EventSource is a long-lived
+		// connection that the browser re-establishes on its own after every hiccup,
+		// deploy or idle timeout, so sharing a bucket with the participant API meant
+		// a handful of reconnects could lock a participant out of the calendar they
+		// were reconnecting to. Its own bucket, keyed on path+IP so one calendar's
+		// reconnect loop cannot starve another, and sized for several tabs behind a
+		// shared NAT rather than for API call volume.
+		r.Group(func(r chi.Router) {
+			if cfg.RateLimitEnabled {
+				r.Use(rateLimiter.Limit(middleware.RateLimitConfig{
+					Requests: 300,
+					Window:   time.Minute,
+					KeyFunc:  middleware.CombinedKeyFunc,
+				}))
+			}
+
+			r.Get("/calendar/{token}/events", eventsHandler.Stream)
+		})
+
 		// Public routes with rate limiting (all availability endpoints are public)
 		r.Group(func(r chi.Router) {
 			if cfg.RateLimitEnabled {
@@ -689,9 +735,6 @@ func main() {
 			// rather than in the nine service methods so a tenth write route cannot
 			// silently stop notifying anyone.
 			r.Use(availabilityHandlers.PublishChanges(broker))
-
-			// Live updates: the browser subscribes here and refetches on each notice.
-			r.Get("/calendar/{token}/events", eventsHandler.Stream)
 
 			// Participant availability management
 			r.Get("/calendar/{token}/participant/{pid}", availabilityHandler.GetParticipantAvailabilities)

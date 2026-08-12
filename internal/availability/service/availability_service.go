@@ -8,28 +8,39 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/whento/pkg/cache"
 	"github.com/whento/pkg/datevalidation"
+	"github.com/whento/pkg/logger"
 	"github.com/whento/whento/internal/availability/models"
 	"github.com/whento/whento/internal/availability/repository"
 )
 
+// Sentinels. handleAvailabilityError and handleRecurrenceError turn these into status
+// codes with errors.Is, and anything that does not match one of them is reported as a
+// 500 — so a rejection the caller could act on has to be one of these, wrapped with %w,
+// rather than a bare fmt.Errorf.
 var (
 	ErrCalendarNotFound        = errors.New("calendar not found")
 	ErrParticipantNotFound     = errors.New("participant not found")
 	ErrInvalidParticipantID    = errors.New("invalid participant ID")
 	ErrInvalidDate             = errors.New("invalid date format, expected YYYY-MM-DD")
+	ErrInvalidDateRange        = errors.New("end date must be after start date")
+	ErrDateBeforeCalendarStart = errors.New("date is before the calendar start date")
+	ErrDateAfterCalendarEnd    = errors.New("date is after the calendar end date")
 	ErrInvalidTime             = errors.New("invalid time format, expected HH:MM")
 	ErrInvalidTimeRange        = errors.New("end time must be after start time")
 	ErrTimeOutsideAllowedHours = errors.New("time range does not fit within allowed hours for this day")
 	ErrDurationTooShort        = errors.New("availability duration is less than the minimum required")
 	ErrAvailabilityExists      = errors.New("availability already exists for this date")
 	ErrAvailabilityNotFound    = errors.New("availability not found")
+	ErrInvalidRecurrenceID     = errors.New("invalid recurrence ID")
 	ErrRecurrenceNotFound      = errors.New("recurrence not found")
+	ErrExceptionNotFound       = errors.New("exception not found")
 	ErrRecurrenceOverlap       = errors.New("recurrence overlaps with an existing recurrence on the same day")
 	ErrInvalidDayOfWeek        = errors.New("day_of_week must be between 0 (Sunday) and 6 (Saturday)")
 	ErrWeekdayNotAllowed       = errors.New("this day of the week is not allowed for this calendar")
@@ -108,6 +119,58 @@ func NewAvailabilityService(
 	}
 }
 
+// notifyThresholdTimeout bounds the detached threshold check. Nothing is waiting on it —
+// the request that triggered it has already been answered — so the deadline is there to
+// stop a wedged SMTP or database call from pinning a goroutine for the life of the
+// process, one per availability written.
+const notifyThresholdTimeout = 30 * time.Second
+
+// notifyThresholdAsync runs the threshold check outside the request that caused it.
+//
+// Threshold notifications are the emails this product exists to send, so a failure here
+// is worth a log line: the three copies of this block that it replaces each ended in an
+// empty branch under a comment reading "log only", and every failure vanished.
+//
+// The context is detached rather than dropped: cancellation is what must not carry over —
+// the request is finished, and its context is cancelled the moment the handler returns —
+// while the request ID must, or the log line has nothing to be correlated with.
+func (s *AvailabilityService) notifyThresholdAsync(
+	ctx context.Context,
+	calendarID uuid.UUID,
+	date time.Time,
+	previousCount int,
+) {
+	log := logger.FromContext(ctx)
+	detached := context.WithoutCancel(ctx)
+
+	go func() {
+		// middleware.Recoverer only wraps the request goroutine. A panic raised here
+		// would take the whole process down with it, calendar and all.
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error("threshold notification panicked",
+					"calendar_id", calendarID,
+					"date", date.Format("2006-01-02"),
+					"panic", r,
+					"stack", string(debug.Stack()),
+				)
+			}
+		}()
+
+		notifyCtx, cancel := context.WithTimeout(detached, notifyThresholdTimeout)
+		defer cancel()
+
+		if err := s.notifyService.CheckThresholdAndNotify(notifyCtx, calendarID, date, previousCount); err != nil {
+			log.Error("threshold notification failed",
+				"calendar_id", calendarID,
+				"date", date.Format("2006-01-02"),
+				"previous_count", previousCount,
+				"error", err,
+			)
+		}
+	}()
+}
+
 // CreateAvailability creates a new availability for a participant
 func (s *AvailabilityService) CreateAvailability(ctx context.Context, token, participantID string, req *models.CreateAvailabilityRequest) (*models.AvailabilityResponse, error) {
 	// Validate calendar token and get calendar info
@@ -123,7 +186,7 @@ func (s *AvailabilityService) CreateAvailability(ctx context.Context, token, par
 	// Parse and validate participant ID
 	partID, err := uuid.Parse(participantID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid participant id: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
 	}
 
 	// Verify participant exists and belongs to this calendar
@@ -154,10 +217,10 @@ func (s *AvailabilityService) CreateAvailability(ctx context.Context, token, par
 
 	// Validate that the date is within calendar's date range if set
 	if calendarInfo.StartDate != nil && date.Before(*calendarInfo.StartDate) {
-		return nil, fmt.Errorf("date is before calendar start date (%s)", calendarInfo.StartDate.Format("2006-01-02"))
+		return nil, fmt.Errorf("%w (%s)", ErrDateBeforeCalendarStart, calendarInfo.StartDate.Format("2006-01-02"))
 	}
 	if calendarInfo.EndDate != nil && date.After(*calendarInfo.EndDate) {
-		return nil, fmt.Errorf("date is after calendar end date (%s)", calendarInfo.EndDate.Format("2006-01-02"))
+		return nil, fmt.Errorf("%w (%s)", ErrDateAfterCalendarEnd, calendarInfo.EndDate.Format("2006-01-02"))
 	}
 
 	// Validate that the date is allowed for this calendar
@@ -228,13 +291,9 @@ func (s *AvailabilityService) CreateAvailability(ctx context.Context, token, par
 		return nil, err
 	}
 
-	// Trigger notification check (fire-and-forget, don't block availability operation)
-	go func() {
-		notifyCtx := context.Background()
-		if err := s.notifyService.CheckThresholdAndNotify(notifyCtx, calendarID, date, previousCount); err != nil {
-			// Log only, don't fail the availability operation
-		}
-	}()
+	// The availability is already stored: the threshold check must not be able to fail
+	// the write, so it runs detached from the request.
+	s.notifyThresholdAsync(ctx, calendarID, date, previousCount)
 
 	return toAvailabilityResponse(availability, participant.Name, participant.Email, participant.EmailVerified), nil
 }
@@ -253,7 +312,7 @@ func (s *AvailabilityService) GetParticipantAvailabilities(ctx context.Context, 
 	// Parse participant ID
 	partID, err := uuid.Parse(participantID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid participant id: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
 	}
 
 	// Verify participant belongs to this calendar
@@ -332,7 +391,7 @@ func (s *AvailabilityService) UpdateAvailability(ctx context.Context, token, par
 	// Parse participant ID
 	partID, err := uuid.Parse(participantID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid participant id: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
 	}
 
 	// Verify participant belongs to this calendar
@@ -430,14 +489,9 @@ func (s *AvailabilityService) UpdateAvailability(ctx context.Context, token, par
 		return nil, err
 	}
 
-	// Trigger notification check (fire-and-forget)
-	// Note: Update doesn't change participant count, but we still check in case threshold config changed
-	go func() {
-		notifyCtx := context.Background()
-		if err := s.notifyService.CheckThresholdAndNotify(notifyCtx, calendarID, date, currentCount); err != nil {
-			// Log only, don't fail the availability operation
-		}
-	}()
+	// An update does not change the participant count, but the threshold configuration
+	// may have changed since, so the check still runs.
+	s.notifyThresholdAsync(ctx, calendarID, date, currentCount)
 
 	return toAvailabilityResponse(availability, participant.Name, participant.Email, participant.EmailVerified), nil
 }
@@ -456,7 +510,7 @@ func (s *AvailabilityService) DeleteAvailability(ctx context.Context, token, par
 	// Parse participant ID
 	partID, err := uuid.Parse(participantID)
 	if err != nil {
-		return fmt.Errorf("invalid participant id: %w", err)
+		return fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
 	}
 
 	// Verify participant belongs to this calendar
@@ -500,13 +554,7 @@ func (s *AvailabilityService) DeleteAvailability(ctx context.Context, token, par
 		return err
 	}
 
-	// Trigger notification check (fire-and-forget)
-	go func() {
-		notifyCtx := context.Background()
-		if err := s.notifyService.CheckThresholdAndNotify(notifyCtx, calendarID, date, previousCount); err != nil {
-			// Log only, don't fail the availability operation
-		}
-	}()
+	s.notifyThresholdAsync(ctx, calendarID, date, previousCount)
 
 	return nil
 }
@@ -723,7 +771,7 @@ func (s *AvailabilityService) GetRangeSummary(ctx context.Context, token, startD
 
 	// Validate range
 	if endDate.Before(startDate) {
-		return nil, fmt.Errorf("end date must be after start date")
+		return nil, fmt.Errorf("%w (%s..%s)", ErrInvalidDateRange, startDateStr, endDateStr)
 	}
 
 	// Get all availabilities in range
@@ -1031,7 +1079,7 @@ func (s *AvailabilityService) CreateRecurrence(ctx context.Context, token, parti
 	// Parse participant ID
 	partID, err := uuid.Parse(participantID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid participant id: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
 	}
 
 	// Verify participant belongs to this calendar
@@ -1081,7 +1129,7 @@ func (s *AvailabilityService) CreateRecurrence(ctx context.Context, token, parti
 			return nil, ErrInvalidDate
 		}
 		if endDate.Before(startDate) {
-			return nil, fmt.Errorf("end date must be after start date")
+			return nil, fmt.Errorf("%w (%s..%s)", ErrInvalidDateRange, req.StartDate, *req.EndDate)
 		}
 	}
 
@@ -1143,7 +1191,7 @@ func (s *AvailabilityService) GetParticipantRecurrences(ctx context.Context, tok
 	// Parse participant ID
 	partID, err := uuid.Parse(participantID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid participant id: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
 	}
 
 	// Verify participant belongs to this calendar
@@ -1205,7 +1253,7 @@ func (s *AvailabilityService) UpdateRecurrence(ctx context.Context, token, parti
 	// Parse recurrence ID
 	recID, err := uuid.Parse(recurrenceID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid recurrence ID")
+		return nil, fmt.Errorf("%w: %w", ErrInvalidRecurrenceID, err)
 	}
 
 	// Verify participant belongs to calendar
@@ -1220,10 +1268,12 @@ func (s *AvailabilityService) UpdateRecurrence(ctx context.Context, token, parti
 	// Verify recurrence exists and belongs to participant
 	existingRec, err := s.recurrenceRepo.GetRecurrenceByID(ctx, recID)
 	if err != nil {
-		return nil, fmt.Errorf("recurrence not found")
+		return nil, ErrRecurrenceNotFound
 	}
+	// A recurrence belonging to someone else is reported as missing rather than as a
+	// refusal: the holder of the link learns nothing about what the ID names.
 	if existingRec.ParticipantID != partID {
-		return nil, fmt.Errorf("recurrence does not belong to participant")
+		return nil, ErrRecurrenceNotFound
 	}
 
 	// Validate day of week
@@ -1260,7 +1310,7 @@ func (s *AvailabilityService) UpdateRecurrence(ctx context.Context, token, parti
 			return nil, ErrInvalidDate
 		}
 		if endDate.Before(startDate) {
-			return nil, fmt.Errorf("end date must be after start date")
+			return nil, fmt.Errorf("%w (%s..%s)", ErrInvalidDateRange, req.StartDate, *req.EndDate)
 		}
 	}
 
@@ -1302,6 +1352,9 @@ func (s *AvailabilityService) UpdateRecurrence(ctx context.Context, token, parti
 	recurrence.ID = recID
 
 	if err := s.recurrenceRepo.UpdateRecurrence(ctx, recurrence); err != nil {
+		if errors.Is(err, repository.ErrRecurrenceNotFound) {
+			return nil, ErrRecurrenceNotFound
+		}
 		return nil, err
 	}
 
@@ -1322,7 +1375,7 @@ func (s *AvailabilityService) DeleteRecurrence(ctx context.Context, token, parti
 	// Parse participant ID
 	partID, err := uuid.Parse(participantID)
 	if err != nil {
-		return fmt.Errorf("invalid participant id: %w", err)
+		return fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
 	}
 
 	// Verify participant belongs to this calendar
@@ -1341,7 +1394,7 @@ func (s *AvailabilityService) DeleteRecurrence(ctx context.Context, token, parti
 	// Parse recurrence ID
 	recID, err := uuid.Parse(recurrenceID)
 	if err != nil {
-		return fmt.Errorf("invalid recurrence id: %w", err)
+		return fmt.Errorf("%w: %w", ErrInvalidRecurrenceID, err)
 	}
 
 	// Verify recurrence belongs to this participant
@@ -1356,6 +1409,9 @@ func (s *AvailabilityService) DeleteRecurrence(ctx context.Context, token, parti
 
 	// Delete recurrence
 	if err := s.recurrenceRepo.DeleteRecurrence(ctx, recID); err != nil {
+		if errors.Is(err, repository.ErrRecurrenceNotFound) {
+			return ErrRecurrenceNotFound
+		}
 		return err
 	}
 
@@ -1376,7 +1432,7 @@ func (s *AvailabilityService) CreateException(ctx context.Context, token, partic
 	// Parse participant ID
 	partID, err := uuid.Parse(participantID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid participant id: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
 	}
 
 	// Verify participant belongs to this calendar
@@ -1395,7 +1451,7 @@ func (s *AvailabilityService) CreateException(ctx context.Context, token, partic
 	// Parse recurrence ID
 	recID, err := uuid.Parse(recurrenceID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid recurrence id: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidRecurrenceID, err)
 	}
 
 	// Verify recurrence belongs to this participant
@@ -1443,7 +1499,7 @@ func (s *AvailabilityService) DeleteException(ctx context.Context, token, partic
 	// Parse participant ID
 	partID, err := uuid.Parse(participantID)
 	if err != nil {
-		return fmt.Errorf("invalid participant id: %w", err)
+		return fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
 	}
 
 	// Verify participant belongs to this calendar
@@ -1462,7 +1518,7 @@ func (s *AvailabilityService) DeleteException(ctx context.Context, token, partic
 	// Parse recurrence ID
 	recID, err := uuid.Parse(recurrenceID)
 	if err != nil {
-		return fmt.Errorf("invalid recurrence id: %w", err)
+		return fmt.Errorf("%w: %w", ErrInvalidRecurrenceID, err)
 	}
 
 	// Verify recurrence belongs to this participant
@@ -1483,6 +1539,9 @@ func (s *AvailabilityService) DeleteException(ctx context.Context, token, partic
 
 	// Delete exception
 	if err := s.recurrenceRepo.DeleteException(ctx, recID, dateStr); err != nil {
+		if errors.Is(err, repository.ErrExceptionNotFound) {
+			return ErrExceptionNotFound
+		}
 		return err
 	}
 

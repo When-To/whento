@@ -166,7 +166,7 @@ func newManager(t *testing.T) *jwt.Manager {
 type rig struct {
 	handler  *handlers.AuthHandler
 	users    *mockUserRepository
-	tokens   *mockTokenRepository
+	tokens   service.TokenRepository
 	store    *fakeUserStore
 	mail     *fakeEmailSender
 	manager  *jwt.Manager
@@ -179,10 +179,12 @@ type rigOptions struct {
 	verificationOn  bool
 	emailConfigured bool
 	users           *mockUserRepository
-	tokens          *mockTokenRepository
-	mfa             *mockMFARepository
-	mfaStatus       *fakeMFAStatus
-	passkeyCount    *fakePasskeyCounter
+	// tokens is the interface rather than the concrete mock so a test can substitute a
+	// context-aware repository — see auth_handler_context_test.go.
+	tokens       service.TokenRepository
+	mfa          *mockMFARepository
+	mfaStatus    *fakeMFAStatus
+	passkeyCount *fakePasskeyCounter
 }
 
 func newRig(t *testing.T, opts rigOptions) *rig {

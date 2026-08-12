@@ -6,14 +6,18 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/whento/pkg/cache"
+	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/logger"
 )
@@ -25,6 +29,15 @@ const (
 	UserEmailKey ctxKey = "user_email"
 	UserRoleKey  ctxKey = "user_role"
 )
+
+// errCodeUnavailable is returned when a request cannot be authorised because a
+// dependency is unreachable, as opposed to because it was refused.
+const errCodeUnavailable = "SERVICE_UNAVAILABLE"
+
+// unroutedLabel replaces the route in the access log when chi never matched
+// one (404s, or the middleware used outside a chi router). The raw path is
+// never a safe substitute: in this API the path itself carries the credential.
+const unroutedLabel = "unrouted"
 
 // RequestID adds a unique request ID to each request
 func RequestID(next http.Handler) http.Handler {
@@ -41,16 +54,28 @@ func RequestID(next http.Handler) http.Handler {
 	})
 }
 
-// Logger logs each request
+// Logger logs each request.
+//
+// It logs the chi route *pattern*, never the request path. Access to a
+// calendar is capability-based: the path is the credential
+// (/calendar/{token}/participant/{pid}, /magic-link/verify/{token},
+// /verify-email/{token}), so a log line carrying the path is a log line
+// carrying a replayable credential. The pattern keeps the placeholders and
+// drops the values. Neither the IP nor the User-Agent is logged, on purpose —
+// do not add them.
 func Logger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
+		// The pattern is only filled in once chi has matched the route, which
+		// happens inside next.ServeHTTP; reading it from the deferred call is
+		// what makes it available. chi mutates the routing context in place,
+		// so the value is visible through the request we were handed.
 		defer func() {
 			logger.FromContext(r.Context()).Info("request",
 				"method", r.Method,
-				"path", r.URL.Path,
+				"route", routePattern(r),
 				"status", ww.Status(),
 				"duration_ms", time.Since(start).Milliseconds(),
 				"bytes", ww.BytesWritten(),
@@ -61,6 +86,17 @@ func Logger(next http.Handler) http.Handler {
 	})
 }
 
+// routePattern returns the chi route pattern for a request, or unroutedLabel
+// when no route matched. RouteContext and RoutePattern are both nil-safe, so
+// this also covers the middleware being used outside a chi router.
+func routePattern(r *http.Request) string {
+	pattern := chi.RouteContext(r.Context()).RoutePattern()
+	if pattern == "" {
+		return unroutedLabel
+	}
+	return pattern
+}
+
 // Recoverer recovers from panics
 func Recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +105,7 @@ func Recoverer(next http.Handler) http.Handler {
 				logger.FromContext(r.Context()).Error("panic recovered",
 					"error", err,
 				)
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Internal Server Error")
 			}
 		}()
 
@@ -121,31 +157,49 @@ func Auth(jwtManager *jwt.Manager, c cache.Cache) func(http.Handler) http.Handle
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				http.Error(w, "Authorization header required", http.StatusUnauthorized)
+				httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Authorization header required")
 				return
 			}
 
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-				http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
+				httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Invalid authorization header format")
 				return
 			}
 
 			claims, err := jwtManager.ValidateAccessToken(parts[1])
 			if err != nil {
-				http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
+				httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Invalid or expired token")
 				return
 			}
 
-			// Check if token was issued before a password change
+			// Check whether the token was issued before a password change. This
+			// is the only revocation mechanism the system has: access tokens are
+			// self-contained and cannot otherwise be withdrawn. A cache we cannot
+			// read therefore has to fail closed — treating an unreadable cache as
+			// "nothing revoked" silently revives every token a password change
+			// was supposed to kill, for as long as the outage lasts.
 			if c != nil && c.IsEnabled() {
 				var changedAt int64
 				key := cache.UserPasswordChangedKey(claims.UserID)
-				if err := c.Get(r.Context(), key, &changedAt); err == nil {
+				switch err := c.Get(r.Context(), key, &changedAt); {
+				case err == nil:
 					if claims.IssuedAt != nil && claims.IssuedAt.Unix() < changedAt {
-						http.Error(w, "Token invalidated by password change", http.StatusUnauthorized)
+						httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Token invalidated by password change")
 						return
 					}
+				case errors.Is(err, redis.Nil):
+					// A miss is an answer: no password change is on record.
+				default:
+					// The request is refused, but with 503 rather than 401: the
+					// token may well be valid, we simply cannot prove it has not
+					// been revoked. A 401 would make every client discard a good
+					// session over a transient cache outage.
+					logger.FromContext(r.Context()).Error("token revocation check failed, refusing the request",
+						"error", err,
+					)
+					httputil.Error(w, http.StatusServiceUnavailable, errCodeUnavailable, "Unable to verify token revocation")
+					return
 				}
 			}
 
@@ -167,7 +221,7 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userRole, ok := r.Context().Value(UserRoleKey).(string)
 			if !ok {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
 				return
 			}
 
@@ -180,7 +234,7 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 			}
 
 			if !hasRole {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "Forbidden")
 				return
 			}
 
