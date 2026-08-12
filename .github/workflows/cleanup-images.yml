@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Delete stale versions
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
           # github-script does not put the token in the environment; the registry API
