@@ -20,15 +20,17 @@ COPY frontend/ ./
 RUN npm run build
 
 # Go build stage
-FROM golang:1.26-alpine3.23 AS builder
+FROM golang:1.26-alpine3.24 AS builder
 
 WORKDIR /build
 
 # Install build dependencies
 RUN apk add --no-cache git
 
-# Install swag CLI for swagger documentation generation
-RUN go install github.com/swaggo/swag/cmd/swag@latest
+# Install swag CLI for swagger documentation generation.
+# Pinned to the same version as .devcontainer/Dockerfile so the spec this
+# image ships is the one the annotations were written against.
+RUN go install github.com/swaggo/swag/cmd/swag@v1.16.6
 
 # Copy go mod files
 COPY go.mod go.sum ./
@@ -57,18 +59,18 @@ RUN go build \
     ./cmd/
 
 # Download migrate CLI (use BUILDPLATFORM to avoid QEMU issues)
-FROM --platform=$BUILDPLATFORM alpine:3.23 AS migrate-builder
+FROM --platform=$BUILDPLATFORM alpine:3.24 AS migrate-builder
 
 ARG TARGETARCH
 
 # Download golang-migrate binary for target architecture
 RUN apk add --no-cache curl && \
-    curl -fsSL https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-${TARGETARCH}.tar.gz | tar xvz && \
+    curl -fsSL https://github.com/golang-migrate/migrate/releases/download/v4.19.1/migrate.linux-${TARGETARCH}.tar.gz | tar xvz && \
     mv migrate /usr/local/bin/migrate && \
     chmod +x /usr/local/bin/migrate
 
 # Runtime stage
-FROM alpine:3.23
+FROM alpine:3.24
 
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata openssl postgresql-client

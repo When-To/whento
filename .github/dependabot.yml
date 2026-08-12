@@ -1,0 +1,101 @@
+# WhenTo - Dependency Update Configuration
+# Copyright (C) 2025 WhenTo Contributors
+# SPDX-License-Identifier: BSL-1.1
+#
+# Replaces the hand-rolled update-dependencies.yml workflow, which only
+# covered Go and npm. The image tags and action versions it never looked at
+# were the ones that had drifted the furthest behind.
+#
+# Note: security updates are NOT configured here. They are a repository
+# setting (Settings -> Code security -> Dependabot security updates) and must
+# be enabled there, otherwise the npm audit coverage of the old workflow is
+# lost.
+
+version: 2
+updates:
+  # ── Go: a two-module workspace (/, /pkg) wired together by go.work ──────
+  - package-ecosystem: gomod
+    directories: ['/', '/pkg']
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(deps)'
+    # The old workflow ran `go get -u ./...`, which also moves indirect
+    # dependencies. Dependabot only tracks direct ones by default, so ask for
+    # everything to keep the same coverage. The group below folds it all into
+    # a single pull request anyway.
+    allow:
+      - dependency-type: all
+    groups:
+      go:
+        applies-to: version-updates
+        update-types: [minor, patch]
+    ignore:
+      # Local module, resolved through `replace ... => ./pkg`.
+      - dependency-name: github.com/whento/pkg
+
+  # ── Frontend ────────────────────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(deps)'
+    groups:
+      frontend:
+        applies-to: version-updates
+        update-types: [minor, patch]
+    ignore:
+      # typescript-eslint 8.x declares the peer range >=4.8.4 <6.1.0, and no
+      # TypeScript 7 compatible release exists yet. Lift this once it ships.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      # The runtime is Node 24 LTS everywhere; types must not run ahead of it.
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
+
+  # ── Workflow actions ────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: 'chore(ci)'
+    groups:
+      actions:
+        patterns: ['*']
+
+  # ── Image tags in the production and devcontainer Dockerfiles ───────────
+  - package-ecosystem: docker
+    directories: ['/', '/.devcontainer']
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: 'chore(deps)'
+    ignore:
+      # Node 26 is Current, not LTS. Stay on 24.
+      - dependency-name: node
+        update-types: [version-update:semver-major]
+
+  # ── Image tags in the compose files ─────────────────────────────────────
+  - package-ecosystem: docker-compose
+    directories: ['/', '/.devcontainer']
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: 'chore(deps)'
+    ignore:
+      # A Postgres major upgrade cannot read the existing data volume, so it
+      # needs a dump/restore and a release note for self-hosted users. Redis
+      # rides along in the same piece of work. Lift both when that is ready.
+      - dependency-name: postgres
+        update-types: [version-update:semver-major]
+      - dependency-name: redis
+        update-types: [version-update:semver-major]
