@@ -1,9 +1,16 @@
 # WhenTo Cloud - Dockerfile for SaaS version with Stripe integration
 # Copyright (C) 2025 WhenTo Contributors
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: BSL-1.1
+
+# Base images are pinned by digest as well as by tag: a floating tag can be
+# re-published upstream and silently change the runtime, which makes a build
+# non-reproducible. The tag stays in front of the digest so the version is still
+# readable, and Dependabot (package-ecosystem: docker) keeps both in step.
+# Digests resolved 2026-08-12 from registry-1.docker.io; they are the multi-arch
+# index digests, so multi-platform builds keep working.
 
 # Build stage
-FROM golang:1.26-alpine3.24 AS builder
+FROM golang:1.26-alpine3.24@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS builder
 
 WORKDIR /build
 
@@ -41,18 +48,43 @@ RUN go build \
     ./cmd/
 
 # Download migrate CLI (use BUILDPLATFORM to avoid QEMU issues)
-FROM --platform=$BUILDPLATFORM alpine:3.24 AS migrate-builder
+FROM --platform=$BUILDPLATFORM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS migrate-builder
 
 ARG TARGETARCH
 
-# Download golang-migrate binary for target architecture
+# golang-migrate CLI, pinned by version *and* by SHA-256.
+#
+# The archive used to be piped straight into tar, so whatever the release CDN
+# returned was unpacked and later executed without any integrity check. The
+# checksums below come from the release's own sha256sum.txt and were
+# re-computed from the downloaded archives; `sha256sum -c` turns a mismatch
+# into a build failure instead of a silently swapped binary.
+#
+# The release is multi-arch, so the expected digest depends on TARGETARCH. Only
+# the platforms the release workflow actually builds are mapped; anything else
+# stops the build rather than skipping the verification. Keep MIGRATE_VERSION in
+# step with .github/workflows/ci.yml and .devcontainer/Dockerfile — the binary
+# that validates the migrations must be the one that applies them.
+ARG MIGRATE_VERSION=v4.19.1
+ARG MIGRATE_SHA256_AMD64=2ac648fbd1b127b69ab5a7b33cf96212178f71e22379fc50573630c6f4c7ce18
+ARG MIGRATE_SHA256_ARM64=2fea2455c0f3f07cc3f4b98471c951ad1a716059574b20b6416bd1e9058751c5
+
 RUN apk add --no-cache curl && \
-    curl -fsSL https://github.com/golang-migrate/migrate/releases/download/v4.19.1/migrate.linux-${TARGETARCH}.tar.gz | tar xvz && \
-    mv migrate /usr/local/bin/migrate && \
-    chmod +x /usr/local/bin/migrate
+    case "${TARGETARCH}" in \
+    amd64) expected="${MIGRATE_SHA256_AMD64}" ;; \
+    arm64) expected="${MIGRATE_SHA256_ARM64}" ;; \
+    *) echo "no pinned golang-migrate checksum for TARGETARCH='${TARGETARCH}'" >&2; exit 1 ;; \
+    esac && \
+    curl -fsSL -o /tmp/migrate.tar.gz \
+    "https://github.com/golang-migrate/migrate/releases/download/${MIGRATE_VERSION}/migrate.linux-${TARGETARCH}.tar.gz" && \
+    echo "${expected}  /tmp/migrate.tar.gz" | sha256sum -c - && \
+    tar -xzf /tmp/migrate.tar.gz -C /tmp migrate && \
+    mv /tmp/migrate /usr/local/bin/migrate && \
+    chmod +x /usr/local/bin/migrate && \
+    rm -f /tmp/migrate.tar.gz
 
 # Runtime stage
-FROM alpine:3.24
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata openssl postgresql-client

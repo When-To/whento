@@ -7,7 +7,6 @@ package handlers_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -310,7 +309,7 @@ func TestGetFeed_UsesCorrectDomain(t *testing.T) {
 
 	// Check body contains the correct domain in UID
 	body := w.Body.String()
-	expectedUIDPart := fmt.Sprintf("@192.168.1.10:8080")
+	expectedUIDPart := "@192.168.1.10:8080"
 	if !strings.Contains(body, expectedUIDPart) {
 		t.Errorf("Expected UID to contain '%s', but got:\n%s", expectedUIDPart, body)
 	}

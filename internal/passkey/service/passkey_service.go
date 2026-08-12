@@ -217,8 +217,12 @@ func (s *PasskeyService) FinishRegistration(ctx context.Context, userID uuid.UUI
 		return nil, ErrInvalidCredential
 	}
 
-	// Delete session from cache
-	s.cache.Delete(ctx, cacheKey)
+	// Delete session from cache. The entry also carries a 5-minute TTL, so this is
+	// best-effort — but a failure leaves the challenge replayable until it expires,
+	// which is worth surfacing rather than dropping.
+	if err := s.cache.Delete(ctx, cacheKey); err != nil {
+		s.logger.Warn("Failed to delete passkey registration session from cache", "error", err, "user_id", userID)
+	}
 
 	// Generate default name
 	count := len(passkeys)
@@ -319,8 +323,11 @@ func (s *PasskeyService) FinishAuthentication(ctx context.Context, challengeID s
 		return nil, ErrInvalidCredential
 	}
 
-	// Delete session from cache
-	s.cache.Delete(ctx, cacheKey)
+	// Delete session from cache. Best-effort as above: the entry expires on its own,
+	// but until then a failed delete keeps the login challenge replayable.
+	if err := s.cache.Delete(ctx, cacheKey); err != nil {
+		s.logger.Warn("Failed to delete passkey login session from cache", "error", err, "challenge_id", challengeID)
+	}
 
 	// Type assert to get our WebAuthnUser
 	webAuthnUser, ok := validatedUser.(*WebAuthnUser)

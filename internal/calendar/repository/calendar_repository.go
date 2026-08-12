@@ -80,7 +80,7 @@ func (r *CalendarRepository) CreateWithParticipants(ctx context.Context, calenda
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Create calendar
 	calendarQuery := `
@@ -252,6 +252,10 @@ func (r *CalendarRepository) GetByOwnerID(ctx context.Context, ownerID uuid.UUID
 		calendars = append(calendars, calendar)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating calendars: %w", err)
+	}
+
 	return calendars, nil
 }
 
@@ -353,11 +357,12 @@ func (r *CalendarRepository) Delete(ctx context.Context, id uuid.UUID) error {
 // RegenerateToken regenerates either the public_token or ics_token
 func (r *CalendarRepository) RegenerateToken(ctx context.Context, id uuid.UUID, tokenType, newToken string) error {
 	var query string
-	if tokenType == "public" {
+	switch tokenType {
+	case "public":
 		query = `UPDATE calendars SET public_token = $2, updated_at = NOW() WHERE id = $1`
-	} else if tokenType == "ics" {
+	case "ics":
 		query = `UPDATE calendars SET ics_token = $2, updated_at = NOW() WHERE id = $1`
-	} else {
+	default:
 		return fmt.Errorf("invalid token type: %s", tokenType)
 	}
 

@@ -171,7 +171,9 @@ func (h *CalendarHandler) CreateCalendar(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		defer func() {
-			tx.Rollback(r.Context())
+			// Runs after the Commit deferred below, so on the happy path this
+			// only ever sees pgx.ErrTxClosed.
+			_ = tx.Rollback(r.Context())
 		}()
 
 		if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock($1)`, lockKey); err != nil {
@@ -181,7 +183,12 @@ func (h *CalendarHandler) CreateCalendar(w http.ResponseWriter, r *http.Request)
 		}
 
 		defer func() {
-			tx.Commit(r.Context())
+			// The transaction exists only to hold the advisory lock across the
+			// quota check, so a failed commit costs no data — but it did hide
+			// connection failures completely.
+			if err := tx.Commit(r.Context()); err != nil {
+				logger.FromContext(r.Context()).Warn("Failed to release quota advisory lock", "error", err, "user_id", userID)
+			}
 		}()
 	}
 

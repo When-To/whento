@@ -26,9 +26,15 @@ on:
         type: boolean
         default: true
 
+# Read-only by default; the one job that deletes package versions asks for what it needs.
 permissions:
-  packages: write
-  pull-requests: read
+  contents: read
+
+# A second run while the first is deleting would work from a stale version list. The
+# schedule is weekly, so waiting is free; cancelling a run mid-deletion is not.
+concurrency:
+  group: cleanup-images
+  cancel-in-progress: false
 
 env:
   # How long a pull request stays closed before its image is removed. Long enough that
@@ -42,9 +48,15 @@ jobs:
   cleanup:
     name: Remove images for long-closed pull requests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Deleting package versions, and reading which pull requests are closed.
+      packages: write
+      pull-requests: read
     steps:
       - name: Delete stale versions
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
           # github-script does not put the token in the environment; the registry API

@@ -15,8 +15,6 @@ import (
 
 	"github.com/google/uuid"
 
-	pkgModels "github.com/whento/pkg/models"
-	authModels "github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/calendar/handlers"
 	"github.com/whento/whento/internal/calendar/models"
 	"github.com/whento/whento/internal/calendar/repository"
@@ -195,92 +193,6 @@ func (m *mockQuotaService) IsOverQuota(ctx context.Context, userID uuid.UUID) (b
 
 func (m *mockQuotaService) QuotaLockKey(userID uuid.UUID) int64 {
 	return 0
-}
-
-type mockUserRepository struct {
-	user *authModels.User
-	err  error
-}
-
-func (m *mockUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*authModels.User, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	if m.user == nil {
-		return &authModels.User{
-			TimestampedEntity: pkgModels.TimestampedEntity{Entity: pkgModels.Entity{ID: id}},
-			EmailVerified:     true,
-		}, nil
-	}
-	return m.user, nil
-}
-
-func (m *mockUserRepository) GetByEmail(ctx context.Context, email string) (*authModels.User, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (m *mockUserRepository) Create(ctx context.Context, user *authModels.User) error {
-	return m.err
-}
-
-func (m *mockUserRepository) Update(ctx context.Context, user *authModels.User) error {
-	return m.err
-}
-
-func (m *mockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return m.err
-}
-
-func (m *mockUserRepository) SetEmailAsVerified(ctx context.Context, id uuid.UUID) error {
-	return m.err
-}
-
-func (m *mockUserRepository) SetVerificationToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) error {
-	return m.err
-}
-
-func (m *mockUserRepository) GetByVerificationToken(ctx context.Context, token string) (*authModels.User, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (m *mockUserRepository) ClearVerificationToken(ctx context.Context, userID uuid.UUID) error {
-	return m.err
-}
-
-func (m *mockUserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
-	return m.err
-}
-
-func (m *mockUserRepository) UpdateRole(ctx context.Context, userID uuid.UUID, role string) error {
-	return m.err
-}
-
-func (m *mockUserRepository) ListAll(ctx context.Context) ([]authModels.User, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (m *mockUserRepository) SetPasswordResetToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) error {
-	return m.err
-}
-
-func (m *mockUserRepository) GetByPasswordResetToken(ctx context.Context, token string) (*authModels.User, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (m *mockUserRepository) ClearPasswordResetToken(ctx context.Context, userID uuid.UUID) error {
-	return m.err
-}
-
-func (m *mockUserRepository) SetMagicLinkToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) error {
-	return m.err
-}
-
-func (m *mockUserRepository) GetByMagicLinkToken(ctx context.Context, token string) (*authModels.User, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (m *mockUserRepository) ClearMagicLinkToken(ctx context.Context, userID uuid.UUID) error {
-	return m.err
 }
 
 // Verify interface implementations at compile time

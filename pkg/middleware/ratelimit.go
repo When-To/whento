@@ -198,7 +198,20 @@ func (b *redisBackend) Allow(ctx context.Context, key string, limit int, window 
 		return false, 0, 0, err
 	}
 
-	count := results[2].(*redis.IntCmd).Val()
+	// The pipeline shape is fixed a few lines above, so neither guard should ever
+	// fire. They exist because this runs inside a middleware: an out-of-range index
+	// or a failed type assertion would panic on the request path and take every
+	// request with it. Returning an error instead falls back to the memory backend,
+	// which still enforces the limit.
+	if len(results) < 3 {
+		return false, 0, 0, fmt.Errorf("ratelimit: pipeline returned %d results, want at least 3", len(results))
+	}
+	countCmd, ok := results[2].(*redis.IntCmd)
+	if !ok {
+		return false, 0, 0, fmt.Errorf("ratelimit: unexpected ZCard result type %T", results[2])
+	}
+
+	count := countCmd.Val()
 	remaining := limit - int(count)
 	if remaining < 0 {
 		remaining = 0

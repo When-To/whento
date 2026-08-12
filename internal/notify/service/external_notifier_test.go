@@ -16,7 +16,7 @@ import (
 // have the server fetch it on their behalf. None of it was covered.
 //
 // Note that most cases below deliberately use a scheme failure, a blocked hostname or a
-// raw IP literal, all of which short-circuit before net.LookupIP. Tests must not depend
+// raw IP literal, all of which short-circuit before the DNS lookup. Tests must not depend
 // on DNS being reachable from the runner.
 
 func TestIsPrivateIP(t *testing.T) {
@@ -89,7 +89,7 @@ func TestValidateWebhookURLRejects(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateWebhookURL(tt.url)
+			err := validateWebhookURL(t.Context(), tt.url)
 			if err == nil {
 				t.Fatalf("validateWebhookURL(%q) accepted the URL", tt.url)
 			}
@@ -105,7 +105,7 @@ func TestValidateWebhookURLRejects(t *testing.T) {
 func TestValidateWebhookURLIsExported(t *testing.T) {
 	const hostile = "https://169.254.169.254/latest/meta-data/"
 
-	if ValidateWebhookURL(hostile) == nil {
+	if ValidateWebhookURL(t.Context(), hostile) == nil {
 		t.Error("the exported validator accepted the metadata endpoint")
 	}
 }
@@ -137,7 +137,7 @@ func TestValidateDiscordWebhookURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateDiscordWebhookURL(tt.url)
+			err := ValidateDiscordWebhookURL(t.Context(), tt.url)
 			if err == nil {
 				t.Fatalf("ValidateDiscordWebhookURL(%q) accepted the URL", tt.url)
 			}
@@ -168,7 +168,7 @@ func TestValidateSlackWebhookURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateSlackWebhookURL(tt.url)
+			err := ValidateSlackWebhookURL(t.Context(), tt.url)
 			if err == nil {
 				t.Fatalf("ValidateSlackWebhookURL(%q) accepted the URL", tt.url)
 			}

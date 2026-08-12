@@ -440,9 +440,10 @@ func TestBeginDiscoverableAuthenticationIsAnonymous(t *testing.T) {
 
 func TestBeginRegistrationNeedsAKnownUser(t *testing.T) {
 	// The handler is authenticated, so a user id that resolves to nothing means the
-	// account was deleted between the token being issued and this request.
-	user := &authModels.User{Email: "ada@example.test", DisplayName: "Ada", Role: authModels.RoleUser}
-	user.ID = uuid.New()
+	// account was deleted between the token being issued and this request. Only the
+	// id ever reaches the handler here — the lookup is stubbed to fail — so building
+	// a full user record would just be dead weight.
+	userID := uuid.New()
 
 	cfg := &config.Config{
 		WebAuthnRPName:   "WhenTo",
@@ -460,7 +461,7 @@ func TestBeginRegistrationNeedsAKnownUser(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	NewPasskeyHandler(svc, nil, discard).BeginRegistration(
-		rec, request(http.MethodPost, "", "", user.ID.String()))
+		rec, request(http.MethodPost, "", "", userID.String()))
 
 	if rec.Code == http.StatusOK {
 		t.Error("registration began for a user that does not exist")

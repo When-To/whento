@@ -5,70 +5,11 @@
 package service
 
 import (
-	"context"
 	"testing"
 
 	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/auth/models"
 )
-
-// Mock implementations for testing
-
-type mockUserRepository struct {
-	users         map[string]*models.User
-	createErr     error
-	getByIDErr    error
-	getByEmailErr error
-	updateErr     error
-	countValue    int
-}
-
-func newMockUserRepository() *mockUserRepository {
-	return &mockUserRepository{
-		users: make(map[string]*models.User),
-	}
-}
-
-func (m *mockUserRepository) Create(ctx context.Context, user *models.User) error {
-	if m.createErr != nil {
-		return m.createErr
-	}
-	m.users[user.ID.String()] = user
-	m.users[user.Email] = user
-	return nil
-}
-
-func (m *mockUserRepository) GetByID(ctx context.Context, id string) (*models.User, error) {
-	if m.getByIDErr != nil {
-		return nil, m.getByIDErr
-	}
-	if user, ok := m.users[id]; ok {
-		return user, nil
-	}
-	return nil, ErrUserNotFound
-}
-
-func (m *mockUserRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
-	if m.getByEmailErr != nil {
-		return nil, m.getByEmailErr
-	}
-	if user, ok := m.users[email]; ok {
-		return user, nil
-	}
-	return nil, ErrUserNotFound
-}
-
-func (m *mockUserRepository) Update(ctx context.Context, user *models.User) error {
-	if m.updateErr != nil {
-		return m.updateErr
-	}
-	m.users[user.ID.String()] = user
-	return nil
-}
-
-func (m *mockUserRepository) Count(ctx context.Context) (int, error) {
-	return m.countValue, nil
-}
 
 // Tests
 

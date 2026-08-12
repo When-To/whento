@@ -280,15 +280,15 @@ func (h *SPAHandler) injectMetaTags(htmlContent []byte, meta PageMeta) []byte {
 
 	// Open Graph tags — all values are HTML-escaped to prevent XSS via URL path injection
 	if meta.OGTitle != "" {
-		metaTags.WriteString(fmt.Sprintf(`<meta property="og:title" content="%s">`, html.EscapeString(meta.OGTitle)))
+		fmt.Fprintf(&metaTags, `<meta property="og:title" content="%s">`, html.EscapeString(meta.OGTitle))
 		metaTags.WriteString("\n    ")
 	}
 	if meta.OGDescription != "" {
-		metaTags.WriteString(fmt.Sprintf(`<meta property="og:description" content="%s">`, html.EscapeString(meta.OGDescription)))
+		fmt.Fprintf(&metaTags, `<meta property="og:description" content="%s">`, html.EscapeString(meta.OGDescription))
 		metaTags.WriteString("\n    ")
 	}
 	if meta.OGImage != "" {
-		metaTags.WriteString(fmt.Sprintf(`<meta property="og:image" content="%s">`, html.EscapeString(meta.OGImage)))
+		fmt.Fprintf(&metaTags, `<meta property="og:image" content="%s">`, html.EscapeString(meta.OGImage))
 		metaTags.WriteString("\n    ")
 	}
 	metaTags.WriteString(`<meta property="og:type" content="website">`)
@@ -298,21 +298,21 @@ func (h *SPAHandler) injectMetaTags(htmlContent []byte, meta PageMeta) []byte {
 	metaTags.WriteString(`<meta name="twitter:card" content="summary_large_image">`)
 	metaTags.WriteString("\n    ")
 	if meta.OGTitle != "" {
-		metaTags.WriteString(fmt.Sprintf(`<meta name="twitter:title" content="%s">`, html.EscapeString(meta.OGTitle)))
+		fmt.Fprintf(&metaTags, `<meta name="twitter:title" content="%s">`, html.EscapeString(meta.OGTitle))
 		metaTags.WriteString("\n    ")
 	}
 	if meta.OGDescription != "" {
-		metaTags.WriteString(fmt.Sprintf(`<meta name="twitter:description" content="%s">`, html.EscapeString(meta.OGDescription)))
+		fmt.Fprintf(&metaTags, `<meta name="twitter:description" content="%s">`, html.EscapeString(meta.OGDescription))
 		metaTags.WriteString("\n    ")
 	}
 	if meta.OGImage != "" {
-		metaTags.WriteString(fmt.Sprintf(`<meta name="twitter:image" content="%s">`, html.EscapeString(meta.OGImage)))
+		fmt.Fprintf(&metaTags, `<meta name="twitter:image" content="%s">`, html.EscapeString(meta.OGImage))
 		metaTags.WriteString("\n    ")
 	}
 
 	// Canonical URL
 	if meta.Canonical != "" {
-		metaTags.WriteString(fmt.Sprintf(`<link rel="canonical" href="%s">`, html.EscapeString(meta.Canonical)))
+		fmt.Fprintf(&metaTags, `<link rel="canonical" href="%s">`, html.EscapeString(meta.Canonical))
 		metaTags.WriteString("\n    ")
 	}
 

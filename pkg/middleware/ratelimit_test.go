@@ -43,7 +43,7 @@ func TestMemoryBackend_KeysAreIsolated(t *testing.T) {
 	defer b.stop()
 
 	for i := 0; i < 2; i++ {
-		b.Allow(context.Background(), "k1", 2, time.Minute)
+		_, _, _, _ = b.Allow(context.Background(), "k1", 2, time.Minute)
 	}
 	allowed, _, _, _ := b.Allow(context.Background(), "k1", 2, time.Minute)
 	if allowed {
@@ -64,7 +64,7 @@ func TestMemoryBackend_Refills(t *testing.T) {
 	window := 100 * time.Millisecond
 
 	for i := 0; i < limit; i++ {
-		b.Allow(context.Background(), "refill", limit, window)
+		_, _, _, _ = b.Allow(context.Background(), "refill", limit, window)
 	}
 	allowed, _, _, _ := b.Allow(context.Background(), "refill", limit, window)
 	if allowed {
@@ -82,8 +82,8 @@ func TestMemoryBackend_Sweep(t *testing.T) {
 	b := newMemoryBackend()
 	defer b.stop()
 
-	b.Allow(context.Background(), "fresh", 5, time.Minute)
-	b.Allow(context.Background(), "stale", 5, time.Minute)
+	_, _, _, _ = b.Allow(context.Background(), "fresh", 5, time.Minute)
+	_, _, _, _ = b.Allow(context.Background(), "stale", 5, time.Minute)
 
 	b.mu.Lock()
 	b.entries["stale"].lastUsed = time.Now().Add(-2 * evictAfter)
@@ -171,7 +171,7 @@ func TestRateLimiter_TimeoutCapsRedisCallDuration(t *testing.T) {
 	rl.primary = primary
 
 	start := time.Now()
-	rl.check(context.Background(), "k", 5, time.Minute)
+	_, _, _, _, _ = rl.check(context.Background(), "k", 5, time.Minute)
 	elapsed := time.Since(start)
 
 	if elapsed > 200*time.Millisecond {

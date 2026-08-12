@@ -122,6 +122,10 @@ func (r *ParticipantRepository) GetByCalendarID(ctx context.Context, calendarID 
 		participants = append(participants, participant)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating participants: %w", err)
+	}
+
 	return participants, nil
 }
 
@@ -409,6 +413,10 @@ func (r *ParticipantRepository) GetVerifiedParticipantsByCalendar(
 			return nil, fmt.Errorf("failed to scan participant: %w", err)
 		}
 		participants = append(participants, participant)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating participants: %w", err)
 	}
 
 	return participants, nil

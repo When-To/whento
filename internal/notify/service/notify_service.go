@@ -490,7 +490,8 @@ func (s *NotifyService) buildNotificationMessage(
 ) string {
 	dateStr := transition.Date.Format("2006-01-02")
 
-	if transition.TransitionType == "threshold_reached" {
+	switch transition.TransitionType {
+	case "threshold_reached":
 		return fmt.Sprintf(
 			"🎉 Calendar '%s': Threshold reached for %s! (%d/%d participants available)",
 			calendar.Name,
@@ -498,7 +499,7 @@ func (s *NotifyService) buildNotificationMessage(
 			transition.NewCount,
 			transition.Threshold,
 		)
-	} else if transition.TransitionType == "threshold_lost" {
+	case "threshold_lost":
 		return fmt.Sprintf(
 			"⚠️ Calendar '%s': Threshold lost for %s (%d/%d participants)",
 			calendar.Name,
@@ -539,7 +540,8 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 		viewButton = "Voir le calendrier"
 		cancelButtonText = "Annuler ma participation"
 
-		if transition.TransitionType == "threshold_reached" {
+		switch transition.TransitionType {
+		case "threshold_reached":
 			emoji = "🎉"
 			messageText = fmt.Sprintf(
 				"Seuil atteint pour %s ! (%d/%d participants disponibles)",
@@ -547,7 +549,7 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 				transition.NewCount,
 				transition.Threshold,
 			)
-		} else if transition.TransitionType == "threshold_lost" {
+		case "threshold_lost":
 			emoji = "⚠️"
 			messageText = fmt.Sprintf(
 				"Seuil perdu pour %s (%d/%d participants)",
@@ -555,7 +557,7 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 				transition.NewCount,
 				transition.Threshold,
 			)
-		} else {
+		default:
 			messageText = fmt.Sprintf(
 				"Disponibilité modifiée pour %s (%d/%d participants)",
 				dateStr,
@@ -572,7 +574,8 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 		viewButton = "View Calendar"
 		cancelButtonText = "Cancel my participation"
 
-		if transition.TransitionType == "threshold_reached" {
+		switch transition.TransitionType {
+		case "threshold_reached":
 			emoji = "🎉"
 			messageText = fmt.Sprintf(
 				"Threshold reached for %s! (%d/%d participants available)",
@@ -580,7 +583,7 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 				transition.NewCount,
 				transition.Threshold,
 			)
-		} else if transition.TransitionType == "threshold_lost" {
+		case "threshold_lost":
 			emoji = "⚠️"
 			messageText = fmt.Sprintf(
 				"Threshold lost for %s (%d/%d participants)",
@@ -588,7 +591,7 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 				transition.NewCount,
 				transition.Threshold,
 			)
-		} else {
+		default:
 			messageText = fmt.Sprintf(
 				"Availability changed for %s (%d/%d participants)",
 				dateStr,

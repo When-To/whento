@@ -100,10 +100,7 @@ func isOutageError(err error) bool {
 		return false
 	}
 	var redisErr redis.Error
-	if errors.As(err, &redisErr) {
-		return false
-	}
-	return true
+	return !errors.As(err, &redisErr)
 }
 
 func (h *circuitBreakerHook) closeIfNeeded(prev int64) {

@@ -203,7 +203,10 @@ func TestTopicsAreForgotten(t *testing.T) {
 	broker := NewMemoryBroker()
 	t.Cleanup(func() { _ = broker.Close() })
 
-	local := broker.(*memoryBroker)
+	local, ok := broker.(*memoryBroker)
+	if !ok {
+		t.Fatalf("NewMemoryBroker returned %T, want *memoryBroker", broker)
+	}
 
 	for i := range 100 {
 		_, stop := broker.Subscribe(context.Background(), string(rune('a'+i%26))+"-calendar")

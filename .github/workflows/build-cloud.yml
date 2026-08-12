@@ -4,6 +4,9 @@
 #
 # SECURITY: This workflow publishes to a PRIVATE registry ONLY
 # The cloud image must NEVER be published to Docker Hub
+#
+# Actions are pinned to full commit SHAs, tag in the trailing comment: this job handles
+# the private registry credentials, and a mutable major tag is a mutable supply chain.
 
 name: Build Cloud Image
 
@@ -18,18 +21,31 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
+# Never cancelled: a half-pushed image is worse than a slow one.
+concurrency:
+  group: build-cloud-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: '1.26'
+  NODE_VERSION: '24'
+
 jobs:
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: '24'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -42,7 +58,7 @@ jobs:
         run: npm run build:cloud
 
       - name: Upload frontend build
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: frontend-dist-cloud
           path: frontend/dist
@@ -51,14 +67,15 @@ jobs:
   generate-swagger:
     name: Generate Swagger Docs
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: '1.26'
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Install swag CLI
         run: go install github.com/swaggo/swag/cmd/swag@v1.16.6
@@ -67,7 +84,7 @@ jobs:
         run: swag init -g cmd/main.go -o docs/swagger --parseInternal --generatedTime=false
 
       - name: Upload Swagger docs
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: swagger-docs-cloud
           path: docs/swagger
@@ -76,31 +93,34 @@ jobs:
   build-and-push:
     name: Build and Push to Private Registry
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: [build-frontend, generate-swagger]
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Download frontend build
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: frontend-dist-cloud
           path: frontend/dist
 
       - name: Download Swagger docs
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: swagger-docs-cloud
           path: docs/swagger
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Login to Private Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ${{ secrets.PRIVATE_REGISTRY }}
           username: ${{ secrets.GITEA_USERNAME }}
@@ -108,19 +128,22 @@ jobs:
 
       - name: Extract version
         id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
+          set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
+            VERSION="$INPUT_VERSION"
           else
             VERSION=${GITHUB_REF#refs/tags/}
           fi
           VERSION_NUM=${VERSION#v}
-          echo "tag=${VERSION}" >> $GITHUB_OUTPUT
-          echo "version=${VERSION_NUM}" >> $GITHUB_OUTPUT
+          echo "tag=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION_NUM}" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ secrets.PRIVATE_REGISTRY }}/${{ secrets.PRIVATE_IMAGE }}
           tags: |
@@ -128,8 +151,35 @@ jobs:
             type=raw,value=cloud-${{ steps.version.outputs.version }}
             type=semver,pattern=cloud-{{version}},value=${{ steps.version.outputs.tag }}
 
+      # Built and scanned locally first, so nothing with a fixable critical or high CVE
+      # is pushed. The push below reuses these layers out of the gha cache.
+      - name: Build image for scanning
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: build/cloud/Dockerfile
+          push: false
+          load: true
+          tags: whento-cloud-scan:candidate
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: whento-cloud-scan:candidate
+          format: table
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+
       - name: Build and push Docker image
-        uses: docker/build-push-action@v7
+        id: push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: build/cloud/Dockerfile
@@ -139,11 +189,19 @@ jobs:
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
           platforms: linux/amd64
+          # In-registry SPDX SBOM and build provenance. No GitHub attestation here: the
+          # image lives in a private registry outside this repository's trust root, and
+          # attesting it would publish its digest in a public transparency log.
+          sbom: true
+          provenance: mode=max
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Summary
         run: |
-          echo "## Cloud image published to private registry" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** \`cloud-latest\`, \`cloud-${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Cloud image published to private registry"
+            echo ""
+            echo "**Tag:** \`cloud-latest\`, \`cloud-${{ steps.version.outputs.version }}\`"
+            echo "**Digest:** \`${{ steps.push.outputs.digest }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

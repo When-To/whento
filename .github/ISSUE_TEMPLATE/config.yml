@@ -1,0 +1,22 @@
+# WhenTo - Issue chooser configuration
+# Copyright (C) 2025 WhenTo Contributors
+# SPDX-License-Identifier: BSL-1.1
+#
+# blank_issues_enabled: false forces every report through bug_report.yml or
+# feature_request.yml, so the required fields (version, build type, logs) are
+# always filled in. The contact links below cover what neither template should
+# be used for — chiefly vulnerabilities, which must not be filed publicly.
+
+blank_issues_enabled: false
+
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/When-To/whento/blob/main/.github/SECURITY.md
+    about: >-
+      Do NOT open a public issue. Email security@whento.be instead; the policy
+      describes what to include and the 48-hour response window.
+  # Discussions are disabled on this repository, so there is deliberately no
+  # link to them here — a contact link pointing at a disabled tab 404s.
+  - name: Contributing guide
+    url: https://github.com/When-To/whento/blob/main/.github/CONTRIBUTING.md
+    about: Build prerequisites, the cloud/selfhosted build tags, and the commit conventions.
