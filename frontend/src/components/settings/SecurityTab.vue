@@ -13,32 +13,45 @@
       </h2>
       <form class="space-y-4" @submit.prevent="changePassword">
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            {{ t('auth.currentPassword') }}
+          <label for="security-current-password" class="block">
+            <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {{ t('auth.currentPassword') }}
+            </span>
+            <input
+              id="security-current-password"
+              v-model="passwordForm.currentPassword"
+              type="password"
+              class="input"
+              autocomplete="current-password"
+            />
           </label>
-          <input
-            v-model="passwordForm.currentPassword"
-            type="password"
-            class="input"
-            autocomplete="current-password"
-          />
         </div>
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            {{ t('auth.newPassword') }}
+          <label for="security-new-password" class="block">
+            <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {{ t('auth.newPassword') }}
+            </span>
+            <input
+              id="security-new-password"
+              v-model="passwordForm.newPassword"
+              type="password"
+              class="input"
+              autocomplete="new-password"
+            />
           </label>
-          <input
-            v-model="passwordForm.newPassword"
-            type="password"
-            class="input"
-            autocomplete="new-password"
-          />
         </div>
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            {{ t('auth.confirmPassword') }}
+          <label for="security-confirm-password" class="block">
+            <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {{ t('auth.confirmPassword') }}
+            </span>
+            <input
+              id="security-confirm-password"
+              v-model="passwordForm.confirmPassword"
+              type="password"
+              class="input"
+            />
           </label>
-          <input v-model="passwordForm.confirmPassword" type="password" class="input" />
         </div>
         <button
           type="submit"

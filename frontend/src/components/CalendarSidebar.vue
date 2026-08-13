@@ -16,11 +16,11 @@
         class="flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700"
       >
         <h2 class="font-display text-lg font-semibold text-gray-900 dark:text-white">
-          {{ t('calendar.visitedCalendars', 'Mes calendriers') }}
+          {{ t('calendar.visitedCalendars') }}
         </h2>
         <button
           class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          :title="t('common.close', 'Close')"
+          :title="t('common.close')"
           @click="close"
         >
           <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -59,7 +59,7 @@
               </div>
               <button
                 class="shrink-0 text-gray-400 hover:text-danger-600 dark:hover:text-danger-400"
-                :title="t('common.remove', 'Remove')"
+                :title="t('common.remove')"
                 @click.prevent.stop="handleRemove(calendar.token)"
               >
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -100,7 +100,7 @@
     <button
       v-if="shouldShowButton"
       class="hidden md:flex fixed left-4 top-20 z-50 h-12 w-12 items-center justify-center rounded-full bg-primary-600 text-white shadow-lg transition-all hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600"
-      :title="t('calendar.showCalendars', 'Show calendars')"
+      :title="t('calendar.showCalendars')"
       @click="toggle"
     >
       <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

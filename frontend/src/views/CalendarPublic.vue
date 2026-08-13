@@ -59,7 +59,7 @@
                 />
               </svg>
               {{ calendar.participants?.length || 0 }}
-              {{ t('calendar.participantCount', 'participant(s)') }}
+              {{ t('calendar.participantCount') }}
             </span>
             <span class="flex items-center gap-1">
               <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -99,7 +99,7 @@
                 />
               </svg>
               <h3 class="mt-4 text-lg font-medium text-gray-900 dark:text-white">
-                {{ t('calendar.noParticipants', 'No participants') }}
+                {{ t('calendar.noParticipants') }}
               </h3>
               <template v-if="calendar.allow_anonymous_participants">
                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
@@ -113,6 +113,7 @@
                     v-model="newParticipantName"
                     type="text"
                     class="input flex-1 max-w-xs"
+                    :aria-label="t('calendar.joinAsParticipant')"
                     :placeholder="t('calendar.participantNamePlaceholder')"
                     :disabled="joiningAsParticipant"
                   />
@@ -127,20 +128,10 @@
               </template>
               <template v-else>
                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                  {{
-                    t(
-                      'calendar.noParticipantsDescription',
-                      'This calendar has no participants yet. No availability can be entered at this time.'
-                    )
-                  }}
+                  {{ t('calendar.noParticipantsDescription') }}
                 </p>
                 <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  {{
-                    t(
-                      'calendar.contactOwnerToAddParticipants',
-                      'Contact the calendar owner to add participants.'
-                    )
-                  }}
+                  {{ t('calendar.contactOwnerToAddParticipants') }}
                 </p>
               </template>
             </div>
@@ -172,12 +163,7 @@
                   />
                 </svg>
                 <p class="ml-3 text-sm text-yellow-700 dark:text-yellow-300">
-                  {{
-                    t(
-                      'calendar.participantLockedMessage',
-                      'This calendar requires a direct participant link. Contact the calendar owner to get your personal link.'
-                    )
-                  }}
+                  {{ t('calendar.participantLockedMessage') }}
                 </p>
               </div>
             </div>
@@ -201,6 +187,7 @@
                     v-model="newParticipantName"
                     type="text"
                     class="input flex-1"
+                    :aria-label="t('calendar.joinAsParticipant')"
                     :placeholder="t('calendar.participantNamePlaceholder')"
                     :disabled="joiningAsParticipant"
                   />
@@ -333,6 +320,7 @@ import { useI18n } from 'vue-i18n';
 import { useCalendarStore } from '@/stores/calendar';
 import { useCalendarHistoryStore } from '@/stores/calendarHistory';
 import { useToastStore } from '@/stores/toast';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const route = useRoute();
 const router = useRouter();
@@ -374,7 +362,7 @@ async function loadCalendar() {
       }
     }
   } catch (err: any) {
-    toastStore.error(err.message || t('calendar.fetchError', 'Failed to load calendar'));
+    toastStore.error(t(translateErrorMessage(err, { fallback: 'calendar.fetchError' })));
     // Remove invalid calendar from history and redirect to home
     historyStore.removeCalendar(token);
     router.push('/');
@@ -397,7 +385,7 @@ async function handleJoinAsParticipant() {
     }
   } catch (err: any) {
     toastStore.error(
-      err.message || t('calendar.participantNameAlreadyTaken', 'This name is already taken')
+      t(translateErrorMessage(err, { fallback: 'calendar.participantNameAlreadyTaken' }))
     );
   } finally {
     joiningAsParticipant.value = false;

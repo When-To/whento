@@ -13,16 +13,20 @@
       </h2>
       <form class="space-y-4" @submit.prevent="updateProfile">
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            {{ t('auth.displayName') }}
+          <label for="profile-display-name" class="block">
+            <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {{ t('auth.displayName') }}
+            </span>
+            <input id="profile-display-name" v-model="form.displayName" type="text" class="input" />
           </label>
-          <input v-model="form.displayName" type="text" class="input" />
         </div>
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            {{ t('auth.email') }}
+          <label for="profile-email" class="block">
+            <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {{ t('auth.email') }}
+            </span>
+            <input id="profile-email" v-model="user.email" type="email" class="input" readonly />
           </label>
-          <input v-model="user.email" type="email" class="input" readonly />
         </div>
         <button
           type="submit"
@@ -41,13 +45,16 @@
       </h2>
       <form class="space-y-4" @submit.prevent="savePreferences">
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            {{ t('common.language') }}
+          <label for="profile-language" class="block">
+            <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {{ t('common.language') }}
+            </span>
+            <select id="profile-language" v-model="preferences.locale" class="input">
+              <option v-for="code in SUPPORTED_LOCALES" :key="code" :value="code">
+                {{ LOCALE_NAMES[code] }}
+              </option>
+            </select>
           </label>
-          <select v-model="preferences.locale" class="input">
-            <option value="en">English</option>
-            <option value="fr">Français</option>
-          </select>
         </div>
         <div>
           <TimezoneSelector v-model="preferences.timezone" :label="t('common.timezone')" />
@@ -70,7 +77,9 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useToastStore } from '@/stores/toast';
 import { apiClient } from '@/api/client';
+import { LOCALE_NAMES, SUPPORTED_LOCALES } from '@/i18n';
 import TimezoneSelector from '@/components/TimezoneSelector.vue';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const { t, locale } = useI18n();
 const authStore = useAuthStore();
@@ -142,7 +151,7 @@ async function updateProfile() {
 
     toast.success(t('settings.preferencesSaved'));
   } catch (error: any) {
-    toast.error(error.message || t('errors.generic'));
+    toast.error(t(translateErrorMessage(error, { fallback: 'errors.generic' })));
   } finally {
     savingProfile.value = false;
   }
@@ -173,7 +182,7 @@ async function savePreferences() {
 
     toast.success(t('settings.preferencesSaved'));
   } catch (error: any) {
-    toast.error(error.message || t('errors.generic'));
+    toast.error(t(translateErrorMessage(error, { fallback: 'errors.generic' })));
   } finally {
     savingPreferences.value = false;
   }

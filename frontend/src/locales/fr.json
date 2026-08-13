@@ -11,15 +11,8 @@
     "deleting": "Suppression...",
     "close": "Fermer",
     "back": "Retour",
-    "next": "Suivant",
-    "previous": "Précédent",
-    "search": "Rechercher",
-    "filter": "Filtrer",
-    "sort": "Trier",
-    "yes": "Oui",
     "no": "Non",
     "or": "ou",
-    "and": "et",
     "you": "Vous",
     "welcome": "Bienvenue, {name} !",
     "retry": "Réessayer",
@@ -28,7 +21,6 @@
     "min": "min",
     "max": "max",
     "settings": "Paramètres",
-    "profile": "Profil",
     "preferences": "Préférences",
     "language": "Langue",
     "timezone": "Fuseau horaire",
@@ -44,7 +36,25 @@
     "notFoundMessage": "Désolé, nous n'avons pas trouvé la page que vous cherchez.",
     "confirm": "Confirmer",
     "confirmTitle": "Confirmation",
-    "dismissNotification": "Fermer la notification"
+    "dismissNotification": "Fermer la notification",
+    "logoAlt": "Logo WhenTo",
+    "toggleTheme": "Changer de thème",
+    "toggleLanguage": "Changer de langue"
+  },
+  "formats": {
+    "timePlaceholder": "--:--",
+    "totpCode": "000000",
+    "backupCode": "ABCD1234"
+  },
+  "a11y": {
+    "copyPublicLink": "Copier le lien public",
+    "copyIcsLink": "Copier le lien d'abonnement iCal",
+    "unifiedFeedUrl": "URL du flux unifié",
+    "newEmailAddress": "Nouvelle adresse e-mail",
+    "skipToContent": "Aller au contenu principal",
+    "participantName": "Nom du participant",
+    "magicLinkTitle": "Vérification du lien de connexion",
+    "timeInput": "Heure"
   },
   "home": {
     "heroTitle": "When to Play?",
@@ -79,12 +89,8 @@
     "hasAccount": "Déjà un compte ?",
     "loginButton": "Se connecter",
     "registerButton": "S'inscrire",
-    "loginSuccess": "Connexion réussie !",
-    "registerSuccess": "Inscription réussie !",
-    "logoutSuccess": "Déconnexion réussie",
     "loginError": "Échec de la connexion",
     "registerError": "Échec de l'inscription",
-    "emailAlreadyExists": "Un utilisateur avec cette adresse email existe déjà",
     "invalidCredentials": "Email ou mot de passe incorrect",
     "emailVerification": "Vérification de l'adresse email",
     "verifyingEmail": "Vérification de votre adresse email...",
@@ -163,10 +169,10 @@
   "nav": {
     "home": "Accueil",
     "dashboard": "Tableau de bord",
-    "calendars": "Calendriers",
     "settings": "Paramètres",
     "admin": "Administration",
-    "whyWhento": "Pourquoi WhenTo"
+    "whyWhento": "Pourquoi WhenTo",
+    "toggleMenu": "Ouvrir ou fermer le menu"
   },
   "settings": {
     "theme": "Thème",
@@ -205,14 +211,13 @@
       "description": "Ajoutez une couche de sécurité supplémentaire en exigeant un code de votre application d'authentification.",
       "enable": "Activer la 2FA",
       "enabled": "La 2FA est activée",
-      "disabled": "La 2FA est désactivée",
       "setupTitle": "Configurer la double authentification",
       "scanQRCode": "Scannez ce code QR avec votre application d'authentification :",
+      "qrCodeAlt": "QR code à scanner avec votre application d'authentification",
       "manualEntry": "Ou entrez ce code manuellement",
       "enterCode": "Entrez le code à 6 chiffres de votre application",
       "invalidCode": "Code de vérification invalide",
       "enableSuccess": "2FA activée avec succès",
-      "enableError": "Échec de l'activation de la 2FA",
       "disableSuccess": "2FA désactivée avec succès",
       "disableError": "Échec de la désactivation de la 2FA",
       "disable": "Désactiver la 2FA",
@@ -224,21 +229,11 @@
       "regenerateSuccess": "Codes de récupération régénérés avec succès",
       "regenerateError": "Échec de la régénération des codes de récupération",
       "setupError": "Échec du démarrage de la configuration 2FA",
-      "downloadCodes": "Télécharger les codes",
-      "printCodes": "Imprimer les codes"
+      "downloadCodes": "Télécharger les codes"
     }
   },
-  "dashboard": {
-    "bannerReachedUser": "Vous avez atteint votre limite de calendriers ({usage}/{limit}). Mettez à niveau votre plan pour créer plus de calendriers.",
-    "bannerReachedServer": "Limite de calendriers serveur atteinte ({usage}/{limit}). Veuillez mettre à niveau votre licence ou supprimer les calendriers inutilisés.",
-    "bannerWarningUser": "Vous utilisez {usage} sur {limit} calendriers ({percentage}%). Envisagez de mettre à niveau votre plan.",
-    "bannerWarningServer": "Le serveur utilise {usage} sur {limit} calendriers ({percentage}%). Envisagez de mettre à niveau votre licence.",
-    "bannerInfoUser": "Vous utilisez {usage} sur {limit} calendriers ({percentage}%).",
-    "bannerInfoServer": "Le serveur utilise {usage} sur {limit} calendriers ({percentage}%).",
-    "contactAdmin": "Contactez votre administrateur pour mettre à niveau la licence du serveur."
-  },
+  "dashboard": {},
   "calendar": {
-    "title": "Calendrier",
     "calendar": "Calendrier",
     "myCalendars": "Mes calendriers",
     "newCalendar": "Nouveau calendrier",
@@ -260,7 +255,6 @@
     "minDurationHelp": "Durée minimale de disponibilité en heures pour inclure un événement dans le flux iCalendar (0 = aucune restriction)",
     "participants": "Participants",
     "participantCount": "participant(s)",
-    "participantShort": "part.",
     "addParticipant": "Ajouter un participant",
     "participantName": "Nom du participant",
     "participantNamePlaceholder": "Entrez le nom du participant...",
@@ -277,13 +271,8 @@
     "regenerateICSToken": "Régénérer le token ICS",
     "noCalendars": "Vous n'avez pas encore de calendrier",
     "createFirstCalendar": "Créez votre premier calendrier pour commencer",
-    "calendarCreated": "Calendrier créé avec succès",
     "calendarUpdated": "Calendrier mis à jour avec succès",
     "settingsSaved": "Paramètres enregistrés avec succès",
-    "calendarDeleted": "Calendrier supprimé avec succès",
-    "participantAdded": "Participant ajouté avec succès",
-    "participantDeleted": "Participant supprimé avec succès",
-    "tokenRegenerated": "Token régénéré avec succès",
     "confirmDelete": "Êtes-vous sûr de vouloir supprimer ce calendrier ?",
     "confirmDeleteMessage": "Cette action est irréversible. Toutes les disponibilités et données associées seront définitivement supprimées.",
     "confirmDeleteParticipant": "Êtes-vous sûr de vouloir supprimer ce participant ? Toutes ses disponibilités seront supprimées.",
@@ -303,12 +292,11 @@
     "participantsRequired": "Au moins un participant est requis",
     "allowedWeekdays": "Jours de la semaine autorisés",
     "allowedWeekdaysHelp": "Sélectionnez les jours de la semaine où les participants peuvent indiquer leurs disponibilités",
+    "day": "Jour",
     "timezone": "Fuseau horaire",
     "timezoneHelp": "Le fuseau horaire par défaut pour ce calendrier",
     "searchTimezone": "Rechercher un fuseau horaire...",
     "selectedTimezone": "Sélectionné :",
-    "allowHolidays": "Autoriser les jours fériés",
-    "allowHolidaysHelp": "Autoriser les participants à ajouter des disponibilités les jours fériés",
     "holidaysPolicy": "Politique des jours fériés",
     "holidaysPolicyIgnore": "Ignorer",
     "holidaysPolicyAllow": "Autoriser",
@@ -375,12 +363,13 @@
     "nextWeek": "Semaine suivante",
     "thresholdMet": "Événement (seuil atteint)",
     "viewClassic": "Classique",
-    "viewCompact": "Compact",
     "listView": "Liste",
     "noActionableDays": "Aucun jour disponible dans cette période",
     "noParticipantsDescription": "Ce calendrier n'a pas encore de participants. Aucune disponibilité ne peut être saisie pour le moment.",
     "contactOwnerToAddParticipants": "Contactez le propriétaire du calendrier pour ajouter des participants.",
-    "updateParticipantError": "Échec de la mise à jour du participant"
+    "updateParticipantError": "Échec de la mise à jour du participant",
+    "sectionThreshold": "Seuil de participants et durée minimale",
+    "sectionSchedule": "Autoriser/bloquer des jours/heures"
   },
   "weekdays": {
     "short": {
@@ -394,20 +383,14 @@
     }
   },
   "availability": {
-    "title": "Disponibilités",
     "availability": "disponibilité",
     "availabilities": "disponibilités",
     "myAvailabilities": "Mes disponibilités",
-    "available": "Disponible",
     "recurring": "Récurrent",
     "fromRecurrenceHint": "Cette date vient d'une récurrence. Cliquez-la dans le calendrier pour ignorer cette occurrence.",
-    "thresholdMet": "Seuil atteint",
     "timeSlot": "Plage horaire",
-    "clickDateToAdd": "Cliquez sur une date pour ajouter votre disponibilité",
     "noAvailabilities": "Aucune disponibilité",
     "noParticipant": "Aucun participant disponible",
-    "addAvailability": "Ajouter une disponibilité",
-    "selectDate": "Sélectionner une date",
     "startTime": "Début",
     "endTime": "Fin",
     "allDay": "Jour complet",
@@ -427,16 +410,12 @@
     "thursday": "Jeudi",
     "friday": "Vendredi",
     "saturday": "Samedi",
-    "availabilityAdded": "Disponibilité ajoutée",
-    "availabilityDeleted": "Disponibilité supprimée",
     "confirmDelete": "Supprimer cette disponibilité ?",
     "confirmDeleteRecurrence": "Supprimer cette récurrence ?",
     "created": "Disponibilité créée",
     "deleted": "Disponibilité supprimée",
     "updated": "Disponibilité modifiée",
     "batchSuccess": "{count} disponibilités mises à jour",
-    "recurrenceAdded": "Récurrence ajoutée",
-    "recurrenceDeleted": "Récurrence supprimée",
     "multipleAdded": "{count} disponibilité(s) ajoutée(s)",
     "multipleRemoved": "{count} disponibilité(s) supprimée(s)",
     "allDatesAlreadyAdded": "Toutes les dates sélectionnées ont déjà une disponibilité",
@@ -444,15 +423,22 @@
     "clickOrDragToAdd": "Cliquez sur une date pour ajouter votre disponibilité, ou glissez pour sélectionner plusieurs jours",
     "startEndTimeMustDiffer": "L'heure de début et de fin ne peuvent pas être identiques",
     "cannotSplitError": "Impossible de couper une disponibilité en deux. Un participant ne peut avoir qu'une disponibilité par jour.",
-    "date": "Date"
+    "date": "Date",
+    "createError": "Échec de l'ajout de la disponibilité",
+    "updateError": "Échec de la mise à jour de la disponibilité",
+    "deleteError": "Échec de la suppression de la disponibilité",
+    "recurrenceCreateError": "Échec de l'ajout de la récurrence",
+    "recurrenceUpdateError": "Échec de la mise à jour de la récurrence",
+    "recurrenceDeleteError": "Échec de la suppression de la récurrence",
+    "exceptionCreateError": "Échec de l'ajout de l'exception",
+    "exceptionDeleteError": "Échec de la suppression de l'exception"
   },
   "participant": {
     "selectParticipant": "Sélectionner un participant",
     "whoAreYou": "Qui êtes-vous ?",
     "selectYourName": "Sélectionnez votre nom dans la liste",
-    "addYourAvailabilities": "Ajouter vos disponibilités",
     "participantsForDate": "Participants pour le",
-    "commonDates": "Dates communes"
+    "cancelError": "Échec de l'annulation de la participation"
   },
   "errors": {
     "generic": "Une erreur est survenue",
@@ -482,53 +468,34 @@
     }
   },
   "validation": {
-    "generic": {
-      "required": "ce champ est requis",
-      "email": "doit être une adresse email valide",
-      "min": "doit contenir au moins {count} caractères",
-      "max": "doit contenir au plus {count} caractères",
-      "gte": "doit être supérieur ou égal à {value}",
-      "lte": "doit être inférieur ou égal à {value}",
-      "oneof": "doit être l'un des suivants : {values}",
-      "timezone": "doit être un fuseau horaire IANA valide",
-      "locale": "doit être l'un des suivants : fr, en",
-      "uuid": "doit être un UUID valide"
-    },
     "fields": {
       "email": {
-        "label": "Email",
         "required": "L'adresse email est requise",
         "email": "L'adresse email n'est pas valide",
         "max": "L'adresse email ne peut pas dépasser 255 caractères"
       },
       "password": {
-        "label": "Mot de passe",
         "required": "Le mot de passe est requis",
         "min": "Le mot de passe doit contenir au moins 12 caractères avec au moins une majuscule, une minuscule, un chiffre et un caractère spécial",
         "max": "Le mot de passe ne peut pas dépasser 72 caractères"
       },
       "display_name": {
-        "label": "Nom d'affichage",
         "required": "Le nom d'affichage est requis",
         "min": "Le nom d'affichage doit contenir au moins 2 caractères",
         "max": "Le nom d'affichage ne peut pas dépasser 100 caractères"
       },
       "current_password": {
-        "label": "Mot de passe actuel",
         "required": "Le mot de passe actuel est requis"
       },
       "new_password": {
-        "label": "Nouveau mot de passe",
         "required": "Le nouveau mot de passe est requis",
         "min": "Le nouveau mot de passe doit contenir au moins 12 caractères avec au moins une majuscule, une minuscule, un chiffre et un caractère spécial",
         "max": "Le nouveau mot de passe ne peut pas dépasser 72 caractères"
       },
       "locale": {
-        "label": "Langue",
         "oneof": "La langue doit être l'une des suivantes : français, anglais"
       },
       "timezone": {
-        "label": "Fuseau horaire",
         "timezone": "Le fuseau horaire n'est pas valide"
       }
     }
@@ -697,7 +664,6 @@
   },
   "admin": {
     "title": "Administration",
-    "users": "Utilisateurs",
     "totalUsers": "Total des utilisateurs",
     "email": "Email",
     "displayName": "Nom d'affichage",
@@ -728,7 +694,8 @@
     "confirmDisable2FA": "Désactiver la 2FA TOTP ?",
     "confirmDisable2FAMessage": "Êtes-vous sûr de vouloir désactiver la 2FA TOTP pour {name} ? Cela supprimera la configuration de l'application d'authentification et les codes de secours. Les passkeys ne seront pas affectées.",
     "disable2FASuccess": "2FA TOTP désactivée pour {name} ({backupCodes} codes de secours supprimés)",
-    "disable2FAError": "Échec de la désactivation de la 2FA"
+    "disable2FAError": "Échec de la désactivation de la 2FA",
+    "invalidUserId": "Identifiant d'utilisateur invalide"
   },
   "quota": {
     "yourCalendars": "Vos calendriers",
@@ -737,8 +704,7 @@
     "unlimited": "Illimité",
     "approaching": "Vous approchez de votre limite de calendriers",
     "using": "Vous utilisez {percentage}% de votre quota",
-    "errorLoading": "Échec du chargement des informations de quota",
-    "upgradeNow": "Mettre à niveau"
+    "errorLoading": "Échec du chargement des informations de quota"
   },
   "why": {
     "heroTitle": "Pourquoi WhenTo ?",
@@ -838,7 +804,6 @@
     "title": "Flux ICS unifié",
     "description": "Abonnez-vous à un seul flux qui combine les événements de vos calendriers sélectionnés.",
     "enable": "Activer le flux unifié",
-    "feedUrl": "URL du flux",
     "copyUrl": "Copier",
     "urlCopied": "URL du flux unifié copiée !",
     "regenerateToken": "Régénérer",

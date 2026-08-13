@@ -18,9 +18,9 @@
           <div class="space-y-3">
             <!-- Date (read-only) -->
             <div>
-              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {{ t('availability.date', 'Date') }}
-              </label>
+              <span class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {{ t('availability.date') }}
+              </span>
               <div class="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
                 <svg
                   class="h-4 w-4 text-gray-400"
@@ -42,22 +42,24 @@
             <!-- Time Range -->
             <div class="grid grid-cols-2 gap-2">
               <div>
-                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {{ t('availability.startTime', 'Start time') }}
-                </label>
+                <span class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {{ t('availability.startTime') }}
+                </span>
                 <TimeSelect
                   v-model="editingAvailability.start_time"
                   class="w-full min-h-11"
+                  :aria-label="t('availability.startTime')"
                   :max="editingAvailability.end_time || undefined"
                 />
               </div>
               <div>
-                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {{ t('availability.endTime', 'End time') }}
-                </label>
+                <span class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {{ t('availability.endTime') }}
+                </span>
                 <TimeSelect
                   v-model="editingAvailability.end_time"
                   class="w-full min-h-11"
+                  :aria-label="t('availability.endTime')"
                   :min="editingAvailability.start_time || undefined"
                 />
               </div>
@@ -65,24 +67,27 @@
 
             <!-- Note -->
             <div>
-              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {{ t('availability.note', 'Note') }}
+              <label :for="`availability-note-${availability.date}`" class="block">
+                <span class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {{ t('availability.note') }}
+                </span>
+                <textarea
+                  :id="`availability-note-${availability.date}`"
+                  v-model="editingAvailability.note"
+                  rows="2"
+                  class="input w-full"
+                  :placeholder="t('availability.note')"
+                />
               </label>
-              <textarea
-                v-model="editingAvailability.note"
-                rows="2"
-                class="input w-full"
-                :placeholder="t('availability.note')"
-              />
             </div>
 
             <!-- Action Buttons -->
             <div class="flex flex-col md:flex-row gap-2 md:justify-end">
               <button class="btn btn-ghost btn-sm w-full md:w-auto min-h-11" @click="cancelEdit">
-                {{ t('common.cancel', 'Cancel') }}
+                {{ t('common.cancel') }}
               </button>
               <button class="btn btn-primary btn-sm w-full md:w-auto min-h-11" @click="handleSave">
-                {{ t('common.save', 'Save') }}
+                {{ t('common.save') }}
               </button>
             </div>
           </div>
@@ -137,7 +142,7 @@
           <div v-if="isDateInFuture(availability.date)" class="flex gap-2 shrink-0">
             <button
               class="p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-0 flex items-center justify-center text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              :title="t('common.edit', 'Edit')"
+              :title="t('common.edit')"
               @click="startEdit(availability)"
             >
               <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -186,7 +191,7 @@
           />
         </svg>
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          {{ t('availability.noAvailabilities', 'No availability') }}
+          {{ t('availability.noAvailabilities') }}
         </p>
       </div>
     </div>
@@ -212,6 +217,7 @@ import CollapsibleSection from '@/components/CollapsibleSection.vue';
 import TimeSelect from '@/components/TimeSelect.vue';
 import { useAvailabilityLabels } from '@/composables/calendar/useAvailabilityLabels';
 import type { Availability, CreateAvailabilityRequest } from '@/types';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const props = defineProps<{
   /** The calendar's public token. */
@@ -268,7 +274,7 @@ async function handleSave() {
 
     // Participant counts will be automatically reloaded, which updates availabilityData
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to update availability');
+    toastStore.error(t(translateErrorMessage(err, { fallback: 'availability.updateError' })));
   }
 }
 
@@ -279,7 +285,7 @@ async function handleDelete(date: string) {
     await availabilitiesApi.delete(props.token, props.participantId, date);
     await props.reload();
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to delete availability');
+    toastStore.error(t(translateErrorMessage(err, { fallback: 'availability.deleteError' })));
   }
 }
 </script>

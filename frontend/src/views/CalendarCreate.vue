@@ -59,6 +59,7 @@
                 v-model="participants[index]"
                 type="text"
                 class="input flex-1"
+                :aria-label="t('calendar.participantName')"
                 :placeholder="t('calendar.participantName')"
                 required
               />
@@ -110,6 +111,7 @@
               v-model="newParticipantName"
               type="text"
               class="input flex-1"
+              :aria-label="t('calendar.addParticipant')"
               :placeholder="t('calendar.participantNamePlaceholder')"
               @keyup.enter.prevent="addParticipant"
             />
@@ -138,14 +140,7 @@
         </CollapsibleSection>
 
         <!-- Participant threshold and minimum duration -->
-        <CollapsibleSection
-          :title="
-            locale === 'fr'
-              ? 'Seuil de participants et durée minimale'
-              : 'Participant threshold and minimum duration'
-          "
-          :default-open="true"
-        >
+        <CollapsibleSection :title="t('calendar.sectionThreshold')" :default-open="true">
           <CalendarThresholdFields
             v-model:threshold="form.threshold"
             v-model:min-duration-hours="form.min_duration_hours"
@@ -156,10 +151,7 @@
         </CollapsibleSection>
 
         <!-- Allow/block days/hours -->
-        <CollapsibleSection
-          :title="locale === 'fr' ? 'Autoriser/bloquer des jours/heures' : 'Allow/block days/hours'"
-          :default-open="false"
-        >
+        <CollapsibleSection :title="t('calendar.sectionSchedule')" :default-open="false">
           <CalendarScheduleFields
             v-model:start-date="form.start_date"
             v-model:end-date="form.end_date"
@@ -282,6 +274,7 @@ import {
   prepareWeekdayTimes,
 } from '@/utils/calendar/weekdayTimes';
 import { getDefaultNotifyConfig, updateNotifyConfig, type NotifyConfig } from '@/api/notify';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const router = useRouter();
 const { t, locale } = useI18n();
@@ -450,7 +443,7 @@ async function handleSubmit() {
     router.push(`/calendars/${calendar.id}/settings`);
   } catch (error: any) {
     console.error('Error creating calendar:', error);
-    errorMessage.value = error.message || t('calendar.createError');
+    errorMessage.value = t(translateErrorMessage(error, { fallback: 'calendar.createError' }));
   } finally {
     loading.value = false;
   }

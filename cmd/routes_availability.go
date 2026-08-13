@@ -34,10 +34,29 @@ func registerAvailabilityRoutes(r chi.Router, d *deps, h *handlers) {
 			r.Get("/calendar/{token}/events", h.events.Stream)
 		})
 
-		// Public routes with rate limiting (all availability endpoints are public)
+		// Public routes with rate limiting (all availability endpoints are public).
+		//
+		// 60/minute/IP covered reads and writes together, and that is far too tight
+		// for how the product is actually used. Filling in a few months of
+		// availability sends one request per date — ParticipantView's batch handler
+		// fires them all at once through Promise.allSettled — so selecting a quarter
+		// is roughly ninety simultaneous writes. The reader was rate limited for
+		// using the feature. Worse, the bucket is per IP, so a household or an
+		// office behind one address shared those sixty, and the summary refetches
+		// that every SSE notice triggers spent from the same budget.
+		//
+		// Raised to 400/minute, which absorbs a full quarter selected in one gesture
+		// plus the refetches that follow it, and still bounds a client stuck in a
+		// loop. Kept as one bucket rather than split between reads and writes: both
+		// need the same order of headroom, and a second budget would be one more
+		// thing to reason about for no protection gained.
+		//
+		// This is not the abuse control on these routes — possession of the
+		// calendar's public token is, and someone holding it can already do all of
+		// this through the interface. The limiter is here to bound a runaway client,
+		// not to ration normal use.
 		r.Group(func(r chi.Router) {
-			// Rate limiting: 60 requests/minute/IP for public availability access
-			l.use(r, perIP(60, time.Minute))
+			l.use(r, perIP(400, time.Minute))
 
 			// One notice per successful write, for every route below. Placed here
 			// rather than in the nine service methods so a tenth write route cannot

@@ -110,11 +110,16 @@
 
                     <label
                       v-if="user.id !== authStore.user?.id"
+                      :for="`admin-role-${user.id}`"
                       class="flex items-center gap-1 cursor-pointer"
                       :title="user.role === 'admin' ? t('admin.removeAdmin') : t('admin.makeAdmin')"
                     >
                       <input
+                        :id="`admin-role-${user.id}`"
                         type="checkbox"
+                        :aria-label="
+                          user.role === 'admin' ? t('admin.removeAdmin') : t('admin.makeAdmin')
+                        "
                         :checked="user.role === 'admin'"
                         :disabled="updatingRole[user.id]"
                         class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
@@ -282,6 +287,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useToastStore } from '@/stores/toast';
 import { adminApi } from '@/api/admin';
 import type { User } from '@/types';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -312,7 +318,7 @@ async function loadUsers() {
     }
   } catch (err: any) {
     console.error('Failed to load users:', err);
-    toastStore.error(err.message || t('errors.generic'));
+    toastStore.error(t(translateErrorMessage(err, { fallback: 'errors.generic' })));
   } finally {
     loading.value = false;
   }

@@ -83,6 +83,7 @@
                 type="text"
                 readonly
                 :value="unifiedFeedUrl"
+                :aria-label="t('a11y.unifiedFeedUrl')"
                 class="input flex-1 text-xs"
                 @click="($event.target as HTMLInputElement)?.select()"
               />
@@ -172,7 +173,7 @@
           {{ fetchError }}
         </p>
         <button class="btn btn-primary" @click="loadCalendars()">
-          {{ t('common.retry', 'Retry') }}
+          {{ t('common.retry') }}
         </button>
       </div>
 
@@ -223,7 +224,10 @@
           v-for="calendar in calendars"
           :key="calendar.id"
           class="card card-hover group cursor-pointer"
-          @click="router.push(`/c/${calendar.public_token}`)"
+          role="button"
+          tabindex="0"
+          @click="openCalendar(calendar.public_token)"
+          @keydown="handleCardKeydown($event, calendar.public_token)"
         >
           <!-- Calendar Header -->
           <div class="mb-4 flex items-start justify-between">
@@ -273,18 +277,17 @@
 
           <!-- Unified Feed Checkbox -->
           <div v-if="unifiedFeedConfig?.configured" class="mb-2 flex items-center" @click.stop>
-            <input
-              :id="`unified-feed-${calendar.id}`"
-              type="checkbox"
-              :checked="unifiedFeedStore.isCalendarIncluded(calendar.id)"
-              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
-              @change="unifiedFeedStore.toggleCalendar(calendar.id)"
-            />
-            <label
-              :for="`unified-feed-${calendar.id}`"
-              class="ml-2 text-xs text-gray-500 dark:text-gray-400"
-            >
-              {{ t('unifiedFeed.includeInFeed') }}
+            <label :for="`unified-feed-${calendar.id}`" class="flex items-center">
+              <input
+                :id="`unified-feed-${calendar.id}`"
+                type="checkbox"
+                :checked="unifiedFeedStore.isCalendarIncluded(calendar.id)"
+                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
+                @change="unifiedFeedStore.toggleCalendar(calendar.id)"
+              />
+              <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('unifiedFeed.includeInFeed') }}
+              </span>
             </label>
           </div>
 
@@ -303,11 +306,11 @@
                   d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
                 />
               </svg>
-              {{ t('common.copy', 'Copy') }}
+              {{ t('common.copy') }}
             </button>
             <button
               class="btn btn-ghost btn-sm"
-              :title="t('common.settings', 'Settings')"
+              :title="t('common.settings')"
               @click.stop="router.push(`/calendars/${calendar.id}/settings`)"
             >
               <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -341,6 +344,7 @@ import { useCalendarStore } from '@/stores/calendar';
 import { useUnifiedFeedStore } from '@/stores/unifiedFeed';
 import { useToastStore } from '@/stores/toast';
 import QuotaUsage from '@/components/QuotaUsage.vue';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const router = useRouter();
 const { t } = useI18n();
@@ -363,6 +367,20 @@ const unifiedFeedUrl = computed(() => {
   if (!unifiedFeedConfig.value?.ics_token) return '';
   return `${window.location.origin}/api/v1/ics/unified/${unifiedFeedConfig.value.ics_token}.ics`;
 });
+
+function openCalendar(publicToken: string) {
+  router.push(`/c/${publicToken}`);
+}
+
+// The card is a static element turned into a button, so it has to handle keyboard activation
+// itself. Events coming from the controls inside the card (checkbox, quick actions) are ignored,
+// otherwise activating one of them would also open the calendar.
+function handleCardKeydown(event: KeyboardEvent, publicToken: string) {
+  if (event.target !== event.currentTarget) return;
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  event.preventDefault();
+  openCalendar(publicToken);
+}
 
 function copyPublicLink(token: string) {
   const url = `${window.location.origin}/c/${token}`;
@@ -398,7 +416,7 @@ async function loadCalendars() {
   try {
     await calendarStore.fetchCalendars();
   } catch (error: any) {
-    fetchError.value = error.message || 'Failed to load calendars';
+    fetchError.value = t(translateErrorMessage(error, { fallback: 'calendar.fetchError' }));
     console.error('Error loading calendars:', error);
   }
 }

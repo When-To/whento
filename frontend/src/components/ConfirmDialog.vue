@@ -71,12 +71,16 @@
  *  - the element that had focus before the dialog opened gets it back on close,
  *    which is what lets a keyboard user carry on where they were.
  *
+ * The last four now come from `useFocusTrap`, extracted from this component so the
+ * app's other dialogs get the same behaviour instead of a fourth hand-rolled copy.
+ *
  * Clicking the backdrop deliberately does *not* dismiss: every current caller is a
  * destructive action, and an accidental click outside should not count as an answer.
  */
-import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
+import { computed, ref, useId } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirm } from '@/composables/useConfirm';
+import { useFocusTrap } from '@/composables/useFocusTrap';
 
 const { t } = useI18n();
 const { pending, resolveConfirm } = useConfirm();
@@ -91,70 +95,12 @@ const panel = ref<HTMLElement | null>(null);
 const confirmButton = ref<HTMLButtonElement | null>(null);
 const cancelButton = ref<HTMLButtonElement | null>(null);
 
-/** Where focus was before we took it, so it can be handed back. */
-let previouslyFocused: HTMLElement | null = null;
-
-const FOCUSABLE =
-  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
-
-function focusableElements(): HTMLElement[] {
-  if (!panel.value) return [];
-  return Array.from(panel.value.querySelectorAll<HTMLElement>(FOCUSABLE));
-}
-
-/**
- * Listens on the document rather than on the panel: Escape has to work even if focus
- * has somehow escaped the dialog, which is precisely the case a trap must recover from.
- */
-function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') {
-    event.preventDefault();
-    cancel();
-    return;
-  }
-
-  if (event.key !== 'Tab') return;
-
-  const focusable = focusableElements();
-  if (focusable.length === 0) return;
-
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  const active = document.activeElement;
-
-  // Wrap at both ends, and pull focus back in if it has left the panel entirely.
-  if (event.shiftKey && (active === first || !panel.value?.contains(active))) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && (active === last || !panel.value?.contains(active))) {
-    event.preventDefault();
-    first.focus();
-  }
-}
-
-function detach() {
-  document.removeEventListener('keydown', onKeydown, true);
-}
-
-watch(
-  request,
-  async open => {
-    if (open) {
-      previouslyFocused =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      document.addEventListener('keydown', onKeydown, true);
-      await nextTick();
-      (isDanger.value ? cancelButton.value : confirmButton.value)?.focus();
-    } else {
-      detach();
-      previouslyFocused?.focus();
-      previouslyFocused = null;
-    }
-  },
-  { immediate: true }
-);
-
-onBeforeUnmount(detach);
+useFocusTrap(() => request.value !== null, {
+  container: panel,
+  onEscape: () => cancel(),
+  // Cancel for destructive questions, so a reflexive Enter cannot confirm a deletion.
+  initialFocus: () => (isDanger.value ? cancelButton.value : confirmButton.value),
+});
 
 function accept() {
   resolveConfirm(true);

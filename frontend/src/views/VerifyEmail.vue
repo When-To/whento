@@ -10,9 +10,9 @@
   >
     <div class="max-w-md w-full space-y-8">
       <div>
-        <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
+        <h1 class="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
           {{ $t('auth.emailVerification') }}
-        </h2>
+        </h1>
       </div>
 
       <!-- Loading state -->
@@ -103,6 +103,7 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 import axios from 'axios';
 
 const route = useRoute();
@@ -113,6 +114,28 @@ const loading = ref(true);
 const success = ref(false);
 const error = ref(false);
 const errorMessage = ref('');
+
+/**
+ * Resolve a failed verification to an i18n key.
+ *
+ * This view talks to axios directly rather than through `apiClient`, so it used to render
+ * `error.message` from the envelope verbatim — English developer prose on an otherwise
+ * French page. Only the structured `code` carries meaning across locales, and on this
+ * endpoint a rejected request means the token itself is bad, which deserves a more
+ * specific line than the generic "bad request".
+ */
+function verificationErrorKey(code: string | undefined): string {
+  return translateErrorMessage(
+    { code },
+    {
+      fallback: 'auth.verificationError',
+      overrides: {
+        BAD_REQUEST: 'auth.invalidOrExpiredToken',
+        NOT_FOUND: 'auth.invalidOrExpiredToken',
+      },
+    }
+  );
+}
 
 const verifyEmail = async (token: string) => {
   try {
@@ -134,18 +157,17 @@ const verifyEmail = async (token: string) => {
         }
       }
     } else {
-      throw new Error(response.data.error?.message || 'Verification failed');
+      error.value = true;
+      errorMessage.value = t(verificationErrorKey(response.data.error?.code));
     }
   } catch (err: any) {
     error.value = true;
-
-    if (err.response?.data?.error?.message) {
-      errorMessage.value = err.response.data.error.message;
-    } else if (err.response?.status === 400) {
-      errorMessage.value = t('auth.invalidOrExpiredToken');
-    } else {
-      errorMessage.value = t('auth.verificationError');
-    }
+    errorMessage.value = t(
+      verificationErrorKey(
+        err.response?.data?.error?.code ??
+          (err.response?.status === 400 ? 'BAD_REQUEST' : undefined)
+      )
+    );
   } finally {
     loading.value = false;
   }

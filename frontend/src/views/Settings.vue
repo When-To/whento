@@ -113,6 +113,7 @@ import { useToastStore } from '@/stores/toast';
 import { apiClient } from '@/api/client';
 import ProfileTab from '@/components/settings/ProfileTab.vue';
 import SecurityTab from '@/components/settings/SecurityTab.vue';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -139,7 +140,7 @@ async function resendVerificationEmail() {
     await apiClient.post('/auth/send-verification');
     toast.success(t('auth.verificationEmailResent'));
   } catch (error: any) {
-    toast.error(error.message || t('auth.failedToResendEmail'));
+    toast.error(t(translateErrorMessage(error, { fallback: 'auth.failedToResendEmail' })));
   } finally {
     resending.value = false;
   }

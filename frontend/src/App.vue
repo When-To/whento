@@ -17,7 +17,7 @@
       class="w-full max-w-md rounded-lg border border-gray-200 bg-white p-8 text-center shadow-lg dark:border-gray-800 dark:bg-gray-900"
       role="alert"
     >
-      <img src="/logo.png" alt="WhenTo" class="mx-auto mb-4 h-12 w-12" />
+      <img src="/logo.png" :alt="t('common.logoAlt')" class="mx-auto mb-4 h-12 w-12" />
       <h1 class="mb-2 font-display text-xl font-bold text-gray-900 dark:text-white">
         {{ t('errors.boundary.title') }}
       </h1>
@@ -44,7 +44,7 @@
     class="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950"
   >
     <div class="text-center">
-      <img src="/logo.png" alt="WhenTo" class="mb-4 h-16 w-16 mx-auto" />
+      <img src="/logo.png" :alt="t('common.logoAlt')" class="mb-4 h-16 w-16 mx-auto" />
       <svg class="h-8 w-8 animate-spin text-primary-600 mx-auto" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path
@@ -57,6 +57,14 @@
   </div>
 
   <div v-else id="app" class="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <!--
+      Skip link. First focusable thing in the document, off-screen until it takes focus.
+      Without it a keyboard user pays for the whole <nav> — logo, up to three section
+      links, theme, language and the user menu — on every single page before reaching
+      the content they navigated to.
+    -->
+    <a href="#main-content" class="skip-link">{{ t('a11y.skipToContent') }}</a>
+
     <!-- Calendar Sidebar -->
     <CalendarSidebar />
 
@@ -68,7 +76,7 @@
         <div class="flex h-16 items-center justify-between">
           <!-- Logo -->
           <router-link to="/" class="flex items-center space-x-2">
-            <img src="/logo.png" alt="WhenTo" class="h-8 w-8" />
+            <img src="/logo.png" :alt="t('common.logoAlt')" class="h-8 w-8" />
             <span class="font-display text-xl font-bold text-gray-900 dark:text-white">WhenTo</span>
           </router-link>
 
@@ -148,7 +156,7 @@
             <!-- Theme Toggle -->
             <button
               class="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-              aria-label="Toggle theme"
+              :aria-label="t('common.toggleTheme')"
               @click="toggleTheme"
             >
               <svg
@@ -176,7 +184,11 @@
             </button>
 
             <!-- Language Toggle -->
+            <!-- Named explicitly: "EN" alone is a two-letter accessible name that says
+                 nothing about what pressing the button does. -->
             <button
+              type="button"
+              :aria-label="t('common.toggleLanguage')"
               class="rounded-lg px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
               @click="toggleLocale"
             >
@@ -213,7 +225,7 @@
             <button
               v-if="hasCalendarHistory"
               class="relative rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-              :title="t('calendar.showCalendars', 'Show calendars')"
+              :title="t('calendar.showCalendars')"
               @click="toggleCalendarHistory"
             >
               <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -235,7 +247,7 @@
             <!-- Hamburger Menu Button -->
             <button
               class="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-              aria-label="Toggle menu"
+              :aria-label="t('nav.toggleMenu')"
               @click="toggleMobileMenu"
             >
               <svg
@@ -348,7 +360,7 @@
               }}</span>
               <button
                 class="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-                aria-label="Toggle theme"
+                :aria-label="t('common.toggleTheme')"
                 @click="toggleTheme"
               >
                 <svg
@@ -381,6 +393,8 @@
                 t('settings.language')
               }}</span>
               <button
+                type="button"
+                :aria-label="t('common.toggleLanguage')"
                 class="rounded-lg px-3 py-1 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
                 @click="toggleLocale"
               >
@@ -428,7 +442,8 @@
     </nav>
 
     <!-- Main Content -->
-    <main>
+    <!-- `tabindex="-1"` so the skip link can actually move focus here, not just scroll. -->
+    <main id="main-content" tabindex="-1">
       <router-view v-slot="{ Component }">
         <transition name="page-fade" mode="out-in">
           <component :is="Component" />

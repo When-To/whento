@@ -14,6 +14,7 @@
         v-model="newEmail"
         type="email"
         class="input flex-1"
+        :aria-label="t('a11y.newEmailAddress')"
         :placeholder="t('notifications.newEmailPlaceholder')"
         required
       />

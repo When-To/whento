@@ -10,15 +10,42 @@ import en from './locales/en.json';
 
 /**
  * Supported locales - single source of truth
- * To add a new language:
+ *
+ * To add a new language (frontend side):
  * 1. Import the locale file (e.g., import de from './locales/de.json')
  * 2. Add it to LOCALE_MESSAGES (e.g., { en, fr, de })
+ * 3. Add its endonym to LOCALE_NAMES (e.g., de: 'Deutsch')
+ * 4. Add its first day of the week to LOCALE_WEEK_START (e.g., de: 1)
+ *
+ * The new file must carry exactly the same key paths as `en.json`; `locales.test.ts`
+ * asserts that parity across every entry of LOCALE_MESSAGES, so a partial translation
+ * fails the suite rather than silently falling back to English at runtime.
+ *
+ * The backend renders e-mails from its own message catalogues, which this file does not
+ * reach. A new language is only half-added until it also exists under:
+ * - `internal/auth/handlers/templates/locales/`
+ * - `internal/auth/service/templates/locales/`
+ * - `internal/notify/**\/templates/locales/`
  */
 const LOCALE_MESSAGES = { en, fr } as const;
 
 export type SupportedLocale = keyof typeof LOCALE_MESSAGES;
 export const SUPPORTED_LOCALES = Object.keys(LOCALE_MESSAGES) as SupportedLocale[];
 export const DEFAULT_LOCALE: SupportedLocale = 'en';
+
+/**
+ * Language names, each written in its own language.
+ *
+ * Endonyms are deliberately *not* translation keys: a language picker shows "Français"
+ * to an English reader, because someone who cannot read the current UI language still has
+ * to be able to find their own. Translating them would produce "French" for an English
+ * user — exactly the entry that reader cannot act on. Keeping them here rather than in the
+ * template means a new language adds one line instead of an `<option>` per view.
+ */
+export const LOCALE_NAMES: Record<SupportedLocale, string> = {
+  en: 'English',
+  fr: 'Français',
+};
 
 /**
  * Checks if a string is a supported locale

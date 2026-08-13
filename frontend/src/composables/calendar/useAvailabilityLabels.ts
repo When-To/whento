@@ -73,7 +73,7 @@ export function useAvailabilityLabels(): AvailabilityLabels {
     const end = endTime || '23:59';
 
     if (start === '00:00' && end === '23:59') {
-      return t('availability.allDay', 'All day');
+      return t('availability.allDay');
     }
 
     if (startTime && endTime) {
@@ -83,7 +83,7 @@ export function useAvailabilityLabels(): AvailabilityLabels {
     } else if (endTime) {
       return `${t('availability.endTime')}: ${endTime}`;
     }
-    return t('availability.allDay', 'All day');
+    return t('availability.allDay');
   }
 
   function getDayName(dayOfWeek: number): string {

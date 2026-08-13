@@ -11,7 +11,7 @@
       <div class="card">
         <!-- Header -->
         <div class="mb-8 text-center">
-          <img src="/logo.png" alt="WhenTo" class="mx-auto mb-4 h-16 w-16" />
+          <img src="/logo.png" :alt="t('common.logoAlt')" class="mx-auto mb-4 h-16 w-16" />
           <h1 class="font-display text-3xl font-bold text-gray-900 dark:text-white">
             {{ t('auth.register') }}
           </h1>
@@ -38,22 +38,21 @@
         <form class="space-y-6" @submit.prevent="handleSubmit">
           <!-- Display Name -->
           <div>
-            <label
-              for="display_name"
-              class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              {{ t('auth.displayName') }}
+            <label for="display_name" class="block">
+              <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('auth.displayName') }}
+              </span>
+              <input
+                id="display_name"
+                v-model="form.display_name"
+                type="text"
+                required
+                autocomplete="name"
+                class="input"
+                :class="{ 'input-error': errors.display_name }"
+                :placeholder="t('auth.displayName')"
+              />
             </label>
-            <input
-              id="display_name"
-              v-model="form.display_name"
-              type="text"
-              required
-              autocomplete="name"
-              class="input"
-              :class="{ 'input-error': errors.display_name }"
-              :placeholder="t('auth.displayName')"
-            />
             <p v-if="errors.display_name" class="mt-1 text-sm text-danger-600 dark:text-danger-400">
               {{ errors.display_name }}
             </p>
@@ -61,22 +60,21 @@
 
           <!-- Email -->
           <div>
-            <label
-              for="email"
-              class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              {{ t('auth.email') }}
+            <label for="email" class="block">
+              <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('auth.email') }}
+              </span>
+              <input
+                id="email"
+                v-model="form.email"
+                type="email"
+                required
+                autocomplete="email"
+                class="input"
+                :class="{ 'input-error': errors.email }"
+                :placeholder="t('auth.email')"
+              />
             </label>
-            <input
-              id="email"
-              v-model="form.email"
-              type="email"
-              required
-              autocomplete="email"
-              class="input"
-              :class="{ 'input-error': errors.email }"
-              :placeholder="t('auth.email')"
-            />
             <p v-if="errors.email" class="mt-1 text-sm text-danger-600 dark:text-danger-400">
               {{ errors.email }}
             </p>
@@ -84,22 +82,21 @@
 
           <!-- Password -->
           <div>
-            <label
-              for="password"
-              class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              {{ t('auth.password') }}
+            <label for="password" class="block">
+              <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('auth.password') }}
+              </span>
+              <input
+                id="password"
+                v-model="form.password"
+                type="password"
+                required
+                autocomplete="new-password"
+                class="input"
+                :class="{ 'input-error': errors.password }"
+                :placeholder="t('auth.password')"
+              />
             </label>
-            <input
-              id="password"
-              v-model="form.password"
-              type="password"
-              required
-              autocomplete="new-password"
-              class="input"
-              :class="{ 'input-error': errors.password }"
-              :placeholder="t('auth.password')"
-            />
             <p v-if="errors.password" class="mt-1 text-sm text-danger-600 dark:text-danger-400">
               {{ errors.password }}
             </p>

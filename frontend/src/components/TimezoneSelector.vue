@@ -6,16 +6,23 @@
 
 <template>
   <div class="relative">
-    <label v-if="label" class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+    <!--
+      A caption rather than a `<label>`: the field is a combobox whose value the user
+      never types in full, the caption is optional, and a `<label>` that wraps nothing
+      and points at nothing names nothing. `aria-label` carries the same words when a
+      caption is given, and the search prompt when it is not.
+    -->
+    <span v-if="label" class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
       {{ label }}
-    </label>
+    </span>
 
     <div class="relative">
       <input
         ref="inputRef"
         v-model="searchQuery"
         type="text"
-        :placeholder="t('calendar.searchTimezone', 'Search timezone...')"
+        :placeholder="t('calendar.searchTimezone')"
+        :aria-label="label || t('calendar.searchTimezone')"
         class="input w-full pr-10"
         @focus="showDropdown = true"
         @blur="handleBlur"
@@ -58,7 +65,7 @@
 
     <!-- Selected timezone display -->
     <div v-if="!showDropdown && modelValue" class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-      {{ t('calendar.selectedTimezone', 'Selected:') }} {{ getTimezoneLabel(modelValue) }}
+      {{ t('calendar.selectedTimezone') }} {{ getTimezoneLabel(modelValue) }}
     </div>
 
     <p v-if="help" class="mt-1 text-sm text-gray-500 dark:text-gray-400">

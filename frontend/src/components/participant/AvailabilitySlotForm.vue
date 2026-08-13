@@ -8,7 +8,7 @@
   <div class="card">
     <div class="mb-4 flex items-baseline gap-2">
       <h2 class="font-display text-xl font-semibold text-gray-900 dark:text-white">
-        {{ t('availability.timeSlot', 'Plage horaire') }}
+        {{ t('availability.timeSlot') }}
       </h2>
       <span
         v-if="minDurationHours && minDurationHours > 0"
@@ -21,37 +21,39 @@
     <div class="space-y-3">
       <!-- All Day Checkbox -->
       <div class="flex items-center">
-        <input
-          id="allDay"
-          v-model="allDay"
-          type="checkbox"
-          class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-        />
-        <label for="allDay" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
-          {{ t('availability.allDay') }}
+        <label for="allDay" class="flex items-center text-sm text-gray-700 dark:text-gray-300">
+          <input
+            id="allDay"
+            v-model="allDay"
+            type="checkbox"
+            class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+          <span class="ml-2">{{ t('availability.allDay') }}</span>
         </label>
       </div>
 
       <!-- Time Range -->
       <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+          <span class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
             {{ t('availability.startTime') }}
-          </label>
+          </span>
           <TimeSelect
             v-model="startTime"
             class="text-sm"
+            :aria-label="t('availability.startTime')"
             :disabled="allDay"
             :max="endTime || undefined"
           />
         </div>
         <div>
-          <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+          <span class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
             {{ t('availability.endTime') }}
-          </label>
+          </span>
           <TimeSelect
             v-model="endTime"
             class="text-sm"
+            :aria-label="t('availability.endTime')"
             :disabled="allDay"
             :min="startTime || undefined"
           />
@@ -60,15 +62,18 @@
 
       <!-- Note -->
       <div>
-        <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-          {{ t('availability.note') }}
+        <label for="slot-note" class="block">
+          <span class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+            {{ t('availability.note') }}
+          </span>
+          <textarea
+            id="slot-note"
+            v-model="note"
+            rows="2"
+            class="input text-sm"
+            :placeholder="t('availability.note')"
+          />
         </label>
-        <textarea
-          v-model="note"
-          rows="2"
-          class="input text-sm"
-          :placeholder="t('availability.note')"
-        />
       </div>
     </div>
   </div>
