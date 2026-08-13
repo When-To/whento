@@ -719,7 +719,9 @@ func TestTheAttemptLimitLocksOut(t *testing.T) {
 	}
 
 	// The counter is per user, so one account under attack does not lock out another.
-	key := "mfa_attempts:" + user.ID.String()
+	// The key is the digest one, since that is what the handler writes; that it no
+	// longer spells out the user id is asserted in mfa_privacy_test.go.
+	key := mfaAttemptsKey(user.ID)
 	if appCache.values[key] < 5 {
 		t.Errorf("the counter is %d after five failures", appCache.values[key])
 	}

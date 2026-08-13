@@ -12,6 +12,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/whento/pkg/httputil"
+	// Aliased: the constructor below takes a *slog.Logger named `logger`, which
+	// would otherwise shadow the package.
+	pkglog "github.com/whento/pkg/logger"
 	"github.com/whento/pkg/validator"
 	calendarModels "github.com/whento/whento/internal/calendar/models"
 	calendarRepo "github.com/whento/whento/internal/calendar/repository"
@@ -106,7 +109,8 @@ func (h *ParticipantEmailHandler) AddEmail(w http.ResponseWriter, r *http.Reques
 
 	// Add email and send verification
 	if err := h.emailService.AddEmail(ctx, pid, req.Email, participant.Name, "en"); err != nil {
-		h.logger.Error("Failed to add participant email", "participant_id", pid, "error", err)
+		h.logger.Error("Failed to add participant email",
+			"participant_ref", pkglog.Fingerprint(pid.String()), "error", err)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, err.Error())
 		return
 	}
@@ -196,7 +200,8 @@ func (h *ParticipantEmailHandler) ResendVerification(w http.ResponseWriter, r *h
 
 	// Resend verification
 	if err := h.emailService.ResendVerification(ctx, pid, "en"); err != nil {
-		h.logger.Error("Failed to resend verification", "participant_id", pid, "error", err)
+		h.logger.Error("Failed to resend verification",
+			"participant_ref", pkglog.Fingerprint(pid.String()), "error", err)
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, err.Error())
 		return
 	}

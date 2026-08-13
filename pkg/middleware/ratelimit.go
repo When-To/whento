@@ -21,6 +21,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/whento/pkg/httputil"
+	"github.com/whento/pkg/metrics"
 )
 
 // trustedProxyIPs holds exact trusted proxy IPs.
@@ -137,6 +138,10 @@ func (rl *RateLimiter) Limit(cfg RateLimitConfig) func(http.Handler) http.Handle
 			w.Header().Set("X-RateLimit-Backend", backend)
 
 			if !allowed {
+				// Counted by route pattern only. The bucket key — an IP, a user
+				// id, a path holding a calendar token — is never a label: the
+				// metric answers "how many refusals on this route", never "whose".
+				metrics.RateLimitRejected(routePattern(r))
 				w.Header().Set("Retry-After", fmt.Sprintf("%d", resetAt-time.Now().Unix()))
 				httputil.Error(w, http.StatusTooManyRequests, httputil.ErrCodeRateLimited, "Rate limit exceeded")
 				return

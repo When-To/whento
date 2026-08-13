@@ -22,6 +22,10 @@ import (
 
 	"github.com/whento/pkg/email"
 	"github.com/whento/pkg/jwt"
+
+	// Aliased: the constructor below takes a *slog.Logger named `logger`, which
+	// would otherwise shadow the package.
+	pkglog "github.com/whento/pkg/logger"
 	"github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/auth/repository"
 	"github.com/whento/whento/internal/config"
@@ -82,7 +86,12 @@ func (s *MagicLinkService) RequestMagicLink(ctx context.Context, email string) e
 	user, err := s.userRepo.GetByEmailVerified(ctx, email)
 	if err != nil {
 		// CRITICAL: Return nil even if user not found (anti-enumeration)
-		s.logger.Info("Magic link requested for non-existent or unverified email", "email", email)
+		//
+		// Logging the address would defeat that from the other side: the response
+		// says nothing, and the log file would say everything — including which
+		// addresses do not have an account here.
+		s.logger.Info("Magic link requested for non-existent or unverified email",
+			"account_ref", pkglog.Fingerprint(email))
 		return nil
 	}
 
@@ -201,9 +210,9 @@ func (s *MagicLinkService) sendMagicLinkEmail(to, displayName, locale, token str
 	})
 
 	if err != nil {
-		s.logger.Error("Failed to send magic link email", "error", err, "to", to)
+		s.logger.Error("Failed to send magic link email", "error", err, "recipient_ref", pkglog.Fingerprint(to))
 	} else {
-		s.logger.Info("Magic link email sent", "to", to, "locale", locale)
+		s.logger.Info("Magic link email sent", "recipient_ref", pkglog.Fingerprint(to), "locale", locale)
 	}
 }
 

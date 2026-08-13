@@ -15,6 +15,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/whento/pkg/email"
+	// Aliased: the constructor below takes a *slog.Logger named `logger`, which
+	// would otherwise shadow the package.
+	pkglog "github.com/whento/pkg/logger"
 	authRepo "github.com/whento/whento/internal/auth/repository"
 	availabilityModels "github.com/whento/whento/internal/availability/models"
 	availabilityRepo "github.com/whento/whento/internal/availability/repository"
@@ -255,7 +258,11 @@ func (s *NotifyService) notifyOwnerExternalChannels(
 			ctx, calendar.ID, transition.Date, transition.TransitionType, owner.ID, "telegram",
 		)
 		if !sent {
-			s.logger.Info("Sending Telegram notification", "chat_id", config.Channels.Telegram.ChatID)
+			// A Telegram chat id names a person's chat as surely as an address
+			// names their mailbox, and unlike the two webhook lines above it was
+			// logged whole.
+			s.logger.Info("Sending Telegram notification",
+				"chat_ref", pkglog.Fingerprint(config.Channels.Telegram.ChatID))
 			if err := s.externalNotifier.SendTelegram(
 				ctx, config.Channels.Telegram.BotToken, config.Channels.Telegram.ChatID, textMessage,
 			); err != nil {
@@ -325,7 +332,7 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 				}
 
 				s.logger.Debug("Owner added to email recipients",
-					"email", owner.Email,
+					"owner_id", owner.ID,
 					"has_participant_id", ownerParticipantID != nil)
 			}
 		}
@@ -363,7 +370,10 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 		}
 	}
 
-	s.logger.Debug("Participant names collected for email", "count", len(participantNames), "names", participantNames)
+	// The names themselves go into the email body and stop there. A participant
+	// is often someone who never signed up for anything and gave only a first
+	// name; the count is what this line was ever useful for.
+	s.logger.Debug("Participant names collected for email", "count", len(participantNames))
 
 	// 2. Collect participant recipients if NotifyParticipants is enabled
 	if config.NotifyParticipants {
@@ -383,8 +393,7 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 					// Only notify participants who have availability on this specific date
 					if !participantIDsWithAvailability[p.ID] {
 						s.logger.Debug("Skipping participant - no availability on this date",
-							"participant_id", p.ID,
-							"name", p.Name,
+							"participant_ref", pkglog.Fingerprint(p.ID.String()),
 							"date", transition.Date)
 						continue
 					}
@@ -392,11 +401,10 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 					if p.Email != nil && p.EmailVerified {
 						// If this email already exists in recipients (e.g., owner), keep the existing one
 						// The owner record has more complete info (IsOwner flag, user ID)
-						if existing, exists := recipients[*p.Email]; exists {
+						if _, exists := recipients[*p.Email]; exists {
 							s.logger.Debug("Email already in recipients (likely owner), skipping duplicate",
-								"email", *p.Email,
-								"participant_name", p.Name,
-								"existing_name", existing.Name)
+								"recipient_ref", pkglog.Fingerprint(*p.Email),
+								"participant_ref", pkglog.Fingerprint(p.ID.String()))
 							continue
 						}
 
@@ -411,8 +419,8 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 						}
 
 						s.logger.Debug("Participant added to email recipients",
-							"email", *p.Email,
-							"name", p.Name)
+							"recipient_ref", pkglog.Fingerprint(*p.Email),
+							"participant_ref", pkglog.Fingerprint(p.ID.String()))
 					}
 				}
 			}
@@ -425,18 +433,26 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 
 	// 3. Send one email per unique recipient
 	for email, recipient := range recipients {
+		// One tag per recipient, reused by every line in this iteration, so an
+		// operator can follow a single send through the loop without the address
+		// ever being written. `recipient.RecipientID` is a user id for the owner
+		// and a participant id otherwise, and a participant id is half of what
+		// authorises access to the calendar, so it is fingerprinted too.
+		recipientRef := pkglog.Fingerprint(email)
+		recipientIDRef := pkglog.Fingerprint(recipient.RecipientID.String())
+
 		// Check if not sent recently (anti-spam)
 		sent, err := s.notificationLog.WasNotificationSentRecently(
 			ctx, calendar.ID, transition.Date, transition.TransitionType, recipient.RecipientID, "email",
 		)
 		if err != nil {
-			s.logger.Error("Failed to check notification log", "email", email, "error", err)
+			s.logger.Error("Failed to check notification log", "recipient_ref", recipientRef, "error", err)
 		}
 
 		if sent {
 			s.logger.Debug("Email notification already sent recently, skipping",
-				"email", email,
-				"recipient_id", recipient.RecipientID)
+				"recipient_ref", recipientRef,
+				"recipient_id_ref", recipientIDRef)
 			continue
 		}
 
@@ -452,21 +468,23 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 
 		htmlMessage := s.buildHTMLNotificationMessage(calendar, transition, calendarURL, recipient.ParticipantID != nil, recipient.Locale, participantNames)
 
+		// calendarURL is deliberately absent from this line. It is
+		// {app}/c/{public token}/p/{participant id} — the calendar's credential
+		// and the participant's identity, together, in one field, at info level.
 		s.logger.Info("Sending email notification",
-			"email", email,
-			"name", recipient.Name,
+			"recipient_ref", recipientRef,
 			"is_owner", recipient.IsOwner,
-			"url", calendarURL)
+			"personalised_link", recipient.ParticipantID != nil)
 
 		if err := s.sendEmailNotification(ctx, recipient.Email, recipient.Name, htmlMessage, recipient.Locale, true); err != nil {
 			s.logger.Error("Failed to send email",
-				"email", email,
-				"recipient_id", recipient.RecipientID,
+				"recipient_ref", recipientRef,
+				"recipient_id_ref", recipientIDRef,
 				"error", err)
 		} else {
 			s.logger.Info("Email notification sent successfully",
-				"email", email,
-				"recipient_id", recipient.RecipientID)
+				"recipient_ref", recipientRef,
+				"recipient_id_ref", recipientIDRef)
 
 			// Log notification
 			recipientType := "participant"

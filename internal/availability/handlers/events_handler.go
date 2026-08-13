@@ -17,6 +17,7 @@ import (
 	"github.com/whento/pkg/broadcast"
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/logger"
+	"github.com/whento/pkg/metrics"
 )
 
 const (
@@ -71,7 +72,13 @@ func NewEventsHandler(calendars CalendarLookup, broker broadcast.Broker) *Events
 //	@Router			/api/v1/availabilities/calendar/{token}/events [get]
 func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
-	log := logger.FromContext(r.Context())
+
+	// The token is the credential: whoever holds it can read and write the calendar.
+	// It must not reach a log line, so every line below carries a fingerprint of it
+	// instead — enough to see that a run of failures is about one calendar, useless
+	// to anyone reading the log. The context logger already adds request_id, which is
+	// what ties a line back to a single stream.
+	log := logger.FromContext(r.Context()).With("calendar_ref", logger.Fingerprint(token))
 
 	// Resolved before a single byte goes out: once the stream has started the status
 	// line is spent, and an unknown token would look to the browser like a working
@@ -98,9 +105,9 @@ func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, http.ErrNotSupported) {
 			// A ResponseWriter that cannot be unwrapped down to the connection: the
 			// stream still works, it just keeps whatever deadline the server set.
-			log.Debug("events: write deadlines are not supported by this response writer", "token", token)
+			log.Debug("events: write deadlines are not supported by this response writer")
 		} else {
-			log.Warn("events: could not clear the write deadline", "token", token, "error", err)
+			log.Warn("events: could not clear the write deadline", "error", err)
 		}
 	}
 
@@ -108,6 +115,12 @@ func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	// otherwise be missed by a browser that believes it is now up to date.
 	notices, stop := h.broker.Subscribe(r.Context(), token)
 	defer stop()
+
+	// One gauge, no labels: how many streams are open right now. It carries
+	// nothing about who is holding them, and it is the number that says whether
+	// a shutdown is about to have to wait for anybody.
+	metrics.SSEConnectionOpened()
+	defer metrics.SSEConnectionClosed()
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
@@ -117,7 +130,7 @@ func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := fmt.Fprintf(w, "retry: %d\n\n", retryHint.Milliseconds()); err != nil {
-		log.Debug("events: stream write failed", "token", token, "error", err)
+		log.Debug("events: stream write failed", "error", err)
 		return
 	}
 	flusher.Flush()
@@ -133,7 +146,11 @@ func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-r.Context().Done():
-			// The browser went away: a closed tab, a lost network, a reload.
+			// The browser went away: a closed tab, a lost network, a reload —
+			// or the server is shutting down. The request context descends from
+			// the server's BaseContext (see cmd/main.go), which is cancelled at
+			// shutdown precisely so that streams leave on their own instead of
+			// each holding Shutdown open for its whole grace period.
 			return
 
 		case _, open := <-notices:
@@ -143,7 +160,7 @@ func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if _, err := fmt.Fprint(w, "event: update\ndata: {}\n\n"); err != nil {
-				log.Debug("events: stream write failed", "token", token, "error", err)
+				log.Debug("events: stream write failed", "error", err)
 				return
 			}
 			flusher.Flush()

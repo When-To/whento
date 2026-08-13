@@ -23,6 +23,10 @@ import (
 
 	"github.com/whento/pkg/email"
 	"github.com/whento/pkg/jwt"
+
+	// Aliased: the constructor below takes a *slog.Logger named `logger`, which
+	// would otherwise shadow the package.
+	pkglog "github.com/whento/pkg/logger"
 	"github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/auth/repository"
 	"github.com/whento/whento/internal/config"
@@ -113,8 +117,10 @@ func (s *PasswordResetService) processPasswordReset(email string) {
 	user, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
 		// User not found - silently log and exit (no error to caller)
+		// There is no user id to name here, so a fingerprint is all that is left
+		// to tell "one address, tried repeatedly" from "many addresses, once each".
 		s.logger.Debug("password reset requested for non-existent email",
-			"email", email,
+			"account_ref", pkglog.Fingerprint(email),
 			"error", err.Error())
 		return
 	}
@@ -145,18 +151,22 @@ func (s *PasswordResetService) processPasswordReset(email string) {
 		if err := s.sendPasswordResetEmail(user, resetURL); err != nil {
 			s.logger.Error("failed to send password reset email",
 				"user_id", user.ID,
-				"email", user.Email,
 				"error", err.Error())
 		} else {
 			s.logger.Info("password reset email sent",
-				"user_id", user.ID,
-				"email", user.Email)
+				"user_id", user.ID)
 		}
 	} else {
-		// SMTP not configured - log the reset link
+		// SMTP not configured: the log *is* the delivery channel here, so this one
+		// line deliberately carries the reset token. It is the only way an operator
+		// running without SMTP can complete a reset, and it only ever happens on an
+		// instance that has no mail configured at all. The address is still not
+		// written — an operator who can read this log can map the user id in the
+		// database, which is the same database the account lives in.
+		//
+		// See docs/logging-and-privacy.md; this is the single documented exception.
 		s.logger.Warn("SMTP not configured - password reset link (copy this URL):",
-			"user", user.Email,
-			"display_name", user.DisplayName,
+			"user_id", user.ID,
 			"reset_url", resetURL,
 			"expires_at", expiresAt.Format(time.RFC3339))
 	}
@@ -221,8 +231,7 @@ func (s *PasswordResetService) ResetPassword(ctx context.Context, req *models.Re
 	}
 
 	s.logger.Info("password reset successful with auto-login",
-		"user_id", user.ID,
-		"email", user.Email)
+		"user_id", user.ID)
 
 	return &models.ResetPasswordResponse{
 		Message:      "Password reset successful",
@@ -281,7 +290,7 @@ func (s *PasswordResetService) sendPasswordResetEmail(user *models.User, resetUR
 		return err
 	}
 
-	s.logger.Info("Password reset email sent", "to", user.Email, "locale", user.Locale)
+	s.logger.Info("Password reset email sent", "user_id", user.ID, "locale", user.Locale)
 	return nil
 }
 

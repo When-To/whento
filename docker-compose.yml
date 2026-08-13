@@ -1,3 +1,13 @@
+# WhenTo - production stack: app + PostgreSQL + Redis.
+#
+# Hardening applied here, and the reasoning behind it, is documented in
+# docs/hardening-docker.md. Two things are worth reading before the first
+# `docker compose up`:
+#   - docs/backup-restore.md  — `docker compose down -v` DELETES postgres_data,
+#     redis_data and whento_keys. There is no undo.
+#   - docs/upgrade-postgres-redis.md — a Postgres major upgrade cannot read the
+#     existing data volume; it needs a dump and a restore.
+
 services:
   app:
     image: ghcr.io/when-to/whento:latest
@@ -29,7 +39,7 @@ services:
       # Security
       - CORS_ORIGINS=${CORS_ORIGINS:-${APP_URL:-http://localhost:8080}}
       - TRUSTED_PROXIES=${TRUSTED_PROXIES:-}
-      
+
       # SMTP (TLS is implied by SMTP_PORT: 465 = implicit TLS, otherwise STARTTLS)
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT:-587}
@@ -64,6 +74,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # The image already runs as the unprivileged `whento` user and listens on
+    # 8080, so it needs no capability at all: nothing here binds a privileged
+    # port, changes uid, or touches a device.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    # Compose v2 applies these on a plain `docker compose up`; they are not
+    # swarm-only. Sized for a small self-hosted instance — raise them rather
+    # than remove them if the container gets OOM-killed under real load.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    # A read-only root filesystem is *not* enabled by default: it has not been
+    # verified against a running container here. The application itself writes
+    # nothing outside /app/keys (which is the named volume above), and the
+    # entrypoint only writes the generated key pair, so the block below is the
+    # expected shape. Enable it on a staging stack first and confirm the
+    # container reaches a healthy state.
+    #   read_only: true
+    #   tmpfs:
+    #     - /tmp:rw,noexec,nosuid,size=16m
 
   postgres:
     image: postgres:16-alpine
@@ -73,6 +108,8 @@ services:
       - POSTGRES_USER=${DB_USER:-whento}
       - POSTGRES_PASSWORD=${DB_PASSWORD:?Database password required}
     volumes:
+      # Named local volume. `docker compose down -v` destroys it, and with it
+      # every calendar in the instance. See docs/backup-restore.md.
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     networks:
@@ -84,22 +121,83 @@ services:
       retries: 5
       start_period: 10s
     shm_size: 128mb
+    security_opt:
+      - no-new-privileges:true
+    # The official entrypoint starts as root, fixes ownership of the data
+    # directory and then drops to the `postgres` user. That needs exactly these
+    # five capabilities: dropping ALL without adding them back leaves the
+    # container unable to start. Do not trim the list without testing a first
+    # start on an empty volume, which is the case that needs them all.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    pids_limit: 512
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          # Postgres is the component that suffers most from an undersized
+          # limit: it is a hard ceiling, and the server sizes nothing from it.
+          # Raise this together with shared_buffers if the instance grows.
+          memory: 1G
 
   redis:
     image: redis:7-alpine
     container_name: whento-redis
-    command: redis-server --requirepass ${REDIS_PASSWORD:?Redis password required} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Redis password required}
+      # redis-cli reads REDISCLI_AUTH from the environment, which is what keeps
+      # the healthcheck below from putting the password in a command line.
+      - REDISCLI_AUTH=${REDIS_PASSWORD:?Redis password required}
+    # The password used to be passed as `--requirepass <value>`, which put it in
+    # the container's process list (visible to anything running in the container
+    # and in `docker inspect`). It is now written to a 0600 config file at
+    # startup and read from there; the command line holds only the variable name.
+    #
+    # `user: redis` is required by this form: the image's entrypoint only drops
+    # privileges when its first argument is literally `redis-server`, so without
+    # it the server would run as root. The data directory is already owned by
+    # `redis` in the image and in any volume this stack has created.
+    user: redis
+    command:
+      - sh
+      - -c
+      - |
+        umask 077
+        printf 'requirepass "%s"\nmaxmemory 256mb\nmaxmemory-policy allkeys-lru\n' "$$REDIS_PASSWORD" > /tmp/redis.conf
+        exec redis-server /tmp/redis.conf
     volumes:
       - redis_data:/data
     restart: unless-stopped
     networks:
       - whento-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    # Running as `redis` from the start, so the entrypoint's chown pass never
+    # runs and no capability is needed.
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          # Above `maxmemory 256mb` on purpose: the limit has to cover the
+          # dataset, copy-on-write during a background save, and the allocator's
+          # fragmentation. A limit equal to maxmemory gets the process
+          # OOM-killed instead of evicting keys.
+          memory: 512M
 
 volumes:
   postgres_data:

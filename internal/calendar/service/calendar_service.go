@@ -245,7 +245,7 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 					if err := s.participantRepo.SetEmailAsVerified(ctx, participant.ID, owner.Email); err != nil {
 						logger.FromContext(ctx).Warn("Failed to pre-verify the owner participant's email",
 							"calendar_id", calendar.ID,
-							"participant_id", participant.ID,
+							"participant_ref", logger.Fingerprint(participant.ID.String()),
 							"error", err)
 					}
 					break

@@ -383,6 +383,57 @@ func decodeLogLine(t *testing.T, buf *bytes.Buffer) map[string]any {
 	return line
 }
 
+// TestLoggerSkipsHealthyProbes: Docker's HEALTHCHECK calls /api/health every 30
+// seconds for as long as the container lives, and an orchestrator polls
+// /api/ready just as relentlessly. At Info each of those is a log line that says
+// only "still here" — on a quiet instance it is the whole log. They are dropped
+// while they succeed, and only while they succeed: a readiness probe answering
+// 503 is the single most important line the file will ever hold.
+func TestLoggerSkipsHealthyProbes(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		status  int
+		wantLog bool
+	}{
+		{name: "liveness succeeds", pattern: "/api/health", status: http.StatusOK, wantLog: false},
+		{name: "readiness succeeds", pattern: "/api/ready", status: http.StatusOK, wantLog: false},
+		{name: "readiness fails", pattern: "/api/ready", status: http.StatusServiceUnavailable, wantLog: true},
+		{name: "liveness fails", pattern: "/api/health", status: http.StatusInternalServerError, wantLog: true},
+		{name: "any other route is always logged", pattern: "/api/v1/calendars", status: http.StatusOK, wantLog: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := captureLogs(t)
+
+			router := chi.NewRouter()
+			router.Use(Logger)
+			router.Get(tt.pattern, func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+			})
+
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.pattern, nil))
+			if rec.Code != tt.status {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.status)
+			}
+
+			logged := strings.TrimSpace(buf.String()) != ""
+			if logged != tt.wantLog {
+				t.Errorf("logged = %v, want %v (log: %q)", logged, tt.wantLog, buf.String())
+			}
+			if !tt.wantLog {
+				return
+			}
+			line := decodeLogLine(t, buf)
+			if got, _ := line["route"].(string); got != tt.pattern {
+				t.Errorf("route = %q, want %q", got, tt.pattern)
+			}
+		})
+	}
+}
+
 func TestCORS(t *testing.T) {
 	allowed := []string{"https://whento.be", "https://app.whento.be"}
 

@@ -56,6 +56,12 @@
 # Database
 !migrations/
 
+# Operator documentation (docs/swagger/ is generated, and re-ignored below).
+# Without this entry the `/*` rule above keeps the whole directory untracked and
+# the `!docs/**` rule further down never gets a chance to apply: git does not
+# descend into an excluded directory.
+!docs/
+
 # Build files
 !build/
 

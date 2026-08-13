@@ -17,11 +17,44 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/whento/pkg/cache"
+	"github.com/whento/pkg/logger"
 	authModels "github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/config"
 	"github.com/whento/whento/internal/passkey/models"
 	"github.com/whento/whento/internal/passkey/repository"
 )
+
+const (
+	// registrationPrefix and challengePrefix stay readable so an operator can still tell
+	// a half-finished registration from a half-finished login in a Redis console.
+	registrationPrefix = "passkey:registration:"
+	challengePrefix    = "passkey:authentication:challenge:"
+
+	// sessionTTL bounds how long a WebAuthn ceremony may stay open.
+	sessionTTL = 5 * time.Minute
+)
+
+// registrationSessionKey and challengeSessionKey are the only places these keys are
+// built. Both halves of a ceremony — the Begin that stores the session and the Finish
+// that reads and deletes it — go through the same function, which is what keeps hashing
+// the key from quietly turning every registration and every passkey login into
+// ErrInvalidChallenge.
+//
+// What is hidden is the variable part: a user's UUID for a registration, and the
+// challenge id for a login. Both identify an account holder or a live authentication
+// ceremony, and a Redis key is stored — `KEYS *` and `dump.rdb` show the key space, so
+// this family used to name every user currently enrolling a passkey.
+//
+// cache.HashKeyPart, not logger.Fingerprint: the ceremony may well be finished by a
+// different instance than the one that began it, so the digest has to be derived
+// identically everywhere rather than per process.
+func registrationSessionKey(userID uuid.UUID) string {
+	return registrationPrefix + cache.HashKeyPart(userID.String())
+}
+
+func challengeSessionKey(challengeID string) string {
+	return challengePrefix + cache.HashKeyPart(challengeID)
+}
 
 var (
 	ErrPasskeyNotFound   = errors.New("passkey not found")
@@ -175,8 +208,8 @@ func (s *PasskeyService) BeginRegistration(ctx context.Context, userID uuid.UUID
 
 	// Store session data in cache (5-minute TTL)
 	// Cache will handle JSON marshalling internally
-	cacheKey := fmt.Sprintf("passkey:registration:%s", userID.String())
-	if err := s.cache.Set(ctx, cacheKey, sessionData, 5*time.Minute); err != nil {
+	cacheKey := registrationSessionKey(userID)
+	if err := s.cache.Set(ctx, cacheKey, sessionData, sessionTTL); err != nil {
 		s.logger.Error("Failed to store registration session in cache", "error", err)
 		// Continue anyway - cache is optional
 	}
@@ -194,7 +227,7 @@ func (s *PasskeyService) FinishRegistration(ctx context.Context, userID uuid.UUI
 
 	// Get stored session data
 	// Cache will handle JSON unmarshalling internally
-	cacheKey := fmt.Sprintf("passkey:registration:%s", userID.String())
+	cacheKey := registrationSessionKey(userID)
 	var sessionData webauthn.SessionData
 	if err := s.cache.Get(ctx, cacheKey, &sessionData); err != nil {
 		return nil, ErrInvalidChallenge
@@ -270,8 +303,8 @@ func (s *PasskeyService) BeginDiscoverableAuthentication(ctx context.Context) (*
 
 	// Store session data in cache with challenge ID (5-minute TTL)
 	// Cache will handle JSON marshalling internally
-	cacheKey := fmt.Sprintf("passkey:authentication:challenge:%s", challengeID)
-	if err := s.cache.Set(ctx, cacheKey, sessionData, 5*time.Minute); err != nil {
+	cacheKey := challengeSessionKey(challengeID)
+	if err := s.cache.Set(ctx, cacheKey, sessionData, sessionTTL); err != nil {
 		s.logger.Error("Failed to store authentication session in cache", "error", err)
 		// Continue anyway - cache is optional
 	}
@@ -282,7 +315,7 @@ func (s *PasskeyService) BeginDiscoverableAuthentication(ctx context.Context) (*
 // FinishAuthentication completes the passkey authentication (usernameless/passwordless)
 func (s *PasskeyService) FinishAuthentication(ctx context.Context, challengeID string, r *http.Request) (*authModels.User, error) {
 	// Build cache key for discoverable credentials session
-	cacheKey := fmt.Sprintf("passkey:authentication:challenge:%s", challengeID)
+	cacheKey := challengeSessionKey(challengeID)
 
 	// Get stored session data
 	var sessionData webauthn.SessionData
@@ -319,14 +352,19 @@ func (s *PasskeyService) FinishAuthentication(ctx context.Context, challengeID s
 	// Verify credential using high-level API for passkeys
 	validatedUser, validatedCredential, err := s.webAuthn.FinishPasskeyLogin(loadUser, sessionData, r)
 	if err != nil {
-		s.logger.Error("Failed to finish passkey login", "error", err, "challenge_id", challengeID)
+		// The challenge id is the handle to a live login ceremony, so the line carries a
+		// per-process fingerprint of it: enough to tie the failure to one ceremony,
+		// nothing a log reader could replay.
+		s.logger.Error("Failed to finish passkey login", "error", err,
+			"challenge_ref", logger.Fingerprint(challengeID))
 		return nil, ErrInvalidCredential
 	}
 
 	// Delete session from cache. Best-effort as above: the entry expires on its own,
 	// but until then a failed delete keeps the login challenge replayable.
 	if err := s.cache.Delete(ctx, cacheKey); err != nil {
-		s.logger.Warn("Failed to delete passkey login session from cache", "error", err, "challenge_id", challengeID)
+		s.logger.Warn("Failed to delete passkey login session from cache", "error", err,
+			"challenge_ref", logger.Fingerprint(challengeID))
 	}
 
 	// Type assert to get our WebAuthnUser

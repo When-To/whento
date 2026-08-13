@@ -54,6 +54,18 @@ func RequestID(next http.Handler) http.Handler {
 	})
 }
 
+// healthRoutes are the probe endpoints an orchestrator polls forever: Docker's
+// HEALTHCHECK hits /api/health every 30 seconds for the life of the container,
+// and Kubernetes is no gentler. Logging each of them at Info buries the traffic
+// that says something in a stream that says only "still here", and it is the
+// bulk of a quiet instance's log volume. They are dropped while they succeed
+// and logged as soon as they do not — a readiness probe answering 503 is an
+// event, and one that must not be silent.
+var healthRoutes = map[string]struct{}{
+	"/api/health": {},
+	"/api/ready":  {},
+}
+
 // Logger logs each request.
 //
 // It logs the chi route *pattern*, never the request path. Access to a
@@ -76,10 +88,16 @@ func Logger(next http.Handler) http.Handler {
 		//nolint:contextcheck // the closure reads r.Context(); contextcheck cannot
 		// see through a deferred literal and reports it as a detached context.
 		defer func() {
+			route := routePattern(r)
+			status := ww.Status()
+			if _, isProbe := healthRoutes[route]; isProbe && status < http.StatusBadRequest {
+				return
+			}
+
 			logger.FromContext(r.Context()).Info("request",
 				"method", r.Method,
-				"route", routePattern(r),
-				"status", ww.Status(),
+				"route", route,
+				"status", status,
 				"duration_ms", time.Since(start).Milliseconds(),
 				"bytes", ww.BytesWritten(),
 			)

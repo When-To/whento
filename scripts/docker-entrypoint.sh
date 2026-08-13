@@ -22,10 +22,17 @@ build_database_url() {
         return 0
     fi
 
-    # Check if we have the required DB_* variables
+    # Check if we have the required DB_* variables.
+    #
+    # Returning non-zero here would abort the whole script: `set -e` above kills
+    # it on the first failing simple command, and this function is called as
+    # one. The container would then exit with no message beyond this line, even
+    # though wait_for_db and run_migrations both handle an unset DATABASE_URL by
+    # skipping, and the application reports the missing configuration itself
+    # with a usable error. Warn and continue.
     if [ -z "$DB_HOST" ] && [ -z "$DB_USER" ]; then
-        echo "[DB] No DATABASE_URL or DB_* variables set"
-        return 1
+        echo "[DB] WARNING: no DATABASE_URL and no DB_* variables set"
+        return 0
     fi
 
     # Build DATABASE_URL from individual variables
@@ -117,15 +124,33 @@ run_migrations() {
 
     echo "[Migrations] Running database migrations..."
 
-    # Run migrations using golang-migrate
-    migrate -path /app/migrations -database "$DATABASE_URL" up
+    # Run migrations using golang-migrate.
+    #
+    # `migrate up` exits 0 when there was nothing to apply — it prints
+    # "no change" and treats it as success — so a non-zero status is a real
+    # failure: an unreachable database, a dirty schema version, or SQL that did
+    # not apply. The container must not start the application on top of a
+    # half-migrated schema, so the failure is deliberately fatal.
+    #
+    # This used to be written as a bare call followed by `if [ $? -eq 0 ]`. With
+    # `set -e` at the top of the file, a failing `migrate` ended the script
+    # before the test could run, which made both branches unreachable and the
+    # "or already up to date" fallback a comment about behaviour that could not
+    # happen. Testing the command directly is what makes the message real.
+    # `|| status=$?` is what captures the real exit code: after a plain
+    # `if cmd; then ... fi` whose condition failed, `$?` is the status of the
+    # compound statement (0), not the status of cmd.
+    status=0
+    migrate -path /app/migrations -database "$DATABASE_URL" up || status=$?
 
-    if [ $? -eq 0 ]; then
-        echo "[Migrations] Migrations completed successfully"
-    else
-        # Exit code 1 with "no change" is OK
-        echo "[Migrations] Migrations applied (or already up to date)"
+    if [ "$status" -eq 0 ]; then
+        echo "[Migrations] Migrations are up to date"
+        return 0
     fi
+
+    echo "[Migrations] ERROR: migrate exited with status $status; refusing to start" >&2
+    echo "[Migrations] Recovery procedure: docs/migration-rollback.md in the WhenTo repository" >&2
+    return "$status"
 }
 
 # ============================================

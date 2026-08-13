@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/whento/pkg/httputil"
+	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
 	"github.com/whento/pkg/validator"
 	authService "github.com/whento/whento/internal/auth/service"
@@ -321,7 +322,7 @@ func (h *PasskeyHandler) FinishAuthentication(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	h.logger.Info("Received passkey authentication request", "challenge_id", challengeID)
+	h.logger.Info("Received passkey authentication request", "challenge_ref", logger.Fingerprint(challengeID))
 
 	user, err := h.service.FinishAuthentication(r.Context(), challengeID, r)
 	if err != nil {

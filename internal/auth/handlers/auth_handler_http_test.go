@@ -185,6 +185,9 @@ type rigOptions struct {
 	mfa          *mockMFARepository
 	mfaStatus    *fakeMFAStatus
 	passkeyCount *fakePasskeyCounter
+	// appCache defaults to a no-op, which disables the lockout counter. A test
+	// that needs the locked-account path substitutes an enabled one.
+	appCache cache.Cache
 }
 
 func newRig(t *testing.T, opts rigOptions) *rig {
@@ -210,10 +213,14 @@ func newRig(t *testing.T, opts rigOptions) *rig {
 		opts.allowedEmails = []string{"*"}
 	}
 
+	if opts.appCache == nil {
+		opts.appCache = &cache.NoOpCache{}
+	}
+
 	manager := newManager(t)
 	// Cost 4 rather than the production 12: these tests hash passwords repeatedly.
 	authSvc := service.NewAuthService(opts.users, opts.tokens, opts.mfa, manager,
-		&cache.NoOpCache{}, bcrypt.MinCost, opts.allowedRegister, opts.allowedEmails)
+		opts.appCache, bcrypt.MinCost, opts.allowedRegister, opts.allowedEmails)
 
 	store := &fakeUserStore{user: opts.users.user}
 	mail := &fakeEmailSender{configured: opts.emailConfigured}
