@@ -152,6 +152,39 @@ func (h *circuitBreakerHook) ProcessPipelineHook(next redis.ProcessPipelineHook)
 	}
 }
 
+// RedisPinger adapts a Redis client to the Ping(ctx) error shape a readiness
+// probe expects. go-redis returns a *StatusCmd, which is one indirection too
+// many for a caller that only wants to know whether Redis answered.
+//
+// The circuit breaker installed by NewRedisClient applies here too: during an
+// outage the probe returns ErrRedisCircuitOpen immediately instead of waiting
+// out a dial timeout, which is what keeps a readiness endpoint cheap.
+type RedisPinger struct {
+	client *redis.Client
+}
+
+// NewRedisPinger returns a probe for client. It returns nil when client is nil
+// so that a caller can test the result and leave its interface field nil,
+// rather than end up holding a non-nil interface wrapping a nil pointer.
+func NewRedisPinger(client *redis.Client) *RedisPinger {
+	if client == nil {
+		return nil
+	}
+	return &RedisPinger{client: client}
+}
+
+// Ping reports whether Redis answered under ctx.
+func (p *RedisPinger) Ping(ctx context.Context) error {
+	if p == nil || p.client == nil {
+		return ErrRedisUnavailable
+	}
+	return p.client.Ping(ctx).Err()
+}
+
+// ErrRedisUnavailable is returned when a probe is asked about a Redis client
+// that was never created.
+var ErrRedisUnavailable = errors.New("redis: no client")
+
 // CloseRedis closes the Redis client
 func CloseRedis(client *redis.Client) error {
 	if client != nil {

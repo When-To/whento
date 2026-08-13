@@ -49,12 +49,32 @@ func NewMFAHandler(service *service.MFAService, authSvc *authService.AuthService
 	}
 }
 
+// mfaAttemptsKey is the one place the lockout counter's key is built.
+//
+// The user id is a database UUID and identifies an account holder, and a Redis key is
+// stored: `KEYS *` on a running instance and `dump.rdb` on disk both show the whole key
+// space, so this family used to be a list of every account that had recently failed a
+// second factor. Only the digest goes to Redis; the prefix stays readable so an operator
+// can still see what the key is for.
+//
+// Deriving it here rather than in each of the three callers is what keeps the counter
+// working: check, increment and clear have to agree on the key exactly, and a
+// divergence would not fail loudly — it would leave the brute-force limit counting into
+// a bucket nobody reads, which is worse than the leak it closes.
+//
+// cache.HashKeyPart, not logger.Fingerprint: the digest has to be the same on every
+// instance sharing the Redis and across a restart, or a lockout would be reset by a
+// deploy and would not follow an account between instances.
+func mfaAttemptsKey(userID uuid.UUID) string {
+	return mfaAttemptsPrefix + cache.HashKeyPart(userID.String())
+}
+
 // checkMFAAttempts checks if a user has exceeded the MFA attempt limit.
 func (h *MFAHandler) checkMFAAttempts(r *http.Request, userID uuid.UUID) error {
 	if !h.cache.IsEnabled() {
 		return nil
 	}
-	key := mfaAttemptsPrefix + userID.String()
+	key := mfaAttemptsKey(userID)
 	var attempts int
 	_ = h.cache.Get(r.Context(), key, &attempts)
 	if attempts >= maxMFAAttempts {
@@ -68,7 +88,7 @@ func (h *MFAHandler) incrementMFAAttempts(r *http.Request, userID uuid.UUID) {
 	if !h.cache.IsEnabled() {
 		return
 	}
-	key := mfaAttemptsPrefix + userID.String()
+	key := mfaAttemptsKey(userID)
 	var attempts int
 	_ = h.cache.Get(r.Context(), key, &attempts)
 	attempts++
@@ -80,7 +100,7 @@ func (h *MFAHandler) clearMFAAttempts(r *http.Request, userID uuid.UUID) {
 	if !h.cache.IsEnabled() {
 		return
 	}
-	key := mfaAttemptsPrefix + userID.String()
+	key := mfaAttemptsKey(userID)
 	_ = h.cache.Delete(r.Context(), key)
 }
 

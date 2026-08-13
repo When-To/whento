@@ -368,6 +368,24 @@ SMTP_FROM=whento@example.com
 
 > **Note:** with this compose file, `DATABASE_URL` and `REDIS_URL` are constructed automatically from `DB_*` / `REDIS_PASSWORD`. Setting them directly in `.env` has no effect here — they only apply to standalone / binary deployments.
 
+> **⚠️ `docker compose down -v` deletes your data.** `postgres_data`, `redis_data` and
+> `whento_keys` are local named volumes; `-v` removes all three, with no prompt and no
+> undo. Stop the stack with `docker compose down`. Set up backups before the instance
+> holds anything you would miss — [docs/backup-restore.md](docs/backup-restore.md).
+
+### Operator documentation
+
+The procedures that are too long for this file live in [`docs/`](docs/README.md):
+
+| Guide                                                                | For                                                                              |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| [Backup and restore](docs/backup-restore.md)                         | Dumps, retention, restore, and the restore drill that proves the backup works.     |
+| [Reverse proxy](docs/reverse-proxy.md)                               | Caddy/nginx examples, and setting `TRUSTED_PROXIES` so rate limiting works.        |
+| [Migration rollback](docs/migration-rollback.md)                     | Migrations apply automatically at every start. What to do when one is the problem. |
+| [Upgrading Postgres and Redis](docs/upgrade-postgres-redis.md)       | Why a Postgres major bump needs a dump and restore, step by step.                  |
+| [Docker hardening](docs/hardening-docker.md)                         | What the compose file hardens, what it does not, and how to verify.                |
+| [Logging and privacy](docs/logging-and-privacy.md)                   | What is logged, what is not, what Redis holds, and for how long.                   |
+
 ### JWT signing keys must be persisted
 
 On first start the container generates an RSA-4096 key pair in `/app/keys` and signs
@@ -392,7 +410,8 @@ volumes:
 Consequences worth knowing:
 
 - **Back up `whento_keys` alongside the database.** Restoring the database without the
-  keys works, but logs everyone out.
+  keys works, but logs everyone out. Both are covered by
+  [docs/backup-restore.md](docs/backup-restore.md).
 - **Deleting the volume is the way to rotate the keys** — a deliberate, global logout.
 - **Calendar participant links are not affected.** They authorise by possession of the
   link itself, not by a signed token, so they keep working across a key rotation.
@@ -411,11 +430,13 @@ go build -tags selfhosted -o bin/whento ./cmd/
 
 ### Reverse Proxy
 
-Example with Caddy:
+WhenTo terminates no TLS of its own. Minimal Caddy configuration:
 
 ```caddyfile
 your-domain.com {
-    reverse_proxy localhost:8080
+    reverse_proxy whento-app:8080 {
+        flush_interval -1  # live availability updates are a long-lived SSE stream
+    }
 }
 ```
 
@@ -424,6 +445,9 @@ compose stack, the Docker bridge range, e.g. `172.16.0.0/12`). `X-Forwarded-For`
 `X-Real-IP` are ignored for every other source, by design: believing them
 unconditionally would let any client choose its own rate-limit bucket. Until it is set,
 per-IP rate limits count all proxied traffic as one client.
+
+Complete Caddy and nginx configurations, how to find the right `TRUSTED_PROXIES` value,
+and the SSE and header requirements: [docs/reverse-proxy.md](docs/reverse-proxy.md).
 
 ---
 
@@ -517,6 +541,10 @@ make migrate-down
 # Check migration status
 make migrate-status
 ```
+
+These are development commands. In production the container entrypoint runs
+`migrate up` on every start; reverting one there is a different procedure, with
+different risks — [docs/migration-rollback.md](docs/migration-rollback.md).
 
 ### Frontend Commands
 
@@ -656,6 +684,11 @@ The `pre-commit` hook formats staged files automatically — see [CONTRIBUTING.m
   authenticated calls
 - **Security Headers** — HSTS, CSP, X-Frame-Options
 - **SQL Injection Protection** — Parameterized queries via pgx
+- **Logs that carry no credentials** — the access log records the chi route pattern
+  (`/calendar/{token}/participant/{pid}`), never the path, so calendar tokens and
+  magic-link secrets never reach a log file. No IP address and no User-Agent are logged
+  either, and rate-limit buckets are stored in Redis under a salted HMAC.
+  [Full posture, with the known exceptions →](docs/logging-and-privacy.md)
 
 ### One thing to understand about participant links
 

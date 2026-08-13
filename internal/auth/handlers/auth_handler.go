@@ -260,9 +260,9 @@ func (h *AuthHandler) sendVerificationEmail(to, displayName, locale, token strin
 	})
 
 	if err != nil {
-		h.logger.Error("Failed to send verification email", "error", err, "to", to)
+		h.logger.Error("Failed to send verification email", "error", err, "recipient_ref", logger.Fingerprint(to))
 	} else {
-		h.logger.Info("Verification email sent", "to", to, "locale", locale)
+		h.logger.Info("Verification email sent", "recipient_ref", logger.Fingerprint(to), "locale", locale)
 	}
 }
 
@@ -305,7 +305,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.authService.Login(r.Context(), &req)
 	if err != nil {
 		if errors.Is(err, service.ErrAccountLocked) {
-			logger.FromContext(r.Context()).Warn("Login attempt on locked account", "email", req.Email)
+			// The address itself is not written: a lockout line is one an operator
+			// reads while an incident is running, and what they need from it is
+			// whether the attempts are all against one account or spread over many.
+			// The fingerprint answers that; the address would only add a list of
+			// who has an account here to whatever reads the log stream.
+			logger.FromContext(r.Context()).Warn("Login attempt on locked account",
+				"account_ref", logger.Fingerprint(req.Email))
 			httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Invalid email or password")
 			return
 		}

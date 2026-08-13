@@ -14,6 +14,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	// Aliased: NewService takes a *slog.Logger named `logger`, which would
+	// otherwise shadow the package.
+	pkglog "github.com/whento/pkg/logger"
 )
 
 const (
@@ -147,17 +151,27 @@ func (s *Service) SendContext(ctx context.Context, email Email) error {
 	}
 
 	// Try to send with TLS first (port 465 or explicit STARTTLS)
+	// Neither line below carries a recipient address. This service is the one
+	// place every outbound mail passes through, so logging `to` here would put an
+	// address in the log stream for every verification, magic link, reset and
+	// notification the instance ever sends — the largest single source of them.
+	// The fingerprint still groups retries of the same send, and the recipient
+	// count still says whether a failure hit one person or a batch.
+	recipients := pkglog.Fingerprint(to)
+
 	err := s.sendWithTLS(ctx, addr, auth, s.fromAddress, email.To, message)
 	if err != nil {
 		s.logger.Error("Failed to send email",
 			slog.String("error", err.Error()),
-			slog.String("to", to),
+			slog.String("recipient_ref", recipients),
+			slog.Int("recipient_count", len(email.To)),
 		)
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
 	s.logger.Info("Email sent successfully",
-		slog.String("to", to),
+		slog.String("recipient_ref", recipients),
+		slog.Int("recipient_count", len(email.To)),
 		slog.String("subject", email.Subject),
 	)
 

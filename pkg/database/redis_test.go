@@ -143,3 +143,47 @@ func TestCircuitBreaker_PipelineShortCircuit(t *testing.T) {
 		}
 	}
 }
+
+func TestNewRedisPinger(t *testing.T) {
+	t.Run("no client yields no probe", func(t *testing.T) {
+		// Returning a typed nil here would be worse than returning nothing: the
+		// caller would store it in an interface, the interface would test
+		// non-nil, and readiness would report a hard failure for a dependency
+		// the operator deliberately did not deploy.
+		if p := NewRedisPinger(nil); p != nil {
+			t.Errorf("NewRedisPinger(nil) = %v, want nil", p)
+		}
+	})
+
+	t.Run("a nil probe still answers rather than panicking", func(t *testing.T) {
+		var p *RedisPinger
+		if err := p.Ping(context.Background()); !errors.Is(err, ErrRedisUnavailable) {
+			t.Errorf("Ping() = %v, want ErrRedisUnavailable", err)
+		}
+	})
+
+	t.Run("an unreachable Redis reports an error and does not hang", func(t *testing.T) {
+		client := redis.NewClient(&redis.Options{
+			Addr:        "127.0.0.1:1",
+			DialTimeout: 100 * time.Millisecond,
+			MaxRetries:  -1,
+		})
+		t.Cleanup(func() { _ = client.Close() })
+
+		p := NewRedisPinger(client)
+		if p == nil {
+			t.Fatal("NewRedisPinger returned nil for a real client")
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		start := time.Now()
+		if err := p.Ping(ctx); err == nil {
+			t.Skip("something is listening on 127.0.0.1:1")
+		}
+		if elapsed := time.Since(start); elapsed > time.Second {
+			t.Errorf("the probe took %v; a readiness check must fail fast", elapsed)
+		}
+	})
+}

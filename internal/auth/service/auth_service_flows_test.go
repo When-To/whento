@@ -604,7 +604,10 @@ func TestLoginResetsTheCounterOnSuccess(t *testing.T) {
 			Email: "user@example.com", Password: "wrong",
 		})
 	}
-	if got := fixture.cache.values[loginAttemptsPrefix+"user@example.com"]; got != 3 {
+	// The key is the digest of the address, never the address: see
+	// TestLoginAttemptsKeyNeverHoldsTheAddress.
+	lockoutKey := loginAttemptsPrefix + cache.HashKeyPart("user@example.com")
+	if got := fixture.cache.values[lockoutKey]; got != 3 {
 		t.Fatalf("counter = %d, want 3", got)
 	}
 
@@ -614,7 +617,7 @@ func TestLoginResetsTheCounterOnSuccess(t *testing.T) {
 		t.Fatalf("Login: %v", err)
 	}
 
-	if _, still := fixture.cache.values[loginAttemptsPrefix+"user@example.com"]; still {
+	if _, still := fixture.cache.values[lockoutKey]; still {
 		t.Error("the failed-attempt counter survived a successful login")
 	}
 }

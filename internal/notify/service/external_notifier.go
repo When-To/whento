@@ -17,6 +17,10 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	// Aliased: the constructor below takes a *slog.Logger named `logger`, which
+	// would otherwise shadow the package.
+	pkglog "github.com/whento/pkg/logger"
 )
 
 // ExternalNotifier handles external notification channels (Discord, Slack, Telegram)
@@ -325,6 +329,8 @@ func (e *ExternalNotifier) SendTelegram(
 		return fmt.Errorf("telegram API returned status %d", resp.StatusCode)
 	}
 
-	e.logger.Info("Telegram notification sent successfully", "chat_id", chatID)
+	// A Telegram chat id names a person's chat as surely as an address names
+	// their mailbox.
+	e.logger.Info("Telegram notification sent successfully", "chat_ref", pkglog.Fingerprint(chatID))
 	return nil
 }

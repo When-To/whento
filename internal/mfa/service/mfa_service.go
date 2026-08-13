@@ -70,6 +70,29 @@ type MFAService struct {
 	logger     *slog.Logger
 }
 
+// defaultTOTPDigits matches the config default and RFC 4226's usual choice.
+const defaultTOTPDigits = otp.DigitsSix
+
+// totpDigits converts the configured digit count into otp.Digits, which is an
+// int, from a uint that config parses with strconv.ParseUint.
+//
+// Config validation already bounds TOTP_DIGITS to 6-8, so in a process that
+// booted normally this can only ever see a valid value. The check is here
+// anyway because that validation lives in a different package and nothing in
+// the type system makes NewMFAService unreachable without it: a test, a future
+// caller, or a reordering of startup would silently hand this an unbounded
+// value, and converting a large uint to int wraps it negative rather than
+// failing. Falling back to six digits keeps a working authenticator instead of
+// generating codes nobody's app can read.
+// The bounds match internal/config's minTOTPDigits/maxTOTPDigits; 7 is legal
+// and must survive, so this clamps the range rather than enumerating values.
+func totpDigits(configured uint) otp.Digits {
+	if configured < 6 || configured > 8 {
+		return defaultTOTPDigits
+	}
+	return otp.Digits(configured)
+}
+
 // NewMFAService creates a new MFA service
 func NewMFAService(
 	repo MFAStore,
@@ -84,7 +107,7 @@ func NewMFAService(
 		tokenRepo:  tokenRepo,
 		issuer:     cfg.TOTPIssuer,
 		period:     cfg.TOTPPeriod,
-		digits:     otp.Digits(cfg.TOTPDigits),
+		digits:     totpDigits(cfg.TOTPDigits),
 		bcryptCost: cfg.BcryptCost,
 		logger:     logger,
 	}

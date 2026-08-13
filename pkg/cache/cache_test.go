@@ -80,10 +80,6 @@ func TestKeysAreDistinctAndPrefixed(t *testing.T) {
 			t.Errorf("%s and %s produce the same key %q", name, previous, key)
 		}
 		seen[key] = name
-
-		if !strings.Contains(key, "abc") {
-			t.Errorf("%s = %q, which does not include its identifier", name, key)
-		}
 	}
 
 	// Every key belongs to a known namespace, so a pattern invalidation cannot sweep

@@ -159,8 +159,13 @@ func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest)
 
 // Login authenticates a user
 func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (*models.AuthResponse, error) {
-	// Check account lockout before any credential validation
-	lockoutKey := loginAttemptsPrefix + req.Email
+	// Check account lockout before any credential validation.
+	//
+	// The counter is keyed by a digest of the address, never the address itself:
+	// this key lives in Redis for 15 minutes and shows up in `KEYS *` and in
+	// `dump.rdb`, and a list of the addresses that recently failed to log in is
+	// exactly the kind of thing that must not be lying around there.
+	lockoutKey := loginAttemptsPrefix + cache.HashKeyPart(req.Email)
 	if s.cache.IsEnabled() {
 		var attempts int
 		if err := s.cache.Get(ctx, lockoutKey, &attempts); err == nil {
@@ -492,7 +497,11 @@ func (s *AuthService) VerifyMFAAndLogin(ctx context.Context, tempToken string, m
 	// Prevent temp token replay: check JTI hasn't been consumed
 	jti, _ := claims["jti"].(string)
 	if jti != "" && s.cache != nil {
-		key := "mfa_used_jti:" + jti
+		// A jti is opaque, but it is still the identifier of one person's
+		// half-completed sign-in, and it is the value carried by a token that is
+		// still valid for five minutes. It is stored as a digest for the same
+		// reason as everything else here.
+		key := "mfa_used_jti:" + cache.HashKeyPart(jti)
 		used, _ := s.cache.Exists(ctx, key)
 		if used {
 			return nil, ErrInvalidToken

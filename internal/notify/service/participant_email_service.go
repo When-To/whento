@@ -21,6 +21,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/whento/pkg/email"
+	// Aliased: the constructor below takes a *slog.Logger named `logger`, which
+	// would otherwise shadow the package.
+	pkglog "github.com/whento/pkg/logger"
 	"github.com/whento/whento/internal/calendar/repository"
 	"github.com/whento/whento/internal/config"
 )
@@ -99,14 +102,16 @@ func (s *ParticipantEmailService) AddEmail(
 	go func() {
 		if err := s.sendVerificationEmail(emailAddress, participantName, locale, token); err != nil {
 			s.logger.Error("Failed to send participant verification email",
-				"participant_id", participantID,
+				"participant_ref", pkglog.Fingerprint(participantID.String()),
 				"error", err)
 		}
 	}()
 
+	// A participant id is half of what authorises access to a calendar — the
+	// public token is the other half — so it is fingerprinted like the address.
 	s.logger.Info("Participant email verification initiated",
-		"participant_id", participantID,
-		"email", emailAddress)
+		"participant_ref", pkglog.Fingerprint(participantID.String()),
+		"recipient_ref", pkglog.Fingerprint(emailAddress))
 
 	return nil
 }
@@ -124,7 +129,7 @@ func (s *ParticipantEmailService) VerifyEmail(
 
 	// Check if email already verified
 	if participant.EmailVerified {
-		s.logger.Info("Email already verified", "participant_id", participant.ID)
+		s.logger.Info("Email already verified", "participant_ref", pkglog.Fingerprint(participant.ID.String()))
 		return nil
 	}
 
@@ -134,8 +139,8 @@ func (s *ParticipantEmailService) VerifyEmail(
 	}
 
 	s.logger.Info("Participant email verified successfully",
-		"participant_id", participant.ID,
-		"email", *participant.Email)
+		"participant_ref", pkglog.Fingerprint(participant.ID.String()),
+		"recipient_ref", pkglog.Fingerprint(*participant.Email))
 
 	return nil
 }
@@ -183,14 +188,14 @@ func (s *ParticipantEmailService) ResendVerification(
 	go func() {
 		if err := s.sendVerificationEmail(*participant.Email, participant.Name, locale, token); err != nil {
 			s.logger.Error("Failed to resend participant verification email",
-				"participant_id", participantID,
+				"participant_ref", pkglog.Fingerprint(participantID.String()),
 				"error", err)
 		}
 	}()
 
 	s.logger.Info("Participant email verification resent",
-		"participant_id", participantID,
-		"email", *participant.Email)
+		"participant_ref", pkglog.Fingerprint(participantID.String()),
+		"recipient_ref", pkglog.Fingerprint(*participant.Email))
 
 	return nil
 }
@@ -244,7 +249,8 @@ func (s *ParticipantEmailService) sendVerificationEmail(
 		return err
 	}
 
-	s.logger.Info("Participant verification email sent", "to", to, "locale", locale)
+	s.logger.Info("Participant verification email sent",
+		"recipient_ref", pkglog.Fingerprint(to), "locale", locale)
 	return nil
 }
 
