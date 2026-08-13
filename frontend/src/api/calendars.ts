@@ -11,6 +11,7 @@ import type {
   CreateCalendarRequest,
   UpdateCalendarRequest,
   Participant,
+  PublicCalendar,
   CreateParticipantRequest,
   UpdateParticipantRequest,
 } from '@/types';
@@ -77,9 +78,13 @@ export const calendarsApi = {
     return apiClient.post<Participant>(`/calendars/public/${token}/participants`, data);
   },
 
-  // Public calendar view (no auth required)
-  async getPublic(token: string, participantId?: string): Promise<CalendarWithParticipants> {
+  // Public calendar view (no auth required).
+  //
+  // Answers with PublicCalendarResponse, which is *not* a CalendarResponse: no
+  // owner_id, no public_token, no notify_on_threshold, no updated_at, and a
+  // notify_participants that no owner-side route returns.
+  async getPublic(token: string, participantId?: string): Promise<PublicCalendar> {
     const params = participantId ? { participant_id: participantId } : {};
-    return apiClient.get<CalendarWithParticipants>(`/calendars/public/${token}`, { params });
+    return apiClient.get<PublicCalendar>(`/calendars/public/${token}`, { params });
   },
 };

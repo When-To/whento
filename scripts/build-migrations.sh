@@ -1,7 +1,7 @@
 #!/bin/sh
 # WhenTo - Build migrations script
 # Copyright (C) 2025 WhenTo Contributors
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: BSL-1.1
 
 set -e
 

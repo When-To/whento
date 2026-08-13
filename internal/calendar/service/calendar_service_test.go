@@ -585,58 +585,6 @@ func TestConditionalEmail(t *testing.T) {
 	}
 }
 
-func TestIsDuplicateKeyError(t *testing.T) {
-	tests := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{name: "nil", err: nil, want: false},
-		{name: "the bare constraint message", err: errors.New("ERROR: duplicate key value violates unique constraint"), want: true},
-		{name: "a pgx error carrying the sqlstate", err: errors.New(`ERROR: duplicate key (SQLSTATE 23505)`), want: true},
-		{name: "the code alone", err: errors.New("23505"), want: true},
-		{name: "an unrelated failure", err: errRepo, want: false},
-		{name: "a different sqlstate", err: errors.New("ERROR: not null violation (SQLSTATE 23502)"), want: false},
-		{name: "an empty message", err: errors.New(""), want: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := isDuplicateKeyError(tt.err); got != tt.want {
-				t.Errorf("isDuplicateKeyError(%v) = %v, want %v", tt.err, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestFindSubstring covers the hand-rolled substring search, whose bound arithmetic
-// goes negative when the needle is longer than the haystack.
-func TestFindSubstring(t *testing.T) {
-	tests := []struct {
-		name   string
-		s      string
-		substr string
-		want   bool
-	}{
-		{name: "at the start", s: "23505 and more", substr: "23505", want: true},
-		{name: "at the end", s: "code 23505", substr: "23505", want: true},
-		{name: "in the middle", s: "a 23505 b", substr: "23505", want: true},
-		{name: "the whole string", s: "23505", substr: "23505", want: true},
-		{name: "absent", s: "23502", substr: "23505", want: false},
-		{name: "needle longer than haystack", s: "235", substr: "23505", want: false},
-		{name: "empty haystack", s: "", substr: "23505", want: false},
-		{name: "empty needle", s: "23505", substr: "", want: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := findSubstring(tt.s, tt.substr); got != tt.want {
-				t.Errorf("findSubstring(%q, %q) = %v, want %v", tt.s, tt.substr, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestGenerateToken(t *testing.T) {
 	seen := make(map[string]bool)
 

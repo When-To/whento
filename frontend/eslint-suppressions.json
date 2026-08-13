@@ -224,7 +224,7 @@
   },
   "src/views/CalendarCreate.vue": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 2
+      "count": 1
     },
     "no-console": {
       "count": 1

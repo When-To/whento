@@ -17,7 +17,7 @@ import { computed, type ComputedRef, type Ref } from 'vue';
 import { resolveWeekStart } from '@/utils/weekStart';
 import type {
   Availability,
-  CalendarWithParticipants,
+  CalendarCommon,
   DateAvailabilitySummary,
   RecurrenceWithExceptions,
 } from '@/types';
@@ -42,7 +42,11 @@ export interface MonthRef {
 }
 
 export interface UseParticipantCalendarOptions {
-  readonly calendar: Ref<CalendarWithParticipants | null>;
+  /**
+   * Only the scheduling rules are read here, so this takes the shape both
+   * calendar views share: the owner route and the public one both satisfy it.
+   */
+  readonly calendar: Ref<CalendarCommon | null>;
   readonly availabilities: Ref<readonly Availability[]>;
   readonly recurrences: Ref<readonly RecurrenceWithExceptions[]>;
   readonly participantCounts: Ref<Readonly<Record<string, number>>>;

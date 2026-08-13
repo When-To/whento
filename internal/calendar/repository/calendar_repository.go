@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/whento/pkg/dberr"
 	"github.com/whento/whento/internal/calendar/models"
 )
 
@@ -147,7 +148,7 @@ func (r *CalendarRepository) CreateWithParticipants(ctx context.Context, calenda
 
 		if err != nil {
 			// Check for duplicate participant name
-			if isDuplicateKeyError(err) {
+			if dberr.IsUniqueViolation(err) {
 				return nil, ErrParticipantAlreadyExists
 			}
 			return nil, fmt.Errorf("failed to create participant: %w", err)

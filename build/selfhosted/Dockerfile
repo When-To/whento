@@ -1,6 +1,16 @@
-# WhenTo Self-hosted - Dockerfile for self-hosted version with licensing
+# WhenTo Self-hosted - release image, built by CI and by the release workflow
 # Copyright (C) 2025 WhenTo Contributors
 # SPDX-License-Identifier: BSL-1.1
+
+# frontend/dist and docs/swagger are expected in the build context: the CI and
+# release workflows build them in earlier jobs and download the artifacts before
+# calling this file. The root Dockerfile is the variant that builds them itself.
+#
+# Everything below the build stage is deliberately identical to
+# build/cloud/Dockerfile and to the root Dockerfile, line for line. Docker has no
+# include mechanism and the workflows pin these paths, so the pins really are
+# maintained in triplicate; cmd/dockerfiles_test.go fails the build when the
+# three copies drift apart.
 
 # Base images are pinned by digest as well as by tag: a floating tag can be
 # re-published upstream and silently change the runtime, which makes a build
@@ -105,8 +115,10 @@ COPY --from=builder /build/whento /app/whento
 # Copy selfhosted-specific migrations
 COPY --from=builder /build/migrations-build /app/migrations
 
-# Copy frontend build (will be built separately)
-COPY frontend/dist /app/web
+# The frontend is not copied into the runtime image: it is embedded in the binary
+# by web/embed.go, from the web/dist the build stage above filled in. A second
+# copy under /app/web used to be shipped here and nothing has ever read it —
+# neither the binary, which serves the embedded FS, nor docker-entrypoint.sh.
 
 # Copy entrypoint script
 COPY --from=builder /build/scripts/docker-entrypoint.sh /app/docker-entrypoint.sh

@@ -1323,7 +1323,7 @@ const notificationsEnabled = computed(() => {
   return calendar.value?.notify_participants === true;
 });
 
-const calendar = computed(() => calendarStore.currentCalendar);
+const calendar = computed(() => calendarStore.currentPublicCalendar);
 
 // Get participant info from calendar (includes email from API call with participant_id param)
 const participant = computed(() => {
@@ -1602,9 +1602,20 @@ const selectedParticipantsCommonDates = computed(() => {
   return commonDates;
 });
 
+/**
+ * Whether to offer the "edit calendar" link.
+ *
+ * The public payload says nothing about ownership — `PublicCalendarResponse` has no
+ * `owner_id` — so it is answered from the reader's own calendars, loaded once in
+ * `loadOwnedCalendars()`. This used to compare `calendar.owner_id`, which is
+ * `undefined` on this route: the link never appeared for the owner of a calendar,
+ * only for admins.
+ */
 const canManageCalendar = computed(() => {
-  if (!calendar.value || !authStore.user) return false;
-  return calendar.value.owner_id === authStore.user.id || authStore.user.role === 'admin';
+  const current = calendar.value;
+  if (!current || !authStore.user) return false;
+  if (authStore.user.role === 'admin') return true;
+  return calendarStore.calendars.some(owned => owned.id === current.id);
 });
 
 const calendarDateRangeText = computed(() => {
@@ -1816,11 +1827,27 @@ function saveParticipantSelection() {
   historyStore.updateParticipantId(token.value, participantId.value);
 }
 
+/**
+ * Loads the signed-in reader's own calendars, which is the only way this route can
+ * tell whether they own the one they are looking at (see `canManageCalendar`). Best
+ * effort: failing to answer that question must not break the participant view.
+ */
+async function loadOwnedCalendars() {
+  if (!authStore.isAuthenticated || calendarStore.calendars.length > 0) return;
+
+  try {
+    await calendarStore.fetchCalendars();
+  } catch {
+    // Ignored on purpose: the edit link simply stays hidden.
+  }
+}
+
 async function loadCalendar() {
   loading.value = true;
 
   try {
     await calendarStore.fetchPublicCalendar(token.value, participantId.value);
+    void loadOwnedCalendars();
 
     if (!participant.value) {
       toastStore.error(t('errors.notFound', 'Participant not found'));

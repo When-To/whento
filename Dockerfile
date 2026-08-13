@@ -1,6 +1,18 @@
-# WhenTo Self-hosted - Dockerfile for self-hosted version with licensing
+# WhenTo - self-contained image for local builds (the `make docker-*` targets)
 # Copyright (C) 2025 WhenTo Contributors
 # SPDX-License-Identifier: BSL-1.1
+
+# This file is the only one of the three that builds the frontend and generates
+# the Swagger spec itself, which is what makes `docker build .` work from a bare
+# checkout. build/selfhosted/Dockerfile and build/cloud/Dockerfile — the two CI
+# builds — instead expect frontend/dist and docs/swagger to be in the build
+# context already, produced by earlier workflow jobs.
+#
+# Everything after that first divergence is deliberately identical across the
+# three files, line for line: Docker has no include mechanism, and the two build/
+# paths are pinned in the workflows, so the base image digests and the
+# golang-migrate pins genuinely have to be written out three times.
+# cmd/dockerfiles_test.go fails the build when the three copies drift apart.
 
 # Base images are pinned by digest as well as by tag: a floating tag can be
 # re-published upstream and silently change the runtime, which makes a build
@@ -111,6 +123,11 @@ RUN apk add --no-cache curl && \
 # Runtime stage
 FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 
+LABEL org.opencontainers.image.title="WhenTo" \
+    org.opencontainers.image.description="Self-hosted scheduling and calendar application" \
+    org.opencontainers.image.vendor="WhenTo Contributors" \
+    org.opencontainers.image.licenses="BSL-1.1"
+
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata openssl postgresql-client
 
@@ -124,6 +141,11 @@ COPY --from=builder /build/whento /app/whento
 
 # Copy selfhosted-specific migrations
 COPY --from=builder /build/migrations-build /app/migrations
+
+# The frontend is not copied into the runtime image: it is embedded in the binary
+# by web/embed.go, from the web/dist the build stage above filled in. A second
+# copy under /app/web used to be shipped here and nothing has ever read it —
+# neither the binary, which serves the embedded FS, nor docker-entrypoint.sh.
 
 # Copy entrypoint script
 COPY --from=builder /build/scripts/docker-entrypoint.sh /app/docker-entrypoint.sh

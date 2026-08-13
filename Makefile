@@ -1,4 +1,4 @@
-.PHONY: dev dev-fullstack dev-backend dev-frontend dev-db dev-app test test-root test-pkg test-coverage build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-build-multiarch docker-test-build docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-clean docs-serve docs-validate keys help hooks format format-go format-frontend format-check format-check-go format-check-frontend lint lint-go
+.PHONY: require-selfhosted-image dev dev-fullstack dev-backend dev-frontend dev-db dev-app test test-root test-pkg test-coverage build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-build-multiarch docker-test-build docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-clean types types-check docs-serve docs-validate keys help hooks format format-go format-frontend format-check format-check-go format-check-frontend lint lint-go
 
 # BUILD_TYPE can be 'cloud' or 'selfhosted' (default: selfhosted)
 BUILD_TYPE ?= selfhosted
@@ -43,6 +43,8 @@ help:
 	@echo "  make docker-ps        - Show production container status"
 	@echo "  make swagger          - Generate Swagger documentation from Go comments"
 	@echo "  make swagger-clean    - Remove generated Swagger files"
+	@echo "  make types            - Regenerate frontend API types from the Swagger spec"
+	@echo "  make types-check      - Fail if the committed API types are stale"
 	@echo "  make docs-serve       - Info on accessing embedded Swagger UI"
 	@echo "  make hooks            - Enable the repo git hooks (format on commit)"
 	@echo "  make format           - Format Go (goimports) + frontend (prettier) files"
@@ -138,7 +140,15 @@ build: swagger-generate
 	@cp -R frontend/dist/* web/dist/
 	@echo "Building WhenTo unified binary ($(BUILD_TYPE) mode)..."
 	@mkdir -p bin
-	CGO_ENABLED=0 go build -tags $(BUILD_TYPE) -ldflags="-s -w" -o bin/whento ./cmd
+	@# Without the -X flags a locally built binary reports Version="dev" forever,
+	@# which is the same blind spot the Dockerfiles had until their flags were
+	@# pointed at symbols that actually exist. cmd/buildinfo.go declares all three.
+	CGO_ENABLED=0 go build -tags $(BUILD_TYPE) \
+		-ldflags="-s -w \
+			-X main.Version=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev) \
+			-X main.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ) \
+			-X main.VCSRef=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)" \
+		-o bin/whento ./cmd
 	@echo "✓ Binary built: bin/whento"
 
 clean:
@@ -242,7 +252,25 @@ migrate-status: migrate-build
 	@rm -rf ./migrations-build
 
 # Docker Production
-docker-build:
+#
+# The root Dockerfile is hardcoded to selfhosted — it pins `-tags selfhosted`,
+# `npm run build`, and the selfhosted migration set. It declares no BUILD_TYPE
+# ARG, so the `--build-arg BUILD_TYPE=` the targets below pass has always been
+# silently discarded: `make docker-build BUILD_TYPE=cloud` produced a
+# *selfhosted* image and said "cloud mode" while doing it. Refusing is the point
+# — a cloud image built from the wrong Dockerfile is exactly the artefact the
+# repository must never publish. build/cloud/Dockerfile is the cloud image, and
+# it expects a prebuilt frontend/dist, which is why it is not wired here.
+require-selfhosted-image:
+	@if [ "$(BUILD_TYPE)" != "selfhosted" ]; then \
+		echo "Error: the root Dockerfile only builds selfhosted images."; \
+		echo "  Requested BUILD_TYPE=$(BUILD_TYPE)."; \
+		echo "  For a cloud image use build/cloud/Dockerfile, which needs"; \
+		echo "  frontend/dist and docs/swagger built first (see .github/workflows/build-cloud.yml)."; \
+		exit 1; \
+	fi
+
+docker-build: require-selfhosted-image
 	@echo "Building Docker image: whento:latest ($(BUILD_TYPE) mode)"
 	docker build -t whento:latest \
 		--build-arg VERSION=latest \
@@ -252,7 +280,7 @@ docker-build:
 		.
 	@echo "✓ Image built successfully"
 
-docker-build-versioned:
+docker-build-versioned: require-selfhosted-image
 	@if [ -z "$(VERSION)" ]; then \
 		echo "Error: VERSION is required. Usage: make docker-build-versioned VERSION=1.0.0"; \
 		exit 1; \
@@ -266,7 +294,7 @@ docker-build-versioned:
 		.
 	@echo "✓ Image whento:$(VERSION) built successfully"
 
-docker-build-multiarch:
+docker-build-multiarch: require-selfhosted-image
 	@echo "Building multi-architecture Docker image (amd64 + arm64, $(BUILD_TYPE) mode)..."
 	@echo "Note: This requires Docker Buildx and may take 10-15 minutes"
 	@echo ""
@@ -283,7 +311,7 @@ docker-build-multiarch:
 		.
 	@echo "✓ Multi-arch image built successfully"
 
-docker-test-build:
+docker-test-build: require-selfhosted-image
 	@echo "Testing Docker build (simulating CI/CD workflow, $(BUILD_TYPE) mode)..."
 	@echo ""
 	@echo "Build Arguments:"
@@ -357,6 +385,28 @@ swagger-clean:
 	@echo "✓ Swagger files cleaned"
 
 swagger: swagger-generate
+
+# Frontend API types
+#
+# The chain is: Go annotations -> docs/swagger/swagger.json (git-ignored) ->
+# frontend/src/types/api.generated.ts (committed). The last step is committed on
+# purpose: a backend response that changes shape then shows up as a diff in the
+# pull request that causes it, instead of silently drifting from the hand-written
+# TypeScript, which is exactly what had happened.
+types: swagger-generate
+	@echo "Generating frontend API types from docs/swagger/swagger.json..."
+	@cd frontend && { [ -d node_modules ] || npm install; } && npm run --silent generate:api-types
+	@echo "✓ frontend/src/types/api.generated.ts is up to date"
+
+# Non-mutating gate: regenerates and fails if the committed types differ.
+types-check: types
+	@if [ -n "$$(git status --porcelain -- frontend/src/types/api.generated.ts)" ]; then \
+		echo "✗ frontend/src/types/api.generated.ts does not match the Go annotations."; \
+		echo "  Run 'make types' and commit the result."; \
+		git --no-pager diff -- frontend/src/types/api.generated.ts; \
+		exit 1; \
+	fi
+	@echo "✓ Frontend API types match the Swagger spec"
 
 # Aliases for compatibility
 docs-serve:

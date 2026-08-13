@@ -29,7 +29,9 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const response = await authApi.register(data);
       user.value = response.user;
-      apiClient.setToken(response.access_token);
+      if (response.access_token) {
+        apiClient.setToken(response.access_token);
+      }
       return response;
     } catch (err: any) {
       error.value = err.message || 'Registration failed';
@@ -45,8 +47,20 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       const response = await authApi.login(data);
+
+      // With a second factor enabled the backend answers `require_mfa` and a
+      // temp_token, and no access token at all. Storing the (absent) token wrote
+      // the literal string "undefined" into localStorage, and setting the user
+      // made the session look authenticated before the second factor was ever
+      // verified. The session only starts in VerifyMFA, once the code checks out.
+      if (response.require_mfa) {
+        return response;
+      }
+
       user.value = response.user;
-      apiClient.setToken(response.access_token);
+      if (response.access_token) {
+        apiClient.setToken(response.access_token);
+      }
       return response;
     } catch (err: any) {
       error.value = err.message || 'Login failed';
@@ -141,7 +155,9 @@ export const useAuthStore = defineStore('auth', () => {
 
       // Auto-login after successful reset
       user.value = response.user;
-      apiClient.setToken(response.access_token);
+      if (response.access_token) {
+        apiClient.setToken(response.access_token);
+      }
 
       return response;
     } catch (err: any) {

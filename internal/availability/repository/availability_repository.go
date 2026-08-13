@@ -14,11 +14,16 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/whento/pkg/dberr"
 	"github.com/whento/whento/internal/availability/models"
 )
 
+// Sentinels, so that callers can tell a request the user got wrong from a database
+// that refused. Compare with errors.Is — never with the error text, which is what the
+// service layer used to do and which made these messages part of the API by accident.
 var (
 	ErrAvailabilityNotFound = errors.New("availability not found")
+	ErrAvailabilityExists   = errors.New("availability already exists for this date")
 )
 
 // AvailabilityRepository handles availability database operations
@@ -50,8 +55,8 @@ func (r *AvailabilityRepository) Create(ctx context.Context, availability *model
 	).Scan(&availability.CreatedAt, &availability.UpdatedAt)
 
 	if err != nil {
-		if isDuplicateKeyError(err) {
-			return fmt.Errorf("availability already exists for this date")
+		if dberr.IsUniqueViolation(err) {
+			return ErrAvailabilityExists
 		}
 		return fmt.Errorf("failed to create availability: %w", err)
 	}
@@ -384,27 +389,4 @@ func (r *AvailabilityRepository) GetParticipantCountForDate(
 	}
 
 	return count, nil
-}
-
-func isDuplicateKeyError(err error) bool {
-	return err != nil && (
-	// PostgreSQL unique constraint violation
-	err.Error() == "ERROR: duplicate key value violates unique constraint" ||
-		// pgx specific error code check
-		containsCode(err.Error(), "23505"))
-}
-
-func containsCode(errMsg, code string) bool {
-	return len(errMsg) > 0 && len(code) > 0 &&
-		(errMsg[0:min(len(errMsg), 100)] != "" &&
-			findSubstring(errMsg, code))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

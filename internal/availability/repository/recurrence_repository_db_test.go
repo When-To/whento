@@ -301,3 +301,120 @@ func TestRecurrenceExceptions(t *testing.T) {
 		t.Errorf("%d exceptions outlived their recurrence", len(left))
 	}
 }
+
+// TestGetExceptionsByRecurrenceIDs covers the batched read that replaced a
+// GetExceptionsByRecurrence call per recurrence on the two summary endpoints. The
+// grouping is done in Go from a single result set, so the risk is a row landing under
+// the wrong recurrence — which would make one participant's exclusions silently apply
+// to another's weekly slot.
+func TestGetExceptionsByRecurrenceIDs(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewRecurrenceRepository(pool)
+	ctx := dbtest.Context(t)
+
+	f := seed(t, pool)
+
+	withExceptions := recurrence(f.participant.ID, 1, nil, nil)
+	alsoWithExceptions := recurrence(f.other.ID, 2, nil, nil)
+	withoutExceptions := recurrence(f.participant.ID, 3, nil, nil)
+	for _, rec := range []*models.Recurrence{withExceptions, alsoWithExceptions, withoutExceptions} {
+		if err := repo.CreateRecurrence(ctx, rec); err != nil {
+			t.Fatalf("CreateRecurrence: %v", err)
+		}
+	}
+
+	addException := func(recurrenceID uuid.UUID, date string) {
+		t.Helper()
+
+		exc := &models.RecurrenceException{
+			RecurrenceID: recurrenceID,
+			ExcludedDate: date,
+			CreatedAt:    time.Date(2027, 2, 1, 12, 0, 0, 0, time.UTC),
+		}
+		exc.ID = uuid.New()
+
+		if err := repo.CreateException(ctx, exc); err != nil {
+			t.Fatalf("CreateException %s: %v", date, err)
+		}
+	}
+
+	addException(withExceptions.ID, "2027-03-15")
+	addException(withExceptions.ID, "2027-03-08")
+	addException(alsoWithExceptions.ID, "2027-04-05")
+
+	t.Run("groups every recurrence in one query", func(t *testing.T) {
+		got, err := repo.GetExceptionsByRecurrenceIDs(ctx, []uuid.UUID{
+			withExceptions.ID, alsoWithExceptions.ID, withoutExceptions.ID,
+		})
+		if err != nil {
+			t.Fatalf("GetExceptionsByRecurrenceIDs: %v", err)
+		}
+
+		mine := got[withExceptions.ID]
+		if len(mine) != 2 {
+			t.Fatalf("got %d exceptions for the first recurrence, want 2", len(mine))
+		}
+		// Same date ordering as the single-recurrence read, which the summaries rely on.
+		if mine[0].ExcludedDate != "2027-03-08" || mine[1].ExcludedDate != "2027-03-15" {
+			t.Errorf("dates = %q then %q, want them in date order", mine[0].ExcludedDate, mine[1].ExcludedDate)
+		}
+		for _, exc := range mine {
+			if exc.RecurrenceID != withExceptions.ID {
+				t.Errorf("exception %s is filed under the wrong recurrence", exc.ID)
+			}
+		}
+
+		theirs := got[alsoWithExceptions.ID]
+		if len(theirs) != 1 || theirs[0].ExcludedDate != "2027-04-05" {
+			t.Errorf("second recurrence = %v, want one exception on 2027-04-05", theirs)
+		}
+
+		// A recurrence with no exception is absent rather than present-and-empty, which
+		// is what GetExceptionsByRecurrence returns too.
+		if got, ok := got[withoutExceptions.ID]; ok || got != nil {
+			t.Errorf("a recurrence with no exception yielded %v", got)
+		}
+	})
+
+	t.Run("matches the single-recurrence read", func(t *testing.T) {
+		one, err := repo.GetExceptionsByRecurrence(ctx, withExceptions.ID)
+		if err != nil {
+			t.Fatalf("GetExceptionsByRecurrence: %v", err)
+		}
+
+		batched, err := repo.GetExceptionsByRecurrenceIDs(ctx, []uuid.UUID{withExceptions.ID})
+		if err != nil {
+			t.Fatalf("GetExceptionsByRecurrenceIDs: %v", err)
+		}
+
+		got := batched[withExceptions.ID]
+		if len(got) != len(one) {
+			t.Fatalf("batched returned %d exceptions, single returned %d", len(got), len(one))
+		}
+		for i := range one {
+			if got[i] != one[i] {
+				t.Errorf("exception %d: batched = %+v, single = %+v", i, got[i], one[i])
+			}
+		}
+	})
+
+	t.Run("no ids means no query and no rows", func(t *testing.T) {
+		got, err := repo.GetExceptionsByRecurrenceIDs(ctx, nil)
+		if err != nil {
+			t.Fatalf("GetExceptionsByRecurrenceIDs(nil): %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("an empty id list returned %d groups", len(got))
+		}
+	})
+
+	t.Run("unknown ids contribute nothing", func(t *testing.T) {
+		got, err := repo.GetExceptionsByRecurrenceIDs(ctx, []uuid.UUID{uuid.New()})
+		if err != nil {
+			t.Fatalf("GetExceptionsByRecurrenceIDs: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("an unknown recurrence returned %d groups", len(got))
+		}
+	})
+}

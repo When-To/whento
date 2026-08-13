@@ -573,18 +573,21 @@ import { ref, reactive, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { resolveWeekStart } from '@/utils/weekStart';
+import { isSupportedLocale } from '@/i18n';
 import { useCalendarStore } from '@/stores/calendar';
 import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
 import TimezoneSelector from '@/components/TimezoneSelector.vue';
 import TimeSelect from '@/components/TimeSelect.vue';
 import CollapsibleSection from '@/components/CollapsibleSection.vue';
 import NotificationSettings from '@/components/NotificationSettings.vue';
-import { getDefaultNotifyConfig, type NotifyConfig } from '@/api/notify';
+import { getDefaultNotifyConfig, updateNotifyConfig, type NotifyConfig } from '@/api/notify';
 
 const router = useRouter();
 const { t, locale } = useI18n();
 const calendarStore = useCalendarStore();
 const authStore = useAuthStore();
+const toastStore = useToastStore();
 
 const form = reactive({
   name: '',
@@ -792,10 +795,27 @@ async function handleSubmit() {
       start_date: form.start_date || undefined,
       end_date: form.end_date || undefined,
       notify_on_threshold: notifyConfig.value.enabled,
-      notify_config: notifyConfig.value.enabled ? JSON.stringify(notifyConfig.value) : undefined,
-      participant_locale: locale.value,
+      // Narrowed rather than cast: the request only accepts a locale the backend
+      // has email templates for, and `locale.value` is typed as a plain string.
+      participant_locale: isSupportedLocale(locale.value) ? locale.value : undefined,
       participants: participants.value.filter(name => name.trim() !== ''),
-    } as any);
+    });
+
+    // The creation endpoint deliberately ignores a notification configuration:
+    // the backend only accepts one through PATCH /notify-config, which validates
+    // the webhook URLs. This used to post a `notify_config` JSON string that the
+    // API dropped on the floor, so notifications were never actually enabled on a
+    // freshly created calendar.
+    if (notifyConfig.value.enabled) {
+      try {
+        await updateNotifyConfig(calendar.id, notifyConfig.value);
+      } catch {
+        // The calendar itself exists; only its notification settings did not take.
+        // Say so, and still send the user to the settings page to retry there,
+        // rather than leaving them to create a second calendar.
+        toastStore.error(t('notifications.saveError'));
+      }
+    }
 
     // Redirect to calendar management page
     router.push(`/calendars/${calendar.id}/settings`);

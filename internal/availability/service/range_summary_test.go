@@ -29,11 +29,14 @@ type mockAvailabilityRepo struct {
 	inRangeErr error
 	onDate     []*models.Availability
 	onDateErr  error
+	createErr  error
 }
 
 var _ AvailabilityRepository = (*mockAvailabilityRepo)(nil)
 
-func (m *mockAvailabilityRepo) Create(context.Context, *models.Availability) error { return nil }
+func (m *mockAvailabilityRepo) Create(context.Context, *models.Availability) error {
+	return m.createErr
+}
 
 func (m *mockAvailabilityRepo) GetByParticipantID(context.Context, uuid.UUID) ([]*models.Availability, error) {
 	return nil, nil
@@ -140,10 +143,22 @@ func (m *mockRecurrenceRepo) CreateException(context.Context, *models.Recurrence
 	return nil
 }
 
-func (m *mockRecurrenceRepo) GetExceptionsByRecurrence(
-	_ context.Context, recurrenceID uuid.UUID,
-) ([]models.RecurrenceException, error) {
-	return m.exceptions[recurrenceID], m.exceptionsErr
+func (m *mockRecurrenceRepo) GetExceptionsByRecurrenceIDs(
+	_ context.Context, recurrenceIDs []uuid.UUID,
+) (map[uuid.UUID][]models.RecurrenceException, error) {
+	if m.exceptionsErr != nil {
+		return nil, m.exceptionsErr
+	}
+
+	// Mirror the repository: only recurrences that actually have exceptions appear.
+	out := make(map[uuid.UUID][]models.RecurrenceException, len(recurrenceIDs))
+	for _, id := range recurrenceIDs {
+		if exceptions := m.exceptions[id]; len(exceptions) > 0 {
+			out[id] = exceptions
+		}
+	}
+
+	return out, nil
 }
 
 func (m *mockRecurrenceRepo) DeleteException(context.Context, uuid.UUID, string) error { return nil }

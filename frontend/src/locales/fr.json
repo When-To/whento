@@ -809,7 +809,8 @@
     "verificationFailed": "Échec de la vérification de l'email",
     "invalidToken": "Le lien de vérification est invalide.",
     "tokenExpired": "Le lien de vérification a expiré. Veuillez en demander un nouveau.",
-    "verificationError": "Une erreur s'est produite lors de la vérification. Veuillez réessayer."
+    "verificationError": "Une erreur s'est produite lors de la vérification. Veuillez réessayer.",
+    "saveError": "Échec de l'enregistrement des paramètres de notification"
   },
   "unifiedFeed": {
     "title": "Flux ICS unifié",

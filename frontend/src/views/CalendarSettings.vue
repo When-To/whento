@@ -1233,7 +1233,7 @@ async function handleSaveNotifications(config: NotifyConfig) {
     await updateNotifyConfig(calendarId, config);
     toastStore.success(t('calendar.settingsSaved'));
   } catch (error: any) {
-    toastStore.error(error.message || 'Failed to save notification settings');
+    toastStore.error(error.message || t('notifications.saveError'));
   }
 }
 

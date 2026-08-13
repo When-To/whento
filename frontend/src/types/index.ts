@@ -4,314 +4,324 @@
  * SPDX-License-Identifier: BSL-1.1
  */
 
+/*
+ * The application's view of the API.
+ *
+ * Nothing here is written from scratch: every wire type is *derived* from
+ * `api.generated.ts`, which `npm run generate:api-types` (`make types`) produces
+ * from the backend's own OpenAPI description. Hand-maintaining these interfaces
+ * is what let them drift from the Go models — a required `User.updated_at` the
+ * backend never sends, a `Calendar.notify_participants` that only exists on the
+ * public route, three contradictory shapes for `notify_config`.
+ *
+ * Two things the generated file cannot express are added back here, and nothing
+ * else:
+ *
+ *   1. Which response fields are always present. swaggo only marks a property
+ *      `required` when the Go struct carries `validate:"required"`, which
+ *      response models never do, so every generated response field is optional.
+ *      `AlwaysSent<S, K>` restores the guarantee for the fields whose Go tag has
+ *      no `omitempty`. Naming a field that the schema does not have is a
+ *      compile error, which is the point: the guarantee cannot outlive the field.
+ *
+ *   2. Narrower types than the wire allows: `role`, `locale` and the nested
+ *      `$ref`s, which the generator can only type as `string` or as the
+ *      all-optional generated schema. `Refine<S, R>` overrides them, and again
+ *      rejects any key the schema does not declare.
+ *
+ * So: to add a field, add it in Go and regenerate. To promise it is always
+ * there, name it in the `AlwaysSent` list.
+ */
+
+import type { components } from './api.generated';
+
+type Schemas = components['schemas'];
+
+/** The generated schema `S`, with the listed fields promoted to required. */
+type AlwaysSent<S, K extends keyof S> = Required<Pick<S, K>> & Omit<S, K>;
+
+/**
+ * The generated schema `S`, with the fields of `R` replaced by the given types.
+ * A key of `R` that `S` does not declare resolves to `never` and fails to match,
+ * so refinements cannot survive the removal of the field they refine.
+ */
+type Refine<S, R extends { [K in keyof R]: K extends keyof S ? R[K] : never }> = Omit<S, keyof R> &
+  R;
+
 // Common Types
-export interface TimeRange {
-  min_time?: string;
-  max_time?: string;
-}
+export type TimeRange = Schemas['models.TimeRange'];
 
 // User & Auth Types
-export interface User {
-  id: string;
-  email: string;
-  display_name: string;
-  role: 'user' | 'admin';
-  locale: 'fr' | 'en';
-  timezone: string;
-  email_verified: boolean;
-  created_at: string;
-  updated_at: string;
-  mfa_status?: MFAStatus; // Admin panel only
-}
+export type UserRole = 'user' | 'admin';
 
-export interface MFAStatus {
-  totp_enabled: boolean;
-  passkey_count: number;
-}
+/**
+ * `GET /auth/me`, and the `user` of every authentication response.
+ *
+ * There is deliberately no `updated_at`: `models.UserResponse` does not carry
+ * one. (`models.User`, which the auth responses embed, does — the two shapes
+ * differ backend-side. Only the fields common to both are promised here.)
+ */
+export type User = Refine<
+  AlwaysSent<
+    Schemas['models.UserResponse'],
+    | 'id'
+    | 'email'
+    | 'display_name'
+    | 'role'
+    | 'locale'
+    | 'timezone'
+    | 'email_verified'
+    | 'created_at'
+  >,
+  { role: UserRole; locale: Locale; mfa_status?: MFAStatus }
+>;
 
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
+export type MFAStatus = AlwaysSent<Schemas['models.MFAStatus'], 'totp_enabled' | 'passkey_count'>;
 
-export interface RegisterRequest {
-  email: string;
-  password: string;
-  display_name: string;
-  locale?: 'fr' | 'en';
-}
+export type LoginRequest = Schemas['models.LoginRequest'];
 
-export interface AuthResponse {
-  access_token: string;
-  user: User;
-  require_mfa?: boolean;
-  temp_token?: string;
-}
+export type RegisterRequest = Schemas['models.RegisterRequest'];
+
+/**
+ * `access_token` is optional on purpose: when the account has a second factor,
+ * the backend answers with `require_mfa` + `temp_token` and no access token at
+ * all (`auth_service.go`). Callers must check before storing it.
+ */
+export type AuthResponse = Refine<Schemas['models.AuthResponse'], { user: User }>;
 
 // Calendar Types
-export type HolidaysPolicy = 'ignore' | 'allow' | 'block';
+export type HolidaysPolicy = NonNullable<Schemas['models.CalendarResponse']['holidays_policy']>;
 
-export interface Calendar {
-  id: string;
-  owner_id: string;
-  name: string;
-  description: string;
-  public_token: string;
-  ics_token: string;
-  threshold: number;
-  min_duration_hours: number;
-  allowed_weekdays: number[];
-  timezone: string;
-  holidays_policy: HolidaysPolicy;
-  allow_holiday_eves: boolean;
-  weekday_times?: Record<string, TimeRange>;
-  holiday_min_time?: string;
-  holiday_max_time?: string;
-  holiday_eve_min_time?: string;
-  holiday_eve_max_time?: string;
-  notify_on_threshold: boolean;
-  notify_config?: Record<string, unknown>;
-  lock_participants: boolean;
-  allow_anonymous_participants: boolean;
-  notify_participants: boolean;
-  start_date?: string;
-  end_date?: string;
-  created_at: string;
-  updated_at: string;
-}
+/**
+ * A calendar as its **owner** sees it: `GET /calendars`, `GET /calendars/{id}`.
+ *
+ * Carries the tokens and the ownership and notification settings. The public
+ * route returns `PublicCalendar` instead, which has none of them — one type for
+ * both is what made `notify_participants` look guaranteed to owners when only
+ * the public route ever sends it.
+ */
+export type Calendar = Refine<
+  AlwaysSent<
+    Schemas['models.CalendarResponse'],
+    | 'id'
+    | 'owner_id'
+    | 'name'
+    | 'public_token'
+    | 'ics_token'
+    | 'threshold'
+    | 'min_duration_hours'
+    | 'allowed_weekdays'
+    | 'timezone'
+    | 'holidays_policy'
+    | 'allow_holiday_eves'
+    | 'notify_on_threshold'
+    | 'lock_participants'
+    | 'allow_anonymous_participants'
+    | 'created_at'
+    | 'updated_at'
+  >,
+  { participants?: Participant[] }
+>;
 
-export interface CalendarWithParticipants extends Calendar {
-  participants: Participant[];
-}
+/** A calendar from a route that also lists its participants. */
+export type CalendarWithParticipants = Refine<Calendar, { participants: Participant[] }>;
 
-export interface CreateCalendarRequest {
-  name: string;
-  description?: string;
-  threshold: number;
-  min_duration_hours?: number;
-  allowed_weekdays?: number[];
-  timezone?: string;
-  holidays_policy?: HolidaysPolicy;
-  allow_holiday_eves?: boolean;
-  weekday_times?: Record<string, TimeRange>;
-  holiday_min_time?: string;
-  holiday_max_time?: string;
-  holiday_eve_min_time?: string;
-  holiday_eve_max_time?: string;
-  notify_on_threshold?: boolean;
-  notify_config?: string;
-  lock_participants?: boolean;
-  allow_anonymous_participants?: boolean;
-  start_date?: string;
-  end_date?: string;
-  participant_locale?: Locale;
-  participants?: string[];
-}
+/**
+ * A calendar as a **participant** sees it: `GET /calendars/public/{token}`.
+ *
+ * No `owner_id`, no `public_token`, no `notify_on_threshold`, no `updated_at`;
+ * `notify_participants` exists only here. Participants are always included, and
+ * their `id` is masked when `lock_participants` is on.
+ */
+export type PublicCalendar = Refine<
+  AlwaysSent<
+    Schemas['models.PublicCalendarResponse'],
+    | 'id'
+    | 'name'
+    | 'threshold'
+    | 'min_duration_hours'
+    | 'allowed_weekdays'
+    | 'timezone'
+    | 'holidays_policy'
+    | 'allow_holiday_eves'
+    | 'lock_participants'
+    | 'allow_anonymous_participants'
+    | 'notify_participants'
+    | 'ics_token'
+    | 'created_at'
+    | 'participants'
+  >,
+  { participants: PublicParticipant[] }
+>;
 
-export interface UpdateCalendarRequest {
-  name?: string;
-  description?: string;
-  threshold?: number;
-  min_duration_hours?: number;
-  allowed_weekdays?: number[];
-  timezone?: string;
-  holidays_policy?: HolidaysPolicy;
-  allow_holiday_eves?: boolean;
-  weekday_times?: Record<string, TimeRange>;
-  holiday_min_time?: string;
-  holiday_max_time?: string;
-  holiday_eve_min_time?: string;
-  holiday_eve_max_time?: string;
-  notify_on_threshold?: boolean;
-  notify_config?: string;
-  lock_participants?: boolean;
-  allow_anonymous_participants?: boolean;
-  start_date?: string;
-  end_date?: string;
-}
+/**
+ * What the two views agree on: the scheduling rules, and nothing that depends on
+ * who is asking. Code that only draws the grid takes this, so it works on both
+ * routes without either type having to lie.
+ */
+export type CalendarCommon = Omit<PublicCalendar, 'notify_participants' | 'participants'>;
+
+/** Fails to compile unless `T` is exactly `true`. */
+type Assert<T extends true> = T;
+
+/**
+ * Compile-time proof that the owner view still satisfies the shared shape, so
+ * that code written against `CalendarCommon` really does accept both. If a field
+ * is dropped from one Go response and not the other, this stops compiling.
+ */
+export type CalendarViewsAgree = Assert<Calendar extends CalendarCommon ? true : false>;
+
+/**
+ * There is deliberately no `notify_config` here. The backend refuses to take one
+ * at creation or update time — `calendar_service.go` sets it only through
+ * `PATCH /calendars/{id}/notify-config`, which validates the webhook URLs, and
+ * ignoring it elsewhere is what stops a create request from smuggling in an
+ * arbitrary URL. Use `updateNotifyConfig()` from `@/api/notify`.
+ */
+export type CreateCalendarRequest = Schemas['models.CreateCalendarRequest'];
+
+/** Same as above: notification channels are not settable from here. */
+export type UpdateCalendarRequest = Schemas['models.UpdateCalendarRequest'];
 
 // Participant Types
-export interface Participant {
-  id?: string; // Optional in public views when lock_participants is enabled
-  calendar_id: string;
-  name: string;
-  email?: string;
-  email_verified?: boolean;
-  created_at: string;
-}
+export type Participant = AlwaysSent<
+  Schemas['models.Participant'],
+  'id' | 'calendar_id' | 'name' | 'email_verified' | 'locale' | 'created_at'
+>;
 
-export interface CreateParticipantRequest {
-  name: string;
-}
+/** A participant in a public calendar. `id` is absent when the calendar is locked. */
+export type PublicParticipant = AlwaysSent<
+  Schemas['models.PublicParticipant'],
+  'calendar_id' | 'name' | 'email_verified' | 'locale' | 'created_at'
+>;
 
-export interface UpdateParticipantRequest {
-  name: string;
-}
+export type CreateParticipantRequest = Schemas['models.AddParticipantRequest'];
+
+export type UpdateParticipantRequest = Schemas['models.UpdateParticipantRequest'];
 
 // Availability Types
-export interface Availability {
-  id: string;
-  participant_id: string;
-  participant_name: string;
-  participant_email?: string;
-  participant_email_verified: boolean;
-  date: string;
-  start_time?: string;
-  end_time?: string;
-  note?: string;
-  created_at: string;
-  updated_at: string;
-}
+export type Availability = AlwaysSent<
+  Schemas['models.AvailabilityResponse'],
+  | 'id'
+  | 'participant_id'
+  | 'participant_name'
+  | 'participant_email_verified'
+  | 'date'
+  | 'created_at'
+  | 'updated_at'
+>;
 
-export interface AvailabilityItem {
-  id: string;
-  date: string;
-  start_time?: string;
-  end_time?: string;
-  note?: string;
-  created_at: string;
-  updated_at: string;
-}
+export type AvailabilityItem = AlwaysSent<
+  Schemas['models.AvailabilityItem'],
+  'id' | 'date' | 'created_at' | 'updated_at'
+>;
 
-export interface ParticipantInfo {
-  id: string;
-  name: string;
-  email?: string;
-  email_verified: boolean;
-}
+export type ParticipantInfo = AlwaysSent<
+  Schemas['models.ParticipantInfo'],
+  'id' | 'name' | 'email_verified'
+>;
 
-export interface ParticipantAvailabilitiesResponse {
-  participant: ParticipantInfo;
-  availabilities: AvailabilityItem[];
-}
+export type ParticipantAvailabilitiesResponse = Refine<
+  Schemas['models.ParticipantAvailabilitiesResponse'],
+  { participant: ParticipantInfo; availabilities: AvailabilityItem[] }
+>;
 
-export interface CreateAvailabilityRequest {
-  date: string;
-  start_time?: string;
-  end_time?: string;
-  note?: string;
-}
+export type CreateAvailabilityRequest = Schemas['models.CreateAvailabilityRequest'];
 
 // Recurrence Types
-export interface Recurrence {
-  id: string;
-  participant_id: string;
-  day_of_week: number; // 0=Sunday, 6=Saturday
-  start_time?: string;
-  end_time?: string;
-  note?: string;
-  start_date: string;
-  end_date?: string;
-  created_at: string;
-}
+export type Recurrence = AlwaysSent<
+  Schemas['models.Recurrence'],
+  'id' | 'participant_id' | 'day_of_week' | 'start_date' | 'created_at'
+>;
 
-export interface RecurrenceWithExceptions {
-  id: string;
-  participant_id: string;
-  day_of_week: number;
-  start_time?: string;
-  end_time?: string;
-  note?: string;
-  start_date: string;
-  end_date?: string;
-  created_at: string;
-  exceptions: RecurrenceException[];
-}
+export type RecurrenceWithExceptions = Refine<
+  AlwaysSent<
+    Schemas['models.RecurrenceWithExceptions'],
+    'id' | 'participant_id' | 'day_of_week' | 'start_date' | 'created_at'
+  >,
+  { exceptions: RecurrenceException[] }
+>;
 
-export interface RecurrenceException {
-  id: string;
-  recurrence_id: string;
-  excluded_date: string;
-  created_at: string;
-}
+export type RecurrenceException = AlwaysSent<
+  Schemas['models.RecurrenceException'],
+  'id' | 'recurrence_id' | 'excluded_date' | 'created_at'
+>;
 
-export interface CreateRecurrenceRequest {
-  day_of_week: number;
-  start_time?: string;
-  end_time?: string;
-  note?: string;
-  start_date: string;
-  end_date?: string;
-}
+export type CreateRecurrenceRequest = Schemas['models.CreateRecurrenceRequest'];
 
 // Date Summary Types
-export interface ParticipantAvailabilitySummary {
-  participant_id?: string; // Optional: not returned by /range endpoint for protected calendars
-  participant_name: string;
-  start_time?: string;
-  end_time?: string;
-  note?: string;
-}
 
-export interface DateAvailabilitySummary {
-  date: string;
-  total_count: number;
-  participants: ParticipantAvailabilitySummary[];
-}
+/**
+ * `participant_id` stays optional: the range endpoint answers with
+ * `models.PublicDateAvailabilitySummary`, which omits it on locked calendars,
+ * even though its annotation names `models.DateAvailabilitySummary`.
+ */
+export type ParticipantAvailabilitySummary = AlwaysSent<
+  Schemas['models.ParticipantAvailabilitySummary'],
+  'participant_name'
+>;
+
+export type DateAvailabilitySummary = Refine<
+  AlwaysSent<Schemas['models.DateAvailabilitySummary'], 'date' | 'total_count' | 'participants'>,
+  { participants: ParticipantAvailabilitySummary[] }
+>;
 
 // API Response Types
+
+/** The `{success, data, error}` envelope from `pkg/httputil`. */
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: ApiError;
 }
 
-export interface ApiError {
-  code: string;
-  message: string;
-  details?: ValidationError[];
-}
+export type ApiError = AlwaysSent<Schemas['httputil.ErrorInfo'], 'code' | 'message'>;
 
-export interface ValidationError {
-  field: string;
-  message: string;
-}
+export type ValidationError = AlwaysSent<Schemas['validator.ValidationError'], 'field' | 'message'>;
 
 // Notification Types
-export interface EmailChannelConfig {
-  enabled: boolean;
-}
+export type EmailChannelConfig = AlwaysSent<Schemas['models.EmailChannelConfig'], 'enabled'>;
 
-export interface DiscordChannelConfig {
-  enabled: boolean;
-  webhook_url?: string;
-}
+export type DiscordChannelConfig = AlwaysSent<Schemas['models.DiscordChannelConfig'], 'enabled'>;
 
-export interface SlackChannelConfig {
-  enabled: boolean;
-  webhook_url?: string;
-}
+export type SlackChannelConfig = AlwaysSent<Schemas['models.SlackChannelConfig'], 'enabled'>;
 
-export interface TelegramChannelConfig {
-  enabled: boolean;
-  bot_token?: string;
-  chat_id?: string;
-}
+export type TelegramChannelConfig = AlwaysSent<Schemas['models.TelegramChannelConfig'], 'enabled'>;
 
-export interface ChannelConfig {
-  email: EmailChannelConfig;
-  discord: DiscordChannelConfig;
-  slack: SlackChannelConfig;
-  telegram: TelegramChannelConfig;
-}
+export type ChannelConfig = Refine<
+  AlwaysSent<Schemas['models.ChannelConfig'], 'email' | 'discord' | 'slack' | 'telegram'>,
+  {
+    email: EmailChannelConfig;
+    discord: DiscordChannelConfig;
+    slack: SlackChannelConfig;
+    telegram: TelegramChannelConfig;
+  }
+>;
 
-export interface ReminderConfig {
-  enabled: boolean;
-  hours_before: number;
-}
+export type ReminderConfig = AlwaysSent<
+  Schemas['models.ReminderConfig'],
+  'enabled' | 'hours_before'
+>;
 
-export interface NotifyConfig {
-  enabled: boolean;
-  notify_owner: boolean;
-  notify_participants: boolean;
-  channels: ChannelConfig;
-  reminders: ReminderConfig;
-}
+export type NotifyConfig = Refine<
+  AlwaysSent<
+    Schemas['models.NotifyConfig'],
+    'enabled' | 'notify_owner' | 'notify_participants' | 'channels' | 'reminders'
+  >,
+  { channels: ChannelConfig; reminders: ReminderConfig }
+>;
 
-export interface NotifyConfigResponse {
-  config: NotifyConfig;
-}
+export type NotifyConfigResponse = Refine<
+  AlwaysSent<Schemas['models.NotifyConfigResponse'], 'config'>,
+  { config: NotifyConfig }
+>;
 
+/*
+ * The two below have no schema to derive from: the participant-email endpoints
+ * declare their body and response inline in the handler rather than through a
+ * named model, so swaggo emits nothing for them. They stay hand-written until
+ * the Go side gets real request/response types.
+ */
 export interface AddParticipantEmailRequest {
   email: string;
 }
@@ -324,20 +334,9 @@ export interface ParticipantEmailResponse {
 }
 
 // Unified ICS Feed Types
-export interface UnifiedFeedConfig {
-  configured: boolean;
-  ics_token?: string;
-  included_calendar_ids?: string[];
-}
+export type UnifiedFeedConfig = AlwaysSent<Schemas['service.UnifiedFeedConfig'], 'configured'>;
 
 // UI Types
 export type Theme = 'light' | 'dark' | 'system';
 
 export type Locale = 'fr' | 'en';
-
-export interface Toast {
-  id: string;
-  type: 'success' | 'error' | 'warning' | 'info';
-  message: string;
-  duration?: number;
-}

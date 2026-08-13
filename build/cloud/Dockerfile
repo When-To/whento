@@ -1,6 +1,16 @@
-# WhenTo Cloud - Dockerfile for SaaS version with Stripe integration
+# WhenTo Cloud - release image for the hosted deployment
 # Copyright (C) 2025 WhenTo Contributors
 # SPDX-License-Identifier: BSL-1.1
+
+# This image must never be published to a public registry: see the warning in
+# .github/workflows/build-cloud.yml.
+#
+# frontend/dist and docs/swagger are expected in the build context, exactly as
+# for build/selfhosted/Dockerfile. The only differences between the two files are
+# the migration set, the build tag, and the runtime LABEL block; everything else
+# is deliberately identical, line for line, because Docker has no include
+# mechanism and the workflows pin these paths. cmd/dockerfiles_test.go fails the
+# build when the copies drift apart.
 
 # Base images are pinned by digest as well as by tag: a floating tag can be
 # re-published upstream and silently change the runtime, which makes a build
@@ -100,8 +110,10 @@ COPY --from=builder /build/whento /app/whento
 # Copy cloud-specific migrations
 COPY --from=builder /build/migrations-build /app/migrations
 
-# Copy frontend build
-COPY frontend/dist /app/web
+# The frontend is not copied into the runtime image: it is embedded in the binary
+# by web/embed.go, from the web/dist the build stage above filled in. A second
+# copy under /app/web used to be shipped here and nothing has ever read it —
+# neither the binary, which serves the embedded FS, nor docker-entrypoint.sh.
 
 # Copy entrypoint script
 COPY --from=builder /build/scripts/docker-entrypoint.sh /app/docker-entrypoint.sh

@@ -276,3 +276,91 @@ func TestEventsForACalendarWithNothingInIt(t *testing.T) {
 		t.Errorf("an empty calendar produced %d dates", len(events))
 	}
 }
+
+// TestEventsAboveThresholdForCalendarsMatchesOneAtATime is the guard on the unified
+// feed's N+1 fix. The batched read pipelines the very same SQL, so the only way it can
+// go wrong is by pairing a result set with the wrong calendar — which would publish one
+// calendar's events under another's name, to a subscriber who cannot tell.
+func TestEventsAboveThresholdForCalendarsMatchesOneAtATime(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewAvailabilityRepository(pool)
+	ctx := dbtest.Context(t)
+
+	// Two independent calendars, deliberately different in shape: different
+	// participants, different dates, and different thresholds, so a swapped or reused
+	// result set cannot pass.
+	first := seedCalendar(t, pool, "Ada", "Grace")
+	addAvailability(t, pool, first.participants[0].ID, march(10), "09:00", "12:00")
+	addAvailability(t, pool, first.participants[1].ID, march(10), "10:00", "14:00")
+
+	second := seedCalendar(t, pool, "Katherine", "Dorothy", "Mary")
+	for _, p := range second.participants {
+		addAvailability(t, pool, p.ID, march(20), "08:00", "18:00")
+	}
+	addAvailability(t, pool, second.participants[0].ID, march(21), "08:00", "18:00")
+
+	empty := seedCalendar(t, pool, "Nobody")
+
+	wanted := []repository.CalendarThreshold{
+		{CalendarID: first.calendar.ID, Threshold: 2},
+		{CalendarID: second.calendar.ID, Threshold: 3},
+		{CalendarID: empty.calendar.ID, Threshold: 1},
+	}
+
+	batched, err := repo.GetEventsAboveThresholdForCalendars(ctx, wanted)
+	if err != nil {
+		t.Fatalf("GetEventsAboveThresholdForCalendars: %v", err)
+	}
+	if len(batched) != len(wanted) {
+		t.Fatalf("got %d calendars back, want %d", len(batched), len(wanted))
+	}
+
+	for _, cal := range wanted {
+		one, err := repo.GetEventsAboveThreshold(ctx, cal.CalendarID, cal.Threshold)
+		if err != nil {
+			t.Fatalf("GetEventsAboveThreshold(%s): %v", cal.CalendarID, err)
+		}
+
+		got := batched[cal.CalendarID]
+		if len(got) != len(one) {
+			t.Errorf("calendar %s: batched has %d dates, single has %d", cal.CalendarID, len(got), len(one))
+
+			continue
+		}
+
+		for date, want := range one {
+			have := got[date]
+			if len(have) != len(want) {
+				t.Errorf("calendar %s on %s: batched has %d rows, single has %d",
+					cal.CalendarID, date.Format("2006-01-02"), len(have), len(want))
+
+				continue
+			}
+			for i := range want {
+				if have[i].ParticipantName != want[i].ParticipantName ||
+					have[i].AvailableCount != want[i].AvailableCount ||
+					have[i].TotalParticipants != want[i].TotalParticipants ||
+					have[i].Note != want[i].Note {
+					t.Errorf("calendar %s on %s row %d: batched = %+v, single = %+v",
+						cal.CalendarID, date.Format("2006-01-02"), i, have[i], want[i])
+				}
+			}
+		}
+	}
+
+	// The threshold is applied per calendar: the second one needs all three, so its
+	// lone availability on the 21st must not appear.
+	if _, found := batched[second.calendar.ID][march(21)]; found {
+		t.Error("a date below the calendar's own threshold was published")
+	}
+
+	t.Run("no calendars means no batch", func(t *testing.T) {
+		got, err := repo.GetEventsAboveThresholdForCalendars(ctx, nil)
+		if err != nil {
+			t.Fatalf("GetEventsAboveThresholdForCalendars(nil): %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("an empty request returned %d calendars", len(got))
+		}
+	})
+}

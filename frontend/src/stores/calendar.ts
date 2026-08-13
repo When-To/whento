@@ -10,6 +10,7 @@ import { calendarsApi } from '@/api/calendars';
 import type {
   CalendarWithParticipants,
   CreateCalendarRequest,
+  PublicCalendar,
   UpdateCalendarRequest,
   CreateParticipantRequest,
   UpdateParticipantRequest,
@@ -18,7 +19,15 @@ import type {
 export const useCalendarStore = defineStore('calendar', () => {
   // State
   const calendars = ref<CalendarWithParticipants[]>([]);
+  /** The calendar being managed by its owner (or an admin). */
   const currentCalendar = ref<CalendarWithParticipants | null>(null);
+  /**
+   * The calendar being viewed through a public link. Kept apart from
+   * `currentCalendar` because the backend answers those two routes with
+   * different shapes: one slot for both made every owner-only field look
+   * available to the public views, where it is in fact undefined.
+   */
+  const currentPublicCalendar = ref<PublicCalendar | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
 
@@ -58,7 +67,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     error.value = null;
 
     try {
-      currentCalendar.value = await calendarsApi.getPublic(token, participantId);
+      currentPublicCalendar.value = await calendarsApi.getPublic(token, participantId);
     } catch (err: any) {
       error.value = err.message || 'Failed to fetch calendar';
       throw err;
@@ -201,8 +210,8 @@ export const useCalendarStore = defineStore('calendar', () => {
 
     try {
       const participant = await calendarsApi.addAnonymousParticipant(token, data);
-      if (currentCalendar.value) {
-        currentCalendar.value.participants.push(participant);
+      if (currentPublicCalendar.value) {
+        currentPublicCalendar.value.participants.push(participant);
       }
       return participant;
     } catch (err: any) {
@@ -257,12 +266,14 @@ export const useCalendarStore = defineStore('calendar', () => {
 
   function clearCurrentCalendar() {
     currentCalendar.value = null;
+    currentPublicCalendar.value = null;
   }
 
   return {
     // State
     calendars,
     currentCalendar,
+    currentPublicCalendar,
     loading,
     error,
 

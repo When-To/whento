@@ -5,7 +5,9 @@
 package service
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -623,24 +625,72 @@ func TestFilterParticipantSummariesPrivacy(t *testing.T) {
 	}
 }
 
-func TestIsDuplicateError(t *testing.T) {
+// TestCreateAvailabilityMapsTheRepositorySentinel pins the layer boundary that used to
+// be a string comparison: the service matched err.Error() against the literal the
+// repository happened to format, so rewording that message would have silently turned a
+// conflict into a 500, with nothing in the compiler or the tests to catch it. Matching
+// on the sentinel also makes a wrapped error work, which the string form could not.
+func TestCreateAvailabilityMapsTheRepositorySentinel(t *testing.T) {
 	tests := []struct {
-		name string
-		err  error
-		want bool
+		name         string
+		createErr    error
+		wantConflict bool
 	}{
-		{name: "nil", err: nil},
-		{name: "the exact sentinel message", err: errors.New("availability already exists for this date"), want: true},
-		{name: "a different message", err: errors.New("something else"), want: false},
-		// The check is an exact string match, so a wrapped error no longer matches.
-		// Pinned because it is the kind of thing a later refactor breaks silently.
-		{name: "the same message, wrapped", err: errors.New("insert failed: availability already exists for this date"), want: false},
+		{name: "no conflict", createErr: nil},
+		{
+			name:         "the repository sentinel",
+			createErr:    repository.ErrAvailabilityExists,
+			wantConflict: true,
+		},
+		{
+			name:         "the sentinel wrapped on the way up",
+			createErr:    fmt.Errorf("insert failed: %w", repository.ErrAvailabilityExists),
+			wantConflict: true,
+		},
+		{
+			// The old string comparison called this a conflict. It is not one.
+			name:      "the same words, but not the sentinel",
+			createErr: errors.New("availability already exists for this date"),
+		},
+		{name: "an unrelated failure", createErr: errStore},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isDuplicateError(tt.err); got != tt.want {
-				t.Errorf("isDuplicateError(%v) = %v, want %v", tt.err, got, tt.want)
+			f := newSummaryFixture(t, nil)
+			f.availRepo.createErr = tt.createErr
+
+			date := time.Now().AddDate(0, 0, 7).Format("2006-01-02")
+			_, err := f.service.CreateAvailability(
+				context.Background(),
+				"token",
+				f.alice.ID.String(),
+				&models.CreateAvailabilityRequest{Date: date},
+			)
+
+			if tt.wantConflict {
+				if !errors.Is(err, ErrAvailabilityExists) {
+					t.Fatalf("CreateAvailability() = %v, want ErrAvailabilityExists", err)
+				}
+
+				return
+			}
+
+			if tt.createErr == nil {
+				if err != nil {
+					t.Fatalf("CreateAvailability() error = %v, want nil", err)
+				}
+
+				return
+			}
+
+			// Anything the service does not recognise must surface unchanged, so that a
+			// database failure is never reported to the caller as a conflict.
+			if errors.Is(err, ErrAvailabilityExists) {
+				t.Fatalf("CreateAvailability() = %v, want it not to be ErrAvailabilityExists", err)
+			}
+			if !errors.Is(err, tt.createErr) {
+				t.Fatalf("CreateAvailability() = %v, want the repository error unchanged", err)
 			}
 		})
 	}

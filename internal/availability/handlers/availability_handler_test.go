@@ -139,9 +139,9 @@ func (s *stubRecurrenceRepo) CreateException(context.Context, *models.Recurrence
 	return nil
 }
 
-func (s *stubRecurrenceRepo) GetExceptionsByRecurrence(
-	context.Context, uuid.UUID,
-) ([]models.RecurrenceException, error) {
+func (s *stubRecurrenceRepo) GetExceptionsByRecurrenceIDs(
+	context.Context, []uuid.UUID,
+) (map[uuid.UUID][]models.RecurrenceException, error) {
 	return nil, nil
 }
 

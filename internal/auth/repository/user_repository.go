@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/whento/pkg/dberr"
 	"github.com/whento/whento/internal/auth/models"
 )
 
@@ -53,7 +54,7 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 	).Scan(&user.CreatedAt, &user.UpdatedAt)
 
 	if err != nil {
-		if isDuplicateKeyError(err) {
+		if dberr.IsUniqueViolation(err) {
 			return ErrUserAlreadyExists
 		}
 		return fmt.Errorf("failed to create user: %w", err)
@@ -328,29 +329,6 @@ func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 	}
 
 	return exists, nil
-}
-
-func isDuplicateKeyError(err error) bool {
-	return err != nil && (
-	// PostgreSQL unique constraint violation
-	err.Error() == "ERROR: duplicate key value violates unique constraint" ||
-		// pgx specific error code check
-		containsCode(err.Error(), "23505"))
-}
-
-func containsCode(errMsg, code string) bool {
-	return len(errMsg) > 0 && len(code) > 0 &&
-		(errMsg[0:min(len(errMsg), 100)] != "" &&
-			findSubstring(errMsg, code))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 // SetVerificationToken sets the verification token for a user
