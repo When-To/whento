@@ -5,10 +5,18 @@
 package service
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"log/slog"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/whento/pkg/logger"
 	"github.com/whento/whento/internal/availability/models"
 )
 
@@ -292,6 +300,146 @@ func TestRecurrencesOverlap(t *testing.T) {
 			if result != tt.expected {
 				t.Errorf("recurrencesOverlap(%s, %s, %s, %s) = %v, expected %v",
 					tt.startDateA, tt.endDateA, tt.startDateB, tt.endDateB, result, tt.expected)
+			}
+		})
+	}
+}
+
+// syncBuffer collects log output written from the detached goroutine while the test
+// reads it from its own.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.buf.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.buf.String()
+}
+
+// recordingNotifier stands in for the notify service and reports what the detached
+// goroutine handed it.
+type recordingNotifier struct {
+	err       error
+	panicWith any
+
+	called      chan struct{}
+	mu          sync.Mutex
+	hadDeadline bool
+	ctxErr      error
+}
+
+func newRecordingNotifier(err error, panicWith any) *recordingNotifier {
+	return &recordingNotifier{err: err, panicWith: panicWith, called: make(chan struct{})}
+}
+
+func (n *recordingNotifier) CheckThresholdAndNotify(ctx context.Context, _ uuid.UUID, _ time.Time, _ int) error {
+	n.mu.Lock()
+	_, n.hadDeadline = ctx.Deadline()
+	n.ctxErr = ctx.Err()
+	n.mu.Unlock()
+
+	close(n.called)
+
+	if n.panicWith != nil {
+		panic(n.panicWith)
+	}
+
+	return n.err
+}
+
+// TestNotifyThresholdAsync covers the three ways the fire-and-forget threshold check used
+// to fail silently.
+//
+// The block this helper replaces logged nothing at all — its error branch was empty under
+// a comment reading "log only" — ran on a context.Background() that could never time out,
+// and had no recover(), so a panic in the notify path took the process down with it
+// (middleware.Recoverer only wraps the request goroutine).
+func TestNotifyThresholdAsync(t *testing.T) {
+	tests := []struct {
+		name string
+		// err is what the notify service returns.
+		err error
+		// panicWith, when set, makes the notify service panic instead.
+		panicWith any
+		// cancelRequest cancels the caller's context before the check is started.
+		cancelRequest bool
+		// wantLogged is a fragment the log line must contain.
+		wantLogged string
+	}{
+		{
+			name:       "a failed notification is logged",
+			err:        errors.New("smtp: connection refused"),
+			wantLogged: "threshold notification failed",
+		},
+		{
+			name:       "a panic is recovered instead of killing the process",
+			panicWith:  "notify exploded",
+			wantLogged: "threshold notification panicked",
+		},
+		{
+			name:          "the check still runs once the request is over",
+			cancelRequest: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out := &syncBuffer{}
+			previous := logger.Default()
+			logger.SetDefault(slog.New(slog.NewJSONHandler(out, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			t.Cleanup(func() { logger.SetDefault(previous) })
+
+			notifier := newRecordingNotifier(tt.err, tt.panicWith)
+			svc := NewAvailabilityService(nil, nil, nil, nil, notifier, nil)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			svc.notifyThresholdAsync(ctx, uuid.New(), time.Now(), 2)
+
+			if tt.cancelRequest {
+				// The handler has returned and chi has cancelled the request context.
+				// The notification must not be cancelled along with it.
+				cancel()
+			}
+
+			select {
+			case <-notifier.called:
+			case <-time.After(2 * time.Second):
+				t.Fatal("the threshold check was never run")
+			}
+
+			notifier.mu.Lock()
+			hadDeadline, ctxErr := notifier.hadDeadline, notifier.ctxErr
+			notifier.mu.Unlock()
+
+			if !hadDeadline {
+				t.Error("the detached context has no deadline: a wedged call would pin this goroutine for ever")
+			}
+			if ctxErr != nil {
+				t.Errorf("the detached context was already done: %v", ctxErr)
+			}
+
+			if tt.wantLogged == "" {
+				return
+			}
+
+			deadline := time.Now().Add(2 * time.Second)
+			for !strings.Contains(out.String(), tt.wantLogged) {
+				if time.Now().After(deadline) {
+					t.Fatalf("nothing was logged about the failure; log was:\n%s", out.String())
+				}
+				time.Sleep(5 * time.Millisecond)
 			}
 		})
 	}

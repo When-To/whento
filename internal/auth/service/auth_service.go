@@ -154,7 +154,7 @@ func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest)
 	}
 
 	// Generate tokens
-	return s.generateAuthResponse(user)
+	return s.generateAuthResponse(ctx, user)
 }
 
 // Login authenticates a user
@@ -212,7 +212,7 @@ func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (*mod
 	}
 
 	// No MFA - generate full tokens
-	return s.generateAuthResponse(user)
+	return s.generateAuthResponse(ctx, user)
 }
 
 // incrementLoginAttempts increments the failed login counter for the given key
@@ -257,7 +257,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*m
 	}
 
 	// Generate new tokens
-	return s.generateAuthResponse(user)
+	return s.generateAuthResponse(ctx, user)
 }
 
 // Logout invalidates the refresh token
@@ -393,7 +393,11 @@ func (s *AuthService) DeleteUser(ctx context.Context, currentUserID, targetUserI
 	return s.userRepo.Delete(ctx, uid)
 }
 
-func (s *AuthService) generateAuthResponse(user *models.User) (*models.AuthResponse, error) {
+// generateAuthResponse issues the access/refresh token pair and persists the refresh
+// token hash. The refresh token write is a synchronous database call on the request
+// path, so it runs under the caller's context: a client disconnect, a request deadline
+// or a server shutdown must be able to cancel it.
+func (s *AuthService) generateAuthResponse(ctx context.Context, user *models.User) (*models.AuthResponse, error) {
 	// Generate access token
 	accessToken, err := s.jwtManager.GenerateAccessToken(user.ID.String(), user.Email, user.Role)
 	if err != nil {
@@ -414,7 +418,7 @@ func (s *AuthService) generateAuthResponse(user *models.User) (*models.AuthRespo
 	}
 	storedToken.ID = uuid.New()
 
-	if err := s.tokenRepo.Create(context.Background(), storedToken); err != nil {
+	if err := s.tokenRepo.Create(ctx, storedToken); err != nil {
 		return nil, fmt.Errorf("failed to store refresh token: %w", err)
 	}
 
@@ -468,7 +472,7 @@ func (s *AuthService) PasskeyLogin(ctx context.Context, user *models.User) (*mod
 	}
 
 	// No MFA - generate full tokens directly
-	return s.generateAuthResponse(user)
+	return s.generateAuthResponse(ctx, user)
 }
 
 // VerifyMFAAndLogin verifies the MFA code and completes login
@@ -515,5 +519,5 @@ func (s *AuthService) VerifyMFAAndLogin(ctx context.Context, tempToken string, m
 	}
 
 	// Generate full tokens
-	return s.generateAuthResponse(user)
+	return s.generateAuthResponse(ctx, user)
 }

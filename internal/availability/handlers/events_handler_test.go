@@ -5,6 +5,7 @@
 package handlers
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"net/http"
@@ -330,4 +331,103 @@ func TestTheTokenIsCheckedAgainstTheRepository(t *testing.T) {
 
 	cancel()
 	<-done
+}
+
+// TestTheStreamOutlivesTheServerWriteTimeout is the case every test above is blind to.
+//
+// httptest.NewRecorder is not a connection: it has no deadline, so a stream written into
+// one survives anything. A real http.Server arms its WriteTimeout once, when it reads the
+// request headers, and never rearms it — so every write past that point fails, starting
+// with the very first heartbeat, and the browser reconnects on the retry hint for ever.
+// Nothing about that is visible until the handler is mounted on an actual server whose
+// WriteTimeout is shorter than the test is willing to wait.
+func TestTheStreamOutlivesTheServerWriteTimeout(t *testing.T) {
+	const (
+		writeTimeout = 300 * time.Millisecond
+		heartbeat    = 50 * time.Millisecond
+	)
+
+	tests := []struct {
+		name string
+		// publish sends a notice once the server's write deadline has certainly passed.
+		publish bool
+		// want is the line the browser must still be able to receive afterwards.
+		want string
+	}{
+		{
+			name: "a heartbeat still lands after the write timeout",
+			want: ": keep-alive",
+		},
+		{
+			name:    "a notice still lands after the write timeout",
+			publish: true,
+			want:    "event: update",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			broker := broadcast.NewMemoryBroker()
+			t.Cleanup(func() { _ = broker.Close() })
+
+			handler := NewEventsHandler(&fakeCalendars{}, broker)
+			handler.heartbeat = heartbeat
+
+			router := chi.NewRouter()
+			router.Get("/calendar/{token}/events", handler.Stream)
+
+			server := httptest.NewUnstartedServer(router)
+			server.Config.WriteTimeout = writeTimeout
+			server.Start()
+			t.Cleanup(server.Close)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/calendar/public-token/events", nil)
+			if err != nil {
+				t.Fatalf("build request: %v", err)
+			}
+
+			started := time.Now()
+			resp, err := server.Client().Do(req)
+			if err != nil {
+				t.Fatalf("open the stream: %v", err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d, want 200", resp.StatusCode)
+			}
+
+			// The notice is sent well past the deadline the server armed when it read
+			// the request headers.
+			if tt.publish {
+				timer := time.AfterFunc(writeTimeout+2*heartbeat, func() {
+					_ = broker.Publish(context.Background(), "public-token")
+				})
+				defer timer.Stop()
+			}
+
+			// Read continuously rather than sleeping first: a line that is still sitting
+			// in the socket buffer says nothing about when it was written, and the
+			// heartbeats sent before the deadline are exactly that.
+			settled := writeTimeout + 2*heartbeat
+			reader := bufio.NewReader(resp.Body)
+			for {
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					t.Fatalf(
+						"the stream died %v after it opened, with a WriteTimeout of %v: %v",
+						time.Since(started).Round(time.Millisecond), writeTimeout, err,
+					)
+				}
+
+				// Only a line that arrived past the deadline proves anything.
+				if strings.HasPrefix(line, tt.want) && time.Since(started) > settled {
+					return
+				}
+			}
+		})
+	}
 }

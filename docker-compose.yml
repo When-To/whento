@@ -42,6 +42,14 @@ services:
       - EMAIL_VERIFICATION_ENABLED=${EMAIL_VERIFICATION_ENABLED:-true}
       - ALLOWED_REGISTER=${ALLOWED_REGISTER:-true}
       - ALLOWED_EMAILS=${ALLOWED_EMAILS:-*}
+    volumes:
+      # The JWT signing keys are generated on first start by the entrypoint. Without
+      # this volume they live in the container's writable layer, so every `docker
+      # compose up` that recreates the container (image update, changed env var)
+      # mints a new key pair and invalidates every issued token: all users are
+      # logged out. Participant links are unaffected — they authorise by the link
+      # itself, not by a signed token.
+      - whento_keys:/app/keys
     depends_on:
       postgres:
         condition: service_healthy
@@ -97,6 +105,9 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  # JWT signing keys. Deleting this volume logs every user out.
+  whento_keys:
     driver: local
 
 networks:

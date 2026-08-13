@@ -6,12 +6,20 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/whento/whento/internal/availability/models"
+)
+
+// Sentinels, so that callers can tell "the row is not there" — which is a request the
+// user got wrong — from "the database refused", which is not. Compare with errors.Is.
+var (
+	ErrRecurrenceNotFound = errors.New("recurrence not found")
+	ErrExceptionNotFound  = errors.New("exception not found")
 )
 
 type RecurrenceRepository struct {
@@ -215,7 +223,7 @@ func (r *RecurrenceRepository) UpdateRecurrence(ctx context.Context, recurrence 
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("recurrence not found")
+		return ErrRecurrenceNotFound
 	}
 
 	return nil
@@ -231,7 +239,7 @@ func (r *RecurrenceRepository) DeleteRecurrence(ctx context.Context, id uuid.UUI
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("recurrence not found")
+		return ErrRecurrenceNotFound
 	}
 
 	return nil
@@ -307,7 +315,7 @@ func (r *RecurrenceRepository) DeleteException(ctx context.Context, recurrenceID
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("exception not found")
+		return ErrExceptionNotFound
 	}
 
 	return nil

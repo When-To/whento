@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // The key function decides *whose* budget a request spends. Getting it wrong is not a
@@ -211,5 +212,184 @@ func TestCombinedKeyFunc(t *testing.T) {
 	other.RemoteAddr = "203.0.113.7:54321"
 	if CombinedKeyFunc(other) == CombinedKeyFunc(req) {
 		t.Error("two different paths from one IP produced the same key")
+	}
+}
+
+// The tests below lock the behaviour that chi's RealIP middleware used to break. RealIP
+// overwrote r.RemoteAddr with whatever X-Forwarded-For said, before this package ever
+// looked at it — so IPKeyFunc read the attacker's header as if it were the peer address
+// and the trusted-proxy configuration decided nothing at all. Rotating one header per
+// request then bought an unlimited number of login attempts.
+
+func TestForgedForwardedHeadersDoNotChangeTheKey(t *testing.T) {
+	tests := []struct {
+		name    string
+		proxies []string
+		remote  string
+		want    string
+	}{
+		{
+			name:   "nothing is trusted",
+			remote: "203.0.113.7:54321",
+			want:   "203.0.113.7",
+		},
+		{
+			// A deployment does sit behind a proxy, but this caller is not it. The
+			// header is only as trustworthy as the hop that set it.
+			name:    "a proxy is configured but the caller is not it",
+			proxies: []string{"10.0.0.1", "172.17.0.0/16"},
+			remote:  "203.0.113.7:54321",
+			want:    "203.0.113.7",
+		},
+	}
+
+	forgeries := []string{
+		"1.1.1.1",
+		"2.2.2.2",
+		"10.0.0.1",             // claiming to be the trusted proxy itself
+		"203.0.113.8, 1.1.1.1", // a chain the attacker wrote end to end
+		"not-an-ip",
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withTrustedProxies(t, tt.proxies)
+
+			for _, forged := range forgeries {
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+				req.RemoteAddr = tt.remote
+				req.Header.Set("X-Forwarded-For", forged)
+				req.Header.Set("X-Real-IP", "9.9.9.9")
+
+				if got := IPKeyFunc(req); got != tt.want {
+					t.Errorf("X-Forwarded-For %q produced key %q, want %q", forged, got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestATrustedProxyIsStillHonoured(t *testing.T) {
+	withTrustedProxies(t, []string{"10.0.0.1", "172.17.0.0/16"})
+
+	tests := []struct {
+		name      string
+		remote    string
+		forwarded string
+		realIP    string
+		want      string
+	}{
+		{
+			name:      "an exact proxy address",
+			remote:    "10.0.0.1:1234",
+			forwarded: "198.51.100.5",
+			want:      "198.51.100.5",
+		},
+		{
+			name:   "a proxy inside a trusted range, via X-Real-IP",
+			remote: "172.17.0.9:1234",
+			realIP: "198.51.100.6",
+			want:   "198.51.100.6",
+		},
+		{
+			// Only the entry the trusted proxy appended counts; the rest of the chain
+			// came from the client.
+			name:      "the entry the proxy appended",
+			remote:    "10.0.0.1:1234",
+			forwarded: "1.1.1.1, 198.51.100.7",
+			want:      "198.51.100.7",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+			req.RemoteAddr = tt.remote
+			if tt.forwarded != "" {
+				req.Header.Set("X-Forwarded-For", tt.forwarded)
+			}
+			if tt.realIP != "" {
+				req.Header.Set("X-Real-IP", tt.realIP)
+			}
+
+			// Without this, every user behind the proxy shares one bucket and a single
+			// noisy client locks out a whole office.
+			if got := IPKeyFunc(req); got != tt.want {
+				t.Errorf("key = %q, want the forwarded client %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRateLimitSurvivesHeaderRotation is the end-to-end form of the same guarantee: the
+// limit has to bite even when every request carries a different forged header.
+func TestRateLimitSurvivesHeaderRotation(t *testing.T) {
+	withTrustedProxies(t, []string{"10.0.0.1"})
+
+	rl := NewRateLimiter(nil)
+	defer rl.Stop()
+
+	handler := rl.Limit(RateLimitConfig{
+		Requests: 2,
+		Window:   time.Minute,
+		KeyFunc:  IPKeyFunc,
+	})(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	statuses := make([]int, 0, 3)
+	for _, forged := range []string{"1.1.1.1", "2.2.2.2", "3.3.3.3"} {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+		req.RemoteAddr = "203.0.113.7:54321"
+		req.Header.Set("X-Forwarded-For", forged)
+
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		statuses = append(statuses, rec.Code)
+	}
+
+	want := []int{http.StatusOK, http.StatusOK, http.StatusTooManyRequests}
+	for i, status := range statuses {
+		if status != want[i] {
+			t.Fatalf("request %d returned %d, want %d (statuses: %v)", i+1, status, want[i], statuses)
+		}
+	}
+}
+
+// TestRateLimitSeparatesClientsBehindATrustedProxy is the symmetric case: with a real
+// proxy in front, two genuinely different clients must not share a budget.
+func TestRateLimitSeparatesClientsBehindATrustedProxy(t *testing.T) {
+	withTrustedProxies(t, []string{"10.0.0.1"})
+
+	rl := NewRateLimiter(nil)
+	defer rl.Stop()
+
+	handler := rl.Limit(RateLimitConfig{
+		Requests: 1,
+		Window:   time.Minute,
+		KeyFunc:  IPKeyFunc,
+	})(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	call := func(client string) int {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+		req.RemoteAddr = "10.0.0.1:1234"
+		req.Header.Set("X-Forwarded-For", client)
+
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		return rec.Code
+	}
+
+	if got := call("198.51.100.5"); got != http.StatusOK {
+		t.Fatalf("the first client got %d, want 200", got)
+	}
+	if got := call("198.51.100.6"); got != http.StatusOK {
+		t.Fatalf("a second client behind the same proxy got %d, want 200", got)
+	}
+	if got := call("198.51.100.5"); got != http.StatusTooManyRequests {
+		t.Fatalf("the first client's second request got %d, want 429", got)
 	}
 }

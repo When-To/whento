@@ -7,8 +7,10 @@ package handlers_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -171,6 +173,8 @@ func newHandler(t *testing.T, calendar *repository.Calendar, calendarErr error, 
 
 	router := chi.NewRouter()
 	router.Get("/api/v1/public/calendars/{token}/availabilities/range", handler.GetRangeSummary)
+	router.Get("/api/v1/public/calendars/{token}/participants/{pid}/availabilities", handler.GetParticipantAvailabilities)
+	router.Post("/api/v1/public/calendars/{token}/participants/{pid}/availabilities", handler.CreateAvailability)
 
 	return router
 }
@@ -192,7 +196,10 @@ func TestGetRangeSummaryRequiresBothDates(t *testing.T) {
 		// A malformed date reaches the service and comes back as a 400 too, but by
 		// a different route — worth distinguishing from the missing-parameter case.
 		{name: "a malformed start", query: "?start=01/03/2026&end=2026-03-31", want: http.StatusBadRequest},
-		{name: "an inverted range", query: "?start=2026-03-31&end=2026-03-01", want: http.StatusInternalServerError},
+		// An inverted range is the caller's mistake, and used to be answered with a 500
+		// purely because the service returned a bare fmt.Errorf that no errors.Is could
+		// match, leaving handleAvailabilityError nothing to go on.
+		{name: "an inverted range", query: "?start=2026-03-31&end=2026-03-01", want: http.StatusBadRequest},
 	}
 
 	for _, tt := range tests {
@@ -338,5 +345,103 @@ func TestGetRangeSummaryEmptySerialisesAsArray(t *testing.T) {
 
 	if string(body.Data) != "[]" {
 		t.Errorf("data = %s, want []", body.Data)
+	}
+}
+
+// TestRejectedInputIsNotReportedAsAServerError pins the status code for the requests the
+// caller got wrong.
+//
+// Every case below used to come back as a 500. The service returned a bare fmt.Errorf for
+// each of them, no errors.Is could match it, and handleAvailabilityError has nothing to
+// fall back on but its default branch — so an inverted date range, a participant ID that
+// is not a UUID, or a date outside the calendar's own window were all reported as faults
+// on our side. A 500 tells the browser to retry and tells the operator to go looking for
+// a bug that is not there.
+func TestRejectedInputIsNotReportedAsAServerError(t *testing.T) {
+	calendarID := uuid.New()
+	participant := &repository.Participant{ID: uuid.New(), CalendarID: calendarID, Name: "Alice"}
+
+	// Far enough out that the past-date check never fires and the test does not rot.
+	opens := time.Date(2099, time.June, 10, 0, 0, 0, 0, time.UTC)
+	closes := time.Date(2099, time.June, 20, 0, 0, 0, 0, time.UTC)
+
+	calendar := &repository.Calendar{
+		ID:              calendarID,
+		AllowedWeekdays: []int{0, 1, 2, 3, 4, 5, 6},
+		Timezone:        "Europe/Paris",
+		StartDate:       &opens,
+		EndDate:         &closes,
+	}
+
+	const base = "/api/v1/public/calendars/tok"
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+		want   int
+	}{
+		{
+			name:   "a range that ends before it starts",
+			method: http.MethodGet,
+			path:   base + "/availabilities/range?start=2099-06-20&end=2099-06-11",
+			want:   http.StatusBadRequest,
+		},
+		{
+			name:   "a participant ID that is not a UUID",
+			method: http.MethodGet,
+			path:   base + "/participants/not-a-uuid/availabilities",
+			want:   http.StatusBadRequest,
+		},
+		{
+			name:   "a date before the calendar opens",
+			method: http.MethodPost,
+			path:   base + "/participants/" + participant.ID.String() + "/availabilities",
+			body:   `{"date":"2099-06-01"}`,
+			want:   http.StatusBadRequest,
+		},
+		{
+			name:   "a date after the calendar closes",
+			method: http.MethodPost,
+			path:   base + "/participants/" + participant.ID.String() + "/availabilities",
+			body:   `{"date":"2099-06-30"}`,
+			want:   http.StatusBadRequest,
+		},
+		// The counterweight: the mapping must not have turned every failure into a 400.
+		{
+			name:   "a participant who does not exist",
+			method: http.MethodGet,
+			path:   base + "/participants/" + uuid.New().String() + "/availabilities",
+			want:   http.StatusNotFound,
+		},
+		{
+			name:   "a date the calendar accepts",
+			method: http.MethodPost,
+			path:   base + "/participants/" + participant.ID.String() + "/availabilities",
+			body:   `{"date":"2099-06-15"}`,
+			want:   http.StatusCreated,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router := newHandler(t, calendar, nil, nil, []*repository.Participant{participant})
+
+			var body io.Reader
+			if tt.body != "" {
+				body = strings.NewReader(tt.body)
+			}
+
+			req := httptest.NewRequest(tt.method, tt.path, body)
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != tt.want {
+				t.Errorf("status = %d, want %d (body %s)", rec.Code, tt.want, rec.Body)
+			}
+		})
 	}
 }

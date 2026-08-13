@@ -158,13 +158,13 @@ function close() {
 }
 
 function handleRemove(token: string) {
-  if (confirm(t('calendar.confirmRemoveHistory', 'Remove this calendar from history?'))) {
+  if (confirm(t('calendar.confirmRemoveHistory'))) {
     historyStore.removeCalendar(token);
   }
 }
 
 function handleClearAll() {
-  if (confirm(t('calendar.confirmClearHistory', 'Clear all history?'))) {
+  if (confirm(t('calendar.confirmClearHistory'))) {
     historyStore.clearHistory();
     close();
   }

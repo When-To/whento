@@ -38,6 +38,13 @@ type Config struct {
 
 	// Rate Limiting
 	RateLimitEnabled bool
+	// RateLimitKeySalt pins the salt used to derive rate limit bucket names.
+	// Buckets are stored hashed so that no IP, token or participant id is ever
+	// written to Redis. The salt therefore has to be identical across every
+	// instance sharing one Redis, or the same client lands in a different
+	// bucket per instance and N instances grant N times the allowance. Empty
+	// means "generate one per process", which is correct for a single instance.
+	RateLimitKeySalt string
 
 	// Security
 	TrustedProxies []string // IPs allowed to set X-Forwarded-For
@@ -111,6 +118,7 @@ func Load() *Config {
 
 		// Rate Limiting
 		RateLimitEnabled: getBool("RATE_LIMIT_ENABLED", true),
+		RateLimitKeySalt: getEnv("RATE_LIMIT_KEY_SALT", ""),
 
 		// Security
 		TrustedProxies: getStringList("TRUSTED_PROXIES", nil),
