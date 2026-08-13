@@ -113,6 +113,12 @@ const nav = useCalendarGridNav({
     const day = props.model.days[index];
     if (day) emit('day-click', day.date);
   },
+  // The per-participant button inside each cell is out of the tab order, as an
+  // ARIA grid requires, so Alt+Enter is how a keyboard reaches it.
+  showDetails: index => {
+    const day = props.model.days[index];
+    if (day) openDetails(day.date);
+  },
   commitRange: (anchor, focus) => {
     const from = Math.min(anchor, focus);
     const to = Math.max(anchor, focus);

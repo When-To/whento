@@ -99,10 +99,17 @@ const holidayTitle = computed(() => {
     </div>
 
     <!-- Opening the per-participant breakdown needs its own affordance: the cell
-         itself belongs to the drag surface. -->
+         itself belongs to the drag surface.
+
+         tabindex="-1" is deliberate. This button sits inside a role=gridcell, and
+         an ARIA grid owns its own navigation: while it was focusable, Tab walked
+         button-to-button and never landed on a cell, so Enter opened this popup
+         and adding an availability was unreachable by keyboard. Alt+Enter on the
+         focused cell reaches it instead. -->
     <button
       v-if="day.status !== 'outside' && day.status !== 'disabled'"
       type="button"
+      tabindex="-1"
       data-no-drag
       class="cal-count"
       :title="t('calendar.viewParticipantsFor', { date: day.dateLong })"

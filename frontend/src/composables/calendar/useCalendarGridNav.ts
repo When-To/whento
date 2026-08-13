@@ -23,6 +23,12 @@ export interface GridNavOptions {
   readonly count: ComputedRef<number>;
   /** Whether an index can receive focus at all. */
   isFocusable(index: number): boolean;
+  /**
+   * Alt+Enter on a single cell. The per-participant breakdown has its own button
+   * inside the cell, which cannot be in the tab order without breaking the grid,
+   * so the grid offers it as a key instead.
+   */
+  showDetails?(index: number): void;
   /** Space or Enter on a single cell. */
   activate(index: number): void;
   /** Shift+arrow released, or Space with a range extended. */
@@ -175,6 +181,10 @@ export function useCalendarGridNav(options: GridNavOptions): GridNav {
       case ' ':
       case 'Enter':
         if (focusedIndex.value < 0) return;
+        if (event.altKey) {
+          options.showDetails?.(focusedIndex.value);
+          break;
+        }
         if (anchorIndex.value !== null && anchorIndex.value !== focusedIndex.value) {
           options.commitRange(anchorIndex.value, focusedIndex.value);
         } else {

@@ -271,8 +271,11 @@ function shiftWeek(days: number) {
             <span class="cal-week-day-name">{{ column.day.weekdayShort }}</span>
             <span class="cal-week-day-num">{{ column.day.dayOfMonth }}</span>
           </button>
+          <!-- See CalendarDayCell: an interactive element inside a role=gridcell
+               must stay out of the tab order, or Tab never reaches the cells. -->
           <button
             type="button"
+            tabindex="-1"
             class="cal-count"
             data-no-drag
             :title="t('calendar.viewParticipantsFor', { date: column.day.dateLong })"
