@@ -75,7 +75,7 @@ func (r *UnifiedFeedRepository) UpdateCalendars(ctx context.Context, feedID uuid
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Delete existing entries
 	_, err = tx.Exec(ctx, `DELETE FROM unified_feed_calendars WHERE unified_feed_id = $1`, feedID)
@@ -95,11 +95,16 @@ func (r *UnifiedFeedRepository) UpdateCalendars(ctx context.Context, feedID uuid
 		br := tx.SendBatch(ctx, batch)
 		for range calendarIDs {
 			if _, err := br.Exec(); err != nil {
-				br.Close()
+				_ = br.Close()
 				return fmt.Errorf("failed to insert calendar selection: %w", err)
 			}
 		}
-		br.Close()
+		// Close reports the first error from any result the loop above did not
+		// consume. Swallowing it used to let the transaction commit as if every
+		// insert had succeeded.
+		if err := br.Close(); err != nil {
+			return fmt.Errorf("failed to close calendar selection batch: %w", err)
+		}
 	}
 
 	// Update timestamp

@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/whento/pkg/cache"
+	"github.com/whento/pkg/logger"
 	authRepo "github.com/whento/whento/internal/auth/repository"
 	"github.com/whento/whento/internal/calendar/models"
 	"github.com/whento/whento/internal/calendar/repository"
@@ -237,10 +238,15 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 			// Find participant matching owner's display name (frontend auto-adds owner as first participant)
 			for _, participant := range participants {
 				if participant.Name == owner.DisplayName {
-					// Set email as already verified for the owner participant
+					// Set email as already verified for the owner participant.
+					// A failure must not fail calendar creation — the owner can add
+					// their email manually — but the branch used to be empty, so the
+					// error was not logged either, contrary to what it claimed.
 					if err := s.participantRepo.SetEmailAsVerified(ctx, participant.ID, owner.Email); err != nil {
-						// Log error but don't fail calendar creation
-						// The owner can manually add their email later if this fails
+						logger.FromContext(ctx).Warn("Failed to pre-verify the owner participant's email",
+							"calendar_id", calendar.ID,
+							"participant_id", participant.ID,
+							"error", err)
 					}
 					break
 				}

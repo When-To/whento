@@ -170,7 +170,7 @@ func (s *Service) sendWithTLS(ctx context.Context, addr string, auth smtp.Auth, 
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// One deadline for the whole conversation. net/smtp has no context of its own, so
 	// this is what keeps a silent server from parking the goroutine on a read.
@@ -185,7 +185,7 @@ func (s *Service) sendWithTLS(ctx context.Context, addr string, auth smtp.Auth, 
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// For anything but implicit TLS, upgrade the plain connection when the server
 	// offers it — this is what port 587 expects.

@@ -1,0 +1,53 @@
+# WhenTo - Code review routing
+# Copyright (C) 2025 WhenTo Contributors
+# SPDX-License-Identifier: BSL-1.1
+#
+# Every rule is a glob; the LAST matching rule wins, so the catch-all comes
+# first and the sensitive paths override it further down.
+#
+# For these rules to actually gate anything, "Require review from Code Owners"
+# has to be enabled on the protected branch (Settings -> Branches). Without it
+# GitHub only requests the review, it does not enforce it.
+#
+# Owners must have write access to the repository, otherwise GitHub silently
+# skips the rule. @InterN0te is the maintainer of record (97 of the 98
+# non-bot commits in the history, and the identity mailmap.txt canonicalises).
+
+# ── Default owner for everything not matched below ──────────────────────────
+*                           @InterN0te
+
+# ── CI/CD and repository automation ─────────────────────────────────────────
+# Workflows run with repository credentials and can publish images; the cloud
+# image must never reach a public registry (see build-cloud.yml).
+/.github/                   @InterN0te
+/.github/workflows/         @InterN0te
+
+# ── Build and packaging ─────────────────────────────────────────────────────
+# Base image digests, the golang-migrate checksums and the non-root runtime
+# user all live here.
+/Dockerfile                 @InterN0te
+/build/                     @InterN0te
+/.dockerignore              @InterN0te
+/docker-compose.yml         @InterN0te
+/docker-compose.dev.yml     @InterN0te
+/Makefile                   @InterN0te
+/scripts/                   @InterN0te
+
+# ── Schema ──────────────────────────────────────────────────────────────────
+# Migrations are applied in production and share a numbering space across
+# common/cloud/selfhosted; a mistake here is not trivially reversible.
+/migrations/                @InterN0te
+
+# ── Security-sensitive code ─────────────────────────────────────────────────
+# Token formats, key derivation and signature schemes: changes here have a
+# compatibility impact on every signed-in user.
+/pkg/jwt/                   @InterN0te
+/pkg/middleware/            @InterN0te
+/internal/auth/             @InterN0te
+/internal/mfa/              @InterN0te
+/internal/passkey/          @InterN0te
+
+# ── Licensing ───────────────────────────────────────────────────────────────
+/LICENSE                    @InterN0te
+/LICENSE-COMMERCIAL         @InterN0te
+/THIRD-PARTY-LICENSES.md    @InterN0te

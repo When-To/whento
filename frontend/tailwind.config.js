@@ -1,9 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{vue,js,ts,jsx,tsx}",
-  ],
+  content: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
   darkMode: 'class',
   theme: {
     extend: {
@@ -64,8 +61,8 @@ export default {
         display: ['Cal Sans', 'Inter', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
-        'glow': '0 0 20px rgba(14, 165, 233, 0.3)',
+        soft: '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
+        glow: '0 0 20px rgba(14, 165, 233, 0.3)',
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out',
@@ -89,4 +86,4 @@ export default {
     },
   },
   plugins: [],
-}
+};

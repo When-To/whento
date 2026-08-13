@@ -42,12 +42,12 @@ func InitServices(_ context.Context, _ *config.Config, pool *pgxpool.Pool) (*Ser
 //
 // Kept as a build-specific function because it is half of a symmetric pair: the cloud
 // variant must expose the same symbol, and CI compiles both.
-func RegisterQuotaRoutes(r chi.Router, services *Services, jwtManager interface{}, cacheInstance cache.Cache) {
+func RegisterQuotaRoutes(r chi.Router, services *Services, jwtManager *jwt.Manager, cacheInstance cache.Cache) {
 	log := logger.Default()
 	quotaHandler := quota.NewHandler(services.QuotaService, log)
 
 	r.Route("/api/v1/quota", func(r chi.Router) {
-		r.Use(middleware.Auth(jwtManager.(*jwt.Manager), cacheInstance))
+		r.Use(middleware.Auth(jwtManager, cacheInstance))
 		r.Get("/limits", quotaHandler.HandleGetLimits)
 	})
 }

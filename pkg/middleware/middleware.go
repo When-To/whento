@@ -72,6 +72,9 @@ func Logger(next http.Handler) http.Handler {
 		// happens inside next.ServeHTTP; reading it from the deferred call is
 		// what makes it available. chi mutates the routing context in place,
 		// so the value is visible through the request we were handed.
+		//
+		//nolint:contextcheck // the closure reads r.Context(); contextcheck cannot
+		// see through a deferred literal and reports it as a detached context.
 		defer func() {
 			logger.FromContext(r.Context()).Info("request",
 				"method", r.Method,
@@ -100,6 +103,7 @@ func routePattern(r *http.Request) string {
 // Recoverer recovers from panics
 func Recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		//nolint:contextcheck // as in Logger: the closure does read r.Context().
 		defer func() {
 			if err := recover(); err != nil {
 				logger.FromContext(r.Context()).Error("panic recovered",

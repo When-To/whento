@@ -267,6 +267,10 @@ func (r *UserRepository) List(ctx context.Context) ([]*models.User, error) {
 		users = append(users, user)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating users: %w", err)
+	}
+
 	return users, nil
 }
 
@@ -291,7 +295,7 @@ func (r *UserRepository) DetermineRoleAtomically(ctx context.Context) (string, e
 	if err != nil {
 		return "", fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Acquire advisory lock (key 1 = first-user registration)
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1)`); err != nil {

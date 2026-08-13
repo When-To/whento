@@ -16,6 +16,12 @@ name: Clean up container images
 # job resolves each retained tag's manifest and treats its children as retained too.
 
 on:
+  # A merged or abandoned pull request's image is dead the moment it closes, so
+  # remove it then rather than leaving it for the weekly sweep. The sweep stays:
+  # it is what catches images whose close event was missed, and the untagged
+  # manifests every re-push leaves behind.
+  pull_request:
+    types: [closed]
   schedule:
     # Mondays, 04:00 UTC — after the week's merges, before anyone needs the registry.
     - cron: '0 4 * * 1'
@@ -26,9 +32,15 @@ on:
         type: boolean
         default: true
 
+# Read-only by default; the one job that deletes package versions asks for what it needs.
 permissions:
-  packages: write
-  pull-requests: read
+  contents: read
+
+# A second run while the first is deleting would work from a stale version list. The
+# schedule is weekly, so waiting is free; cancelling a run mid-deletion is not.
+concurrency:
+  group: cleanup-images
+  cancel-in-progress: false
 
 env:
   # How long a pull request stays closed before its image is removed. Long enough that
@@ -39,12 +51,99 @@ env:
   UNTAGGED_GRACE_DAYS: '2'
 
 jobs:
+  # Deletes exactly one tag — this pull request's — and the per-platform children
+  # of its manifest. No grace period: the sweep's fourteen days exist so a reopened
+  # pull request still finds its image, and reopening fires `pull_request` again,
+  # which rebuilds it.
+  #
+  # A fork's pull request never gets here with anything to delete: building the
+  # image needs `packages: write`, which the fork's token does not carry, so no
+  # PR<n> tag was ever pushed. The job is skipped rather than left to fail.
+  close:
+    name: Remove this pull request's image
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Delete the PR image
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TAG: PR${{ github.event.pull_request.number }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const pkg = context.repo.repo;
+            const tag = process.env.PR_TAG;
+
+            const versions = await github.paginate(
+              github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg,
+              { package_type: 'container', package_name: pkg, org: owner, per_page: 100 }
+            );
+
+            const target = versions.find(v =>
+              (v.metadata?.container?.tags ?? []).includes(tag)
+            );
+            if (!target) {
+              core.info(`No ${tag} image to remove.`);
+              return;
+            }
+
+            // A multi-architecture image is a manifest list whose per-platform children
+            // are untagged versions of their own. Deleting only the parent would orphan
+            // them, which is the leak this workflow exists to stop.
+            const children = new Set();
+            try {
+              const response = await fetch(
+                `https://ghcr.io/v2/${owner}/${pkg}/manifests/${target.name}`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${Buffer.from(process.env.GHCR_TOKEN).toString('base64')}`,
+                    Accept: 'application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json',
+                  },
+                }
+              );
+              if (response.ok) {
+                const manifest = await response.json();
+                for (const entry of manifest.manifests ?? []) children.add(entry.digest);
+              } else {
+                core.warning(`Could not read the manifest for ${tag}: HTTP ${response.status}.`);
+              }
+            } catch (error) {
+              core.warning(`Could not read the manifest for ${tag}: ${error.message}`);
+            }
+
+            const doomed = versions.filter(
+              v => v.id === target.id || (children.has(v.name) && (v.metadata?.container?.tags ?? []).length === 0)
+            );
+
+            for (const version of doomed) {
+              await github.rest.packages.deletePackageVersionForOrg({
+                package_type: 'container',
+                package_name: pkg,
+                org: owner,
+                package_version_id: version.id,
+              });
+              core.info(`Deleted ${version.name}${version.id === target.id ? ` (${tag})` : ' (manifest child)'}`);
+            }
+            core.info(`Removed ${doomed.length} version(s) for ${tag}.`);
+
   cleanup:
     name: Remove images for long-closed pull requests
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Deleting package versions, and reading which pull requests are closed.
+      packages: write
+      pull-requests: read
     steps:
       - name: Delete stale versions
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
           # github-script does not put the token in the environment; the registry API

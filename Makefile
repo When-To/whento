@@ -1,10 +1,11 @@
-.PHONY: dev dev-fullstack dev-backend dev-frontend dev-db dev-app test test-root test-pkg test-coverage build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-build-multiarch docker-test-build docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-clean docs-serve docs-validate keys help hooks format format-go format-frontend format-check format-check-go format-check-frontend
+.PHONY: dev dev-fullstack dev-backend dev-frontend dev-db dev-app test test-root test-pkg test-coverage build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-build-multiarch docker-test-build docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-clean docs-serve docs-validate keys help hooks format format-go format-frontend format-check format-check-go format-check-frontend lint lint-go
 
 # BUILD_TYPE can be 'cloud' or 'selfhosted' (default: selfhosted)
 BUILD_TYPE ?= selfhosted
 
 # Pinned dev tools (keep in sync with .devcontainer/ and .githooks/pre-commit)
 GOIMPORTS_VERSION := v0.48.0
+GOLANGCI_LINT_VERSION := v2.12.2
 
 # Load environment variables from .env file if it exists
 -include .env
@@ -48,6 +49,8 @@ help:
 	@echo "  make format-go        - Format Go files only"
 	@echo "  make format-frontend  - Format frontend files only"
 	@echo "  make format-check     - Check formatting without modifying"
+	@echo "  make lint             - Run golangci-lint (alias for lint-go)"
+	@echo "  make lint-go          - Static analysis of both modules, for both build tags"
 
 # Development
 ensure-dist-placeholder:
@@ -172,6 +175,29 @@ format-check-go:
 		exit 1; \
 	fi
 	@echo "✓ All Go files are properly formatted"
+
+# Static analysis
+#
+# Two dimensions have to be covered, and missing either one means linting code that is
+# not the code that ships:
+#   - two modules: go.work declares the root and pkg/, and `./...` never crosses a
+#     module boundary — same reason test-root/test-pkg are split above.
+#   - two build tags: whole files are selected by `cloud` / `selfhosted`, so one pass
+#     only ever sees one variant.
+# Hence four invocations. golangci-lint *appends* --build-tags to whatever the config
+# declares, which is why .golangci.yml deliberately sets no run.build-tags: passing the
+# tag here would otherwise load both quota variants at once and fail to typecheck.
+lint: lint-go
+
+lint-go:
+	@which golangci-lint > /dev/null || (echo "Error: golangci-lint not installed. Install with: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)" && exit 1)
+	@for tag in selfhosted cloud; do \
+		echo "Linting root module ($$tag)..."; \
+		golangci-lint run --build-tags $$tag ./... || exit 1; \
+		echo "Linting pkg module ($$tag)..."; \
+		(cd pkg && golangci-lint run --config ../.golangci.yml --build-tags $$tag ./...) || exit 1; \
+	done
+	@echo "✓ golangci-lint clean for both modules and both build types"
 
 format-frontend:
 	@echo "Formatting frontend files with prettier..."

@@ -152,6 +152,10 @@ func (r *AvailabilityRepository) GetByParticipantIDWithDateRange(ctx context.Con
 		availabilities = append(availabilities, availability)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating availabilities: %w", err)
+	}
+
 	return availabilities, nil
 }
 
@@ -191,6 +195,10 @@ func (r *AvailabilityRepository) GetByDateRange(ctx context.Context, participant
 			return nil, fmt.Errorf("failed to scan availability: %w", err)
 		}
 		availabilities = append(availabilities, availability)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating availabilities: %w", err)
 	}
 
 	return availabilities, nil
@@ -235,6 +243,10 @@ func (r *AvailabilityRepository) GetByDate(ctx context.Context, calendarID uuid.
 		availabilities = append(availabilities, availability)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating availabilities: %w", err)
+	}
+
 	return availabilities, nil
 }
 
@@ -275,6 +287,10 @@ func (r *AvailabilityRepository) GetByCalendarDateRange(ctx context.Context, cal
 			return nil, fmt.Errorf("failed to scan availability: %w", err)
 		}
 		availabilities = append(availabilities, availability)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating availabilities: %w", err)
 	}
 
 	return availabilities, nil

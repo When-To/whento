@@ -1,33 +1,120 @@
 # WhenTo - Continuous Integration
 # Copyright (C) 2025 WhenTo Contributors
 # SPDX-License-Identifier: BSL-1.1
+#
+# Every third-party action is pinned to a full commit SHA with the tag it came from in
+# the trailing comment. Several jobs here hold `packages: write`, and a moving major tag
+# is a moving target: whoever controls it controls what runs with that token. Dependabot
+# (`chore(ci)` group) bumps the SHA and updates the comment.
 
 name: CI
 
 on:
   workflow_dispatch:
+  # No path filter. The previous `paths-ignore: ['.github/workflows/**']` with a single
+  # `!ci.yml` exception meant a pull request touching only release-selfhosted.yml,
+  # build-cloud.yml, cleanup-images.yml or dependabot.yml ran no checks at all — which
+  # by construction covered every `chore(ci)` Dependabot pull request, since those touch
+  # nothing else.
+  # No base-branch filter either. `branches: [main]` looked harmless while every
+  # pull request targeted main, and silently ran nothing the day one targeted a
+  # feature branch — which is what a stacked series of pull requests is, and what
+  # any long-lived integration branch would be. A pull request is a request to
+  # merge; what it merges into does not change whether the code should be checked.
   pull_request:
-    branches: [main]
-    paths-ignore:
-      - '.github/workflows/**'
-      - '!.github/workflows/ci.yml'
   push:
     branches: [main]
-    paths-ignore:
-      - '.github/workflows/**'
-      - '!.github/workflows/ci.yml'
+
+# Least privilege for every job; the two that need more raise it themselves.
+permissions:
+  contents: read
+
+# Three pushes to a pull request used to start three full pipelines that then raced each
+# other for the same GHCR `PR<n>` tag, so the image you pulled was whichever finished
+# last. Superseded runs are cancelled on pull requests; pushes to main are left alone so
+# the `dev` image and its history stay complete.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GO_VERSION: '1.26'
+  NODE_VERSION: '24'
+  # Must match the version the Dockerfiles install, or migrations are validated with a
+  # different binary from the one that applies them in production.
+  MIGRATE_VERSION: v4.19.1
+  # sha256 of migrate.linux-amd64.tar.gz, from the release's own sha256sum.txt.
+  MIGRATE_SHA256: 2ac648fbd1b127b69ab5a7b33cf96212178f71e22379fc50573630c6f4c7ce18
 
 jobs:
+  # The workflows are code too, and until now nothing checked them. actionlint catches
+  # unknown action inputs, bad `if:` expressions, invalid glob and cron syntax, and runs
+  # shellcheck over every `run:` block.
+  lint-workflows:
+    name: Lint Workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install actionlint
+        run: GOWORK=off go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+
+      - name: Lint workflows
+        run: actionlint -color
+
+  # `make format-check` existed but was never called anywhere: Go formatting was enforced
+  # only by the opt-in .githooks/pre-commit, which `git commit --no-verify` walks past.
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      # Same version as the Makefile and .githooks/pre-commit: goimports output differs
+      # between releases, so a mismatch here would reject correctly formatted code.
+      - name: Install goimports
+        run: |
+          GOWORK=off go install golang.org/x/tools/cmd/goimports@v0.48.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      # format-check-frontend runs prettier through the frontend's own dependencies.
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Check formatting
+        run: make format-check
+
   lint-frontend:
     name: Lint Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: '24'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -60,13 +147,14 @@ jobs:
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: '24'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -79,7 +167,7 @@ jobs:
         run: npm run build
 
       - name: Upload frontend build
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: frontend-dist
           path: frontend/dist
@@ -88,13 +176,14 @@ jobs:
   generate-swagger:
     name: Generate Swagger Docs
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: '1.26'
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Install swag CLI
         run: go install github.com/swaggo/swag/cmd/swag@v1.16.6
@@ -103,15 +192,50 @@ jobs:
         run: swag init -g cmd/main.go -o docs/swagger --parseInternal --generatedTime=false
 
       - name: Upload Swagger docs
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: swagger-docs
           path: docs/swagger
           retention-days: 1
 
+  # golangci-lint over both modules and both build tags — see `lint-go` in the Makefile,
+  # which is the same command a developer runs locally.
+  lint-go:
+    name: Lint Go
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [generate-swagger]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # The linters type-check the packages, so cmd/ needs the generated docs package it
+      # imports and web/embed.go needs something behind its //go:embed.
+      - name: Download Swagger docs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: swagger-docs
+          path: docs/swagger
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install golangci-lint
+        run: |
+          GOWORK=off go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Placeholder frontend build
+        run: make ensure-dist-placeholder
+
+      - name: Lint
+        run: make lint-go
+
   test-backend:
     name: Test Backend
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [build-frontend, generate-swagger]
     services:
       postgres:
@@ -138,24 +262,24 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Download frontend build
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: frontend-dist
           path: web/dist
 
       - name: Download Swagger docs
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: swagger-docs
           path: docs/swagger
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: '1.26'
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Download dependencies
         run: go mod download
@@ -165,48 +289,105 @@ jobs:
       # only place they actually execute, and it has to migrate first.
       - name: Install golang-migrate
         run: |
-          curl -sSL https://github.com/golang-migrate/migrate/releases/download/v4.17.1/migrate.linux-amd64.tar.gz \
-            | tar xvz migrate
+          set -euo pipefail
+          curl -sSLf -o migrate.tar.gz \
+            "https://github.com/golang-migrate/migrate/releases/download/${MIGRATE_VERSION}/migrate.linux-amd64.tar.gz"
+          echo "${MIGRATE_SHA256}  migrate.tar.gz" | sha256sum -c -
+          tar xzf migrate.tar.gz migrate
           sudo mv migrate /usr/local/bin/
+          rm migrate.tar.gz
 
       - name: Apply migrations
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/whento_test?sslmode=disable
         run: make migrate-up BUILD_TYPE=selfhosted
 
-      - name: Run tests
+      - name: Run tests with coverage
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/whento_test?sslmode=disable
           REDIS_URL: redis://localhost:6379
         # go.work has two modules; `./...` never crosses a module boundary, so pkg/
         # needs its own invocation or it is silently untested in CI.
+        #
+        # The package list is filtered because npm vendors a third-party Go package
+        # under frontend/node_modules (flatted). `./...` compiled it, and it showed up
+        # in the coverage total as somebody else's untested code.
         run: |
-          go test -tags selfhosted -race ./...
-          cd pkg && go test -tags selfhosted -race ./...
+          set -euo pipefail
+          mapfile -t packages < <(go list -tags selfhosted ./... | grep -v '/node_modules/')
+          go test -tags selfhosted -race -covermode=atomic -coverprofile=coverage-root.out "${packages[@]}"
+          (cd pkg && go test -tags selfhosted -race -covermode=atomic -coverprofile=../coverage-pkg.out ./...)
+
+      # A ratchet, not a target — the same idea as the thresholds in
+      # frontend/vitest.config.ts. Set just under what the suite reaches today (root
+      # 49.8%, pkg 79.6%, measured with -race and node_modules excluded) so a drop fails
+      # the build without a line or two of noise doing it. Raise them when the next batch
+      # of tests lands; never lower them.
+      - name: Enforce coverage floors
+        env:
+          ROOT_FLOOR: '47'
+          PKG_FLOOR: '78'
+        run: |
+          set -euo pipefail
+          status=0
+          {
+            echo "## Go coverage"
+            echo ""
+            echo "| Module | Coverage | Floor |"
+            echo "|--------|----------|-------|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          check() {
+            name=$1; profile=$2; floor=$3
+            total=$(go tool cover -func="$profile" | awk '/^total:/ { print $NF }' | tr -d '%')
+            echo "| \`$name\` | ${total}% | ${floor}% |" >> "$GITHUB_STEP_SUMMARY"
+            if awk -v t="$total" -v f="$floor" 'BEGIN { exit (t + 0 < f + 0) ? 0 : 1 }'; then
+              echo "::error::$name coverage ${total}% is below the ${floor}% floor"
+              status=1
+            else
+              echo "$name coverage ${total}% (floor ${floor}%)"
+            fi
+          }
+          check root coverage-root.out "$ROOT_FLOOR"
+          check pkg coverage-pkg.out "$PKG_FLOOR"
+          exit $status
+
+      # Coverage profiles hold package paths and hit counts only — no addresses, no
+      # request data, nothing tied to a person.
+      - name: Upload coverage profiles
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: go-coverage
+          path: |
+            coverage-root.out
+            coverage-pkg.out
+          retention-days: 7
+          if-no-files-found: warn
 
   build-check:
     name: Build Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [build-frontend, generate-swagger]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Download frontend build
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: frontend-dist
           path: web/dist
 
       - name: Download Swagger docs
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: swagger-docs
           path: docs/swagger
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: '1.26'
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Build selfhosted
         run: go build -tags selfhosted -o /dev/null ./cmd/
@@ -222,6 +403,9 @@ jobs:
   e2e-backend:
     name: E2E (real backend)
     runs-on: ubuntu-latest
+    # Two health waits of 60 x 2s, plus install and build. Without this the job's ceiling
+    # was the six-hour default.
+    timeout-minutes: 30
     needs: [generate-swagger]
     services:
       postgres:
@@ -256,31 +440,35 @@ jobs:
       RATE_LIMIT_ENABLED: 'false'
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Download Swagger docs
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: swagger-docs
           path: docs/swagger
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: '1.26'
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: '24'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install golang-migrate
         run: |
-          curl -sSL https://github.com/golang-migrate/migrate/releases/download/v4.17.1/migrate.linux-amd64.tar.gz \
-            | tar xvz migrate
+          set -euo pipefail
+          curl -sSLf -o migrate.tar.gz \
+            "https://github.com/golang-migrate/migrate/releases/download/${MIGRATE_VERSION}/migrate.linux-amd64.tar.gz"
+          echo "${MIGRATE_SHA256}  migrate.tar.gz" | sha256sum -c -
+          tar xzf migrate.tar.gz migrate
           sudo mv migrate /usr/local/bin/
+          rm migrate.tar.gz
 
       - name: Apply migrations
         run: make migrate-up BUILD_TYPE=selfhosted
@@ -373,7 +561,7 @@ jobs:
 
       - name: Upload failure artefacts
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: e2e-backend-traces
           # Traces and screenshots for the failing cases. The seeded account file lives
@@ -384,6 +572,7 @@ jobs:
   build-dev-image:
     name: Build Dev Docker Image
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Dependabot pull requests run with a read-only GITHUB_TOKEN whatever the
     # permissions block says, so pushing to ghcr would always fail. Skip the
     # job for them rather than let a dependency bump show a red CI.
@@ -392,31 +581,32 @@ jobs:
       && github.actor != 'dependabot[bot]'
     needs: [build-frontend, generate-swagger, test-backend]
     permissions:
+      contents: read
       packages: write
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Download frontend build
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: frontend-dist
           path: frontend/dist
 
       - name: Download Swagger docs
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: swagger-docs
           path: docs/swagger
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -424,7 +614,7 @@ jobs:
 
       - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # An image built for a pull request is tagged PR<number>, so that several open
@@ -444,16 +634,72 @@ jobs:
             org.opencontainers.image.vendor=WhenTo Contributors
             org.opencontainers.image.licenses=BSL-1.1
 
+      # Built and scanned before it is pushed, so a vulnerable image never reaches the
+      # registry for someone to pull. The push below reuses the same layers out of the
+      # gha cache, so this costs a load, not a second build.
+      - name: Build image for scanning
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: build/selfhosted/Dockerfile
+          push: false
+          load: true
+          tags: whento-scan:candidate
+          # Baked into the binary as main.Version, so `whento` reports the PR it came
+          # from rather than an anonymous "dev".
+          build-args: |
+            VERSION=${{ github.event_name == 'pull_request' && format('PR{0}', github.event.pull_request.number) || 'dev' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ignore-unfixed, because an advisory with no fixed version available is not
+      # something this build can act on; it would only teach people to ignore the job.
+      # Findings stay in the log — no SARIF upload, nothing to store.
+      #
+      # The bundled golang-migrate binary is skipped *here* and scanned separately
+      # below. It is an upstream release artefact, not something this build
+      # compiles: at v4.19.1 — the latest — it embeds pgx 5.5.4, go-jose 4.0.5 and
+      # x/crypto 0.45.0, which is 38 advisories this repository cannot patch. Our
+      # own modules are on pgx 5.10.0 and x/crypto 0.55.0, app/whento scans clean,
+      # and so does the Alpine base.
+      #
+      # Blocking on it would mean the gate is permanently red for a reason no
+      # commit here can address, which is how a security job stops being read.
+      # Blocking on everything else keeps it meaningful. The real fix is upstream,
+      # or removing migrate from the runtime image and running migrations as a
+      # separate step — both larger decisions than a scanner flag.
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: whento-scan:candidate
+          format: table
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          skip-files: usr/local/bin/migrate
+          exit-code: '1'
+
+      # Reported, never blocking, so the upstream debt stays visible and someone
+      # can see the day it shrinks — or the day it gets worse.
+      - name: Scan the bundled migrate binary (informational)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: whento-scan:candidate
+          format: table
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'
+
       - name: Build and push Docker image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: build/selfhosted/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Baked into the binary as main.Version, so `whento` reports the PR it came
-          # from rather than an anonymous "dev".
           build-args: |
             VERSION=${{ github.event_name == 'pull_request' && format('PR{0}', github.event.pull_request.number) || 'dev' }}
           cache-from: type=gha

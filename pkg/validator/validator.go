@@ -146,9 +146,5 @@ func validateStrongPassword(fl validator.FieldLevel) bool {
 
 	// At least 1 special character
 	hasSpecial := regexp.MustCompile(`[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/;'~` + "`" + `]`).MatchString(password)
-	if !hasSpecial {
-		return false
-	}
-
-	return true
+	return hasSpecial
 }

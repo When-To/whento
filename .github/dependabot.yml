@@ -22,6 +22,10 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: 'chore(deps)'
+    # Labels are what the pull request list is filtered by; without them every
+    # Dependabot pull request looks like every other one. Dependabot creates a
+    # label it does not find, so no repository setup is needed first.
+    labels: ['dependencies', 'go']
     # The old workflow ran `go get -u ./...`, which also moves indirect
     # dependencies. Dependabot only tracks direct ones by default, so ask for
     # everything to keep the same coverage. The group below folds it all into
@@ -45,6 +49,12 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: 'chore(deps)'
+    labels: ['dependencies', 'frontend']
+    # The default is `auto`, which leaves the choice to Dependabot. Be explicit
+    # instead: bump the range declared in package.json to the version that was
+    # actually tested, rather than only touching package-lock.json. A fresh
+    # `npm install` resolves against the range, so the two must not drift.
+    versioning-strategy: increase
     groups:
       frontend:
         applies-to: version-updates
@@ -66,6 +76,7 @@ updates:
       day: monday
     commit-message:
       prefix: 'chore(ci)'
+    labels: ['dependencies', 'ci']
     groups:
       actions:
         patterns: ['*']
@@ -84,6 +95,7 @@ updates:
       day: monday
     commit-message:
       prefix: 'chore(deps)'
+    labels: ['dependencies', 'docker']
     ignore:
       # Node 26 is Current, not LTS. Stay on 24.
       - dependency-name: node
@@ -97,6 +109,7 @@ updates:
       day: monday
     commit-message:
       prefix: 'chore(deps)'
+    labels: ['dependencies', 'docker']
     ignore:
       # A Postgres major upgrade cannot read the existing data volume, so it
       # needs a dump/restore and a release note for self-hosted users. Redis
@@ -105,3 +118,22 @@ updates:
         update-types: [version-update:semver-major]
       - dependency-name: redis
         update-types: [version-update:semver-major]
+
+  # ── Dev container features ──────────────────────────────────────────────
+  # devcontainer.json pins ghcr.io/devcontainers/features/* by major version
+  # only, and devcontainer-lock.json records what that resolved to. Nothing was
+  # updating either, so the lockfile drifted away from every other pinned
+  # toolchain in the repository. The base image itself is covered by the docker
+  # ecosystem above, which also watches /.devcontainer.
+  # The directory is the repository root on purpose: the devcontainers fetcher
+  # discovers .devcontainer.json, .devcontainer/devcontainer.json and
+  # .devcontainer/*/devcontainer.json relative to it. Pointing it at
+  # /.devcontainer would make it look one level too deep and find nothing.
+  - package-ecosystem: devcontainers
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: 'chore(deps)'
+    labels: ['dependencies', 'devcontainer']

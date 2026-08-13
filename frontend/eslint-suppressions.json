@@ -1,0 +1,362 @@
+{
+  "src/api/client.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "src/api/mfa.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/api/passkey.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "src/components/CalendarSidebar.vue": {
+    "vuejs-accessibility/click-events-have-key-events": {
+      "count": 1
+    },
+    "vuejs-accessibility/no-static-element-interactions": {
+      "count": 1
+    }
+  },
+  "src/components/ForgotPasswordModal.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "vuejs-accessibility/click-events-have-key-events": {
+      "count": 1
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 1
+    },
+    "vuejs-accessibility/no-static-element-interactions": {
+      "count": 1
+    }
+  },
+  "src/components/NotificationSettings.vue": {
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 5
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 9
+    }
+  },
+  "src/components/ParticipantDetailsPopup.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 2
+    },
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 1
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 3
+    }
+  },
+  "src/components/QuotaUsage.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/components/TimeSelect.vue": {
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 1
+    },
+    "vuejs-accessibility/mouse-events-have-key-events": {
+      "count": 1
+    }
+  },
+  "src/components/TimezoneSelector.vue": {
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 1
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 1
+    }
+  },
+  "src/components/calendar/CalendarListView.vue": {
+    "vuejs-accessibility/no-static-element-interactions": {
+      "count": 1
+    }
+  },
+  "src/components/calendar/CalendarMonthView.vue": {
+    "vuejs-accessibility/interactive-supports-focus": {
+      "count": 1
+    }
+  },
+  "src/components/calendar/CalendarWeekControls.vue": {
+    "vuejs-accessibility/label-has-for": {
+      "count": 3
+    }
+  },
+  "src/components/calendar/CalendarWeekView.vue": {
+    "vuejs-accessibility/interactive-supports-focus": {
+      "count": 1
+    }
+  },
+  "src/components/settings/BackupCodesModal.vue": {
+    "vuejs-accessibility/click-events-have-key-events": {
+      "count": 1
+    },
+    "vuejs-accessibility/no-static-element-interactions": {
+      "count": 1
+    }
+  },
+  "src/components/settings/MFAQRCodeModal.vue": {
+    "vuejs-accessibility/click-events-have-key-events": {
+      "count": 1
+    },
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 1
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 1
+    },
+    "vuejs-accessibility/no-static-element-interactions": {
+      "count": 1
+    }
+  },
+  "src/components/settings/MFASetup.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 5
+    }
+  },
+  "src/components/settings/PasskeyItem.vue": {
+    "vuejs-accessibility/no-autofocus": {
+      "count": 1
+    }
+  },
+  "src/components/settings/PasskeyManager.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 4
+    }
+  },
+  "src/components/settings/ProfileTab.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 3
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 3
+    }
+  },
+  "src/components/settings/SecurityTab.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 3
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 3
+    }
+  },
+  "src/stores/auth.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/stores/calendar.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    }
+  },
+  "src/stores/calendarHistory.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/stores/unifiedFeed.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/utils/calendar/holidays.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/utils/errorTranslator.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/views/Admin.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "no-console": {
+      "count": 5
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 1
+    }
+  },
+  "src/views/AdminUserCalendars.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    },
+    "vuejs-accessibility/anchor-has-content": {
+      "count": 1
+    }
+  },
+  "src/views/CalendarCreate.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "no-console": {
+      "count": 1
+    },
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 8
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 13
+    }
+  },
+  "src/views/CalendarPublic.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 2
+    }
+  },
+  "src/views/CalendarSettings.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 33
+    },
+    "vuejs-accessibility/click-events-have-key-events": {
+      "count": 1
+    },
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 10
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 15
+    },
+    "vuejs-accessibility/no-static-element-interactions": {
+      "count": 1
+    }
+  },
+  "src/views/Dashboard.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "no-console": {
+      "count": 3
+    },
+    "vuejs-accessibility/click-events-have-key-events": {
+      "count": 1
+    },
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 1
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 1
+    },
+    "vuejs-accessibility/no-static-element-interactions": {
+      "count": 1
+    }
+  },
+  "src/views/Login.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "no-console": {
+      "count": 1
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 2
+    }
+  },
+  "src/views/MagicLinkVerify.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/views/ParticipantView.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 17
+    },
+    "no-console": {
+      "count": 3
+    },
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 13
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 25
+    }
+  },
+  "src/views/Register.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 3
+    }
+  },
+  "src/views/ResetPassword.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 2
+    }
+  },
+  "src/views/Settings.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/views/VerifyEmail.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/views/VerifyMFA.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    },
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 1
+    },
+    "vuejs-accessibility/no-autofocus": {
+      "count": 1
+    }
+  },
+  "src/views/VerifyParticipantEmail.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  }
+}

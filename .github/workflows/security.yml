@@ -1,0 +1,170 @@
+# WhenTo - Security scanning
+# Copyright (C) 2025 WhenTo Contributors
+# SPDX-License-Identifier: BSL-1.1
+#
+# Static and dependency-side security checks. Image scanning lives with the jobs that
+# build images (ci.yml, release-selfhosted.yml, build-cloud.yml), because an image is
+# only worth scanning just before it is pushed.
+#
+# Nothing here uploads anything derived from user data: govulncheck and CodeQL read
+# source, dependency-review reads the manifest diff of the pull request.
+
+name: Security
+
+on:
+  workflow_dispatch:
+  # No base-branch filter: a stacked pull request targets a feature branch, and
+  # `branches: [main]` would skip every scan on it. See the same note in ci.yml.
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Tuesdays, 05:00 UTC. Advisories land against code that has not changed, so a
+    # scheduled run is the only thing that catches a dependency that went bad overnight.
+    - cron: '0 5 * * 2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GO_VERSION: '1.26'
+
+jobs:
+  # The cheapest useful Go check there is: it reports only vulnerabilities that are
+  # reachable from this code, so it stays quiet unless something needs doing.
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      # Reachability analysis type-checks the packages, so cmd/ needs its generated docs
+      # package and web/embed.go needs something behind its //go:embed.
+      - name: Install swag CLI
+        run: go install github.com/swaggo/swag/cmd/swag@v1.16.6
+
+      - name: Generate Swagger docs
+        run: swag init -g cmd/main.go -o docs/swagger --parseInternal --generatedTime=false
+
+      - name: Placeholder frontend build
+        run: make ensure-dist-placeholder
+
+      - name: Install govulncheck
+        run: |
+          GOWORK=off go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      # Both build tags: whole files are excluded by the one not being built, and a
+      # vulnerable call in a cloud-only file is invisible to a selfhosted scan.
+      - name: Scan root module (selfhosted)
+        run: govulncheck -tags selfhosted ./...
+
+      - name: Scan root module (cloud)
+        run: govulncheck -tags cloud ./...
+
+      # go.work has two modules and `./...` never crosses a module boundary; pkg/ holds
+      # the JWT, participant-token and middleware code, so it is the last thing that
+      # should go unscanned.
+      - name: Scan pkg module
+        working-directory: pkg
+        run: govulncheck ./...
+
+  # Fails a pull request that introduces a dependency with a known vulnerability, before
+  # it is merged rather than after the next scheduled scan.
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    # Non-blocking until the dependency graph is turned on for this repository.
+    # The action fails with "Dependency review is not supported on this repository",
+    # and both /dependency-graph/sbom and /dependency-graph/compare answer 404 — the
+    # graph is off at the When-To organisation level, and no API toggles it. That is
+    # a settings change, not something a commit can fix, and a check that can never
+    # pass is worse than no check: it teaches people to ignore red marks, including
+    # the ones that matter. The job still runs and its output is still readable.
+    #
+    # Enable the graph at /settings/security_analysis, then delete this line so a
+    # vulnerable dependency blocks the merge again.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          # Vulnerabilities only. License review is deliberately not enabled: this
+          # project ships under BSL-1.1, which no allow-list of OSI identifiers
+          # describes, and the resulting noise would train people to ignore the job.
+          fail-on-severity: high
+          license-check: false
+
+  # Free on a public repository. Go is built manually because autobuild would run a
+  # bare `go build ./...`, which under this project's build tags compiles neither
+  # variant honestly and fails on the generated packages it cannot find.
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: go
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Prepare generated packages
+        if: matrix.language == 'go'
+        run: |
+          go install github.com/swaggo/swag/cmd/swag@v1.16.6
+          swag init -g cmd/main.go -o docs/swagger --parseInternal --generatedTime=false
+          make ensure-dist-placeholder
+
+      # Both tags, so the files each one excludes are still analysed. The two builds do
+      # not share a build cache entry, so the extractor sees both compilations.
+      - name: Build Go
+        if: matrix.language == 'go'
+        # The package list is filtered because npm vendors a third-party Go package under
+        # frontend/node_modules, which is nobody's code to answer for here.
+        run: |
+          set -euo pipefail
+          mapfile -t cloud_packages < <(go list -tags cloud ./... | grep -v '/node_modules/')
+          mapfile -t selfhosted_packages < <(go list -tags selfhosted ./... | grep -v '/node_modules/')
+          go build -tags cloud "${cloud_packages[@]}"
+          go build -tags selfhosted "${selfhosted_packages[@]}"
+          (cd pkg && go build ./...)
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        with:
+          category: /language:${{ matrix.language }}

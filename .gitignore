@@ -17,6 +17,9 @@
 !go.sum
 !go.work
 
+# Linting
+!.golangci.yml
+
 # Build & Task automation
 !Makefile
 

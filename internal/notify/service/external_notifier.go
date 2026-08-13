@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -54,10 +55,10 @@ func NewExternalNotifier(logger *slog.Logger) *ExternalNotifier {
 			Transport: safeTransport,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 3 {
-					return fmt.Errorf("too many redirects")
+					return errors.New("too many redirects")
 				}
 				// Re-validate redirect target
-				if err := validateWebhookURL(req.URL.String()); err != nil {
+				if err := validateWebhookURL(req.Context(), req.URL.String()); err != nil {
 					return err
 				}
 				return nil
@@ -102,7 +103,10 @@ func mustParseCIDR(s string) *net.IPNet {
 
 // validateWebhookURL checks that a webhook URL uses https, points to a non-private host,
 // and resolves to a non-private IP (anti DNS-rebinding).
-func validateWebhookURL(rawURL string) error {
+//
+// The context matters: this runs on the request path and performs a DNS lookup, so a
+// client that gives up, or a shutting-down server, must be able to cut it short.
+func validateWebhookURL(ctx context.Context, rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return fmt.Errorf("invalid webhook URL: %w", err)
@@ -125,13 +129,13 @@ func validateWebhookURL(rawURL string) error {
 		}
 	} else {
 		// Resolve DNS and verify all IPs are public (anti DNS-rebinding)
-		ips, err := net.LookupIP(host)
+		addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 		if err != nil {
 			return fmt.Errorf("webhook URL hostname %q could not be resolved: %w", host, err)
 		}
-		for _, ip := range ips {
-			if isPrivateIP(ip) {
-				return fmt.Errorf("webhook URL hostname %q resolves to private IP %s", host, ip)
+		for _, addr := range addrs {
+			if isPrivateIP(addr.IP) {
+				return fmt.Errorf("webhook URL hostname %q resolves to private IP %s", host, addr.IP)
 			}
 		}
 	}
@@ -139,29 +143,29 @@ func validateWebhookURL(rawURL string) error {
 }
 
 // ValidateWebhookURL is the exported version for use by handlers.
-func ValidateWebhookURL(rawURL string) error {
-	return validateWebhookURL(rawURL)
+func ValidateWebhookURL(ctx context.Context, rawURL string) error {
+	return validateWebhookURL(ctx, rawURL)
 }
 
 // ValidateDiscordWebhookURL validates that the URL is a valid Discord webhook URL.
-func ValidateDiscordWebhookURL(rawURL string) error {
-	if err := validateWebhookURL(rawURL); err != nil {
+func ValidateDiscordWebhookURL(ctx context.Context, rawURL string) error {
+	if err := validateWebhookURL(ctx, rawURL); err != nil {
 		return err
 	}
 	if !strings.HasPrefix(rawURL, "https://discord.com/api/webhooks/") &&
 		!strings.HasPrefix(rawURL, "https://discordapp.com/api/webhooks/") {
-		return fmt.Errorf("Discord webhook URL must start with https://discord.com/api/webhooks/")
+		return errors.New("webhook URL must start with https://discord.com/api/webhooks/")
 	}
 	return nil
 }
 
 // ValidateSlackWebhookURL validates that the URL is a valid Slack webhook URL.
-func ValidateSlackWebhookURL(rawURL string) error {
-	if err := validateWebhookURL(rawURL); err != nil {
+func ValidateSlackWebhookURL(ctx context.Context, rawURL string) error {
+	if err := validateWebhookURL(ctx, rawURL); err != nil {
 		return err
 	}
 	if !strings.HasPrefix(rawURL, "https://hooks.slack.com/") {
-		return fmt.Errorf("Slack webhook URL must start with https://hooks.slack.com/")
+		return errors.New("webhook URL must start with https://hooks.slack.com/")
 	}
 	return nil
 }
@@ -215,7 +219,7 @@ func (e *ExternalNotifier) SendDiscord(
 	if err != nil {
 		return fmt.Errorf("failed to send Discord notification: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("discord webhook returned status %d", resp.StatusCode)
@@ -264,7 +268,7 @@ func (e *ExternalNotifier) SendSlack(
 	if err != nil {
 		return fmt.Errorf("failed to send Slack notification: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("slack webhook returned status %d", resp.StatusCode)
@@ -315,7 +319,7 @@ func (e *ExternalNotifier) SendTelegram(
 	if err != nil {
 		return fmt.Errorf("failed to send Telegram notification: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("telegram API returned status %d", resp.StatusCode)

@@ -97,7 +97,14 @@ func (s *PasswordResetService) RequestPasswordReset(ctx context.Context, req *mo
 	return nil
 }
 
-// processPasswordReset handles the actual password reset logic in background
+// processPasswordReset handles the actual password reset logic in background.
+//
+// It deliberately does not inherit the request context. RequestPasswordReset returns
+// as soon as this goroutine is started, so the request context is cancelled almost
+// immediately — inheriting it would abort the lookup, the token write and the email.
+// The work is bounded by its own timeout instead.
+//
+//nolint:contextcheck // detached on purpose, see above.
 func (s *PasswordResetService) processPasswordReset(email string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

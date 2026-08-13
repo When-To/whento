@@ -1,0 +1,18 @@
+# Build output and generated run artefacts
+dist/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+node_modules/
+
+# Machine-written: reformatting these only creates churn, since the tool that
+# owns them rewrites them in its own style on the next run.
+package-lock.json
+eslint-suppressions.json
+
+# The SEO entrypoint. Prettier only wants to rewrap its meta tags, and reflowing
+# the description/keywords content by hand-editing risk is not worth it here.
+# Excluded deliberately, so that `format:check` covering everything else is not
+# quietly leaving a file behind.
+index.html

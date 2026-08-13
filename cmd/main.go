@@ -155,7 +155,7 @@ func main() {
 		log.Warn("Failed to connect to Redis - running without cache", "error", err)
 		redisClient = nil
 	} else {
-		defer database.CloseRedis(redisClient)
+		defer func() { _ = database.CloseRedis(redisClient) }()
 		log.Info("Connected to Redis - cache enabled")
 	}
 

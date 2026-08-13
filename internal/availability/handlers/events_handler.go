@@ -116,7 +116,10 @@ func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 
-	fmt.Fprintf(w, "retry: %d\n\n", retryHint.Milliseconds())
+	if _, err := fmt.Fprintf(w, "retry: %d\n\n", retryHint.Milliseconds()); err != nil {
+		log.Debug("events: stream write failed", "token", token, "error", err)
+		return
+	}
 	flusher.Flush()
 
 	interval := h.heartbeat

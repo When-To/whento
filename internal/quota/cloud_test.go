@@ -202,8 +202,11 @@ func TestCloudQuotaLockKeyIsPerUser(t *testing.T) {
 	alice := uuid.MustParse("7fbd281f-d193-42a3-8b75-520421a5ff3b")
 	bob := uuid.MustParse("1c0f7a52-9b3e-4d61-8a77-2f5c9e0d1b84")
 
-	if service.QuotaLockKey(alice) != service.QuotaLockKey(alice) {
-		t.Error("the same user produced two different lock keys")
+	// Two separate calls, kept in variables so the assertion is a comparison of two
+	// values rather than of two identical expressions.
+	first, second := service.QuotaLockKey(alice), service.QuotaLockKey(alice)
+	if first != second {
+		t.Errorf("the same user produced two different lock keys: %#x and %#x", first, second)
 	}
 	if service.QuotaLockKey(alice) == service.QuotaLockKey(bob) {
 		t.Error("two different users collided on the same lock key")

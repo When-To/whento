@@ -163,13 +163,13 @@ func (h *NotifyConfigHandler) UpdateConfig(w http.ResponseWriter, r *http.Reques
 
 	// Validate webhook URLs against SSRF — always validate even when channel is disabled
 	if req.Config.Channels.Discord.WebhookURL != "" {
-		if err := notifyService.ValidateDiscordWebhookURL(req.Config.Channels.Discord.WebhookURL); err != nil {
+		if err := notifyService.ValidateDiscordWebhookURL(ctx, req.Config.Channels.Discord.WebhookURL); err != nil {
 			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid Discord webhook URL: "+err.Error())
 			return
 		}
 	}
 	if req.Config.Channels.Slack.WebhookURL != "" {
-		if err := notifyService.ValidateSlackWebhookURL(req.Config.Channels.Slack.WebhookURL); err != nil {
+		if err := notifyService.ValidateSlackWebhookURL(ctx, req.Config.Channels.Slack.WebhookURL); err != nil {
 			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid Slack webhook URL: "+err.Error())
 			return
 		}
@@ -214,5 +214,9 @@ func (h *NotifyConfigHandler) UpdateConfig(w http.ResponseWriter, r *http.Reques
 
 	h.logger.Info("Notification config updated", "calendar_id", cid, "enabled", req.Config.Enabled, "notify_on_threshold", req.Config.Enabled)
 
+	// The request and response types are the same shape today, but they are separate
+	// halves of the API contract and are meant to be able to drift apart; building the
+	// response from req.Config keeps that seam explicit.
+	//nolint:staticcheck // S1016: deliberate, see above.
 	httputil.JSON(w, http.StatusOK, models.NotifyConfigResponse{Config: req.Config})
 }

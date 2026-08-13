@@ -7,8 +7,6 @@ package cache
 import (
 	"context"
 	"time"
-
-	"github.com/redis/go-redis/v9"
 )
 
 // Default TTLs for different types of data
@@ -30,10 +28,8 @@ func GetOrSet(ctx context.Context, c Cache, key string, dest interface{}, ttl ti
 		return nil // Cache hit
 	}
 
-	// If it's not a cache miss error, return the error
-	if err != redis.Nil {
-		// Log the error but continue to fetch from source
-	}
+	// Any error at all — a plain miss (redis.Nil) or a backend failure — falls through
+	// to the source. The cache is an optimisation, never the authority.
 
 	// Cache miss or error - fetch from source
 	value, err := fetchFn()
@@ -44,16 +40,11 @@ func GetOrSet(ctx context.Context, c Cache, key string, dest interface{}, ttl ti
 	// Store in cache (ignore cache errors)
 	_ = c.Set(ctx, key, value, ttl)
 
-	// Copy the fetched value to dest
-	// Since we're using json marshaling in cache, we need to handle the type assertion
-	if v, ok := value.(interface{}); ok {
-		// Use type switch or reflection if needed
-		// For now, we'll assume the fetchFn returns the correct type
-		// This is a simplified version - in production you might want more robust type handling
-		switch destPtr := dest.(type) {
-		case *interface{}:
-			*destPtr = v
-		}
+	// Copy the fetched value to dest. Only *interface{} destinations are handled; a
+	// concretely typed dest keeps whatever the cache read left in it, which is why
+	// GetWithFallback below is the generic — and preferable — form.
+	if destPtr, ok := dest.(*interface{}); ok {
+		*destPtr = value
 	}
 
 	return nil
@@ -99,10 +90,8 @@ func GetWithFallback[T any](ctx context.Context, c Cache, key string, ttl time.D
 		return result, nil // Cache hit
 	}
 
-	// If it's not a cache miss, log but continue
-	if err != redis.Nil {
-		// Could log here
-	}
+	// As in GetOrSet: a miss and a backend failure are treated the same way, because
+	// either way the answer has to come from the source.
 
 	// Cache miss - fetch from source
 	result, err = fallbackFn()
