@@ -86,6 +86,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: github.event_name == 'pull_request'
+    # Non-blocking until the dependency graph is turned on for this repository.
+    # The action fails with "Dependency review is not supported on this repository",
+    # and both /dependency-graph/sbom and /dependency-graph/compare answer 404 — the
+    # graph is off at the When-To organisation level, and no API toggles it. That is
+    # a settings change, not something a commit can fix, and a check that can never
+    # pass is worse than no check: it teaches people to ignore red marks, including
+    # the ones that matter. The job still runs and its output is still readable.
+    #
+    # Enable the graph at /settings/security_analysis, then delete this line so a
+    # vulnerable dependency blocks the merge again.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
