@@ -13,8 +13,9 @@ name: Security
 
 on:
   workflow_dispatch:
+  # No base-branch filter: a stacked pull request targets a feature branch, and
+  # `branches: [main]` would skip every scan on it. See the same note in ci.yml.
   pull_request:
-    branches: [main]
   push:
     branches: [main]
   schedule:

@@ -16,8 +16,12 @@ on:
   # build-cloud.yml, cleanup-images.yml or dependabot.yml ran no checks at all — which
   # by construction covered every `chore(ci)` Dependabot pull request, since those touch
   # nothing else.
+  # No base-branch filter either. `branches: [main]` looked harmless while every
+  # pull request targeted main, and silently ran nothing the day one targeted a
+  # feature branch — which is what a stacked series of pull requests is, and what
+  # any long-lived integration branch would be. A pull request is a request to
+  # merge; what it merges into does not change whether the code should be checked.
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
