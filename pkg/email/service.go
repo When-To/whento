@@ -9,7 +9,9 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -114,26 +116,11 @@ func (s *Service) SendContext(ctx context.Context, email Email) error {
 		return fmt.Errorf("SMTP host not configured")
 	}
 
-	// Build message
-	from := s.buildFromHeader()
-	to := strings.Join(email.To, ", ")
-
-	var contentType string
-	if email.HTML {
-		contentType = "text/html; charset=UTF-8"
-	} else {
-		contentType = "text/plain; charset=UTF-8"
+	message, err := s.buildMessage(email)
+	if err != nil {
+		return err
 	}
-
-	message := []byte(
-		"From: " + from + "\r\n" +
-			"To: " + to + "\r\n" +
-			"Subject: " + email.Subject + "\r\n" +
-			"MIME-Version: 1.0\r\n" +
-			"Content-Type: " + contentType + "\r\n" +
-			"\r\n" +
-			email.Body + "\r\n",
-	)
+	to := strings.Join(email.To, ", ")
 
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
@@ -159,8 +146,7 @@ func (s *Service) SendContext(ctx context.Context, email Email) error {
 	// count still says whether a failure hit one person or a batch.
 	recipients := pkglog.Fingerprint(to)
 
-	err := s.sendWithTLS(ctx, addr, auth, s.fromAddress, email.To, message)
-	if err != nil {
+	if err := s.sendWithTLS(ctx, addr, auth, s.fromAddress, email.To, message); err != nil {
 		s.logger.Error("Failed to send email",
 			slog.String("error", err.Error()),
 			slog.String("recipient_ref", recipients),
@@ -265,12 +251,95 @@ func (s *Service) dial(ctx context.Context, addr string) (net.Conn, error) {
 	return dialer.DialContext(ctx, "tcp", addr)
 }
 
-// buildFromHeader builds the From header with optional name
-func (s *Service) buildFromHeader() string {
-	if s.fromName != "" {
-		return fmt.Sprintf("%s <%s>", s.fromName, s.fromAddress)
+// buildMessage assembles the RFC 5322 message handed to the SMTP DATA command.
+//
+// This is the one place in the codebase that writes a mail header, and it owns their
+// safety rather than trusting its callers to have earned it. net/smtp already refuses
+// CR or LF in the envelope — Mail and Rcpt run every line through validateLine — and
+// the DotWriter behind Data protects the body, but nothing protected the header block:
+// a newline in a subject or a recipient ended it early and let the rest of the value
+// become headers of its own, a Bcc among them.
+//
+// Today no caller can reach that: subjects are locale-file constants and addresses are
+// validated at the edge. That is the problem. The property lived in struct tags spread
+// across three domains, so the first personalised subject — "New availability for " +
+// calendar.Name — would have made it exploitable with nothing to catch it. Now the sink
+// enforces it, and a caller that tries gets an error instead of a mail.
+func (s *Service) buildMessage(email Email) ([]byte, error) {
+	from, err := s.buildFromHeader()
+	if err != nil {
+		return nil, err
 	}
-	return s.fromAddress
+
+	if len(email.To) == 0 {
+		return nil, fmt.Errorf("smtp: no recipient")
+	}
+
+	recipients := make([]string, 0, len(email.To))
+	for _, address := range email.To {
+		parsed, err := mail.ParseAddress(address)
+		if err != nil {
+			return nil, fmt.Errorf("smtp: invalid recipient address: %w", err)
+		}
+		recipients = append(recipients, parsed.String())
+	}
+
+	subject, err := encodeHeaderValue(email.Subject)
+	if err != nil {
+		return nil, fmt.Errorf("smtp: invalid subject: %w", err)
+	}
+
+	contentType := "text/plain; charset=UTF-8"
+	if email.HTML {
+		contentType = "text/html; charset=UTF-8"
+	}
+
+	message := "From: " + from + "\r\n" +
+		"To: " + strings.Join(recipients, ", ") + "\r\n" +
+		"Subject: " + subject + "\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: " + contentType + "\r\n" +
+		"\r\n" +
+		email.Body + "\r\n"
+
+	return []byte(message), nil
+}
+
+// encodeHeaderValue rejects a value that would break out of its header, and encodes
+// what is left per RFC 2047 when it is not plain ASCII.
+//
+// The encoding is not only hygiene: the French locale subjects are full of accented
+// characters ("Vérifiez votre adresse email WhenTo") and went out as raw UTF-8 in a
+// header, which a fair share of mail clients render as mojibake. QEncoding leaves pure
+// ASCII untouched, so the English subjects are byte-for-byte what they were.
+func encodeHeaderValue(value string) (string, error) {
+	if strings.ContainsAny(value, "\r\n") {
+		return "", fmt.Errorf("a header value must not contain CR or LF")
+	}
+
+	return mime.QEncoding.Encode("utf-8", value), nil
+}
+
+// buildFromHeader builds the From header with optional name.
+//
+// mail.Address.String does the quoting and RFC 2047 encoding that the previous
+// fmt.Sprintf did not: a display name holding a comma, a quote or an accent used to
+// produce a malformed From header.
+func (s *Service) buildFromHeader() (string, error) {
+	address, err := mail.ParseAddress(s.fromAddress)
+	if err != nil {
+		return "", fmt.Errorf("smtp: invalid from address: %w", err)
+	}
+
+	if s.fromName == "" {
+		return address.String(), nil
+	}
+
+	if strings.ContainsAny(s.fromName, "\r\n") {
+		return "", fmt.Errorf("smtp: from name must not contain CR or LF")
+	}
+
+	return (&mail.Address{Name: s.fromName, Address: address.Address}).String(), nil
 }
 
 // IsConfigured returns true if SMTP is configured
