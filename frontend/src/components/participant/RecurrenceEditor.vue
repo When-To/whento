@@ -15,34 +15,42 @@
       </h3>
       <div class="space-y-3">
         <div>
-          <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-            {{ t('availability.dayOfWeek') }}
+          <label for="recurrence-day-of-week" class="block">
+            <span class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+              {{ t('availability.dayOfWeek') }}
+            </span>
+            <select
+              id="recurrence-day-of-week"
+              v-model.number="newRecurrence.day_of_week"
+              class="input text-sm"
+            >
+              <option v-for="day in weekDaysOptions" :key="day.value" :value="day.value">
+                {{ day.label }}
+              </option>
+            </select>
           </label>
-          <select v-model.number="newRecurrence.day_of_week" class="input text-sm">
-            <option v-for="day in weekDaysOptions" :key="day.value" :value="day.value">
-              {{ day.label }}
-            </option>
-          </select>
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+            <span class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
               {{ t('availability.startTime') }}
-            </label>
+            </span>
             <TimeSelect
               v-model="newRecurrence.start_time"
               class="text-sm"
+              :aria-label="t('availability.startTime')"
               :min="newRecurrenceMinTime"
               :max="newRecurrenceStartTimeMax"
             />
           </div>
           <div>
-            <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+            <span class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
               {{ t('availability.endTime') }}
-            </label>
+            </span>
             <TimeSelect
               v-model="newRecurrence.end_time"
               class="text-sm"
+              :aria-label="t('availability.endTime')"
               :min="newRecurrenceEndTimeMin"
               :max="newRecurrenceMaxTime"
             />
@@ -50,28 +58,46 @@
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-              {{ t('availability.startDate') }}
+            <label for="recurrence-start-date" class="block">
+              <span class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+                {{ t('availability.startDate') }}
+              </span>
+              <input
+                id="recurrence-start-date"
+                v-model="newRecurrence.start_date"
+                type="date"
+                class="input text-sm"
+                required
+              />
             </label>
-            <input v-model="newRecurrence.start_date" type="date" class="input text-sm" required />
           </div>
           <div>
-            <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-              {{ t('availability.endDate') }}
+            <label for="recurrence-end-date" class="block">
+              <span class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+                {{ t('availability.endDate') }}
+              </span>
+              <input
+                id="recurrence-end-date"
+                v-model="newRecurrence.end_date"
+                type="date"
+                class="input text-sm"
+              />
             </label>
-            <input v-model="newRecurrence.end_date" type="date" class="input text-sm" />
           </div>
         </div>
         <div>
-          <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-            {{ t('availability.note') }}
+          <label for="recurrence-note" class="block">
+            <span class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+              {{ t('availability.note') }}
+            </span>
+            <textarea
+              id="recurrence-note"
+              v-model="newRecurrence.note"
+              rows="2"
+              class="input text-sm"
+              :placeholder="t('availability.note')"
+            />
           </label>
-          <textarea
-            v-model="newRecurrence.note"
-            rows="2"
-            class="input text-sm"
-            :placeholder="t('availability.note')"
-          />
         </div>
         <!-- Error message for equal times -->
         <p v-if="hasEqualTimesNewRecurrence" class="text-sm text-danger-600 dark:text-danger-400">
@@ -119,9 +145,9 @@
           <div class="space-y-3">
             <!-- Day of Week (read-only in edit mode) -->
             <div>
-              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {{ t('availability.dayOfWeek', 'Day of week') }}
-              </label>
+              <span class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {{ t('availability.dayOfWeek') }}
+              </span>
               <div class="flex items-center gap-2 text-sm text-gray-900 dark:text-white py-2">
                 <svg
                   class="h-4 w-4 text-gray-400"
@@ -143,23 +169,25 @@
             <!-- Time Range -->
             <div class="grid grid-cols-2 gap-2">
               <div>
-                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {{ t('availability.startTime', 'Start time') }}
-                </label>
+                <span class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {{ t('availability.startTime') }}
+                </span>
                 <TimeSelect
                   v-model="editingRecurrence.start_time"
                   class="w-full"
+                  :aria-label="t('availability.startTime')"
                   :min="editingRecurrenceMinTime"
                   :max="editingRecurrenceStartTimeMax"
                 />
               </div>
               <div>
-                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {{ t('availability.endTime', 'End time') }}
-                </label>
+                <span class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {{ t('availability.endTime') }}
+                </span>
                 <TimeSelect
                   v-model="editingRecurrence.end_time"
                   class="w-full"
+                  :aria-label="t('availability.endTime')"
                   :min="editingRecurrenceEndTimeMin"
                   :max="editingRecurrenceMaxTime"
                 />
@@ -169,35 +197,48 @@
             <!-- Date Range -->
             <div class="grid grid-cols-2 gap-2">
               <div>
-                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {{ t('availability.startDate', 'Start date') }}
+                <label :for="`recurrence-edit-start-date-${recurrence.id}`" class="block">
+                  <span class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {{ t('availability.startDate') }}
+                  </span>
+                  <input
+                    :id="`recurrence-edit-start-date-${recurrence.id}`"
+                    v-model="editingRecurrence.start_date"
+                    type="date"
+                    class="input w-full"
+                    required
+                  />
                 </label>
-                <input
-                  v-model="editingRecurrence.start_date"
-                  type="date"
-                  class="input w-full"
-                  required
-                />
               </div>
               <div>
-                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {{ t('availability.endDate', 'End date') }}
+                <label :for="`recurrence-edit-end-date-${recurrence.id}`" class="block">
+                  <span class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {{ t('availability.endDate') }}
+                  </span>
+                  <input
+                    :id="`recurrence-edit-end-date-${recurrence.id}`"
+                    v-model="editingRecurrence.end_date"
+                    type="date"
+                    class="input w-full"
+                  />
                 </label>
-                <input v-model="editingRecurrence.end_date" type="date" class="input w-full" />
               </div>
             </div>
 
             <!-- Note -->
             <div>
-              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {{ t('availability.note', 'Note') }}
+              <label :for="`recurrence-edit-note-${recurrence.id}`" class="block">
+                <span class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {{ t('availability.note') }}
+                </span>
+                <input
+                  :id="`recurrence-edit-note-${recurrence.id}`"
+                  v-model="editingRecurrence.note"
+                  type="text"
+                  class="input w-full"
+                  :placeholder="t('availability.note')"
+                />
               </label>
-              <input
-                v-model="editingRecurrence.note"
-                type="text"
-                class="input w-full"
-                :placeholder="t('availability.note')"
-              />
             </div>
 
             <!-- Error message for equal times -->
@@ -211,14 +252,14 @@
             <!-- Action Buttons -->
             <div class="flex gap-2 justify-end">
               <button class="btn btn-ghost btn-sm" @click="resetEditing">
-                {{ t('common.cancel', 'Cancel') }}
+                {{ t('common.cancel') }}
               </button>
               <button
                 class="btn btn-primary btn-sm"
                 :disabled="cannotSaveRecurrence"
                 @click="handleSaveRecurrence"
               >
-                {{ t('common.save', 'Save') }}
+                {{ t('common.save') }}
               </button>
             </div>
           </div>
@@ -309,6 +350,7 @@
                 v-model="exceptionDates[recurrence.id]"
                 type="date"
                 class="input flex-1 text-xs"
+                :aria-label="t('availability.addException')"
                 :placeholder="t('availability.addException')"
               />
               <button
@@ -323,7 +365,7 @@
           <div class="flex gap-2">
             <button
               class="text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              :title="t('common.edit', 'Edit')"
+              :title="t('common.edit')"
               @click="startEditing(recurrence)"
             >
               <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -406,6 +448,7 @@ import {
 } from '@/composables/calendar/useRecurrenceForm';
 import { useAvailabilityLabels } from '@/composables/calendar/useAvailabilityLabels';
 import type { PublicCalendar, RecurrenceWithExceptions } from '@/types';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const props = defineProps<{
   /** The calendar's public token. */
@@ -471,7 +514,9 @@ async function handleAddRecurrence() {
     resetNewRecurrence();
     await props.reload();
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to add recurrence');
+    toastStore.error(
+      t(translateErrorMessage(err, { fallback: 'availability.recurrenceCreateError' }))
+    );
   } finally {
     addingRecurrence.value = false;
   }
@@ -496,7 +541,9 @@ async function handleSaveRecurrence() {
     resetEditing();
     await props.reload();
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to update recurrence');
+    toastStore.error(
+      t(translateErrorMessage(err, { fallback: 'availability.recurrenceUpdateError' }))
+    );
   }
 }
 
@@ -507,7 +554,9 @@ async function handleDeleteRecurrence(recurrenceId: string) {
     await availabilitiesApi.deleteRecurrence(props.token, props.participantId, recurrenceId);
     await props.reload();
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to delete recurrence');
+    toastStore.error(
+      t(translateErrorMessage(err, { fallback: 'availability.recurrenceDeleteError' }))
+    );
   }
 }
 
@@ -520,7 +569,9 @@ async function handleAddException(recurrenceId: string) {
     exceptionDates[recurrenceId] = '';
     await props.reload();
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to add exception');
+    toastStore.error(
+      t(translateErrorMessage(err, { fallback: 'availability.exceptionCreateError' }))
+    );
   }
 }
 
@@ -529,7 +580,9 @@ async function handleRemoveException(recurrenceId: string, date: string) {
     await availabilitiesApi.deleteException(props.token, props.participantId, recurrenceId, date);
     await props.reload();
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to remove exception');
+    toastStore.error(
+      t(translateErrorMessage(err, { fallback: 'availability.exceptionDeleteError' }))
+    );
   }
 }
 </script>

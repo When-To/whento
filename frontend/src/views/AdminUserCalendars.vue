@@ -147,10 +147,18 @@
             <a
               :href="`/c/${calendar.public_token}`"
               target="_blank"
+              rel="noopener noreferrer"
               class="btn btn-secondary text-sm"
               :title="t('calendar.publicLink')"
+              :aria-label="t('calendar.publicLink')"
             >
-              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                class="h-4 w-4"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -174,6 +182,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useToastStore } from '@/stores/toast';
 import { adminApi } from '@/api/admin';
 import type { CalendarWithParticipants } from '@/types';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -195,7 +204,7 @@ onMounted(() => {
 
 async function loadCalendars() {
   if (!userId.value) {
-    toastStore.error('Invalid user ID');
+    toastStore.error(t('admin.invalidUserId'));
     loading.value = false;
     router.push('/admin');
     return;
@@ -212,7 +221,7 @@ async function loadCalendars() {
     // For now, we'll just show the count
   } catch (err: any) {
     console.error('Failed to load calendars:', err);
-    toastStore.error(err.message || t('errors.generic'));
+    toastStore.error(t(translateErrorMessage(err, { fallback: 'errors.generic' })));
   } finally {
     loading.value = false;
   }

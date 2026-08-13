@@ -16,7 +16,7 @@
     <div class="flex min-h-0 flex-1 flex-col">
       <div class="mb-4 flex shrink-0 items-center justify-between">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-          {{ t('participant.participantsForDate', 'Participants for') }}
+          {{ t('participant.participantsForDate') }}
           {{ formatSelectedDate }}
         </h3>
         <button
@@ -39,7 +39,7 @@
           class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary-600 border-r-transparent"
         />
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          {{ t('common.loading', 'Loading...') }}
+          {{ t('common.loading') }}
         </p>
       </div>
 
@@ -49,8 +49,8 @@
             {{ participantDetails.total_count }}
             {{
               participantDetails.total_count > 1
-                ? t('calendar.participants', 'Participants')
-                : t('calendar.participantCount', 'participant(s)')
+                ? t('calendar.participants')
+                : t('calendar.participantCount')
             }}
           </p>
         </div>
@@ -76,7 +76,7 @@
                     v-if="participant.participant_name === props.currentParticipantName"
                     class="text-xs px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300"
                   >
-                    {{ t('common.you', 'You') }}
+                    {{ t('common.you') }}
                   </span>
                 </div>
                 <div class="mt-1 text-sm text-gray-600 dark:text-gray-400">
@@ -93,42 +93,54 @@
                   <!-- Time Range -->
                   <div class="grid grid-cols-2 gap-2 mb-2">
                     <div>
-                      <label
+                      <!--
+                        `TimeSelect` is a component rather than a native control, so a
+                        wrapping `<label>` would name nothing. The caption carries the id
+                        and the field points back at it, which buys the same association.
+                      -->
+                      <span
+                        id="edit-start-time-label"
                         class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
                       >
-                        {{ t('availability.startTime', 'Start time') }}
-                      </label>
+                        {{ t('availability.startTime') }}
+                      </span>
                       <TimeSelect
                         v-model="editedStartTime"
                         class="w-full text-sm"
                         :max="editedEndTime || undefined"
+                        aria-labelledby="edit-start-time-label"
                       />
                     </div>
                     <div>
-                      <label
+                      <span
+                        id="edit-end-time-label"
                         class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
                       >
-                        {{ t('availability.endTime', 'End time') }}
-                      </label>
+                        {{ t('availability.endTime') }}
+                      </span>
                       <TimeSelect
                         v-model="editedEndTime"
                         class="w-full text-sm"
                         :min="editedStartTime || undefined"
+                        aria-labelledby="edit-end-time-label"
                       />
                     </div>
                   </div>
 
                   <!-- Note -->
                   <div class="mb-2">
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {{ t('availability.note', 'Note') }}
+                    <label for="edit-note" class="block">
+                      <span class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {{ t('availability.note') }}
+                      </span>
+                      <textarea
+                        id="edit-note"
+                        v-model="editedNote"
+                        rows="2"
+                        class="input w-full text-sm"
+                        :placeholder="t('availability.note')"
+                      />
                     </label>
-                    <textarea
-                      v-model="editedNote"
-                      rows="2"
-                      class="input w-full text-sm"
-                      :placeholder="t('availability.note', 'Note')"
-                    />
                   </div>
 
                   <!-- Action buttons -->
@@ -154,10 +166,10 @@
                           d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                         />
                       </svg>
-                      {{ t('common.save', 'Save') }}
+                      {{ t('common.save') }}
                     </button>
                     <button :disabled="savingNote" class="btn btn-ghost btn-sm" @click="cancelEdit">
-                      {{ t('common.cancel', 'Cancel') }}
+                      {{ t('common.cancel') }}
                     </button>
                   </div>
                 </div>
@@ -171,7 +183,7 @@
                   v-else-if="participant.participant_name === props.currentParticipantName"
                   class="mt-1 text-sm text-gray-400 dark:text-gray-500 italic"
                 >
-                  {{ t('availability.noNote', 'No note') }}
+                  {{ t('availability.noNote') }}
                 </div>
 
                 <!-- Says why there is nothing to edit here. -->
@@ -195,7 +207,7 @@
                   !props.fromRecurrence
                 "
                 class="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                :title="t('common.edit', 'Edit')"
+                :title="t('common.edit')"
                 @click="
                   startEdit(participant.note || '', participant.start_time, participant.end_time)
                 "
@@ -216,7 +228,7 @@
 
       <div v-else class="min-h-0 flex-1 overflow-y-auto py-8 text-center">
         <p class="text-sm text-gray-600 dark:text-gray-400">
-          {{ t('availability.noAvailabilities', 'No availabilities') }}
+          {{ t('availability.noAvailabilities') }}
         </p>
       </div>
     </div>
@@ -288,7 +300,7 @@ function isFullDayTime(startTime?: string, endTime?: string): boolean {
 
 function formatTimeRange(startTime?: string, endTime?: string): string {
   if (isFullDayTime(startTime, endTime)) {
-    return t('availability.allDay', 'All day');
+    return t('availability.allDay');
   }
   return `${startTime ?? '00:00'}-${endTime ?? '23:59'}`;
 }

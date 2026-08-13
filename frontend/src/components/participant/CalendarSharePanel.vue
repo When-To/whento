@@ -7,19 +7,27 @@
 <template>
   <div class="card">
     <h2 class="mb-4 font-display text-xl font-semibold text-gray-900 dark:text-white">
-      {{ t('calendar.sharingLinks', 'Sharing Links') }}
+      {{ t('calendar.sharingLinks') }}
     </h2>
     <div class="space-y-3">
       <!-- Public Link -->
       <div v-if="showPublicLink">
-        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-          {{ t('calendar.publicLink', 'Public link') }}
-        </label>
+        <span
+          id="share-public-link-label"
+          class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+        >
+          {{ t('calendar.publicLink') }}
+        </span>
         <div class="flex gap-2">
-          <input :value="publicLink" readonly class="input flex-1 text-sm" />
+          <input
+            :value="publicLink"
+            readonly
+            aria-labelledby="share-public-link-label"
+            class="input flex-1 text-sm"
+          />
           <button
             class="btn btn-secondary"
-            :title="t('calendar.copyLink', 'Copy link')"
+            :title="t('calendar.copyLink')"
             @click="emit('copy', publicLink)"
           >
             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -36,14 +44,22 @@
 
       <!-- ICS Link -->
       <div>
-        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-          {{ t('calendar.icsLink', 'iCal subscription link') }}
-        </label>
+        <span
+          id="share-ics-link-label"
+          class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+        >
+          {{ t('calendar.icsLink') }}
+        </span>
         <div class="flex gap-2">
-          <input :value="icsLink" readonly class="input flex-1 text-sm" />
+          <input
+            :value="icsLink"
+            readonly
+            aria-labelledby="share-ics-link-label"
+            class="input flex-1 text-sm"
+          />
           <button
             class="btn btn-secondary"
-            :title="t('calendar.copyLink', 'Copy link')"
+            :title="t('calendar.copyLink')"
             @click="emit('copy', icsLink)"
           >
             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -75,7 +91,7 @@
               d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
             />
           </svg>
-          {{ t('calendar.editCalendar', 'Edit calendar') }}
+          {{ t('calendar.editCalendar') }}
         </router-link>
       </div>
     </div>

@@ -25,6 +25,7 @@
     "vite.config.ts",
     "vitest.config.ts",
     "playwright.config.ts",
-    "playwright.backend.config.ts"
+    "playwright.backend.config.ts",
+    "src/locales/locales.test.ts"
   ]
 }

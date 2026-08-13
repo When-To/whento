@@ -71,7 +71,7 @@
                 d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
               />
             </svg>
-            {{ t('participant.selectParticipant', 'Change participant') }}
+            {{ t('participant.selectParticipant') }}
           </button>
         </div>
 
@@ -251,6 +251,7 @@ import { dayOfWeekISO, formatDateISO, parseISODate } from '@/utils/date/isoDate'
 import { useParticipantCalendar } from '@/composables/calendar/useParticipantCalendar';
 import { useParticipantDisplaySettings } from '@/composables/calendar/useParticipantDisplaySettings';
 import { useCalendarStream } from '@/composables/calendar/useCalendarStream';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 import type {
   Availability,
   AvailabilityItem,
@@ -646,7 +647,7 @@ async function loadCalendar() {
     void loadOwnedCalendars();
 
     if (!participant.value) {
-      toastStore.error(t('errors.notFound', 'Participant not found'));
+      toastStore.error(t('errors.notFound'));
       // Remove invalid calendar from history and redirect
       historyStore.removeCalendar(token.value);
       router.push('/');
@@ -677,7 +678,7 @@ async function loadCalendar() {
     // Load recurrences and participant counts (which includes all participants' availabilities)
     await reloadRecurrencesAndCounts();
   } catch (err: any) {
-    toastStore.error(err.message || t('calendar.fetchError', 'Failed to load calendar'));
+    toastStore.error(t(translateErrorMessage(err, { fallback: 'calendar.fetchError' })));
     // Remove invalid calendar from history and redirect to home
     historyStore.removeCalendar(token.value);
     router.push('/');
@@ -790,7 +791,7 @@ async function handleCalendarDayClick(dateString: string) {
       await availabilitiesApi.delete(token.value, participantId.value, dateString);
       await reloadCounts();
     } catch (err: any) {
-      toastStore.error(err.message || 'Failed to delete availability');
+      toastStore.error(t(translateErrorMessage(err, { fallback: 'availability.deleteError' })));
     }
     return;
   }
@@ -807,7 +808,7 @@ async function handleCalendarDayClick(dateString: string) {
     if (err.code === 'CONFLICT') {
       toastStore.error(t('errors.availabilityConflict'));
     } else {
-      toastStore.error(err.message || 'Failed to add availability');
+      toastStore.error(t(translateErrorMessage(err, { fallback: 'availability.createError' })));
     }
   } finally {
     addingAvailability.value = false;
@@ -842,9 +843,7 @@ async function handleCalendarDaysSelect(dates: string[]) {
   );
 
   if (datesToAdd.length === 0) {
-    toastStore.info(
-      t('availability.allDatesAlreadyAdded', 'All selected dates already have availability')
-    );
+    toastStore.info(t('availability.allDatesAlreadyAdded'));
     return;
   }
 
@@ -889,9 +888,7 @@ async function handleCalendarDaysDeselect(dates: string[]) {
   );
 
   if (datesToRemove.length === 0) {
-    toastStore.info(
-      t('availability.noDatesToRemove', 'No availability to remove for selected dates')
-    );
+    toastStore.info(t('availability.noDatesToRemove'));
     return;
   }
 
@@ -918,7 +915,7 @@ async function handleCalendarDaysDeselect(dates: string[]) {
       })
     );
   } else if (succeeded === 0) {
-    toastStore.error(t('errors.deleteFailed', 'Failed to delete'));
+    toastStore.error(t('errors.deleteFailed'));
   } else {
     toastStore.warning(`${succeeded} availability(ies) removed, ${failed} failed`);
   }
@@ -939,7 +936,9 @@ async function handleCalendarAddException(recurrenceId: string, dateString: stri
     );
     await reloadRecurrencesAndCounts();
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to add exception');
+    toastStore.error(
+      t(translateErrorMessage(err, { fallback: 'availability.exceptionCreateError' }))
+    );
   }
 }
 
@@ -1014,11 +1013,11 @@ async function handleBatchOperations(operations: AvailabilityOperation[]) {
     if (operations.length === 1) {
       const op = operations[0];
       if (op.type === 'create') {
-        toastStore.success(t('availability.created', 'Availability created'));
+        toastStore.success(t('availability.created'));
       } else if (op.type === 'delete') {
-        toastStore.success(t('availability.deleted', 'Availability deleted'));
+        toastStore.success(t('availability.deleted'));
       } else {
-        toastStore.success(t('availability.updated', 'Availability updated'));
+        toastStore.success(t('availability.updated'));
       }
     } else {
       toastStore.success(t('availability.batchSuccess', { count: succeeded }));
@@ -1108,7 +1107,7 @@ async function handleCancelFromEmail() {
       query: {},
     });
   } catch (err: any) {
-    toastStore.error(err.message || 'Failed to cancel participation');
+    toastStore.error(t(translateErrorMessage(err, { fallback: 'participant.cancelError' })));
   }
 }
 

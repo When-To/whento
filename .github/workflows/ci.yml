@@ -46,6 +46,35 @@ jobs:
   # The workflows are code too, and until now nothing checked them. actionlint catches
   # unknown action inputs, bad `if:` expressions, invalid glob and cron syntax, and runs
   # shellcheck over every `run:` block.
+  # CONTRIBUTING.md has prescribed Conventional Commits since before this job
+  # existed, and nothing checked it: the pre-commit hook is opt-in per clone
+  # (`make hooks`) and `--no-verify` walks past it anyway. The pull request title
+  # is what a squash merge writes into main's history, so that is what has to be
+  # well-formed -- checking individual commits would fail honest work-in-progress
+  # messages that the squash discards.
+  pr-title:
+    name: PR Title Convention
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Check the title is a Conventional Commit
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Types come from CONTRIBUTING.md. The scope is optional; `!` marks a
+          # breaking change. Kept as a regex rather than a third-party action so
+          # the rule is readable here and needs no new pinned dependency.
+          if printf '%s' "$TITLE" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+'; then
+            echo "✓ $TITLE"
+          else
+            echo "::error::PR title is not a Conventional Commit: $TITLE"
+            echo "Expected: <type>(<optional scope>): <description>"
+            echo "Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+            echo "Example: fix(calendar): stop leaking participant ids on locked calendars"
+            exit 1
+          fi
+
   lint-workflows:
     name: Lint Workflows
     runs-on: ubuntu-latest
@@ -193,6 +222,26 @@ jobs:
           name: swagger-docs
           path: docs/swagger
           retention-days: 1
+
+      # frontend/src/types/api.generated.ts is committed and derived from the
+      # annotations above. Without this gate the two drift silently, which is
+      # the exact failure the hand-written types had: a field the backend stopped
+      # sending stayed `required` in TypeScript, and the compiler vouched for it.
+      # This job already has Go and swag, so checking here costs one npm install
+      # rather than a second toolchain.
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Check generated API types are in sync
+        run: make types-check
 
   # golangci-lint over both modules and both build tags — see `lint-go` in the Makefile,
   # which is the same command a developer runs locally.

@@ -47,15 +47,16 @@
         <form class="space-y-6" @submit.prevent="handleVerify">
           <div>
             <input
+              ref="codeInput"
               v-model="code"
               type="text"
               :inputmode="useBackupCode ? 'text' : 'numeric'"
               :pattern="useBackupCode ? '[A-Z0-9]*' : '[0-9]*'"
               :maxlength="useBackupCode ? 8 : 6"
-              :placeholder="useBackupCode ? 'ABCD1234' : '000000'"
+              :aria-label="useBackupCode ? t('auth.enterBackupCode') : t('auth.enter2FACode')"
+              :placeholder="useBackupCode ? t('formats.backupCode') : t('formats.totpCode')"
               class="input text-center text-2xl tracking-widest uppercase"
               :class="{ 'input-error': error }"
-              autofocus
               autocomplete="one-time-code"
             />
             <p class="mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
@@ -113,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, nextTick, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
@@ -123,6 +124,7 @@ const router = useRouter();
 const { t } = useI18n();
 const authStore = useAuthStore();
 
+const codeInput = ref<HTMLInputElement | null>(null);
 const code = ref('');
 const error = ref('');
 const loading = ref(false);
@@ -137,13 +139,19 @@ const isCodeValid = computed(() => {
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
   // Check if temp token exists
   const tempToken = localStorage.getItem('temp_token');
   if (!tempToken) {
     // No temp token, redirect to login
     router.push('/login');
+    return;
   }
+
+  // Focus the code field on arrival. Done here rather than with the `autofocus` attribute so the
+  // focus is only taken when this view actually stays mounted.
+  await nextTick();
+  codeInput.value?.focus();
 });
 
 function toggleCodeType() {

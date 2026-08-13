@@ -11,15 +11,8 @@
     "deleting": "Deleting...",
     "close": "Close",
     "back": "Back",
-    "next": "Next",
-    "previous": "Previous",
-    "search": "Search",
-    "filter": "Filter",
-    "sort": "Sort",
-    "yes": "Yes",
     "no": "No",
     "or": "or",
-    "and": "and",
     "you": "You",
     "welcome": "Welcome back, {name}!",
     "retry": "Retry",
@@ -28,7 +21,6 @@
     "min": "min",
     "max": "max",
     "settings": "Settings",
-    "profile": "Profile",
     "preferences": "Preferences",
     "language": "Language",
     "timezone": "Timezone",
@@ -44,7 +36,25 @@
     "notFoundMessage": "Sorry, we couldn't find the page you're looking for.",
     "confirm": "Confirm",
     "confirmTitle": "Please confirm",
-    "dismissNotification": "Dismiss notification"
+    "dismissNotification": "Dismiss notification",
+    "logoAlt": "WhenTo logo",
+    "toggleTheme": "Toggle theme",
+    "toggleLanguage": "Switch language"
+  },
+  "formats": {
+    "timePlaceholder": "--:--",
+    "totpCode": "000000",
+    "backupCode": "ABCD1234"
+  },
+  "a11y": {
+    "copyPublicLink": "Copy the public link",
+    "copyIcsLink": "Copy the iCal subscription link",
+    "unifiedFeedUrl": "Unified feed URL",
+    "newEmailAddress": "New email address",
+    "skipToContent": "Skip to main content",
+    "participantName": "Participant name",
+    "magicLinkTitle": "Sign-in link verification",
+    "timeInput": "Time"
   },
   "home": {
     "heroTitle": "When to Play?",
@@ -79,12 +89,8 @@
     "hasAccount": "Already have an account?",
     "loginButton": "Sign in",
     "registerButton": "Sign up",
-    "loginSuccess": "Login successful!",
-    "registerSuccess": "Registration successful!",
-    "logoutSuccess": "Logged out successfully",
     "loginError": "Login failed",
     "registerError": "Registration failed",
-    "emailAlreadyExists": "User with this email already exists",
     "invalidCredentials": "Invalid email or password",
     "emailVerification": "Email Verification",
     "verifyingEmail": "Verifying your email address...",
@@ -163,10 +169,10 @@
   "nav": {
     "home": "Home",
     "dashboard": "Dashboard",
-    "calendars": "Calendars",
     "settings": "Settings",
     "admin": "Admin",
-    "whyWhento": "Why WhenTo"
+    "whyWhento": "Why WhenTo",
+    "toggleMenu": "Toggle menu"
   },
   "settings": {
     "theme": "Theme",
@@ -205,14 +211,13 @@
       "description": "Add an extra layer of security by requiring a code from your authenticator app.",
       "enable": "Enable 2FA",
       "enabled": "2FA is enabled",
-      "disabled": "2FA is disabled",
       "setupTitle": "Set up Two-Factor Authentication",
       "scanQRCode": "Scan this QR code with your authenticator app:",
+      "qrCodeAlt": "QR code to scan with your authenticator app",
       "manualEntry": "Or enter this code manually",
       "enterCode": "Enter the 6-digit code from your app",
       "invalidCode": "Invalid verification code",
       "enableSuccess": "2FA enabled successfully",
-      "enableError": "Failed to enable 2FA",
       "disableSuccess": "2FA disabled successfully",
       "disableError": "Failed to disable 2FA",
       "disable": "Disable 2FA",
@@ -224,21 +229,11 @@
       "regenerateSuccess": "Backup codes regenerated successfully",
       "regenerateError": "Failed to regenerate backup codes",
       "setupError": "Failed to start 2FA setup",
-      "downloadCodes": "Download Codes",
-      "printCodes": "Print Codes"
+      "downloadCodes": "Download Codes"
     }
   },
-  "dashboard": {
-    "bannerReachedUser": "You've reached your calendar limit ({usage}/{limit}). Upgrade your plan to create more calendars.",
-    "bannerReachedServer": "Server calendar limit reached ({usage}/{limit}). Please upgrade your license or delete unused calendars.",
-    "bannerWarningUser": "You're using {usage} of {limit} calendars ({percentage}%). Consider upgrading your plan.",
-    "bannerWarningServer": "Server is using {usage} of {limit} calendars ({percentage}%). Consider upgrading your license.",
-    "bannerInfoUser": "You're using {usage} of {limit} calendars ({percentage}%).",
-    "bannerInfoServer": "Server is using {usage} of {limit} calendars ({percentage}%).",
-    "contactAdmin": "Contact your administrator to upgrade the server license."
-  },
+  "dashboard": {},
   "calendar": {
-    "title": "Calendar",
     "calendar": "Calendar",
     "myCalendars": "My calendars",
     "newCalendar": "New calendar",
@@ -260,7 +255,6 @@
     "minDurationHelp": "Minimum availability duration in hours to include an event in the iCalendar feed (0 = no restriction)",
     "participants": "Participants",
     "participantCount": "participant(s)",
-    "participantShort": "part.",
     "addParticipant": "Add participant",
     "participantName": "Participant name",
     "participantNamePlaceholder": "Enter participant name...",
@@ -277,13 +271,8 @@
     "regenerateICSToken": "Regenerate ICS Token",
     "noCalendars": "You don't have any calendars yet",
     "createFirstCalendar": "Create your first calendar to get started",
-    "calendarCreated": "Calendar created successfully",
     "calendarUpdated": "Calendar updated successfully",
     "settingsSaved": "Settings saved successfully",
-    "calendarDeleted": "Calendar deleted successfully",
-    "participantAdded": "Participant added successfully",
-    "participantDeleted": "Participant deleted successfully",
-    "tokenRegenerated": "Token regenerated successfully",
     "confirmDelete": "Are you sure you want to delete this calendar?",
     "confirmDeleteMessage": "This action is irreversible. All availabilities and associated data will be permanently deleted.",
     "confirmDeleteParticipant": "Are you sure you want to delete this participant? All their availabilities will be deleted.",
@@ -303,12 +292,11 @@
     "participantsRequired": "At least one participant is required",
     "allowedWeekdays": "Allowed weekdays",
     "allowedWeekdaysHelp": "Select the weekdays when participants can indicate their availability",
+    "day": "Day",
     "timezone": "Timezone",
     "timezoneHelp": "The default timezone for this calendar",
     "searchTimezone": "Search timezone...",
     "selectedTimezone": "Selected:",
-    "allowHolidays": "Allow holidays",
-    "allowHolidaysHelp": "Allow participants to add availability on public holidays",
     "holidaysPolicy": "Holidays policy",
     "holidaysPolicyIgnore": "Ignore",
     "holidaysPolicyAllow": "Allow",
@@ -375,12 +363,13 @@
     "nextWeek": "Next week",
     "thresholdMet": "Event (threshold met)",
     "viewClassic": "Classic",
-    "viewCompact": "Compact",
     "listView": "List",
     "noActionableDays": "No available days in this period",
     "noParticipantsDescription": "This calendar has no participants yet. No availability can be entered at this time.",
     "contactOwnerToAddParticipants": "Contact the calendar owner to add participants.",
-    "updateParticipantError": "Failed to update participant"
+    "updateParticipantError": "Failed to update participant",
+    "sectionThreshold": "Participant threshold and minimum duration",
+    "sectionSchedule": "Allow/block days/hours"
   },
   "weekdays": {
     "short": {
@@ -394,20 +383,14 @@
     }
   },
   "availability": {
-    "title": "Availability",
     "availability": "availability",
     "availabilities": "availabilities",
     "myAvailabilities": "My availabilities",
-    "available": "Available",
     "recurring": "Recurring",
     "fromRecurrenceHint": "This date comes from a recurrence. Click it in the calendar to skip this occurrence.",
-    "thresholdMet": "Threshold met",
     "timeSlot": "Time slot",
-    "clickDateToAdd": "Click on a date to add your availability",
     "noAvailabilities": "No availabilities",
     "noParticipant": "No participants available",
-    "addAvailability": "Add availability",
-    "selectDate": "Select date",
     "startTime": "Start",
     "endTime": "End",
     "allDay": "All day",
@@ -427,16 +410,12 @@
     "thursday": "Thursday",
     "friday": "Friday",
     "saturday": "Saturday",
-    "availabilityAdded": "Availability added",
-    "availabilityDeleted": "Availability deleted",
     "confirmDelete": "Delete this availability?",
     "confirmDeleteRecurrence": "Delete this recurrence?",
     "created": "Availability created",
     "deleted": "Availability deleted",
     "updated": "Availability updated",
     "batchSuccess": "{count} availabilities updated",
-    "recurrenceAdded": "Recurrence added",
-    "recurrenceDeleted": "Recurrence deleted",
     "multipleAdded": "{count} availability(ies) added",
     "multipleRemoved": "{count} availability(ies) removed",
     "allDatesAlreadyAdded": "All selected dates already have an availability",
@@ -444,15 +423,22 @@
     "clickOrDragToAdd": "Click on a date to add your availability, or drag to select multiple days",
     "startEndTimeMustDiffer": "Start time and end time cannot be the same",
     "cannotSplitError": "Cannot split an availability in two. Only one availability per day per participant is allowed.",
-    "date": "Date"
+    "date": "Date",
+    "createError": "Failed to add availability",
+    "updateError": "Failed to update availability",
+    "deleteError": "Failed to delete availability",
+    "recurrenceCreateError": "Failed to add recurrence",
+    "recurrenceUpdateError": "Failed to update recurrence",
+    "recurrenceDeleteError": "Failed to delete recurrence",
+    "exceptionCreateError": "Failed to add exception",
+    "exceptionDeleteError": "Failed to remove exception"
   },
   "participant": {
     "selectParticipant": "Select participant",
     "whoAreYou": "Who are you?",
     "selectYourName": "Select your name from the list",
-    "addYourAvailabilities": "Add your availabilities",
     "participantsForDate": "Participants for",
-    "commonDates": "Common dates"
+    "cancelError": "Failed to cancel participation"
   },
   "errors": {
     "generic": "An error occurred",
@@ -482,53 +468,34 @@
     }
   },
   "validation": {
-    "generic": {
-      "required": "this field is required",
-      "email": "must be a valid email address",
-      "min": "must be at least {count} characters",
-      "max": "must be at most {count} characters",
-      "gte": "must be greater than or equal to {value}",
-      "lte": "must be less than or equal to {value}",
-      "oneof": "must be one of: {values}",
-      "timezone": "must be a valid IANA timezone",
-      "locale": "must be one of: fr, en",
-      "uuid": "must be a valid UUID"
-    },
     "fields": {
       "email": {
-        "label": "Email",
         "required": "Email address is required",
         "email": "Email address is not valid",
         "max": "Email address must not exceed 255 characters"
       },
       "password": {
-        "label": "Password",
         "required": "Password is required",
         "min": "Password must be at least 12 characters with uppercase, lowercase, number, and special character",
         "max": "Password must not exceed 72 characters"
       },
       "display_name": {
-        "label": "Display name",
         "required": "Display name is required",
         "min": "Display name must be at least 2 characters",
         "max": "Display name must not exceed 100 characters"
       },
       "current_password": {
-        "label": "Current password",
         "required": "Current password is required"
       },
       "new_password": {
-        "label": "New password",
         "required": "New password is required",
         "min": "New password must be at least 12 characters with uppercase, lowercase, number, and special character",
         "max": "New password must not exceed 72 characters"
       },
       "locale": {
-        "label": "Language",
         "oneof": "Language must be one of: French, English"
       },
       "timezone": {
-        "label": "Timezone",
         "timezone": "Timezone is not valid"
       }
     }
@@ -697,7 +664,6 @@
   },
   "admin": {
     "title": "Administration",
-    "users": "Users",
     "totalUsers": "Total users",
     "email": "Email",
     "displayName": "Display name",
@@ -728,7 +694,8 @@
     "confirmDisable2FA": "Disable TOTP 2FA?",
     "confirmDisable2FAMessage": "Are you sure you want to disable TOTP 2FA for {name}? This will remove the authenticator app setup and the backup codes. Passkeys will not be affected.",
     "disable2FASuccess": "TOTP 2FA disabled for {name} ({backupCodes} backup codes removed)",
-    "disable2FAError": "Failed to disable 2FA"
+    "disable2FAError": "Failed to disable 2FA",
+    "invalidUserId": "Invalid user ID"
   },
   "quota": {
     "yourCalendars": "Your calendars",
@@ -737,8 +704,7 @@
     "unlimited": "Unlimited",
     "approaching": "You're approaching your calendar limit",
     "using": "You're using {percentage}% of your quota",
-    "errorLoading": "Failed to load quota information",
-    "upgradeNow": "Upgrade Now"
+    "errorLoading": "Failed to load quota information"
   },
   "why": {
     "heroTitle": "Why WhenTo?",
@@ -838,7 +804,6 @@
     "title": "Unified ICS Feed",
     "description": "Subscribe to a single feed that combines events from your selected calendars.",
     "enable": "Enable Unified Feed",
-    "feedUrl": "Feed URL",
     "copyUrl": "Copy",
     "urlCopied": "Unified feed URL copied!",
     "regenerateToken": "Regenerate",

@@ -20,6 +20,7 @@
           v-model="emailInput"
           type="email"
           class="input flex-1"
+          :aria-label="t('auth.email')"
           :placeholder="t('notifications.emailPlaceholder')"
           required
         />
@@ -154,6 +155,7 @@ import { useCalendarStore } from '@/stores/calendar';
 import { useToastStore } from '@/stores/toast';
 import { addParticipantEmail, resendVerificationEmail } from '@/api/notify';
 import ParticipantEmailChangeForm from './ParticipantEmailChangeForm.vue';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const props = defineProps<{
   /** The calendar's public token. */
@@ -188,7 +190,7 @@ async function handleAddEmail() {
     // Reload calendar to get updated participant email info
     await calendarStore.fetchPublicCalendar(props.token, props.participantId);
   } catch (error: any) {
-    toastStore.error(error.message || t('notifications.emailError'));
+    toastStore.error(t(translateErrorMessage(error, { fallback: 'notifications.emailError' })));
   } finally {
     addingEmail.value = false;
   }
@@ -205,7 +207,7 @@ async function handleResendVerification() {
     await resendVerificationEmail(props.token, props.participantId);
     toastStore.success(t('notifications.emailSent'));
   } catch (error: any) {
-    toastStore.error(error.message || t('notifications.emailError'));
+    toastStore.error(t(translateErrorMessage(error, { fallback: 'notifications.emailError' })));
   } finally {
     resendingEmail.value = false;
   }
@@ -226,7 +228,7 @@ async function handleChangeEmail() {
     // Reload calendar to get updated participant email info
     await calendarStore.fetchPublicCalendar(props.token, props.participantId);
   } catch (error: any) {
-    toastStore.error(error.message || t('notifications.emailError'));
+    toastStore.error(t(translateErrorMessage(error, { fallback: 'notifications.emailError' })));
   } finally {
     addingEmail.value = false;
   }

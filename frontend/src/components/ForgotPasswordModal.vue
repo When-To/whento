@@ -6,23 +6,31 @@
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="isOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      @click.self="closeModal"
-    >
+    <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div
+        ref="panel"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="titleId"
         class="mx-4 w-full max-w-md animate-modal-in rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800"
       >
         <div class="mb-4 flex items-center justify-between">
-          <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+          <h2 :id="titleId" class="text-xl font-semibold text-gray-900 dark:text-white">
             {{ t('auth.forgotPassword.title') }}
           </h2>
           <button
+            type="button"
+            :aria-label="t('common.close')"
             class="text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
             @click="closeModal"
           >
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              class="h-6 w-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -40,22 +48,22 @@
 
           <form @submit.prevent="handleSubmit">
             <div class="mb-4">
-              <label
-                for="reset-email"
-                class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-              >
-                {{ t('auth.email') }}
+              <label for="reset-email" class="block">
+                <span class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('auth.email') }}
+                </span>
+                <input
+                  id="reset-email"
+                  ref="emailInput"
+                  v-model="email"
+                  type="email"
+                  required
+                  autocomplete="email"
+                  class="input"
+                  :class="{ 'input-error': error }"
+                  :disabled="loading"
+                />
               </label>
-              <input
-                id="reset-email"
-                v-model="email"
-                type="email"
-                required
-                autocomplete="email"
-                class="input"
-                :class="{ 'input-error': error }"
-                :disabled="loading"
-              />
               <p v-if="error" class="mt-1 text-sm text-danger-600 dark:text-danger-400">
                 {{ error }}
               </p>
@@ -87,6 +95,7 @@
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
               <path
                 stroke-linecap="round"
@@ -112,9 +121,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+/**
+ * Backdrop clicks deliberately do not dismiss, matching ConfirmDialog: a dismissal
+ * gesture that only a mouse can perform is not one a keyboard user can rely on, and
+ * Escape — which `useFocusTrap` wires up — now serves both. The header ✕, Cancel and
+ * Close buttons remain the explicit way out.
+ */
+import { ref, useId, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
+import { useFocusTrap } from '@/composables/useFocusTrap';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -131,6 +148,17 @@ const email = ref('');
 const loading = ref(false);
 const error = ref('');
 const submitted = ref(false);
+
+const titleId = useId();
+const panel = ref<HTMLElement | null>(null);
+const emailInput = ref<HTMLInputElement | null>(null);
+
+useFocusTrap(() => props.isOpen, {
+  container: panel,
+  onEscape: () => closeModal(),
+  // The email field, not the ✕: the user opened this to type an address.
+  initialFocus: () => emailInput.value,
+});
 
 // Reset form when modal opens
 watch(
@@ -155,7 +183,7 @@ const handleSubmit = async () => {
     await authStore.forgotPassword(email.value);
     submitted.value = true;
   } catch (err: any) {
-    error.value = err.message || t('auth.forgotPassword.error');
+    error.value = t(translateErrorMessage(err, { fallback: 'auth.forgotPassword.error' }));
   } finally {
     loading.value = false;
   }

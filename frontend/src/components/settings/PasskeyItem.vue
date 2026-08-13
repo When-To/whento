@@ -30,9 +30,10 @@
         </p>
         <input
           v-else
+          ref="nameInput"
           v-model="editName"
           class="input input-sm"
-          autofocus
+          :aria-label="t('common.rename')"
           @blur="saveRename"
           @keyup.enter="saveRename"
           @keyup.esc="cancelEdit"
@@ -63,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { confirm } from '@/composables/useConfirm';
 import type { Passkey } from '@/api/passkey';
@@ -81,10 +82,14 @@ const emit = defineEmits<{
 
 const editing = ref(false);
 const editName = ref(props.passkey.name);
+const nameInput = ref<HTMLInputElement | null>(null);
 
 function startEdit() {
   editing.value = true;
   editName.value = props.passkey.name;
+  // The field replaces the name in place, so it has to take the caret the way the
+  // removed `autofocus` attribute did — but only once it is actually rendered.
+  void nextTick(() => nameInput.value?.focus());
 }
 
 function cancelEdit() {

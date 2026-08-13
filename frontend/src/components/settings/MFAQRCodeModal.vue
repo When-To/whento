@@ -8,10 +8,15 @@
   <div
     v-if="isOpen"
     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-    @click.self="$emit('close')"
   >
-    <div class="card max-w-md max-h-[90vh] overflow-y-auto">
-      <h2 class="mb-4 text-xl font-bold text-gray-900 dark:text-white">
+    <div
+      ref="panel"
+      role="dialog"
+      aria-modal="true"
+      :aria-labelledby="titleId"
+      class="card max-w-md max-h-[90vh] overflow-y-auto"
+    >
+      <h2 :id="titleId" class="mb-4 text-xl font-bold text-gray-900 dark:text-white">
         {{ t('settings.mfa.setupTitle') }}
       </h2>
 
@@ -23,7 +28,7 @@
 
         <!-- QR Code -->
         <div class="mb-4 flex justify-center">
-          <img :src="qrCodeURL" alt="QR Code" class="h-48 w-48 rounded" />
+          <img :src="qrCodeURL" :alt="t('settings.mfa.qrCodeAlt')" class="h-48 w-48 rounded" />
         </div>
 
         <!-- Manual Entry Secret -->
@@ -39,19 +44,24 @@
 
       <!-- Step 2: Verify Code -->
       <div class="mb-6">
-        <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-          {{ t('settings.mfa.enterCode') }}
+        <label for="mfa-verification-code" class="block">
+          <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            {{ t('settings.mfa.enterCode') }}
+          </span>
+          <input
+            id="mfa-verification-code"
+            ref="codeInput"
+            v-model="verificationCode"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="6"
+            autocomplete="one-time-code"
+            class="input text-center text-2xl tracking-widest"
+            :placeholder="t('formats.totpCode')"
+            @input="verificationCode = verificationCode.replace(/\D/g, '')"
+          />
         </label>
-        <input
-          v-model="verificationCode"
-          type="text"
-          inputmode="numeric"
-          pattern="[0-9]*"
-          maxlength="6"
-          class="input text-center text-2xl tracking-widest"
-          placeholder="000000"
-          @input="verificationCode = verificationCode.replace(/\D/g, '')"
-        />
       </div>
 
       <!-- Backup Codes Info -->
@@ -63,10 +73,11 @@
 
       <!-- Actions -->
       <div class="flex justify-end space-x-2">
-        <button class="btn btn-secondary" @click="$emit('close')">
+        <button type="button" class="btn btn-secondary" @click="emit('close')">
           {{ t('common.cancel') }}
         </button>
         <button
+          type="button"
           :disabled="verificationCode.length !== 6 || verifying"
           class="btn btn-primary"
           @click="verify"
@@ -97,12 +108,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+/**
+ * Enrolling a second factor is a step you cannot abandon halfway without locking
+ * yourself out of the flow, so the dialog needs the full treatment: `role="dialog"`,
+ * a focus trap, Escape to cancel, and focus returned to the "Enable" button that
+ * opened it.
+ *
+ * Focus lands on the verification field, which is the only thing the user has to do
+ * here once they have scanned the code.
+ *
+ * Backdrop clicks no longer dismiss, matching ConfirmDialog — and here that is also
+ * a safeguard: a stray click outside used to abandon a half-finished enrolment.
+ */
+import { ref, useId } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useFocusTrap } from '@/composables/useFocusTrap';
 
 const { t } = useI18n();
 
-defineProps<{
+const props = defineProps<{
   isOpen: boolean;
   secret: string;
   qrCodeURL: string;
@@ -116,6 +140,16 @@ const emit = defineEmits<{
 
 const verificationCode = ref('');
 const verifying = ref(false);
+
+const titleId = useId();
+const panel = ref<HTMLElement | null>(null);
+const codeInput = ref<HTMLInputElement | null>(null);
+
+useFocusTrap(() => props.isOpen, {
+  container: panel,
+  onEscape: () => emit('close'),
+  initialFocus: () => codeInput.value,
+});
 
 async function verify() {
   verifying.value = true;

@@ -8,7 +8,7 @@
   <CollapsibleSection :title="t('notifications.title')" :default-open="false">
     <div class="space-y-6">
       <!-- Enable notifications toggle -->
-      <div class="flex items-center">
+      <label for="enable-notifications" class="flex items-center">
         <input
           id="enable-notifications"
           v-model="localConfig.enabled"
@@ -16,13 +16,10 @@
           class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
           @change="handleEnabledToggle"
         />
-        <label
-          for="enable-notifications"
-          class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300"
-        >
+        <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ t('notifications.enable') }}
-        </label>
-      </div>
+        </span>
+      </label>
 
       <!-- Settings (only shown if enabled) -->
       <div
@@ -35,31 +32,28 @@
             {{ t('notifications.recipients') }}
           </h4>
           <div class="space-y-2">
-            <div class="flex items-center">
+            <label for="notify-owner" class="flex items-center">
               <input
                 id="notify-owner"
                 v-model="localConfig.notify_owner"
                 type="checkbox"
                 class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
-              <label for="notify-owner" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+              <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {{ t('notifications.notifyOwner') }}
-              </label>
-            </div>
-            <div class="flex items-center">
+              </span>
+            </label>
+            <label for="notify-participants" class="flex items-center">
               <input
                 id="notify-participants"
                 v-model="localConfig.notify_participants"
                 type="checkbox"
                 class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
-              <label
-                for="notify-participants"
-                class="ml-2 text-sm text-gray-700 dark:text-gray-300"
-              >
+              <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {{ t('notifications.notifyParticipants') }}
-              </label>
-            </div>
+              </span>
+            </label>
           </div>
         </div>
 
@@ -71,17 +65,17 @@
           <div class="space-y-4">
             <!-- Email -->
             <div v-if="smtpConfigured">
-              <div class="flex items-center">
+              <label for="channel-email" class="flex items-center">
                 <input
                   id="channel-email"
                   v-model="localConfig.channels.email.enabled"
                   type="checkbox"
                   class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />
-                <label for="channel-email" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                   {{ t('notifications.channelEmail') }}
-                </label>
-              </div>
+                </span>
+              </label>
             </div>
             <div
               v-else
@@ -92,23 +86,24 @@
 
             <!-- Discord -->
             <div>
-              <div class="flex items-center">
+              <label for="channel-discord" class="flex items-center">
                 <input
                   id="channel-discord"
                   v-model="localConfig.channels.discord.enabled"
                   type="checkbox"
                   class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />
-                <label for="channel-discord" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                   {{ t('notifications.channelDiscord') }}
-                </label>
-              </div>
+                </span>
+              </label>
               <div v-if="localConfig.channels.discord.enabled" class="mt-2 ml-6">
                 <input
                   v-model="localConfig.channels.discord.webhook_url"
                   type="url"
                   class="input"
                   :placeholder="t('notifications.discordWebhookPlaceholder')"
+                  :aria-label="t('notifications.discordWebhookPlaceholder')"
                 />
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {{ t('notifications.discordWebhookHelp') }}
@@ -118,23 +113,24 @@
 
             <!-- Slack -->
             <div>
-              <div class="flex items-center">
+              <label for="channel-slack" class="flex items-center">
                 <input
                   id="channel-slack"
                   v-model="localConfig.channels.slack.enabled"
                   type="checkbox"
                   class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />
-                <label for="channel-slack" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                   {{ t('notifications.channelSlack') }}
-                </label>
-              </div>
+                </span>
+              </label>
               <div v-if="localConfig.channels.slack.enabled" class="mt-2 ml-6">
                 <input
                   v-model="localConfig.channels.slack.webhook_url"
                   type="url"
                   class="input"
                   :placeholder="t('notifications.slackWebhookPlaceholder')"
+                  :aria-label="t('notifications.slackWebhookPlaceholder')"
                 />
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {{ t('notifications.slackWebhookHelp') }}
@@ -144,17 +140,17 @@
 
             <!-- Telegram -->
             <div>
-              <div class="flex items-center">
+              <label for="channel-telegram" class="flex items-center">
                 <input
                   id="channel-telegram"
                   v-model="localConfig.channels.telegram.enabled"
                   type="checkbox"
                   class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />
-                <label for="channel-telegram" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                   {{ t('notifications.channelTelegram') }}
-                </label>
-              </div>
+                </span>
+              </label>
               <div v-if="localConfig.channels.telegram.enabled" class="mt-2 ml-6 space-y-3">
                 <div>
                   <input
@@ -162,6 +158,7 @@
                     type="text"
                     class="input"
                     :placeholder="t('notifications.telegramTokenPlaceholder')"
+                    :aria-label="t('notifications.telegramTokenPlaceholder')"
                   />
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {{ t('notifications.telegramTokenHelp') }}
@@ -173,6 +170,7 @@
                     type="text"
                     class="input"
                     :placeholder="t('notifications.telegramChatIdPlaceholder')"
+                    :aria-label="t('notifications.telegramChatIdPlaceholder')"
                   />
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {{ t('notifications.telegramChatIdHelp') }}
@@ -189,28 +187,31 @@
             {{ t('notifications.reminders') }}
           </h4>
           <div class="space-y-3">
-            <div class="flex items-center">
+            <label for="enable-reminders" class="flex items-center">
               <input
                 id="enable-reminders"
                 v-model="localConfig.reminders.enabled"
                 type="checkbox"
                 class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
-              <label for="enable-reminders" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+              <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {{ t('notifications.enableReminders') }}
-              </label>
-            </div>
+              </span>
+            </label>
             <div v-if="localConfig.reminders.enabled" class="ml-6">
-              <label class="mb-1 block text-sm text-gray-700 dark:text-gray-300">
-                {{ t('notifications.hoursBefore') }}
+              <label for="reminder-hours-before" class="block">
+                <span class="mb-1 block text-sm text-gray-700 dark:text-gray-300">
+                  {{ t('notifications.hoursBefore') }}
+                </span>
+                <input
+                  id="reminder-hours-before"
+                  v-model.number="localConfig.reminders.hours_before"
+                  type="number"
+                  min="1"
+                  max="168"
+                  class="input max-w-32"
+                />
               </label>
-              <input
-                v-model.number="localConfig.reminders.hours_before"
-                type="number"
-                min="1"
-                max="168"
-                class="input max-w-32"
-              />
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 {{ t('notifications.hoursBeforeHelp') }}
               </p>

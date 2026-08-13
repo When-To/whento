@@ -5,7 +5,8 @@
 -->
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
+import { computed, ref, useAttrs, watch, onMounted, onBeforeUnmount } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 interface Props {
   modelValue?: string;
@@ -31,6 +32,22 @@ const emit = defineEmits<{
 defineOptions({
   inheritAttrs: false,
 });
+
+const { t } = useI18n();
+const attrs = useAttrs();
+
+/**
+ * A last-resort name for the field.
+ *
+ * The input is the component's root, so a caller that supplies `aria-label`,
+ * `aria-labelledby` or an `id` for its own `<label for>` already names it — and those
+ * land on the input through `$attrs`, after this binding, so they win. Only a caller
+ * that supplies none of them gets the generic name, which beats reaching a screen
+ * reader as an unnamed text field.
+ */
+const fallbackAriaLabel = computed(() =>
+  attrs['aria-label'] || attrs['aria-labelledby'] || attrs.id ? undefined : t('a11y.timeInput')
+);
 
 const showDropdown = ref(false);
 const inputRef = ref<HTMLInputElement | null>(null);
@@ -455,6 +472,7 @@ onBeforeUnmount(() => {
     :placeholder="placeholder"
     pattern="^([01]?[0-9]|2[0-3]):([03]0|[14]5)$"
     autocomplete="off"
+    :aria-label="fallbackAriaLabel"
     v-bind="$attrs"
     @input="handleInput"
     @focus="handleFocus"
@@ -488,6 +506,7 @@ onBeforeUnmount(() => {
         }"
         @click="selectOption(option)"
         @mouseenter="highlightedIndex = index"
+        @focus="highlightedIndex = index"
       >
         {{ option }}
       </button>

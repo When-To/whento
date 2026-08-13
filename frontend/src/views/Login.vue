@@ -11,7 +11,7 @@
       <div class="card">
         <!-- Header -->
         <div class="mb-8 text-center">
-          <img src="/logo.png" alt="WhenTo" class="mx-auto mb-4 h-16 w-16" />
+          <img src="/logo.png" :alt="t('common.logoAlt')" class="mx-auto mb-4 h-16 w-16" />
           <h1 class="font-display text-3xl font-bold text-gray-900 dark:text-white">
             {{ t('auth.login') }}
           </h1>
@@ -92,22 +92,21 @@
         <form class="space-y-6" @submit.prevent="handleSubmit">
           <!-- Email -->
           <div>
-            <label
-              for="email"
-              class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              {{ t('auth.email') }}
+            <label for="email" class="block">
+              <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('auth.email') }}
+              </span>
+              <input
+                id="email"
+                v-model="form.email"
+                type="email"
+                required
+                autocomplete="email"
+                class="input"
+                :class="{ 'input-error': errors.email }"
+                :placeholder="t('auth.email')"
+              />
             </label>
-            <input
-              id="email"
-              v-model="form.email"
-              type="email"
-              required
-              autocomplete="email"
-              class="input"
-              :class="{ 'input-error': errors.email }"
-              :placeholder="t('auth.email')"
-            />
             <p v-if="errors.email" class="mt-1 text-sm text-danger-600 dark:text-danger-400">
               {{ errors.email }}
             </p>
@@ -166,32 +165,31 @@
           </div>
 
           <!-- Password -->
-          <div>
-            <div class="mb-2 flex items-center justify-between">
-              <label
-                for="password"
-                class="block text-sm font-medium text-gray-700 dark:text-gray-300"
-              >
+          <!-- The "forgot password" button sits visually on the label row but stays outside the
+               <label>: a button nested in a label would be activated by clicks on the label. -->
+          <div class="relative">
+            <label for="password" class="block">
+              <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 {{ t('auth.password') }}
-              </label>
-              <button
-                type="button"
-                class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
-                @click="showForgotPasswordModal = true"
-              >
-                {{ t('auth.forgotPassword.link') }}
-              </button>
-            </div>
-            <input
-              id="password"
-              v-model="form.password"
-              type="password"
-              required
-              autocomplete="current-password"
-              class="input"
-              :class="{ 'input-error': errors.password }"
-              :placeholder="t('auth.password')"
-            />
+              </span>
+              <input
+                id="password"
+                v-model="form.password"
+                type="password"
+                required
+                autocomplete="current-password"
+                class="input"
+                :class="{ 'input-error': errors.password }"
+                :placeholder="t('auth.password')"
+              />
+            </label>
+            <button
+              type="button"
+              class="absolute right-0 top-0 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+              @click="showForgotPasswordModal = true"
+            >
+              {{ t('auth.forgotPassword.link') }}
+            </button>
             <p v-if="errors.password" class="mt-1 text-sm text-danger-600 dark:text-danger-400">
               {{ errors.password }}
             </p>
@@ -383,7 +381,7 @@ async function handleMagicLinkRequest() {
     magicLinkSuccess.value = true;
     magicLinkMessage.value = response.message;
   } catch (err: any) {
-    error.value = err.message || t('auth.magicLink.requestError');
+    error.value = t(translateErrorMessage(err, { fallback: 'auth.magicLink.requestError' }));
   } finally {
     magicLinkLoading.value = false;
   }

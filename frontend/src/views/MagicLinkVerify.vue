@@ -8,6 +8,10 @@
   <div class="flex min-h-[calc(100vh-4rem)] items-center justify-center py-12">
     <div class="w-full max-w-md animate-slide-up">
       <div class="card text-center">
+        <!-- The page has three mutually exclusive states, none of which carries a title of its
+             own, so the document heading is visually hidden. -->
+        <h1 class="sr-only">{{ t('a11y.magicLinkTitle') }}</h1>
+
         <!-- Loading State -->
         <div v-if="loading">
           <div

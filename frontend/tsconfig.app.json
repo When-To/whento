@@ -28,5 +28,9 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "dev/**/*.ts", "dev/**/*.vue"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "dev/**/*.ts", "dev/**/*.vue"],
+  // locales.test.ts walks src/ from disk to prove no hardcoded string crept back,
+  // so it needs node types the application itself must never have. It is
+  // type-checked by tsconfig.node.json instead.
+  "exclude": ["src/locales/locales.test.ts"]
 }

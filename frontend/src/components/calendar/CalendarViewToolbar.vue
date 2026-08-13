@@ -11,7 +11,7 @@
       <!-- Title and description -->
       <div class="flex-1">
         <h2 class="font-display text-xl font-semibold text-gray-900 dark:text-white">
-          {{ t('calendar.calendar', 'Calendar') }}
+          {{ t('calendar.calendar') }}
           <span
             v-if="dateRangeText"
             class="text-base font-normal text-gray-600 dark:text-gray-400 block md:inline mt-1 md:mt-0"
@@ -29,7 +29,7 @@
         <!-- Display mode selector -->
         <div class="flex items-center gap-2">
           <label for="displayMode" class="text-sm text-gray-700 dark:text-gray-300 shrink-0">
-            {{ t('calendar.displayMode', 'Display') }}
+            {{ t('calendar.displayMode') }}
           </label>
           <select
             id="displayMode"
@@ -37,10 +37,10 @@
             class="input text-sm flex-1 md:w-32 min-h-11 md:min-h-0"
           >
             <option value="month">
-              {{ t('calendar.monthView', 'Month') }}
+              {{ t('calendar.monthView') }}
             </option>
             <option value="week">
-              {{ t('calendar.weekView', 'Week') }}
+              {{ t('calendar.weekView') }}
             </option>
           </select>
         </div>
@@ -117,15 +117,8 @@ const { t } = useI18n();
 const maxPeriods = computed(() => maxPeriodsFor(displayMode.value));
 
 const periodCountLabel = computed(() =>
-  displayMode.value === 'week'
-    ? t('calendar.numberOfWeeks', 'Number of weeks')
-    : t('calendar.numberOfMonths', 'Number of months')
+  displayMode.value === 'week' ? t('calendar.numberOfWeeks') : t('calendar.numberOfMonths')
 );
 
-const instructions = computed(() =>
-  t(
-    'availability.clickOrDragToAdd',
-    'Click on a date to add your availability, or drag to select multiple days'
-  )
-);
+const instructions = computed(() => t('availability.clickOrDragToAdd'));
 </script>

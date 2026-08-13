@@ -41,9 +41,9 @@
 
     <!-- Grid layout: 8 columns (1 for labels + 7 for days) -->
     <div class="grid grid-cols-[auto_repeat(7,minmax(0,1fr))] gap-2 items-center overflow-x-auto">
-      <!-- Row 1: Label "Jour" + Day buttons -->
+      <!-- Row 1: day label + day buttons -->
       <label class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap pr-2">
-        {{ locale === 'fr' ? 'Jour' : 'Day' }}
+        {{ t('calendar.day') }}
       </label>
       <button
         v-for="day in weekdays"
@@ -74,7 +74,7 @@
         :class="{
           'opacity-50 cursor-not-allowed': !allowedWeekdays.includes(day.value),
         }"
-        placeholder="--:--"
+        :placeholder="t('formats.timePlaceholder')"
       />
 
       <!-- Row 3: Label + End times -->
@@ -90,7 +90,7 @@
         :class="{
           'opacity-50 cursor-not-allowed': !allowedWeekdays.includes(day.value),
         }"
-        placeholder="--:--"
+        :placeholder="t('formats.timePlaceholder')"
       />
     </div>
 
@@ -131,7 +131,7 @@
           :class="{
             'opacity-50 cursor-not-allowed': holidaysPolicy !== 'allow',
           }"
-          placeholder="Min"
+          :placeholder="t('common.min')"
         />
         <span class="text-gray-500 dark:text-gray-400">-</span>
         <TimeSelect
@@ -141,7 +141,7 @@
           :class="{
             'opacity-50 cursor-not-allowed': holidaysPolicy !== 'allow',
           }"
-          placeholder="Max"
+          :placeholder="t('common.max')"
         />
       </div>
     </div>
@@ -179,7 +179,7 @@
           :class="{
             'opacity-50 cursor-not-allowed': !allowHolidayEves || allWeekdaysSelected,
           }"
-          placeholder="Min"
+          :placeholder="t('common.min')"
         />
         <span class="text-gray-500 dark:text-gray-400">-</span>
         <TimeSelect
@@ -189,7 +189,7 @@
           :class="{
             'opacity-50 cursor-not-allowed': !allowHolidayEves || allWeekdaysSelected,
           }"
-          placeholder="Max"
+          :placeholder="t('common.max')"
         />
       </div>
     </div>
@@ -202,8 +202,9 @@
  * holiday policies.
  *
  * This block was duplicated verbatim between the create and the settings view — around
- * two hundred lines each, including the `--:--` / `Min` / `Max` placeholders that the
- * audit picked up as identical. Nothing about it depends on whether the calendar exists
+ * two hundred lines each, including the hard-coded `--:--` / `Min` / `Max` placeholders
+ * that the audit picked up as identical and that now go through i18n like everything
+ * else. Nothing about it depends on whether the calendar exists
  * yet, so unlike the participants panel it merges without either side carrying the
  * other's needs. Each view still supplies its own `CollapsibleSection` wrapper and its
  * own save button, which is where the two genuinely diverge.

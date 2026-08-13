@@ -23,23 +23,22 @@
         <form v-if="!success" class="space-y-6" @submit.prevent="handleSubmit">
           <!-- New Password -->
           <div>
-            <label
-              for="new-password"
-              class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              {{ t('auth.resetPassword.newPassword') }}
+            <label for="new-password" class="block">
+              <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('auth.resetPassword.newPassword') }}
+              </span>
+              <input
+                id="new-password"
+                v-model="newPassword"
+                type="password"
+                required
+                minlength="8"
+                autocomplete="new-password"
+                class="input"
+                :class="{ 'input-error': error }"
+                :disabled="loading"
+              />
             </label>
-            <input
-              id="new-password"
-              v-model="newPassword"
-              type="password"
-              required
-              minlength="8"
-              autocomplete="new-password"
-              class="input"
-              :class="{ 'input-error': error }"
-              :disabled="loading"
-            />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{ t('auth.resetPassword.passwordRequirement') }}
             </p>
@@ -47,23 +46,22 @@
 
           <!-- Confirm Password -->
           <div>
-            <label
-              for="confirm-password"
-              class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              {{ t('auth.resetPassword.confirmPassword') }}
+            <label for="confirm-password" class="block">
+              <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('auth.resetPassword.confirmPassword') }}
+              </span>
+              <input
+                id="confirm-password"
+                v-model="confirmPassword"
+                type="password"
+                required
+                minlength="8"
+                autocomplete="new-password"
+                class="input"
+                :class="{ 'input-error': error }"
+                :disabled="loading"
+              />
             </label>
-            <input
-              id="confirm-password"
-              v-model="confirmPassword"
-              type="password"
-              required
-              minlength="8"
-              autocomplete="new-password"
-              class="input"
-              :class="{ 'input-error': error }"
-              :disabled="loading"
-            />
           </div>
 
           <!-- Error Message -->
@@ -152,6 +150,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useToastStore } from '@/stores/toast';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -200,7 +199,7 @@ const handleSubmit = async () => {
       router.push('/dashboard');
     }, 2000);
   } catch (err: any) {
-    error.value = err.message || t('auth.resetPassword.error');
+    error.value = t(translateErrorMessage(err, { fallback: 'auth.resetPassword.error' }));
   } finally {
     loading.value = false;
   }

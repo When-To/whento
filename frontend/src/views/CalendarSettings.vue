@@ -107,18 +107,41 @@
 
             <div class="space-y-4">
               <!-- Public Link (hidden when participants are locked) -->
+              <!--
+                A `<span id>` + `aria-labelledby` rather than a `<label for>`: the copy
+                button shares the row with the field, and a `<label>` may not contain
+                interactive content other than the control it labels. The accessible name
+                is the same either way.
+              -->
               <div v-if="!form.lock_participants">
-                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <span
+                  id="calendar-public-link-label"
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {{ t('calendar.publicLink') }}
-                </label>
+                </span>
                 <div class="flex gap-2">
-                  <input :value="publicUrl" type="text" class="input flex-1" readonly />
+                  <input
+                    id="calendar-public-link"
+                    :value="publicUrl"
+                    type="text"
+                    class="input flex-1"
+                    aria-labelledby="calendar-public-link-label"
+                    readonly
+                  />
                   <button
                     type="button"
+                    :aria-label="t('a11y.copyPublicLink')"
                     class="btn btn-secondary"
                     @click="copyToClipboard(publicUrl)"
                   >
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg
+                      class="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
@@ -132,13 +155,34 @@
 
               <!-- ICS Link -->
               <div>
-                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <span
+                  id="calendar-ics-link-label"
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {{ t('calendar.icsLink') }}
-                </label>
+                </span>
                 <div class="flex gap-2">
-                  <input :value="icsUrl" type="text" class="input flex-1" readonly />
-                  <button type="button" class="btn btn-secondary" @click="copyToClipboard(icsUrl)">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <input
+                    id="calendar-ics-link"
+                    :value="icsUrl"
+                    type="text"
+                    class="input flex-1"
+                    aria-labelledby="calendar-ics-link-label"
+                    readonly
+                  />
+                  <button
+                    type="button"
+                    :aria-label="t('a11y.copyIcsLink')"
+                    class="btn btn-secondary"
+                    @click="copyToClipboard(icsUrl)"
+                  >
+                    <svg
+                      class="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
@@ -167,9 +211,11 @@
                 <!-- Edit mode -->
                 <template v-if="editingParticipantId === participant.id">
                   <input
+                    :id="`participant-name-${participant.id}`"
                     v-model="editingParticipantName"
                     type="text"
                     class="input flex-1"
+                    :aria-label="t('a11y.participantName')"
                     @keyup.enter="handleSaveParticipant(participant.id)"
                     @keyup.esc="cancelEditParticipant"
                   />
@@ -177,9 +223,16 @@
                     type="button"
                     class="text-primary-600 hover:text-primary-700 dark:text-primary-400"
                     :title="t('common.save')"
+                    :aria-label="t('common.save')"
                     @click="handleSaveParticipant(participant.id)"
                   >
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg
+                      class="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
@@ -192,9 +245,16 @@
                     type="button"
                     class="text-gray-600 hover:text-gray-700 dark:text-gray-400"
                     :title="t('common.cancel')"
+                    :aria-label="t('common.cancel')"
                     @click="cancelEditParticipant"
                   >
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg
+                      class="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
@@ -212,9 +272,16 @@
                     type="button"
                     class="text-primary-600 hover:text-primary-700 dark:text-primary-400"
                     :title="t('calendar.copyParticipantLink')"
+                    :aria-label="t('calendar.copyParticipantLink')"
                     @click="copyParticipantLink(participant.id!)"
                   >
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg
+                      class="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
@@ -227,9 +294,16 @@
                     type="button"
                     class="text-gray-600 hover:text-gray-700 dark:text-gray-400"
                     :title="t('common.edit')"
+                    :aria-label="t('common.edit')"
                     @click="startEditParticipant(participant.id!, participant.name)"
                   >
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg
+                      class="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
@@ -243,9 +317,16 @@
                     type="button"
                     class="text-danger-600 hover:text-danger-700 dark:text-danger-400"
                     :title="t('common.delete')"
+                    :aria-label="t('common.delete')"
                     @click="handleDeleteParticipant(participant.id!, participant.name)"
                   >
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg
+                      class="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
@@ -284,9 +365,11 @@
             <!-- Add Participant -->
             <form class="flex gap-2 mb-4" @submit.prevent="handleAddParticipant">
               <input
+                id="new-participant-name"
                 v-model="newParticipantName"
                 type="text"
                 class="input flex-1"
+                :aria-label="t('a11y.participantName')"
                 :placeholder="t('calendar.participantNamePlaceholder')"
               />
               <button
@@ -340,14 +423,7 @@
           </CollapsibleSection>
 
           <!-- Participant threshold and minimum duration -->
-          <CollapsibleSection
-            :title="
-              locale === 'fr'
-                ? 'Seuil de participants et durée minimale'
-                : 'Participant threshold and minimum duration'
-            "
-            :default-open="false"
-          >
+          <CollapsibleSection :title="t('calendar.sectionThreshold')" :default-open="false">
             <CalendarThresholdFields
               v-model:threshold="form.threshold"
               v-model:min-duration-hours="form.min_duration_hours"
@@ -390,12 +466,7 @@
           </CollapsibleSection>
 
           <!-- Allow/block days/hours -->
-          <CollapsibleSection
-            :title="
-              locale === 'fr' ? 'Autoriser/bloquer des jours/heures' : 'Allow/block days/hours'
-            "
-            :default-open="false"
-          >
+          <CollapsibleSection :title="t('calendar.sectionSchedule')" :default-open="false">
             <CalendarScheduleFields
               v-model:start-date="form.start_date"
               v-model:end-date="form.end_date"
@@ -497,44 +568,23 @@
                 </p>
                 <button
                   type="button"
+                  :disabled="deleting"
                   class="btn bg-danger-600 text-white hover:bg-danger-700 dark:bg-danger-600 dark:hover:bg-danger-700"
-                  @click="showDeleteConfirm = true"
+                  @click="handleDelete"
                 >
-                  {{ t('calendar.deleteCalendar') }}
+                  {{ deleting ? t('common.deleting') : t('calendar.deleteCalendar') }}
                 </button>
               </div>
             </div>
           </CollapsibleSection>
         </div>
 
-        <!-- Delete Confirmation Modal -->
-        <div
-          v-if="showDeleteConfirm"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          @click.self="showDeleteConfirm = false"
-        >
-          <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
-            <h3 class="mb-4 font-display text-xl font-semibold text-gray-900 dark:text-white">
-              {{ t('calendar.confirmDelete') }}
-            </h3>
-            <p class="mb-6 text-gray-600 dark:text-gray-400">
-              {{ t('calendar.confirmDeleteMessage') }}
-            </p>
-            <div class="flex justify-end gap-3">
-              <button type="button" class="btn btn-ghost" @click="showDeleteConfirm = false">
-                {{ t('common.cancel') }}
-              </button>
-              <button
-                type="button"
-                :disabled="deleting"
-                class="btn bg-danger-600 text-white hover:bg-danger-700"
-                @click="handleDelete"
-              >
-                {{ deleting ? t('common.deleting') : t('common.delete') }}
-              </button>
-            </div>
-          </div>
-        </div>
+        <!--
+          The delete confirmation used to be a fourth hand-rolled modal here: no
+          `role="dialog"`, no focus trap, no Escape, dismissable only by clicking the
+          backdrop. It is now the shared `confirm()` from `useConfirm`, which this view
+          already used for the other five destructive actions on the page.
+        -->
       </template>
     </div>
   </div>
@@ -553,6 +603,7 @@ import CalendarInfoFields from '@/components/calendar/CalendarInfoFields.vue';
 import CalendarThresholdFields from '@/components/calendar/CalendarThresholdFields.vue';
 import CalendarScheduleFields from '@/components/calendar/CalendarScheduleFields.vue';
 import ParticipantAccessToggles from '@/components/calendar/ParticipantAccessToggles.vue';
+import { translateErrorMessage } from '@/utils/errorTranslator';
 import {
   createEmptyWeekdayTimes,
   normalizeTime,
@@ -567,7 +618,7 @@ import {
 
 const router = useRouter();
 const route = useRoute();
-const { t, locale } = useI18n();
+const { t } = useI18n();
 const calendarStore = useCalendarStore();
 const toastStore = useToastStore();
 
@@ -577,8 +628,6 @@ const loading = ref(true);
 const updating = ref(false);
 const addingParticipant = ref(false);
 const deleting = ref(false);
-const showDeleteConfirm = ref(false);
-
 const newParticipantName = ref('');
 
 // Participant editing
@@ -747,7 +796,7 @@ async function loadCalendar() {
       }
     }
   } catch (error: any) {
-    toastStore.error(error.message || t('calendar.fetchError'));
+    toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.fetchError' })));
     // Redirect to dashboard on error
     router.push('/dashboard');
   } finally {
@@ -845,7 +894,7 @@ async function handleUpdate() {
     // Reload calendar to get updated data
     await loadCalendar();
   } catch (error: any) {
-    toastStore.error(error.message || t('calendar.updateError'));
+    toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.updateError' })));
   } finally {
     updating.value = false;
   }
@@ -856,7 +905,7 @@ async function handleSaveNotifications(config: NotifyConfig) {
     await updateNotifyConfig(calendarId, config);
     toastStore.success(t('calendar.settingsSaved'));
   } catch (error: any) {
-    toastStore.error(error.message || t('notifications.saveError'));
+    toastStore.error(t(translateErrorMessage(error, { fallback: 'notifications.saveError' })));
   }
 }
 
@@ -875,7 +924,7 @@ async function handleAddParticipant() {
     newParticipantName.value = '';
     // No need to reload - the store updates currentCalendar automatically
   } catch (error: any) {
-    toastStore.error(error.message || t('calendar.addParticipantError'));
+    toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.addParticipantError' })));
   } finally {
     addingParticipant.value = false;
   }
@@ -904,7 +953,7 @@ async function handleSaveParticipant(participantId: string) {
     cancelEditParticipant();
     // No need to reload - the store updates currentCalendar automatically
   } catch (error: any) {
-    toastStore.error(error.message || t('calendar.updateError'));
+    toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.updateError' })));
   }
 }
 
@@ -927,7 +976,9 @@ async function handleDeleteParticipant(participantId: string, participantName: s
     }
     // No need to reload - the store updates currentCalendar automatically
   } catch (error: any) {
-    toastStore.error(error.message || t('calendar.deleteParticipantError'));
+    toastStore.error(
+      t(translateErrorMessage(error, { fallback: 'calendar.deleteParticipantError' }))
+    );
   }
 }
 
@@ -949,19 +1000,28 @@ async function handleRegenerateToken(tokenType: 'public' | 'ics') {
     }
     // No need to reload - the store updates currentCalendar automatically
   } catch (error: any) {
-    toastStore.error(error.message || t('calendar.regenerateError'));
+    toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.regenerateError' })));
   }
 }
 
 async function handleDelete() {
+  const confirmed = await confirm({
+    title: t('calendar.deleteCalendar'),
+    message: t('calendar.confirmDelete'),
+    detail: t('calendar.confirmDeleteMessage'),
+    confirmLabel: t('common.delete'),
+  });
+  if (!confirmed) {
+    return;
+  }
+
   deleting.value = true;
 
   try {
     await calendarStore.deleteCalendar(calendarId);
     router.push('/dashboard');
   } catch (error: any) {
-    toastStore.error(error.message || t('calendar.deleteError'));
-    showDeleteConfirm.value = false;
+    toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.deleteError' })));
   } finally {
     deleting.value = false;
   }
@@ -988,7 +1048,7 @@ async function handleLockParticipantsChange() {
     // Revert on error
     form.lock_participants = originalForm.lock_participants;
     form.allow_anonymous_participants = originalForm.allow_anonymous_participants;
-    toastStore.error(error.message || t('calendar.updateError'));
+    toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.updateError' })));
   }
 }
 
@@ -1013,7 +1073,7 @@ async function handleAllowAnonymousParticipantsChange() {
     // Revert on error
     form.allow_anonymous_participants = originalForm.allow_anonymous_participants;
     form.lock_participants = originalForm.lock_participants;
-    toastStore.error(error.message || t('calendar.updateError'));
+    toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.updateError' })));
   }
 }
 
