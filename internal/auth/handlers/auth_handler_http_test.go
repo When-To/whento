@@ -507,6 +507,44 @@ func TestTheRefreshTokenNeverReachesTheBody(t *testing.T) {
 	}
 }
 
+// TestRegisterSetsTheRefreshCookie guards the session of a brand-new account. Register
+// generates and stores a refresh token like Login does, but used to drop it on the floor
+// instead of setting the cookie. That went unnoticed only because the access token was
+// persisted in localStorage; once it lives in memory alone, the cookie is the only thing
+// that carries a freshly registered user across a reload.
+func TestRegisterSetsTheRefreshCookie(t *testing.T) {
+	r := newRig(t, rigOptions{allowedRegister: true, users: &mockUserRepository{count: 1}})
+
+	rec := httptest.NewRecorder()
+	req := post("/api/v1/auth/register",
+		`{"email":"ada@example.test","password":"Correct-Horse-9","display_name":"Ada"}`)
+	r.handler.Register(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201 (%q)", rec.Code, rec.Body.String())
+	}
+
+	var cookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "refresh_token" {
+			cookie = c
+		}
+	}
+	if cookie == nil {
+		t.Fatal("register set no refresh_token cookie, so the session dies on the first reload")
+	}
+	if cookie.Value == "" {
+		t.Fatal("the refresh_token cookie is empty")
+	}
+	if !cookie.HttpOnly {
+		t.Error("the refresh token cookie is not HttpOnly, so any script can read it")
+	}
+	// Same rule as Login: the cookie carries it, the body never does.
+	if strings.Contains(rec.Body.String(), cookie.Value) {
+		t.Errorf("the refresh token is in the JSON body:\n%s", rec.Body.String())
+	}
+}
+
 func TestTheCookieIsNotSecureOverPlainHTTP(t *testing.T) {
 	// Marking it Secure over plain HTTP would make it unusable on a local install
 	// served without TLS, which is the default for a self-hosted first run.

@@ -108,23 +108,49 @@ describe('apiClient', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    // restoreAllMocks does not undo stubGlobal, and a stubbed navigator carrying a
+    // fake Web Lock would follow us into the next test.
+    vi.unstubAllGlobals();
   });
 
   describe('tokens', () => {
-    it('persists and restores the access token', () => {
+    it('keeps the access token out of storage entirely', () => {
       apiClient.setToken('a-token');
-      expect(localStorage.getItem('access_token')).toBe('a-token');
 
-      apiClient.clearToken();
-      expect(localStorage.getItem('access_token')).toBeNull();
+      // The whole point of the change: a script that can read stored data must not
+      // find the token there. Only the flag survives, and it is not a credential.
+      expect(Object.values(localStorage)).not.toContain('a-token');
+      expect(localStorage.getItem('whento.session')).toBe('1');
+    });
 
-      localStorage.setItem('access_token', 'restored');
-      apiClient.loadToken();
+    it('uses the in-memory token for requests', async () => {
+      apiClient.setToken('a-token');
 
       const seen = withAdapter(() => ok({}));
-      return apiClient.get('/anything').then(() => {
-        expect(seen[0].auth).toBe('Bearer restored');
-      });
+      await apiClient.get('/anything');
+
+      expect(seen[0].auth).toBe('Bearer a-token');
+    });
+
+    it('drops the token and the flag on clear', async () => {
+      apiClient.setToken('a-token');
+      apiClient.clearToken();
+
+      expect(apiClient.hasSession()).toBe(false);
+      expect(localStorage.getItem('whento.session')).toBeNull();
+
+      const seen = withAdapter(() => ok({}));
+      await apiClient.get('/anything');
+
+      expect(seen[0].auth).toBeUndefined();
+    });
+
+    it('reports a session so a cold load knows to refresh', () => {
+      expect(apiClient.hasSession()).toBe(false);
+
+      apiClient.setToken('a-token');
+
+      expect(apiClient.hasSession()).toBe(true);
     });
 
     it('sends no Authorization header when there is no token', async () => {
@@ -245,8 +271,34 @@ describe('apiClient', () => {
 
       await expect(apiClient.get('/calendars')).rejects.toBeTruthy();
 
-      expect(localStorage.getItem('access_token')).toBeNull();
+      expect(apiClient.hasSession()).toBe(false);
       expect(window.location.href).toBe('/login');
+    });
+
+    it('skips the call when another tab refreshed while we queued', async () => {
+      apiClient.setToken('expired');
+
+      // Stand in for the Web Lock: while the second tab waits its turn, the winning
+      // tab's token arrives over the channel. Spending the cookie again here would
+      // rotate away the token we were just handed and sign both tabs out.
+      const locks = {
+        request: async (_name: string, fn: () => Promise<void>) => {
+          apiClient.setToken('from-another-tab');
+          return fn();
+        },
+      };
+      vi.stubGlobal('navigator', { ...navigator, locks });
+
+      const seen = withAdapter((config, callNumber) => {
+        if (config.url === '/auth/refresh') return ok({ access_token: 'rotated-away' });
+        return callNumber === 0 ? unauthorized() : ok({ ok: true });
+      });
+
+      await expect(apiClient.get('/calendars')).resolves.toEqual({ ok: true });
+
+      expect(seen.filter(r => r.url === '/auth/refresh')).toHaveLength(0);
+      const replay = seen.filter(r => r.url === '/calendars');
+      expect(replay[replay.length - 1].auth).toBe('Bearer from-another-tab');
     });
 
     it('does not redirect away from a public route', async () => {
@@ -259,7 +311,7 @@ describe('apiClient', () => {
 
       await expect(apiClient.get('/calendars')).rejects.toBeTruthy();
 
-      expect(localStorage.getItem('access_token')).toBeNull();
+      expect(apiClient.hasSession()).toBe(false);
       expect(window.location.href).toBe('');
     });
   });

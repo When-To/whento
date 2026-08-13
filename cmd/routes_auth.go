@@ -24,7 +24,12 @@ func registerAuthRoutes(r chi.Router, d *deps, h *handlers) {
 		r.Group(func(r chi.Router) {
 			l.on(r, perPathIP(5, time.Minute)).Post("/login", h.auth.Login)
 			l.on(r, perPathIP(3, time.Minute)).Post("/register", h.auth.Register)
-			l.on(r, perPathIP(5, time.Minute)).Post("/refresh", h.auth.Refresh)
+			// Higher than its neighbours because the access token now lives only in
+			// memory: every cold page load spends one refresh, where it used to take
+			// one only after the token expired. At five a minute, reloading a few
+			// times in a row signed the user out. Guessing the value this protects is
+			// not the threat — it is an RSA-signed JWT — so the headroom costs nothing.
+			l.on(r, perPathIP(30, time.Minute)).Post("/refresh", h.auth.Refresh)
 			r.Post("/logout", h.auth.Logout)
 
 			// Password reset (public - no auth required)

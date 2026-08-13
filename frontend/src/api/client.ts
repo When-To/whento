@@ -8,11 +8,21 @@ import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestCo
 import type { ApiResponse, ApiError } from '@/types';
 import router from '@/router';
 
+/** Marks that this browser has a session; never holds the token itself. */
+const SESSION_FLAG = 'whento.session';
+
+/** Names the cross-tab channel and the cross-tab lock. */
+const AUTH_CHANNEL = 'whento.auth';
+const REFRESH_LOCK = 'whento.refresh';
+
+type AuthMessage = { type: 'token'; token: string } | { type: 'logout' };
+
 class ApiClient {
   private client: AxiosInstance;
   private accessToken: string | null = null;
   /** The one refresh in progress, shared by every caller that needs it. */
   private refreshInFlight: Promise<void> | null = null;
+  private channel: BroadcastChannel | null = null;
 
   constructor() {
     this.client = axios.create({
@@ -25,6 +35,42 @@ class ApiClient {
     });
 
     this.setupInterceptors();
+    this.setupChannel();
+  }
+
+  /**
+   * Share tokens and sign-outs with the other tabs on this origin.
+   *
+   * Refresh tokens are single-use — the backend deletes the old one before issuing the
+   * next (auth_service.go, `RefreshToken`). Tabs each hold their own in-memory access
+   * token, so restoring a window full of pinned tabs used to fire one `/auth/refresh`
+   * per tab against the same cookie: the first rotated it and the rest got a 401 and a
+   * forced sign-out. Whichever tab wins the lock now passes its result to the others.
+   *
+   * Nothing is persisted — the channel is same-origin and in-memory, so this does not
+   * put the token back within reach of stored-data reads.
+   */
+  private setupChannel() {
+    if (typeof BroadcastChannel === 'undefined') {
+      return;
+    }
+
+    this.channel = new BroadcastChannel(AUTH_CHANNEL);
+    this.channel.onmessage = (event: MessageEvent<AuthMessage>) => {
+      const message = event.data;
+      if (message?.type === 'token') {
+        // Set directly rather than through setToken, which would echo it back.
+        this.accessToken = message.token;
+        localStorage.setItem(SESSION_FLAG, '1');
+      } else if (message?.type === 'logout') {
+        this.accessToken = null;
+        localStorage.removeItem(SESSION_FLAG);
+      }
+    };
+  }
+
+  private broadcast(message: AuthMessage) {
+    this.channel?.postMessage(message);
   }
 
   private setupInterceptors() {
@@ -82,6 +128,7 @@ class ApiClient {
 
   private forceLogout() {
     this.clearToken();
+    this.broadcast({ type: 'logout' });
     // Only redirect to login if current route is not public
     const currentRoute = router.currentRoute.value;
     const isPublicRoute = currentRoute.meta.public === true;
@@ -105,19 +152,24 @@ class ApiClient {
 
   setToken(token: string) {
     this.accessToken = token;
-    localStorage.setItem('access_token', token);
+    // A flag, not a secret. The token itself never leaves memory: anything persisted
+    // is readable by any script that gets to run on the page, which is exactly what
+    // CodeQL's js/clear-text-storage-of-sensitive-data flagged when the JWT lived
+    // here. All this records is "there was a session in this browser", so a cold load
+    // knows whether to spend a `/auth/refresh` before deciding the visitor is
+    // anonymous. The refresh cookie is what actually proves the session.
+    localStorage.setItem(SESSION_FLAG, '1');
+    this.broadcast({ type: 'token', token });
   }
 
   clearToken() {
     this.accessToken = null;
-    localStorage.removeItem('access_token');
+    localStorage.removeItem(SESSION_FLAG);
   }
 
-  loadToken() {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      this.accessToken = token;
-    }
+  /** Whether this browser had a session, and so whether a cold load should refresh. */
+  hasSession(): boolean {
+    return localStorage.getItem(SESSION_FLAG) !== null;
   }
 
   /**
@@ -125,12 +177,13 @@ class ApiClient {
    *
    * Every request that 401s calls this, and a page load fires several at once — the
    * calendar alone issues three. Without the shared promise each of them started its
-   * own `/auth/refresh`, so one expired token produced a burst of refreshes against an
-   * endpoint rate limited to 5 per minute per IP. The later ones then raced: refresh
-   * rotates the token, so whichever landed last could invalidate the token an earlier
-   * one had just stored, logging the user out mid-session.
+   * own `/auth/refresh`, so one expired token produced a burst of refreshes against a
+   * rate-limited endpoint. The later ones then raced: refresh rotates the token, so
+   * whichever landed last could invalidate the token an earlier one had just stored,
+   * logging the user out mid-session.
    *
    * Callers all await the same in-flight request and continue with the token it stored.
+   * `performRefresh` extends the same guarantee across tabs.
    */
   async refreshToken(): Promise<void> {
     if (this.refreshInFlight) {
@@ -145,11 +198,42 @@ class ApiClient {
   }
 
   private async performRefresh(): Promise<void> {
-    const response = await this.client.post<ApiResponse<{ access_token: string }>>('/auth/refresh');
-    const newToken = response.data.data?.access_token;
-    if (newToken) {
-      this.setToken(newToken);
+    // Whatever we were holding when we decided a refresh was needed. If it has
+    // changed by the time the lock is ours, another tab refreshed while we queued
+    // and its token is already ours via the channel — spending the cookie again
+    // would rotate away the token we just received.
+    const staleToken = this.accessToken;
+
+    // Serialise across tabs as well as within one. Web Locks queue rather than fail,
+    // so a tab that arrives second waits here instead of racing the first onto a
+    // refresh cookie that is already spent.
+    return this.withRefreshLock(async () => {
+      if (this.accessToken !== staleToken) {
+        return;
+      }
+
+      const response =
+        await this.client.post<ApiResponse<{ access_token: string }>>('/auth/refresh');
+      const newToken = response.data.data?.access_token;
+      if (newToken) {
+        this.setToken(newToken);
+      }
+    });
+  }
+
+  /**
+   * Run `fn` while holding the cross-tab refresh lock.
+   *
+   * jsdom implements neither `navigator.locks` nor a stand-in for it, so the tests run
+   * the callback directly. That is the honest fallback: a single tab is exactly the
+   * case the lock is not needed for, and `refreshInFlight` still serialises within it.
+   */
+  private withRefreshLock(fn: () => Promise<void>): Promise<void> {
+    if (typeof navigator === 'undefined' || !navigator.locks) {
+      return fn();
     }
+
+    return navigator.locks.request(REFRESH_LOCK, fn);
   }
 
   // Generic HTTP methods

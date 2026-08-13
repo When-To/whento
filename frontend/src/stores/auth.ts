@@ -139,22 +139,47 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * Restore the session from the stored access token.
+   * The five-minute token that carries a half-finished login from the password (or
+   * passkey) step to the second factor.
+   *
+   * In memory rather than in localStorage: it authorises completing a sign-in, so
+   * persisting it is the same defect as persisting the access token, and it only has
+   * to survive a `router.push` — an SPA navigation, which keeps module state. A hard
+   * reload on /verify-mfa loses it, and that view sends the visitor back to /login.
+   */
+  const tempToken = ref<string | null>(null);
+
+  function setTempToken(token: string) {
+    tempToken.value = token;
+  }
+
+  function clearTempToken() {
+    tempToken.value = null;
+  }
+
+  /**
+   * Restore the session from the httpOnly refresh cookie.
+   *
+   * A cold load starts with no access token — it only ever lives in memory — so
+   * `/auth/me` 401s and the client's interceptor spends the refresh cookie and
+   * replays the call. That is the same path an expired token has always taken, so
+   * there is no second refresh implementation to keep honest here.
+   *
+   * The session flag is what keeps an anonymous visitor from paying for that round
+   * trip on every public page.
    *
    * Idempotent: concurrent and repeat callers all get the same promise, so the
    * router guard calling it never triggers a second `/auth/me`.
    */
   function initializeAuth(): Promise<void> {
     initPromise ??= (async () => {
-      apiClient.loadToken();
-      const token = localStorage.getItem('access_token');
-      if (token) {
+      if (apiClient.hasSession()) {
         try {
           await fetchUser();
         } catch {
-          // Token expired or invalid. Not an error the user needs to see: they are
-          // simply signed out, and the guard will send them to /login if the route
-          // needs a session.
+          // The refresh cookie is gone or expired. Not an error the user needs to
+          // see: they are simply signed out, and the guard will send them to /login
+          // if the route needs a session.
           apiClient.clearToken();
           clearError();
         }
@@ -180,6 +205,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading,
     error,
     initialized,
+    tempToken,
 
     // Getters
     isAuthenticated,
@@ -195,6 +221,8 @@ export const useAuthStore = defineStore('auth', () => {
     forgotPassword,
     resetPassword,
     setTokens,
+    setTempToken,
+    clearTempToken,
     initializeAuth,
     whenReady,
     clearError,

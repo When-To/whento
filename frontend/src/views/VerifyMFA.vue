@@ -140,10 +140,9 @@ const isCodeValid = computed(() => {
 });
 
 onMounted(async () => {
-  // Check if temp token exists
-  const tempToken = localStorage.getItem('temp_token');
-  if (!tempToken) {
-    // No temp token, redirect to login
+  // The temp token lives in the store, so it survives the router.push that got us
+  // here but not a hard reload — in which case the login has to start over.
+  if (!authStore.tempToken) {
     router.push('/login');
     return;
   }
@@ -161,12 +160,12 @@ function toggleCodeType() {
 }
 
 function backToLogin() {
-  localStorage.removeItem('temp_token');
+  authStore.clearTempToken();
   router.push('/login');
 }
 
 async function handleVerify() {
-  const tempToken = localStorage.getItem('temp_token');
+  const tempToken = authStore.tempToken;
   if (!tempToken) {
     router.push('/login');
     return;
@@ -183,7 +182,7 @@ async function handleVerify() {
     const response = await mfaApi.verify(tempToken, normalizedCode);
 
     // Clear temp token
-    localStorage.removeItem('temp_token');
+    authStore.clearTempToken();
 
     // Store real JWT tokens
     authStore.setTokens(response.access_token);

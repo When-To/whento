@@ -21,10 +21,15 @@ type ForgotPasswordResponse struct {
 	Message string `json:"message"`
 }
 
-// ResetPasswordResponse includes tokens for auto-login after password reset
+// ResetPasswordResponse includes tokens for auto-login after password reset.
+//
+// RefreshToken leaves over the httpOnly cookie the handler sets, never over JSON —
+// `json:"-"` here is what keeps a seven-day credential out of reach of page scripts,
+// matching AuthResponse. Serialising it made reset-password the one endpoint that
+// handed its refresh token to anything that could read a response body.
 type ResetPasswordResponse struct {
 	Message      string        `json:"message"`
 	AccessToken  string        `json:"access_token"`
-	RefreshToken string        `json:"refresh_token"`
+	RefreshToken string        `json:"-"`
 	User         *UserResponse `json:"user"`
 }

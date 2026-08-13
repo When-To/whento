@@ -25,7 +25,7 @@ const authApi = {
 const apiClient = {
   setToken: vi.fn(),
   clearToken: vi.fn(),
-  loadToken: vi.fn(),
+  hasSession: vi.fn(() => false),
 };
 
 vi.mock('@/api/auth', () => ({ authApi }));
@@ -68,6 +68,9 @@ function freshStore() {
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  // clearAllMocks clears calls, not implementations: without this a test that
+  // opts into a session leaves every later test signed in.
+  apiClient.hasSession.mockReturnValue(false);
 });
 
 describe('auth store', () => {
@@ -270,8 +273,30 @@ describe('auth store', () => {
     });
   });
 
+  describe('the MFA temp token', () => {
+    it('holds it in memory and never in storage', () => {
+      const store = freshStore();
+
+      store.setTempToken('half-signed-in');
+
+      expect(store.tempToken).toBe('half-signed-in');
+      // It authorises finishing a sign-in, so persisting it is the same defect as
+      // persisting the access token.
+      expect(Object.values(localStorage)).not.toContain('half-signed-in');
+    });
+
+    it('clears on demand, so a cancelled second factor leaves nothing behind', () => {
+      const store = freshStore();
+      store.setTempToken('half-signed-in');
+
+      store.clearTempToken();
+
+      expect(store.tempToken).toBeNull();
+    });
+  });
+
   describe('initializeAuth', () => {
-    it('marks itself initialized without a call when there is no token', async () => {
+    it('marks itself initialized without a call when there is no session', async () => {
       const store = freshStore();
 
       await store.initializeAuth();
@@ -281,14 +306,16 @@ describe('auth store', () => {
       expect(store.isAuthenticated).toBe(false);
     });
 
-    it('restores the session from a stored token', async () => {
-      localStorage.setItem('access_token', 'stored');
+    it('restores the session from the refresh cookie', async () => {
+      apiClient.hasSession.mockReturnValue(true);
       authApi.getMe.mockResolvedValue(USER);
       const store = freshStore();
 
       await store.initializeAuth();
 
-      expect(apiClient.loadToken).toHaveBeenCalled();
+      // No token is loaded from anywhere: /auth/me goes out bare, 401s, and the
+      // client's interceptor spends the httpOnly cookie to replay it.
+      expect(apiClient.setToken).not.toHaveBeenCalled();
       expect(store.user).toEqual(USER);
       expect(store.initialized).toBe(true);
     });
@@ -296,7 +323,7 @@ describe('auth store', () => {
     it('completes, and surfaces no error, when the stored token is stale', async () => {
       // An expired token is not a failure the user should read about: they are simply
       // signed out, and the guard sends them to /login if the route needs a session.
-      localStorage.setItem('access_token', 'stale');
+      apiClient.hasSession.mockReturnValue(true);
       authApi.getMe.mockRejectedValue({ code: 'UNAUTHORIZED' });
       const store = freshStore();
 
@@ -309,7 +336,7 @@ describe('auth store', () => {
     });
 
     it('runs once however many callers ask', async () => {
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       authApi.getMe.mockResolvedValue(USER);
       const store = freshStore();
 
@@ -321,7 +348,7 @@ describe('auth store', () => {
     it('holds every concurrent caller until the one fetch completes', async () => {
       // Pinia wraps actions, so the promise objects handed back are not identical;
       // what has to hold is that they all wait on the same single `/auth/me`.
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       const gate = deferred<User>();
       authApi.getMe.mockReturnValue(gate.promise);
       const store = freshStore();
@@ -345,7 +372,7 @@ describe('auth store', () => {
     });
 
     it('does not re-run after it has settled', async () => {
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       authApi.getMe.mockResolvedValue(USER);
       const store = freshStore();
 
@@ -357,7 +384,7 @@ describe('auth store', () => {
 
     it('gives each Pinia instance its own initialisation', async () => {
       // Module-scoped state here would leak the first test's session into the next.
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       authApi.getMe.mockResolvedValue(USER);
 
       await freshStore().initializeAuth();
@@ -370,7 +397,7 @@ describe('auth store', () => {
   describe('whenReady', () => {
     it('starts the restore itself when nobody has', async () => {
       // The guard must not depend on main.ts having run first.
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       authApi.getMe.mockResolvedValue(USER);
       const store = freshStore();
 
@@ -381,7 +408,7 @@ describe('auth store', () => {
     });
 
     it('does not resolve before the session is known, however slow that is', async () => {
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       const gate = deferred<User>();
       authApi.getMe.mockReturnValue(gate.promise);
       const store = freshStore();

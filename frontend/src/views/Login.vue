@@ -325,7 +325,7 @@ async function handleSubmit() {
 
     // Check if 2FA is required
     if (response?.require_mfa && response?.temp_token) {
-      localStorage.setItem('temp_token', response.temp_token);
+      authStore.setTempToken(response.temp_token);
       router.push('/verify-mfa');
       return;
     }
@@ -416,7 +416,7 @@ async function loginWithDiscoverablePasskey() {
 
     // Check if 2FA is required
     if (response.require_mfa && response.temp_token) {
-      localStorage.setItem('temp_token', response.temp_token);
+      authStore.setTempToken(response.temp_token);
       router.push('/verify-mfa');
       return;
     }
