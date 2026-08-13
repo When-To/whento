@@ -41,7 +41,10 @@
     "verifying": "Vérification...",
     "verify": "Vérifier",
     "rename": "Renommer",
-    "notFoundMessage": "Désolé, nous n'avons pas trouvé la page que vous cherchez."
+    "notFoundMessage": "Désolé, nous n'avons pas trouvé la page que vous cherchez.",
+    "confirm": "Confirmer",
+    "confirmTitle": "Confirmation",
+    "dismissNotification": "Fermer la notification"
   },
   "home": {
     "heroTitle": "When to Play?",
@@ -152,7 +155,10 @@
       "expired": "Ce lien magique a expiré. Veuillez en demander un nouveau.",
       "missingToken": "Aucun jeton de lien magique fourni."
     },
-    "invalidPassword": "Mot de passe incorrect"
+    "invalidPassword": "Mot de passe incorrect",
+    "logoutError": "Échec de la déconnexion",
+    "fetchUserError": "Impossible de charger votre compte",
+    "updateProfileError": "Échec de la mise à jour du profil"
   },
   "nav": {
     "home": "Accueil",
@@ -373,7 +379,8 @@
     "listView": "Liste",
     "noActionableDays": "Aucun jour disponible dans cette période",
     "noParticipantsDescription": "Ce calendrier n'a pas encore de participants. Aucune disponibilité ne peut être saisie pour le moment.",
-    "contactOwnerToAddParticipants": "Contactez le propriétaire du calendrier pour ajouter des participants."
+    "contactOwnerToAddParticipants": "Contactez le propriétaire du calendrier pour ajouter des participants.",
+    "updateParticipantError": "Échec de la mise à jour du participant"
   },
   "weekdays": {
     "short": {
@@ -457,7 +464,22 @@
     "invalidEmail": "Email invalide",
     "passwordTooShort": "Le mot de passe doit contenir au moins 12 caractères avec au moins une majuscule, une minuscule, un chiffre et un caractère spécial",
     "availabilityConflict": "Impossible d'ajouter une disponibilité sur ce jour, il ne peut y avoir qu'une disponibilité par jour par participant",
-    "deleteFailed": "La suppression a échoué"
+    "deleteFailed": "La suppression a échoué",
+    "badRequest": "La requête n'a pas pu être traitée",
+    "forbidden": "Vous n'avez pas la permission d'effectuer cette action",
+    "conflict": "Cela entre en conflit avec un élément existant",
+    "rateLimited": "Trop de tentatives. Veuillez patienter un instant puis réessayer.",
+    "serverError": "Une erreur est survenue de notre côté. Veuillez réessayer.",
+    "serviceUnavailable": "Le service est temporairement indisponible. Veuillez réessayer sous peu.",
+    "timeout": "La requête a pris trop de temps. Veuillez réessayer.",
+    "unexpected": "Une erreur est survenue. Veuillez réessayer.",
+    "boundary": {
+      "title": "Une erreur s'est produite",
+      "message": "La page n'a pas pu s'afficher. Recharger résout généralement le problème, et vos données sont intactes.",
+      "reload": "Recharger la page",
+      "home": "Retour à l'accueil",
+      "reference": "Référence : {reference}"
+    }
   },
   "validation": {
     "generic": {
@@ -823,6 +845,10 @@
     "regenerateConfirm": "La régénération du jeton invalidera l'URL actuelle. Toute personne utilisant l'ancienne URL aura besoin de la nouvelle. Continuer ?",
     "tokenRegenerated": "Jeton régénéré. Mettez à jour vos abonnements calendrier avec la nouvelle URL.",
     "includeInFeed": "Inclure dans le flux unifié",
-    "noCalendarsSelected": "Aucun calendrier sélectionné. Utilisez les cases à cocher sur vos calendriers ci-dessous pour choisir lesquels inclure."
+    "noCalendarsSelected": "Aucun calendrier sélectionné. Utilisez les cases à cocher sur vos calendriers ci-dessous pour choisir lesquels inclure.",
+    "fetchError": "Impossible de charger le flux unifié",
+    "createError": "Échec de la création du flux unifié",
+    "updateError": "Échec de la mise à jour des calendriers du flux unifié",
+    "regenerateError": "Échec de la régénération du jeton du flux"
   }
 }

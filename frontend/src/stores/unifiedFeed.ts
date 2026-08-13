@@ -7,56 +7,32 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { unifiedFeedApi } from '@/api/unifiedFeed';
+import { useAsyncActions } from '@/stores/asyncAction';
 import type { UnifiedFeedConfig } from '@/types';
 
 export const useUnifiedFeedStore = defineStore('unifiedFeed', () => {
   const config = ref<UnifiedFeedConfig | null>(null);
-  const loading = ref(false);
-  const error = ref<string | null>(null);
+  const { loading, error, run, clearError } = useAsyncActions();
 
   async function fetchConfig() {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('unifiedFeed.fetchError', async () => {
       config.value = await unifiedFeedApi.getConfig();
-    } catch (err: any) {
-      error.value = err.message || 'Failed to fetch unified feed config';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function createFeed() {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('unifiedFeed.createError', async () => {
       config.value = await unifiedFeedApi.create();
-    } catch (err: any) {
-      error.value = err.message || 'Failed to create unified feed';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function updateCalendars(calendarIds: string[]) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('unifiedFeed.updateError', async () => {
       await unifiedFeedApi.updateCalendars(calendarIds);
       if (config.value) {
         config.value.included_calendar_ids = calendarIds;
       }
-    } catch (err: any) {
-      error.value = err.message || 'Failed to update calendars';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function toggleCalendar(calendarId: string) {
@@ -71,20 +47,12 @@ export const useUnifiedFeedStore = defineStore('unifiedFeed', () => {
   }
 
   async function regenerateToken() {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('unifiedFeed.regenerateError', async () => {
       const { ics_token } = await unifiedFeedApi.regenerateToken();
       if (config.value) {
         config.value.ics_token = ics_token;
       }
-    } catch (err: any) {
-      error.value = err.message || 'Failed to regenerate token';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   function isCalendarIncluded(calendarId: string): boolean {
@@ -101,5 +69,6 @@ export const useUnifiedFeedStore = defineStore('unifiedFeed', () => {
     toggleCalendar,
     regenerateToken,
     isCalendarIncluded,
+    clearError,
   };
 });

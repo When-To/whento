@@ -5,7 +5,12 @@
  */
 
 import { apiClient } from './client';
-import type { NotifyConfig, NotifyConfigResponse, ParticipantEmailResponse } from '@/types';
+import type {
+  NotifyConfig,
+  NotifyConfigResponse,
+  ParticipantEmailMessageResponse,
+  ParticipantEmailResponse,
+} from '@/types';
 
 // Re-export types for convenience
 export type { NotifyConfig };
@@ -51,8 +56,12 @@ export const addParticipantEmail = async (
 /**
  * Verify participant email with verification token
  */
-export const verifyParticipantEmail = async (token: string): Promise<{ message: string }> => {
-  return await apiClient.get<{ message: string }>(`/calendars/participants/verify-email/${token}`);
+export const verifyParticipantEmail = async (
+  token: string
+): Promise<ParticipantEmailMessageResponse> => {
+  return await apiClient.get<ParticipantEmailMessageResponse>(
+    `/calendars/participants/verify-email/${token}`
+  );
 };
 
 /**
@@ -61,8 +70,8 @@ export const verifyParticipantEmail = async (token: string): Promise<{ message: 
 export const resendVerificationEmail = async (
   token: string,
   participantId: string
-): Promise<{ message: string }> => {
-  return await apiClient.post<{ message: string }>(
+): Promise<ParticipantEmailMessageResponse> => {
+  return await apiClient.post<ParticipantEmailMessageResponse>(
     `/calendars/${token}/participants/${participantId}/resend-verification`
   );
 };

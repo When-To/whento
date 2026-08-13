@@ -5,9 +5,42 @@
 -->
 
 <template>
+  <!--
+    Error boundary fallback. Rendered instead of the app — not inside it — because
+    what threw may well be the navigation or the layout itself.
+  -->
+  <div
+    v-if="failed"
+    class="flex min-h-screen items-center justify-center bg-gray-50 p-4 dark:bg-gray-950"
+  >
+    <div
+      class="w-full max-w-md rounded-lg border border-gray-200 bg-white p-8 text-center shadow-lg dark:border-gray-800 dark:bg-gray-900"
+      role="alert"
+    >
+      <img src="/logo.png" alt="WhenTo" class="mx-auto mb-4 h-12 w-12" />
+      <h1 class="mb-2 font-display text-xl font-bold text-gray-900 dark:text-white">
+        {{ t('errors.boundary.title') }}
+      </h1>
+      <p class="mb-6 text-sm text-gray-600 dark:text-gray-400">
+        {{ t('errors.boundary.message') }}
+      </p>
+      <div class="flex flex-col gap-2 sm:flex-row sm:justify-center">
+        <button class="btn btn-primary" @click="reloadApp">
+          {{ t('errors.boundary.reload') }}
+        </button>
+        <button class="btn btn-ghost" @click="goHome">
+          {{ t('errors.boundary.home') }}
+        </button>
+      </div>
+      <p class="mt-6 font-mono text-xs text-gray-400 dark:text-gray-600">
+        {{ t('errors.boundary.reference', { reference }) }}
+      </p>
+    </div>
+  </div>
+
   <!-- Loading Screen during auth initialization -->
   <div
-    v-if="!authStore.initialized"
+    v-else-if="!authStore.initialized"
     class="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950"
   >
     <div class="text-center">
@@ -409,19 +442,28 @@
     <!-- Toast Notifications -->
     <ToastContainer />
   </div>
+
+  <!--
+    Outside the two branches above on purpose: a confirmation opened from anywhere
+    must survive an auth-state flip, and it is the single host for useConfirm().
+  -->
+  <ConfirmDialog />
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onErrorCaptured, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { SUPPORTED_LOCALES } from '@/i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useCalendarHistoryStore } from '@/stores/calendarHistory';
+import { useAppError } from '@/composables/useAppError';
 import { useBuildType } from '@/composables/useBuildType';
+import { applyTheme, resolveTheme, THEME_STORAGE_KEY, type Theme } from '@/utils/theme';
 import { PUBLIC_APP_URL } from '@/config/constants';
 import Footer from '@/components/Footer.vue';
 import CalendarSidebar from '@/components/CalendarSidebar.vue';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import ToastContainer from '@/components/ToastContainer.vue';
 
 const route = useRoute();
@@ -430,9 +472,43 @@ const { t, locale } = useI18n();
 const authStore = useAuthStore();
 const historyStore = useCalendarHistoryStore();
 const { isCloud, isSelfHosted } = useBuildType();
+const { failed, reference, reportFatalError, clearFatalError } = useAppError();
 
-const theme = ref<'light' | 'dark'>('light');
+// Resolved at setup, not on mount: the pre-paint snippet in index.html has already
+// put the class on <html>, and reading the same source here keeps the toggle's icon
+// in step with what is actually on screen from the very first frame.
+const theme = ref<Theme>(resolveTheme());
 const mobileMenuOpen = ref(false);
+
+/**
+ * The error boundary.
+ *
+ * Returning `false` stops the error propagating to `app.config.errorHandler`, so a
+ * render failure is reported exactly once. Everything below this component — which
+ * is to say every view — is covered; what escapes (the root, watchers with no
+ * rendering parent) is caught by the global handler in main.ts, which routes into
+ * the same state and so shows the same screen.
+ */
+onErrorCaptured((error, _instance, info) => {
+  reportFatalError(error, `boundary:${info}`);
+  return false;
+});
+
+// Navigating away is a recovery: the broken view is gone, so drop the fallback.
+watch(
+  () => route.fullPath,
+  () => clearFatalError()
+);
+
+function reloadApp() {
+  window.location.reload();
+}
+
+function goHome() {
+  clearFatalError();
+  // A hard navigation if the router itself is what failed.
+  router.push('/').catch(() => window.location.assign('/'));
+}
 
 const isAuthenticated = computed(() => authStore.isAuthenticated);
 const isAdmin = computed(() => authStore.isAdmin);
@@ -442,16 +518,8 @@ const calendarHistoryCount = computed(() => historyStore.calendars.length);
 
 function toggleTheme() {
   theme.value = theme.value === 'light' ? 'dark' : 'light';
-  localStorage.setItem('theme', theme.value);
-  updateTheme();
-}
-
-function updateTheme() {
-  if (theme.value === 'dark') {
-    document.documentElement.classList.add('dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-  }
+  localStorage.setItem(THEME_STORAGE_KEY, theme.value);
+  applyTheme(theme.value);
 }
 
 function toggleLocale() {
@@ -478,14 +546,9 @@ async function handleLogout() {
 }
 
 onMounted(() => {
-  // Initialize theme
-  const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
-  if (savedTheme) {
-    theme.value = savedTheme;
-  } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    theme.value = 'dark';
-  }
-  updateTheme();
+  // The class is already on <html> from the pre-paint snippet; this only covers the
+  // case where that snippet could not run (storage disabled, CSP).
+  applyTheme(theme.value);
 
   // Initialize locale
   const savedLocale = localStorage.getItem('locale');

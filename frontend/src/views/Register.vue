@@ -229,14 +229,7 @@ async function handleSubmit() {
         }
       });
     } else {
-      // Show generic error message (translate if possible)
-      const errorKey = translateErrorMessage(err.message || '');
-      error.value = errorKey === err.message ? err.message : t(errorKey);
-
-      // If no error message, use fallback
-      if (!error.value) {
-        error.value = t('auth.registerError');
-      }
+      error.value = t(translateErrorMessage(err, { fallback: 'auth.registerError' }));
     }
   } finally {
     loading.value = false;

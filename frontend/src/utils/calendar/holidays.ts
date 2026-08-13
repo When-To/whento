@@ -18,9 +18,14 @@
  * language and year, so it is always valid and never needs clearing.
  */
 
-import Holidays, { type HolidaysTypes } from 'date-holidays';
+import { ref, type Ref } from 'vue';
 import { getCountryForTimezone } from 'countries-and-timezones';
 import { addDaysISO, yearOf, type ISODate } from '@/utils/date/isoDate';
+
+// Type-only, so nothing of `date-holidays` survives into this module's static
+// imports — the whole point of the split below.
+import type Holidays from 'date-holidays';
+import type { HolidaysTypes } from 'date-holidays';
 
 /** Public holidays for one country, in one language, answered by calendar date. */
 export interface HolidayIndex {
@@ -43,6 +48,55 @@ const countryCaches = new Map<string, CountryCache>();
 const indexes = new Map<string, HolidayIndex>();
 
 /**
+ * `date-holidays` is 1.4 MB — by a wide margin the largest thing the app ships, and
+ * only the participant calendar ever needs it. A static `import` here made it part
+ * of the entry bundle for every visitor, including anyone who only ever sees the
+ * login page, which is what the "lazy loaded chunk" comment in vite.config.ts
+ * claimed was already happening and was not.
+ *
+ * So the library is fetched on demand. Until it arrives, `getHolidayIndex` answers
+ * "no holidays" rather than blocking, and `holidaysReady` flips when the module
+ * lands so the UI can recompute. The window is one network round trip on a route
+ * that is already fetching its calendar data.
+ */
+type HolidaysConstructor = typeof import('date-holidays').default;
+
+let HolidaysCtor: HolidaysConstructor | null = null;
+let enginePromise: Promise<void> | null = null;
+
+/**
+ * Flips to true once the engine is in memory.
+ *
+ * Reactive so callers can re-derive when it changes; deliberately *not* read inside
+ * `isHoliday`, which runs thousands of times per grid render. Instead the index
+ * cache is dropped on load, so `getHolidayIndex` hands back a new object and any
+ * computed built on it invalidates by identity.
+ */
+export const holidaysReady: Ref<boolean> = ref(false);
+
+/**
+ * Fetch the holiday engine. Idempotent, and safe to call from a render path: repeat
+ * callers share the one in-flight import.
+ */
+export function preloadHolidays(): Promise<void> {
+  enginePromise ??= import('date-holidays')
+    .then(module => {
+      HolidaysCtor = module.default;
+      // Drop the placeholder indexes handed out while the engine was loading, so the
+      // next `getHolidayIndex` builds a real one *and returns a different object*.
+      indexes.clear();
+      holidaysReady.value = true;
+    })
+    .catch(error => {
+      // Same contract as a broken country ruleset below: the calendar keeps working
+      // without holiday shading, and the failure is visible rather than silent.
+      // eslint-disable-next-line no-console
+      console.warn('[holidays] failed to load the holiday engine', error);
+    });
+  return enginePromise;
+}
+
+/**
  * Resolve an IANA timezone to an ISO country code.
  *
  * O(1) against the `countries-and-timezones` dataset, replacing a 93 ms scan that
@@ -61,13 +115,25 @@ function getCountryCache(countryCode: string, language: string): CountryCache {
   const key = `${countryCode}|${language}`;
   let cache = countryCaches.get(key);
   if (!cache) {
+    // Only ever reached from `getHolidayIndex` after `HolidaysCtor` is set.
+    const Ctor = HolidaysCtor as HolidaysConstructor;
     cache = {
-      instance: new Holidays(countryCode, { languages: [language] }),
+      instance: new Ctor(countryCode, { languages: [language] }),
       years: new Map(),
     };
     countryCaches.set(key, cache);
   }
   return cache;
+}
+
+/** The answer for an unsupported country, and for the window before the engine loads. */
+function emptyIndex(countryCode: string | null): HolidayIndex {
+  return {
+    countryCode,
+    isHoliday: () => false,
+    isHolidayEve: () => false,
+    getName: () => null,
+  };
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -130,6 +196,11 @@ function loadYear(cache: CountryCache, year: number): Map<ISODate, string> {
  * `language` is the vue-i18n locale (`'fr'` / `'en'`). It is part of the cache key, so
  * switching language yields correctly localized names — the previous `getHolidayName`
  * hard-coded French and every caller relied on that default.
+ *
+ * Synchronous by design: it is called from computeds, thousands of times per render.
+ * Before the engine has loaded it answers "no holidays" and starts the fetch; when
+ * that lands, the cache is dropped and the next call returns a fully populated index
+ * under a new identity, which is what makes dependent computeds re-run.
  */
 export function getHolidayIndex(timeZone: string, language: string): HolidayIndex {
   const key = `${timeZone}|${language}`;
@@ -138,26 +209,26 @@ export function getHolidayIndex(timeZone: string, language: string): HolidayInde
 
   const countryCode = resolveCountry(timeZone);
 
-  const index: HolidayIndex = countryCode
-    ? (() => {
-        const cache = getCountryCache(countryCode, language);
-        const lookup = (date: ISODate): string | undefined =>
-          loadYear(cache, yearOf(date)).get(date);
-        return {
-          countryCode,
-          isHoliday: date => lookup(date) !== undefined,
-          // Crosses years correctly: 31 December looks up the *next* year's map,
-          // which `loadYear` fills on demand.
-          isHolidayEve: date => lookup(addDaysISO(date, 1)) !== undefined,
-          getName: date => lookup(date) ?? null,
-        };
-      })()
-    : {
-        countryCode: null,
-        isHoliday: () => false,
-        isHolidayEve: () => false,
-        getName: () => null,
-      };
+  let index: HolidayIndex;
+  if (!countryCode) {
+    index = emptyIndex(null);
+  } else if (!HolidaysCtor) {
+    void preloadHolidays();
+    // Not cached under `indexes`: caching it would be correct (the load clears the
+    // map) but leaves a stale object reachable if the import fails outright.
+    return emptyIndex(countryCode);
+  } else {
+    const cache = getCountryCache(countryCode, language);
+    const lookup = (date: ISODate): string | undefined => loadYear(cache, yearOf(date)).get(date);
+    index = {
+      countryCode,
+      isHoliday: date => lookup(date) !== undefined,
+      // Crosses years correctly: 31 December looks up the *next* year's map,
+      // which `loadYear` fills on demand.
+      isHolidayEve: date => lookup(addDaysISO(date, 1)) !== undefined,
+      getName: date => lookup(date) ?? null,
+    };
+  }
 
   indexes.set(key, index);
   return index;

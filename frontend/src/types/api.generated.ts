@@ -1393,7 +1393,10 @@ export interface paths {
      */
     get: {
       parameters: {
-        query?: never;
+        query?: {
+          /** @description Caller's participant ID: the one ID left unmasked when the calendar hides participants */
+          participant_id?: string;
+        };
         header?: never;
         path: {
           /** @description Date (YYYY-MM-DD) */
@@ -1411,7 +1414,7 @@ export interface paths {
             [name: string]: unknown;
           };
           content: {
-            'application/json': components['schemas']['models.DateAvailabilitySummary'];
+            'application/json': components['schemas']['models.PublicDateAvailabilitySummary'];
           };
         };
         /** @description Calendar not found */
@@ -2194,6 +2197,8 @@ export interface paths {
         query: {
           /** @description End date (YYYY-MM-DD) */
           end: string;
+          /** @description Caller's participant ID: the one ID left unmasked when the calendar hides participants */
+          participant_id?: string;
           /** @description Start date (YYYY-MM-DD) */
           start: string;
         };
@@ -2212,7 +2217,7 @@ export interface paths {
             [name: string]: unknown;
           };
           content: {
-            'application/json': components['schemas']['models.DateAvailabilitySummary'][];
+            'application/json': components['schemas']['models.PublicDateAvailabilitySummary'][];
           };
         };
         /** @description Missing start/end parameters */
@@ -3031,9 +3036,7 @@ export interface paths {
       /** @description Email address */
       requestBody: {
         content: {
-          'application/json': {
-            email?: string;
-          };
+          'application/json': components['schemas']['models.AddParticipantEmailRequest'];
         };
       };
       responses: {
@@ -3043,12 +3046,7 @@ export interface paths {
             [name: string]: unknown;
           };
           content: {
-            'application/json': {
-              email?: string;
-              message?: string;
-              participant_id?: string;
-              verified?: boolean;
-            };
+            'application/json': components['schemas']['models.ParticipantEmailResponse'];
           };
         };
         /** @description Bad Request */
@@ -3119,9 +3117,7 @@ export interface paths {
             [name: string]: unknown;
           };
           content: {
-            'application/json': {
-              [key: string]: string;
-            };
+            'application/json': components['schemas']['models.ParticipantEmailMessageResponse'];
           };
         };
         /** @description Bad Request */
@@ -3248,9 +3244,7 @@ export interface paths {
             [name: string]: unknown;
           };
           content: {
-            'application/json': {
-              [key: string]: string;
-            };
+            'application/json': components['schemas']['models.ParticipantEmailMessageResponse'];
           };
         };
         /** @description Bad Request */
@@ -4654,6 +4648,9 @@ export interface components {
       /** @example false */
       success?: boolean;
     };
+    'models.AddParticipantEmailRequest': {
+      email: string;
+    };
     'models.AddParticipantRequest': {
       name: string;
     };
@@ -4787,11 +4784,6 @@ export interface components {
       /** @description Format: "HH:MM" */
       start_time?: string;
     };
-    'models.DateAvailabilitySummary': {
-      date?: string;
-      participants?: components['schemas']['models.ParticipantAvailabilitySummary'][];
-      total_count?: number;
-    };
     'models.DiscordChannelConfig': {
       enabled?: boolean;
       webhook_url?: string;
@@ -4857,12 +4849,14 @@ export interface components {
       availabilities?: components['schemas']['models.AvailabilityItem'][];
       participant?: components['schemas']['models.ParticipantInfo'];
     };
-    'models.ParticipantAvailabilitySummary': {
-      end_time?: string;
-      note?: string;
+    'models.ParticipantEmailMessageResponse': {
+      message?: string;
+    };
+    'models.ParticipantEmailResponse': {
+      email?: string;
+      message?: string;
       participant_id?: string;
-      participant_name?: string;
-      start_time?: string;
+      verified?: boolean;
     };
     'models.ParticipantInfo': {
       email?: string;
@@ -4903,6 +4897,11 @@ export interface components {
         [key: string]: components['schemas']['models.TimeRange'];
       };
     };
+    'models.PublicDateAvailabilitySummary': {
+      date?: string;
+      participants?: components['schemas']['models.PublicParticipantAvailabilitySummary'][];
+      total_count?: number;
+    };
     'models.PublicParticipant': {
       calendar_id?: string;
       created_at?: string;
@@ -4912,6 +4911,13 @@ export interface components {
       id?: string;
       locale?: string;
       name?: string;
+    };
+    'models.PublicParticipantAvailabilitySummary': {
+      end_time?: string;
+      note?: string;
+      participant_id?: string;
+      participant_name?: string;
+      start_time?: string;
     };
     'models.Recurrence': {
       created_at?: string;

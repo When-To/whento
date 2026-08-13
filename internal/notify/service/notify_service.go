@@ -18,39 +18,97 @@ import (
 	// Aliased: the constructor below takes a *slog.Logger named `logger`, which
 	// would otherwise shadow the package.
 	pkglog "github.com/whento/pkg/logger"
-	authRepo "github.com/whento/whento/internal/auth/repository"
+	authModels "github.com/whento/whento/internal/auth/models"
 	availabilityModels "github.com/whento/whento/internal/availability/models"
-	availabilityRepo "github.com/whento/whento/internal/availability/repository"
 	calendarModels "github.com/whento/whento/internal/calendar/models"
-	calendarRepo "github.com/whento/whento/internal/calendar/repository"
 	"github.com/whento/whento/internal/notify/models"
-	notifyRepo "github.com/whento/whento/internal/notify/repository"
+)
+
+// The interfaces below are what this service actually uses of the four repositories,
+// the mailer and the two collaborators it used to hold by concrete type. None of
+// them is the whole of what it names: CalendarStore is one method of a twelve-method
+// repository, ParticipantStore two of sixteen.
+//
+// They are declared here, on the consuming side, and every type they mention lives
+// in a models package — internal/{auth,availability,calendar}/models — so a fake can
+// satisfy one without importing a repository, and therefore without a database. An
+// interface whose signatures name repository types abstracts nothing; it only makes
+// the coupling longer to write.
+type (
+	// CalendarStore resolves the calendar a threshold transition belongs to.
+	CalendarStore interface {
+		GetByID(ctx context.Context, id uuid.UUID) (*calendarModels.Calendar, error)
+	}
+
+	// ParticipantStore lists who is on a calendar, and who among them accepts mail.
+	ParticipantStore interface {
+		GetByCalendarID(ctx context.Context, calendarID uuid.UUID) ([]calendarModels.Participant, error)
+		GetVerifiedParticipantsByCalendar(ctx context.Context, calendarID uuid.UUID) ([]calendarModels.Participant, error)
+	}
+
+	// AvailabilityStore says who declared themselves available on the date that
+	// moved, which is who gets told about it.
+	AvailabilityStore interface {
+		GetByDate(ctx context.Context, calendarID uuid.UUID, date time.Time) ([]*availabilityModels.Availability, error)
+	}
+
+	// UserStore resolves the calendar owner, the one recipient who is an account.
+	UserStore interface {
+		GetByID(ctx context.Context, id uuid.UUID) (*authModels.User, error)
+	}
+
+	// NotificationLog is the anti-spam ledger: it answers whether this exact
+	// notice went to this exact recipient recently, and records the ones sent.
+	NotificationLog interface {
+		WasNotificationSentRecently(ctx context.Context, calendarID uuid.UUID, date time.Time, eventType string, recipientID uuid.UUID, channel string) (bool, error)
+		LogNotification(ctx context.Context, calendarID uuid.UUID, date time.Time, eventType, recipientType string, recipientID uuid.UUID, channel string) error
+	}
+
+	// Mailer is the SMTP sender. IsConfigured is as important as Send: an
+	// instance with no mail set up skips the whole email path.
+	Mailer interface {
+		IsConfigured() bool
+		Send(msg email.Email) error
+	}
+
+	// ChannelNotifier posts to the three chat services. Separate from Mailer
+	// because only the owner ever gets these, and they carry no link.
+	ChannelNotifier interface {
+		SendDiscord(ctx context.Context, webhookURL, message string) error
+		SendSlack(ctx context.Context, webhookURL, message string) error
+		SendTelegram(ctx context.Context, botToken, chatID, message string) error
+	}
+
+	// TransitionDetector decides whether the count crossing the threshold is news.
+	TransitionDetector interface {
+		DetectTransition(ctx context.Context, calendarID uuid.UUID, date time.Time, threshold, previousCount int) (*models.ThresholdTransition, error)
+	}
 )
 
 // NotifyService orchestrates notification sending
 type NotifyService struct {
-	calendarRepo     *calendarRepo.CalendarRepository
-	participantRepo  *calendarRepo.ParticipantRepository
-	availabilityRepo *availabilityRepo.AvailabilityRepository
-	userRepo         *authRepo.UserRepository
-	notificationLog  *notifyRepo.NotificationLogRepository
-	emailService     *email.Service
-	externalNotifier *ExternalNotifier
-	detector         *ThresholdDetector
+	calendarRepo     CalendarStore
+	participantRepo  ParticipantStore
+	availabilityRepo AvailabilityStore
+	userRepo         UserStore
+	notificationLog  NotificationLog
+	emailService     Mailer
+	externalNotifier ChannelNotifier
+	detector         TransitionDetector
 	appURL           string
 	logger           *slog.Logger
 }
 
 // NewNotifyService creates a new notification service
 func NewNotifyService(
-	calendarRepo *calendarRepo.CalendarRepository,
-	participantRepo *calendarRepo.ParticipantRepository,
-	availabilityRepo *availabilityRepo.AvailabilityRepository,
-	userRepo *authRepo.UserRepository,
-	notificationLog *notifyRepo.NotificationLogRepository,
-	emailService *email.Service,
-	externalNotifier *ExternalNotifier,
-	detector *ThresholdDetector,
+	calendarRepo CalendarStore,
+	participantRepo ParticipantStore,
+	availabilityRepo AvailabilityStore,
+	userRepo UserStore,
+	notificationLog NotificationLog,
+	emailService Mailer,
+	externalNotifier ChannelNotifier,
+	detector TransitionDetector,
 	appURL string,
 	logger *slog.Logger,
 ) *NotifyService {

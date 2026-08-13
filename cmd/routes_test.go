@@ -257,6 +257,11 @@ var wantRateLimited = []string{
 	"GET /api/v1/calendars/public/{token}",
 	"POST /api/v1/calendars/public/{token}/participants",
 	"GET /api/v1/calendars/participants/verify-email/{token}",
+	// Both of these spend the same resource — outbound mail to an address the
+	// caller chooses, with no authentication — so both are budgeted. AddEmail
+	// was the only route in its group without a limiter, which made it an open
+	// relay for anyone holding a public calendar link.
+	"POST /api/v1/calendars/{token}/participants/{pid}/email",
 	"POST /api/v1/calendars/{token}/participants/{pid}/resend-verification",
 
 	// The authenticated calendar group: 100/minute/user

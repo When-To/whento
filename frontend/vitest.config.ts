@@ -5,9 +5,14 @@
  */
 
 import { defineConfig } from 'vitest/config';
+import vue from '@vitejs/plugin-vue';
 import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
+  // Single-file components are compiled here too, so component tests can mount them.
+  // Without this, importing a `.vue` file from a test fails in the import analysis
+  // pass, long before any assertion runs.
+  plugins: [vue()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

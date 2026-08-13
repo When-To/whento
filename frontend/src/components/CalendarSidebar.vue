@@ -126,6 +126,7 @@ import { computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useCalendarHistoryStore, type CalendarHistoryItem } from '@/stores/calendarHistory';
+import { confirm } from '@/composables/useConfirm';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -157,14 +158,14 @@ function close() {
   historyStore.close();
 }
 
-function handleRemove(token: string) {
-  if (confirm(t('calendar.confirmRemoveHistory'))) {
+async function handleRemove(token: string) {
+  if (await confirm({ message: t('calendar.confirmRemoveHistory') })) {
     historyStore.removeCalendar(token);
   }
 }
 
-function handleClearAll() {
-  if (confirm(t('calendar.confirmClearHistory'))) {
+async function handleClearAll() {
+  if (await confirm({ message: t('calendar.confirmClearHistory') })) {
     historyStore.clearHistory();
     close();
   }

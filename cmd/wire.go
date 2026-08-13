@@ -236,7 +236,7 @@ func buildHandlers(d *deps) (*handlers, error) {
 		mfa:     mfaHandler,
 
 		// The quota service is what enforces the calendar limit on creation.
-		calendar:    calendarHandlers.NewCalendarHandler(calendarSvc, d.quota.QuotaService, userRepo, d.cfg, d.pool),
+		calendar:    calendarHandlers.NewCalendarHandler(calendarSvc, d.quota.QuotaService, userRepo, d.cfg, calendarRepo.NewQuotaLocker(d.pool)),
 		participant: calendarHandlers.NewParticipantHandler(calendarSvc),
 
 		notifyConfig: notifyHandlers.NewNotifyConfigHandler(

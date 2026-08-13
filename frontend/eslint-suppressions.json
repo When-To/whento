@@ -45,9 +45,6 @@
     }
   },
   "src/components/ParticipantDetailsPopup.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
     "no-console": {
       "count": 2
     },
@@ -82,6 +79,14 @@
       "count": 1
     }
   },
+  "src/components/calendar/CalendarInfoFields.vue": {
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 2
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 2
+    }
+  },
   "src/components/calendar/CalendarListView.vue": {
     "vuejs-accessibility/no-static-element-interactions": {
       "count": 1
@@ -92,6 +97,27 @@
       "count": 1
     }
   },
+  "src/components/calendar/CalendarScheduleFields.vue": {
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 2
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 7
+    }
+  },
+  "src/components/calendar/CalendarThresholdFields.vue": {
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 2
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 2
+    }
+  },
+  "src/components/calendar/CalendarViewToolbar.vue": {
+    "vuejs-accessibility/label-has-for": {
+      "count": 3
+    }
+  },
   "src/components/calendar/CalendarWeekControls.vue": {
     "vuejs-accessibility/label-has-for": {
       "count": 3
@@ -100,6 +126,59 @@
   "src/components/calendar/CalendarWeekView.vue": {
     "vuejs-accessibility/interactive-supports-focus": {
       "count": 1
+    }
+  },
+  "src/components/calendar/ParticipantAccessToggles.vue": {
+    "vuejs-accessibility/label-has-for": {
+      "count": 2
+    }
+  },
+  "src/components/participant/AvailabilityList.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 1
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 4
+    }
+  },
+  "src/components/participant/AvailabilitySlotForm.vue": {
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 1
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 4
+    }
+  },
+  "src/components/participant/CalendarSharePanel.vue": {
+    "vuejs-accessibility/label-has-for": {
+      "count": 2
+    }
+  },
+  "src/components/participant/ParticipantEmailChangeForm.vue": {
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 1
+    }
+  },
+  "src/components/participant/ParticipantEmailPanel.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 1
+    }
+  },
+  "src/components/participant/RecurrenceEditor.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    },
+    "vuejs-accessibility/form-control-has-label": {
+      "count": 8
+    },
+    "vuejs-accessibility/label-has-for": {
+      "count": 12
     }
   },
   "src/components/settings/BackupCodesModal.vue": {
@@ -167,36 +246,13 @@
       "count": 3
     }
   },
-  "src/stores/auth.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 8
-    },
-    "no-console": {
-      "count": 1
-    }
-  },
-  "src/stores/calendar.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 12
-    }
-  },
   "src/stores/calendarHistory.ts": {
     "no-console": {
       "count": 1
     }
   },
-  "src/stores/unifiedFeed.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    }
-  },
   "src/utils/calendar/holidays.ts": {
     "no-console": {
-      "count": 1
-    }
-  },
-  "src/utils/errorTranslator.ts": {
-    "@typescript-eslint/no-explicit-any": {
       "count": 1
     }
   },
@@ -230,10 +286,7 @@
       "count": 1
     },
     "vuejs-accessibility/form-control-has-label": {
-      "count": 8
-    },
-    "vuejs-accessibility/label-has-for": {
-      "count": 13
+      "count": 2
     }
   },
   "src/views/CalendarPublic.vue": {
@@ -252,10 +305,10 @@
       "count": 1
     },
     "vuejs-accessibility/form-control-has-label": {
-      "count": 10
+      "count": 4
     },
     "vuejs-accessibility/label-has-for": {
-      "count": 15
+      "count": 2
     },
     "vuejs-accessibility/no-static-element-interactions": {
       "count": 1
@@ -299,16 +352,10 @@
   },
   "src/views/ParticipantView.vue": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 17
+      "count": 7
     },
     "no-console": {
       "count": 3
-    },
-    "vuejs-accessibility/form-control-has-label": {
-      "count": 13
-    },
-    "vuejs-accessibility/label-has-for": {
-      "count": 25
     }
   },
   "src/views/Register.vue": {

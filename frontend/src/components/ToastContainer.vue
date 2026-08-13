@@ -5,18 +5,40 @@
 -->
 
 <template>
-  <div class="fixed top-20 right-4 z-50 flex flex-col gap-2 max-w-md">
+  <!--
+    The live region.
+
+    Every toast used to be silent for assistive technology: the container carried no
+    `aria-live`, so both "Link copied" and "Failed to delete" were announced nowhere
+    at all. The container is the region because it is in the DOM from the first
+    render — a region that appears at the same moment as its content is not reliably
+    announced.
+
+    `polite` here, overridden to `alert`/`assertive` on individual error toasts
+    below. Per ARIA, the politeness of a change is taken from the nearest live
+    region ancestor *or the changed node itself*, so an inserted error interrupts
+    while a success waits its turn. One blanket `assertive` would make every
+    "Link copied" cut off whatever the user was listening to.
+  -->
+  <div
+    class="fixed top-20 right-4 z-50 flex flex-col gap-2 max-w-md"
+    role="status"
+    aria-live="polite"
+    aria-atomic="false"
+  >
     <TransitionGroup name="toast">
       <div
         v-for="toast in toasts"
         :key="toast.id"
+        :role="toast.type === 'error' ? 'alert' : undefined"
+        :aria-live="toast.type === 'error' ? 'assertive' : undefined"
         :class="[
           'flex items-start gap-3 rounded-lg p-4 shadow-lg border',
           toastClasses[toast.type],
         ]"
       >
-        <!-- Icon -->
-        <div class="shrink-0">
+        <!-- Icon. Decorative: the toast's meaning is in its text, not its glyph. -->
+        <div class="shrink-0" aria-hidden="true">
           <svg
             v-if="toast.type === 'success'"
             class="h-5 w-5"
@@ -67,12 +89,20 @@
           {{ toast.message }}
         </div>
 
-        <!-- Close button -->
+        <!-- Close button. Icon-only, so its whole accessible name comes from the label. -->
         <button
+          type="button"
           class="shrink-0 text-current opacity-70 hover:opacity-100 transition-opacity"
+          :aria-label="t('common.dismissNotification')"
           @click="toastStore.removeToast(toast.id)"
         >
-          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg
+            class="h-4 w-4"
+            aria-hidden="true"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -88,8 +118,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useToastStore } from '@/stores/toast';
 
+const { t } = useI18n();
 const toastStore = useToastStore();
 const toasts = computed(() => toastStore.toasts);
 

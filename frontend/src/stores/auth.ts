@@ -8,14 +8,30 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { authApi } from '@/api/auth';
 import { apiClient } from '@/api/client';
+import { useAsyncActions } from '@/stores/asyncAction';
 import type { User, LoginRequest, RegisterRequest } from '@/types';
 
 export const useAuthStore = defineStore('auth', () => {
   // State
   const user = ref<User | null>(null);
-  const loading = ref(false);
-  const error = ref<string | null>(null);
   const initialized = ref(false);
+  const { loading, error, run, clearError } = useAsyncActions();
+
+  /**
+   * The one in-flight (or settled) `initializeAuth` run.
+   *
+   * `main.ts` deliberately kicks initialisation off without awaiting it, so the app
+   * shell paints immediately. Everything that needs a settled auth state — the router
+   * guard above all — awaits this promise instead of polling `initialized`. The
+   * previous guard slept in 100 ms slices up to fifty times and then gave up, which
+   * both blocked navigation for up to five seconds and, on timeout, evaluated
+   * `requiresAuth` against a store that had never been populated, bouncing a
+   * perfectly authenticated user to /login.
+   *
+   * Held in the setup closure rather than at module scope so each Pinia instance —
+   * and so each test — gets its own.
+   */
+  let initPromise: Promise<void> | null = null;
 
   // Getters
   const isAuthenticated = computed(() => user.value !== null);
@@ -23,134 +39,87 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Actions
   async function register(data: RegisterRequest) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('auth.registerError', async () => {
       const response = await authApi.register(data);
       user.value = response.user;
       if (response.access_token) {
         apiClient.setToken(response.access_token);
       }
       return response;
-    } catch (err: any) {
-      error.value = err.message || 'Registration failed';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function login(data: LoginRequest) {
-    loading.value = true;
-    error.value = null;
+    return run(
+      'auth.loginError',
+      async () => {
+        const response = await authApi.login(data);
 
-    try {
-      const response = await authApi.login(data);
+        // With a second factor enabled the backend answers `require_mfa` and a
+        // temp_token, and no access token at all. Storing the (absent) token wrote
+        // the literal string "undefined" into localStorage, and setting the user
+        // made the session look authenticated before the second factor was ever
+        // verified. The session only starts in VerifyMFA, once the code checks out.
+        if (response.require_mfa) {
+          return response;
+        }
 
-      // With a second factor enabled the backend answers `require_mfa` and a
-      // temp_token, and no access token at all. Storing the (absent) token wrote
-      // the literal string "undefined" into localStorage, and setting the user
-      // made the session look authenticated before the second factor was ever
-      // verified. The session only starts in VerifyMFA, once the code checks out.
-      if (response.require_mfa) {
+        user.value = response.user;
+        if (response.access_token) {
+          apiClient.setToken(response.access_token);
+        }
         return response;
-      }
-
-      user.value = response.user;
-      if (response.access_token) {
-        apiClient.setToken(response.access_token);
-      }
-      return response;
-    } catch (err: any) {
-      error.value = err.message || 'Login failed';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+      },
+      // A 401 from /auth/login is not "you are signed out", it is "those credentials
+      // are wrong" — the only phrasing that makes sense on a login form.
+      { overrides: { UNAUTHORIZED: 'auth.invalidCredentials' } }
+    );
   }
 
   async function logout() {
-    loading.value = true;
-    error.value = null;
-
     try {
-      await authApi.logout();
-    } catch (err: any) {
-      // Ignore logout errors
-      console.error('Logout error:', err);
+      await run('auth.logoutError', () => authApi.logout());
+    } catch {
+      // A failed logout still logs the user out locally: the access token is
+      // dropped below either way, and the refresh cookie is short-lived.
+      clearError();
     } finally {
       user.value = null;
       apiClient.clearToken();
-      loading.value = false;
     }
   }
 
   async function fetchUser() {
-    loading.value = true;
-    error.value = null;
-
-    try {
-      user.value = await authApi.getMe();
-    } catch (err: any) {
-      error.value = err.message || 'Failed to fetch user';
-      user.value = null;
-      apiClient.clearToken();
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    return run('auth.fetchUserError', async () => {
+      try {
+        user.value = await authApi.getMe();
+      } catch (err) {
+        user.value = null;
+        apiClient.clearToken();
+        throw err;
+      }
+    });
   }
 
   async function updateProfile(data: Partial<User>) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('auth.updateProfileError', async () => {
       user.value = await authApi.updateProfile(data);
-    } catch (err: any) {
-      error.value = err.message || 'Failed to update profile';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function updatePassword(oldPassword: string, newPassword: string) {
-    loading.value = true;
-    error.value = null;
-
-    try {
-      await authApi.updatePassword(oldPassword, newPassword);
-    } catch (err: any) {
-      error.value = err.message || 'Failed to update password';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    return run('settings.passwordChangeFailed', () =>
+      authApi.updatePassword(oldPassword, newPassword)
+    );
   }
 
   async function forgotPassword(email: string) {
-    loading.value = true;
-    error.value = null;
-
-    try {
-      await authApi.forgotPassword(email);
-      // Always returns success to prevent email enumeration
-      return Promise.resolve();
-    } catch (err: any) {
-      error.value = err.message || 'Failed to send reset email';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    // Always returns success to prevent email enumeration
+    return run('auth.forgotPassword.error', () => authApi.forgotPassword(email));
   }
 
   async function resetPassword(token: string, newPassword: string) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('auth.resetPassword.error', async () => {
       const response = await authApi.resetPassword(token, newPassword);
 
       // Auto-login after successful reset
@@ -160,12 +129,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       return response;
-    } catch (err: any) {
-      error.value = err.message || 'Failed to reset password';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   // Set tokens directly (for MFA verification and passkey login)
@@ -174,18 +138,40 @@ export const useAuthStore = defineStore('auth', () => {
     // Note: refresh_token is httpOnly cookie, handled by backend
   }
 
-  async function initializeAuth() {
-    apiClient.loadToken();
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      try {
-        await fetchUser();
-      } catch {
-        // Token expired or invalid
-        apiClient.clearToken();
+  /**
+   * Restore the session from the stored access token.
+   *
+   * Idempotent: concurrent and repeat callers all get the same promise, so the
+   * router guard calling it never triggers a second `/auth/me`.
+   */
+  function initializeAuth(): Promise<void> {
+    initPromise ??= (async () => {
+      apiClient.loadToken();
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        try {
+          await fetchUser();
+        } catch {
+          // Token expired or invalid. Not an error the user needs to see: they are
+          // simply signed out, and the guard will send them to /login if the route
+          // needs a session.
+          apiClient.clearToken();
+          clearError();
+        }
       }
-    }
-    initialized.value = true;
+      initialized.value = true;
+    })();
+    return initPromise;
+  }
+
+  /**
+   * Resolves once the session has been restored, starting the restore if nobody
+   * has yet. This is the router guard's entry point — it must never depend on
+   * `main.ts` having run first, or a directly-mounted router (tests, SSR probes)
+   * would wait forever.
+   */
+  function whenReady(): Promise<void> {
+    return initializeAuth();
   }
 
   return {
@@ -210,5 +196,7 @@ export const useAuthStore = defineStore('auth', () => {
     resetPassword,
     setTokens,
     initializeAuth,
+    whenReady,
+    clearError,
   };
 });

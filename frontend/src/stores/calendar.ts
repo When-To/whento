@@ -7,6 +7,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { calendarsApi } from '@/api/calendars';
+import { useAsyncActions } from '@/stores/asyncAction';
 import type {
   CalendarWithParticipants,
   CreateCalendarRequest,
@@ -28,59 +29,38 @@ export const useCalendarStore = defineStore('calendar', () => {
    * available to the public views, where it is in fact undefined.
    */
   const currentPublicCalendar = ref<PublicCalendar | null>(null);
-  const loading = ref(false);
-  const error = ref<string | null>(null);
+
+  // `loading` is derived from a counter of in-flight actions rather than being a
+  // flag each action sets and clears. See stores/asyncAction.ts.
+  const { loading, error, run, clearError } = useAsyncActions();
 
   // Actions
   async function fetchCalendars() {
-    loading.value = true;
-    error.value = null;
-
-    try {
-      const result = await calendarsApi.getAll();
-      calendars.value = Array.isArray(result) ? result : [];
-    } catch (err: any) {
-      error.value = err.message || 'Failed to fetch calendars';
-      calendars.value = []; // Reset to empty array on error
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    return run('calendar.fetchError', async () => {
+      try {
+        const result = await calendarsApi.getAll();
+        calendars.value = Array.isArray(result) ? result : [];
+      } catch (err) {
+        calendars.value = []; // Reset to empty array on error
+        throw err;
+      }
+    });
   }
 
   async function fetchCalendar(id: string) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('calendar.fetchError', async () => {
       currentCalendar.value = await calendarsApi.getById(id);
-    } catch (err: any) {
-      error.value = err.message || 'Failed to fetch calendar';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function fetchPublicCalendar(token: string, participantId?: string) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('calendar.fetchError', async () => {
       currentPublicCalendar.value = await calendarsApi.getPublic(token, participantId);
-    } catch (err: any) {
-      error.value = err.message || 'Failed to fetch calendar';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function createCalendar(data: CreateCalendarRequest) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('calendar.createError', async () => {
       const calendar = await calendarsApi.create(data);
       // Ensure calendars is an array before pushing
       if (!Array.isArray(calendars.value)) {
@@ -93,19 +73,11 @@ export const useCalendarStore = defineStore('calendar', () => {
       };
       calendars.value.push(calendarWithParticipants);
       return calendar;
-    } catch (err: any) {
-      error.value = err.message || 'Failed to create calendar';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function updateCalendar(id: string, data: UpdateCalendarRequest) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('calendar.updateError', async () => {
       const updated = await calendarsApi.update(id, data);
       const index = calendars.value.findIndex(c => c.id === id);
       if (index !== -1) {
@@ -117,48 +89,27 @@ export const useCalendarStore = defineStore('calendar', () => {
         currentCalendar.value = { ...currentCalendar.value, ...updated };
       }
       return updated;
-    } catch (err: any) {
-      error.value = err.message || 'Failed to update calendar';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function deleteCalendar(id: string) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('calendar.deleteError', async () => {
       await calendarsApi.delete(id);
       calendars.value = calendars.value.filter(c => c.id !== id);
       if (currentCalendar.value?.id === id) {
         currentCalendar.value = null;
       }
-    } catch (err: any) {
-      error.value = err.message || 'Failed to delete calendar';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function addParticipant(calendarId: string, data: CreateParticipantRequest) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('calendar.addParticipantError', async () => {
       const participant = await calendarsApi.addParticipant(calendarId, data);
       if (currentCalendar.value?.id === calendarId) {
         currentCalendar.value.participants.push(participant);
       }
       return participant;
-    } catch (err: any) {
-      error.value = err.message || 'Failed to add participant';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function updateParticipant(
@@ -166,10 +117,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     participantId: string,
     data: UpdateParticipantRequest
   ) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('calendar.updateParticipantError', async () => {
       const participant = await calendarsApi.updateParticipant(calendarId, participantId, data);
       if (currentCalendar.value?.id === calendarId) {
         const index = currentCalendar.value.participants.findIndex(p => p.id === participantId);
@@ -178,53 +126,32 @@ export const useCalendarStore = defineStore('calendar', () => {
         }
       }
       return participant;
-    } catch (err: any) {
-      error.value = err.message || 'Failed to update participant';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function deleteParticipant(calendarId: string, participantId: string) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('calendar.deleteParticipantError', async () => {
       await calendarsApi.deleteParticipant(calendarId, participantId);
       if (currentCalendar.value?.id === calendarId) {
         currentCalendar.value.participants = currentCalendar.value.participants.filter(
           p => p.id !== participantId
         );
       }
-    } catch (err: any) {
-      error.value = err.message || 'Failed to delete participant';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function addAnonymousParticipant(token: string, data: CreateParticipantRequest) {
-    error.value = null;
-
-    try {
+    return run('calendar.addParticipantError', async () => {
       const participant = await calendarsApi.addAnonymousParticipant(token, data);
       if (currentPublicCalendar.value) {
         currentPublicCalendar.value.participants.push(participant);
       }
       return participant;
-    } catch (err: any) {
-      error.value = err.message || 'Failed to add participant';
-      throw err;
-    }
+    });
   }
 
   async function regeneratePublicToken(id: string) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('calendar.regenerateError', async () => {
       const { public_token } = await calendarsApi.regeneratePublicToken(id);
       if (currentCalendar.value?.id === id) {
         currentCalendar.value.public_token = public_token;
@@ -234,19 +161,11 @@ export const useCalendarStore = defineStore('calendar', () => {
         calendar.public_token = public_token;
       }
       return public_token;
-    } catch (err: any) {
-      error.value = err.message || 'Failed to regenerate token';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function regenerateICSToken(id: string) {
-    loading.value = true;
-    error.value = null;
-
-    try {
+    return run('calendar.regenerateError', async () => {
       const { ics_token } = await calendarsApi.regenerateICSToken(id);
       if (currentCalendar.value?.id === id) {
         currentCalendar.value.ics_token = ics_token;
@@ -256,12 +175,7 @@ export const useCalendarStore = defineStore('calendar', () => {
         calendar.ics_token = ics_token;
       }
       return ics_token;
-    } catch (err: any) {
-      error.value = err.message || 'Failed to regenerate ICS token';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   function clearCurrentCalendar() {
@@ -291,5 +205,6 @@ export const useCalendarStore = defineStore('calendar', () => {
     regeneratePublicToken,
     regenerateICSToken,
     clearCurrentCalendar,
+    clearError,
   };
 });

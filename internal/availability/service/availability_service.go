@@ -581,8 +581,16 @@ func (s *AvailabilityService) exceptionsFor(
 	return s.recurrenceRepo.GetExceptionsByRecurrenceIDs(ctx, ids)
 }
 
-// GetDateSummary gets all participants available on a specific date
-func (s *AvailabilityService) GetDateSummary(ctx context.Context, token, dateStr string) (*models.DateAvailabilitySummary, error) {
+// GetDateSummary gets all participants available on a specific date.
+//
+// participantID is the caller's own participant id, and is the one id left unmasked
+// when the calendar has lock_participants set — exactly as in GetRangeSummary. This
+// endpoint used to answer with models.DateAvailabilitySummary, whose ParticipantID is
+// a plain uuid.UUID and therefore always serialised, so a locked calendar handed every
+// participant's id to anyone holding the public token. Since participant access here is
+// capability-based (public token + participant id *is* the authorisation), that was
+// both halves of the credential for every participant on the calendar.
+func (s *AvailabilityService) GetDateSummary(ctx context.Context, token, dateStr, participantID string) (*models.PublicDateAvailabilitySummary, error) {
 	// Validate calendar token and get calendar info (including min_duration_hours)
 	calendarInfo, err := s.calendarRepo.GetCalendarInfoByPublicToken(ctx, token)
 	if err != nil {
@@ -702,18 +710,18 @@ func (s *AvailabilityService) GetDateSummary(ctx context.Context, token, dateStr
 		duration := calculateDurationForDate(participantSummaries)
 		if duration < float64(calendarInfo.MinDurationHours) {
 			// Return empty summary if duration is less than minimum
-			return &models.DateAvailabilitySummary{
+			return &models.PublicDateAvailabilitySummary{
 				Date:         dateStr,
 				TotalCount:   0,
-				Participants: []models.ParticipantAvailabilitySummary{},
+				Participants: []models.PublicParticipantAvailabilitySummary{},
 			}, nil
 		}
 	}
 
-	return &models.DateAvailabilitySummary{
+	return &models.PublicDateAvailabilitySummary{
 		Date:         dateStr,
 		TotalCount:   calculateMaxSimultaneousParticipants(participantSummaries),
-		Participants: participantSummaries,
+		Participants: filterParticipantSummaries(calendarInfo.LockParticipants, participantID, participantSummaries),
 	}, nil
 }
 

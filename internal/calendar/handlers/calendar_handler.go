@@ -5,48 +5,90 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
 	"github.com/whento/pkg/validator"
-	authRepo "github.com/whento/whento/internal/auth/repository"
+	authModels "github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/calendar/models"
 	"github.com/whento/whento/internal/calendar/service"
 	"github.com/whento/whento/internal/config"
 	"github.com/whento/whento/internal/quota"
 )
 
-// CalendarHandler handles calendar HTTP requests
-type CalendarHandler struct {
-	calendarService *service.CalendarService
-	quotaService    quota.QuotaService
-	userRepo        *authRepo.UserRepository
-	cfg             *config.Config
-	pool            *pgxpool.Pool
+// CalendarService is the slice of the calendar domain this handler drives.
+//
+// Declared here, on the consuming side, rather than taking *service.CalendarService:
+// the concrete service reaches two repositories and a cache, so a handler test had to
+// build all three to exercise a 404. Go interfaces are structural, so the concrete
+// service satisfies this and no call site changes. Everything it passes and returns
+// lives in internal/calendar/models, which a fake can import without pulling in the
+// repository layer — an interface whose signatures name repository types is not an
+// abstraction, only a longer spelling of the same coupling.
+type CalendarService interface {
+	CreateCalendar(ctx context.Context, userID string, req *models.CreateCalendarRequest) (*models.CalendarResponse, error)
+	GetCalendar(ctx context.Context, userID, userRole, calendarID string) (*models.CalendarResponse, error)
+	ListMyCalendars(ctx context.Context, userID string) ([]*models.CalendarResponse, error)
+	UpdateCalendar(ctx context.Context, userID, userRole, calendarID string, req *models.UpdateCalendarRequest) (*models.CalendarResponse, error)
+	DeleteCalendar(ctx context.Context, userID, userRole, calendarID string) error
+	RegenerateToken(ctx context.Context, userID, userRole, calendarID, tokenType string) (*models.CalendarResponse, error)
+	GetPublicCalendar(ctx context.Context, token, participantID string) (*models.PublicCalendarResponse, error)
+	ListUserCalendars(ctx context.Context, targetUserID string) ([]*models.CalendarResponse, error)
 }
 
-// NewCalendarHandler creates a new calendar handler
+// UserLookup is the one question this handler asks of the user store: is the account
+// creating a calendar allowed to, given that email verification may be required.
+type UserLookup interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*authModels.User, error)
+}
+
+// QuotaLock serialises the quota check and the creation that follows it.
+//
+// The implementation is *repository.QuotaLocker, which holds a PostgreSQL advisory
+// lock for the duration of fn. It is an interface here so that the handler carries a
+// scope instead of a connection pool: the transaction, the SQL and the errors that
+// come with them are the repository's business.
+//
+// WithQuotaLock returns an error only when the lock could not be taken, i.e. only
+// when fn never ran.
+type QuotaLock interface {
+	WithQuotaLock(ctx context.Context, key int64, fn func(context.Context) error) error
+}
+
+// CalendarHandler handles calendar HTTP requests
+type CalendarHandler struct {
+	calendarService CalendarService
+	quotaService    quota.QuotaService
+	userRepo        UserLookup
+	cfg             *config.Config
+	quotaLock       QuotaLock
+}
+
+// NewCalendarHandler creates a new calendar handler.
+//
+// quotaLock may be nil, in which case creation runs unserialised — the same escape
+// hatch the nil *pgxpool.Pool used to provide.
 func NewCalendarHandler(
-	calendarService *service.CalendarService,
+	calendarService CalendarService,
 	quotaService quota.QuotaService,
-	userRepo *authRepo.UserRepository,
+	userRepo UserLookup,
 	cfg *config.Config,
-	pool *pgxpool.Pool,
+	quotaLock QuotaLock,
 ) *CalendarHandler {
 	return &CalendarHandler{
 		calendarService: calendarService,
 		quotaService:    quotaService,
 		userRepo:        userRepo,
 		cfg:             cfg,
-		pool:            pool,
+		quotaLock:       quotaLock,
 	}
 }
 
@@ -159,57 +201,52 @@ func (h *CalendarHandler) CreateCalendar(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	// Acquire per-user (cloud) or server-wide (self-hosted) advisory lock
-	// to prevent TOCTOU race condition between quota check and calendar creation
-	if h.pool != nil {
-		lockKey := h.quotaService.QuotaLockKey(userUUID)
-
-		tx, err := h.pool.Begin(r.Context())
-		if err != nil {
-			logger.FromContext(r.Context()).Error("Failed to begin transaction for quota lock", "error", err, "user_id", userID)
-			httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to check calendar quota")
-			return
-		}
-		defer func() {
-			// Runs after the Commit deferred below, so on the happy path this
-			// only ever sees pgx.ErrTxClosed.
-			_ = tx.Rollback(r.Context())
-		}()
-
-		if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock($1)`, lockKey); err != nil {
-			logger.FromContext(r.Context()).Error("Failed to acquire quota advisory lock", "error", err, "user_id", userID)
-			httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to check calendar quota")
-			return
-		}
-
-		defer func() {
-			// The transaction exists only to hold the advisory lock across the
-			// quota check, so a failed commit costs no data — but it did hide
-			// connection failures completely.
-			if err := tx.Commit(r.Context()); err != nil {
-				logger.FromContext(r.Context()).Warn("Failed to release quota advisory lock", "error", err, "user_id", userID)
-			}
-		}()
+	// Check the quota and create under a per-user (cloud) or server-wide
+	// (self-hosted) advisory lock, so that two concurrent requests cannot both
+	// read a count below the allowance and both create a calendar.
+	if h.quotaLock == nil {
+		h.createUnderQuota(r.Context(), w, userID, userUUID, &req)
+		return
 	}
 
-	// Check quota limits (safe under advisory lock when pool is available)
-	canCreate, err := h.quotaService.CanCreateCalendar(r.Context(), userUUID)
+	lockKey := h.quotaService.QuotaLockKey(userUUID)
+	err = h.quotaLock.WithQuotaLock(r.Context(), lockKey, func(ctx context.Context) error {
+		h.createUnderQuota(ctx, w, userID, userUUID, &req)
+		return nil
+	})
 	if err != nil {
-		logger.FromContext(r.Context()).Error("Failed to check quota", "error", err, "user_id", userID)
+		// The lock was never taken, so nothing has been written to w yet.
+		logger.FromContext(r.Context()).Error("Failed to acquire quota advisory lock", "error", err, "user_id", userID)
+		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to check calendar quota")
+	}
+}
+
+// createUnderQuota checks the allowance and creates the calendar, writing the
+// response either way. It is called while the quota lock is held.
+func (h *CalendarHandler) createUnderQuota(
+	ctx context.Context,
+	w http.ResponseWriter,
+	userID string,
+	userUUID uuid.UUID,
+	req *models.CreateCalendarRequest,
+) {
+	canCreate, err := h.quotaService.CanCreateCalendar(ctx, userUUID)
+	if err != nil {
+		logger.FromContext(ctx).Error("Failed to check quota", "error", err, "user_id", userID)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to check calendar quota")
 		return
 	}
 
 	if !canCreate {
-		limit, _ := h.quotaService.GetUserLimit(r.Context(), userUUID)
+		limit, _ := h.quotaService.GetUserLimit(ctx, userUUID)
 
 		httputil.Error(w, http.StatusForbidden, "quota_exceeded", quotaMessage(limit))
 		return
 	}
 
-	calendar, err := h.calendarService.CreateCalendar(r.Context(), userID, &req)
+	calendar, err := h.calendarService.CreateCalendar(ctx, userID, req)
 	if err != nil {
-		logger.FromContext(r.Context()).Error("Failed to create calendar", "error", err, "user_id", userID)
+		logger.FromContext(ctx).Error("Failed to create calendar", "error", err, "user_id", userID)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to create calendar")
 		return
 	}

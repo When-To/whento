@@ -57,8 +57,8 @@
 
         <div class="space-y-2">
           <div
-            v-for="participant in participantDetails.participants"
-            :key="participant.participant_id || participant.participant_name"
+            v-for="(participant, index) in participantDetails.participants"
+            :key="participant.participant_id ?? `${participant.participant_name}-${index}`"
             :class="[
               'rounded-lg border p-3',
               participant.participant_name === props.currentParticipantName
@@ -228,6 +228,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { availabilitiesApi } from '@/api/availabilities';
 import TimeSelect from '@/components/TimeSelect.vue';
+import type { DateAvailabilitySummary } from '@/types';
 
 interface Props {
   calendarToken: string;
@@ -252,7 +253,10 @@ const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const { t, locale } = useI18n();
 
-const participantDetails = ref<any>(null);
+// Typed rather than `any`: the summary's `participant_id` is optional — a calendar
+// with lock_participants withholds it for everyone but this caller — and `any` was
+// hiding that from the template, which keys its rows on it.
+const participantDetails = ref<DateAvailabilitySummary | null>(null);
 const loadingDetails = ref(false);
 const popupPosition = ref({ x: 0, y: 0 });
 const tooltipRef = ref<HTMLElement | null>(null);
@@ -293,7 +297,11 @@ async function loadParticipantDetails() {
   loadingDetails.value = true;
 
   try {
-    const details = await availabilitiesApi.getDateSummary(props.calendarToken, props.date);
+    const details = await availabilitiesApi.getDateSummary(
+      props.calendarToken,
+      props.date,
+      props.currentParticipantId
+    );
     participantDetails.value = details;
   } catch (err) {
     console.error('Failed to load participant details:', err);

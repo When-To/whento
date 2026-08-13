@@ -349,14 +349,14 @@ async function handleSubmit() {
         }
       });
     } else {
-      // Show generic error message (translate if possible)
-      const errorKey = translateErrorMessage(err.message || '');
-      error.value = errorKey === err.message ? err.message : t(errorKey);
-
-      // If no error message, use fallback
-      if (!error.value) {
-        error.value = t('auth.loginError');
-      }
+      // Resolved from the structured `ApiError.code`, so the user never sees the
+      // backend's English prose. A 401 here means the credentials were wrong.
+      error.value = t(
+        translateErrorMessage(err, {
+          fallback: 'auth.loginError',
+          overrides: { UNAUTHORIZED: 'auth.invalidCredentials' },
+        })
+      );
     }
   } finally {
     loading.value = false;
@@ -435,13 +435,7 @@ async function loginWithDiscoverablePasskey() {
     } else if (err.name === 'InvalidStateError') {
       error.value = t('auth.passkeyInvalidState');
     } else {
-      // Generic error
-      const errorKey = translateErrorMessage(err.message || '');
-      error.value = errorKey === err.message ? err.message : t(errorKey);
-
-      if (!error.value) {
-        error.value = t('auth.passkeyError');
-      }
+      error.value = t(translateErrorMessage(err, { fallback: 'auth.passkeyError' }));
     }
   } finally {
     passkeyLoading.value = false;

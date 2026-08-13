@@ -23,7 +23,7 @@ import type {
 } from '@/types';
 import type { DayModel, MonthModel } from '@/types/calendar';
 import { todayISO, type ISODate } from '@/utils/date/isoDate';
-import { getHolidayIndex } from '@/utils/calendar/holidays';
+import { getHolidayIndex, holidaysReady, preloadHolidays } from '@/utils/calendar/holidays';
 import { buildCalendarRules } from '@/utils/calendar/dateRules';
 import { buildDayIndex } from '@/utils/calendar/dayIndex';
 import {
@@ -106,7 +106,18 @@ export function useParticipantCalendar(
     });
   });
 
-  const holidays = computed(() => getHolidayIndex(timeZone.value, locale.value));
+  // This view is the only consumer of the 1.4 MB holiday dataset, so it is fetched
+  // here rather than bundled into the entry chunk. Start it as soon as the model is
+  // built; the grid renders immediately without holiday shading and fills it in when
+  // the module lands.
+  void preloadHolidays();
+
+  const holidays = computed(() => {
+    // Tracked so the index is re-resolved once the engine is available. The lookup
+    // functions themselves stay non-reactive: they run thousands of times per render.
+    void holidaysReady.value;
+    return getHolidayIndex(timeZone.value, locale.value);
+  });
 
   const index = computed(() =>
     buildDayIndex({

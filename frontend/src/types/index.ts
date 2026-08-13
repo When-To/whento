@@ -252,17 +252,24 @@ export type CreateRecurrenceRequest = Schemas['models.CreateRecurrenceRequest'];
 // Date Summary Types
 
 /**
- * `participant_id` stays optional: the range endpoint answers with
- * `models.PublicDateAvailabilitySummary`, which omits it on locked calendars,
- * even though its annotation names `models.DateAvailabilitySummary`.
+ * Both summary endpoints — `.../range` and `.../dates/{date}` — answer with the
+ * *public* shape, so `participant_id` is genuinely optional: a calendar with
+ * `lock_participants` withholds it for everybody except the caller, and only when
+ * the request names the caller through its own `participant_id` parameter.
+ *
+ * Nothing may key off it. Rows are identified by `participant_name`, which is
+ * always sent; see `ParticipantDetailsPopup`, which marks "You" that way.
  */
 export type ParticipantAvailabilitySummary = AlwaysSent<
-  Schemas['models.ParticipantAvailabilitySummary'],
+  Schemas['models.PublicParticipantAvailabilitySummary'],
   'participant_name'
 >;
 
 export type DateAvailabilitySummary = Refine<
-  AlwaysSent<Schemas['models.DateAvailabilitySummary'], 'date' | 'total_count' | 'participants'>,
+  AlwaysSent<
+    Schemas['models.PublicDateAvailabilitySummary'],
+    'date' | 'total_count' | 'participants'
+  >,
   { participants: ParticipantAvailabilitySummary[] }
 >;
 
@@ -317,21 +324,22 @@ export type NotifyConfigResponse = Refine<
 >;
 
 /*
- * The two below have no schema to derive from: the participant-email endpoints
- * declare their body and response inline in the handler rather than through a
- * named model, so swaggo emits nothing for them. They stay hand-written until
- * the Go side gets real request/response types.
+ * Participant email. These three were hand-written for as long as the endpoints
+ * declared their body inline in the handler and swaggo had no named model to emit;
+ * they now derive from the schema like everything else.
  */
-export interface AddParticipantEmailRequest {
-  email: string;
-}
+export type AddParticipantEmailRequest = Schemas['models.AddParticipantEmailRequest'];
 
-export interface ParticipantEmailResponse {
-  participant_id: string;
-  email: string;
-  verified: boolean;
-  message: string;
-}
+export type ParticipantEmailResponse = AlwaysSent<
+  Schemas['models.ParticipantEmailResponse'],
+  'participant_id' | 'email' | 'verified' | 'message'
+>;
+
+/** Verification and resend: a sentence and nothing else. */
+export type ParticipantEmailMessageResponse = AlwaysSent<
+  Schemas['models.ParticipantEmailMessageResponse'],
+  'message'
+>;
 
 // Unified ICS Feed Types
 export type UnifiedFeedConfig = AlwaysSent<Schemas['service.UnifiedFeedConfig'], 'configured'>;

@@ -30,8 +30,14 @@ func registerCalendarRoutes(r chi.Router, d *deps, h *handlers) {
 			// Public participant email verification: 5 requests/15 minutes/IP
 			l.on(r, perPathIP(5, 15*time.Minute)).Get("/participants/verify-email/{token}", h.participantEmail.VerifyEmail)
 
-			// Public participant email management (requires calendar token validation)
-			r.Post("/{token}/participants/{pid}/email", h.participantEmail.AddEmail)
+			// Public participant email management: 5 requests/15 minutes/IP.
+			//
+			// This route was the only one in the group without a limiter, and it is
+			// the one that sends mail to an address the caller picks — unauthenticated,
+			// so an open relay for anyone holding a public calendar link. The budget
+			// matches resend-verification below rather than the looser per-IP defaults,
+			// because both spend the same resource: outbound mail to a third party.
+			l.on(r, perIP(5, 15*time.Minute)).Post("/{token}/participants/{pid}/email", h.participantEmail.AddEmail)
 
 			// Resend verification: 3 requests/15 minutes/IP
 			l.on(r, perIP(3, 15*time.Minute)).Post("/{token}/participants/{pid}/resend-verification", h.participantEmail.ResendVerification)

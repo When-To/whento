@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: BSL-1.1
  */
 
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import {
+  createRouter,
+  createWebHistory,
+  type NavigationGuard,
+  type RouteRecordRaw,
+} from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 
 // Get build type from environment
@@ -155,19 +160,22 @@ const router = createRouter({
   },
 });
 
-// Navigation guards
-router.beforeEach(async (to, _from, next) => {
+/**
+ * The navigation guard, exported so it can be exercised directly.
+ *
+ * It awaits `authStore.whenReady()`, the promise the store hands out for its own
+ * `initializeAuth()` run. That replaces a 100 ms polling loop capped at fifty
+ * attempts, which had two failure modes: navigation was blocked for up to five
+ * seconds whenever `/auth/me` was slow, and on timeout the guard evaluated
+ * `requiresAuth` against a store that had never been populated — sending a signed-in
+ * user to /login. Awaiting the promise cannot give the wrong answer: it resolves
+ * exactly when the session is known, whether that takes 5 ms or 30 s, and
+ * `whenReady()` starts the restore itself if `main.ts` has not.
+ */
+export const authGuard: NavigationGuard = async (to, _from, next) => {
   const authStore = useAuthStore();
 
-  // Wait for auth initialization
-  if (!authStore.initialized) {
-    // Wait a bit for initialization to complete
-    let attempts = 0;
-    while (!authStore.initialized && attempts < 50) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      attempts++;
-    }
-  }
+  await authStore.whenReady();
 
   // Check if route requires authentication
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
@@ -185,6 +193,8 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   next();
-});
+};
+
+router.beforeEach(authGuard);
 
 export default router;

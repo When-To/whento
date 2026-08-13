@@ -34,6 +34,7 @@ import (
 
 type stubAvailabilityRepo struct {
 	inRange []*models.Availability
+	onDate  []*models.Availability
 }
 
 var _ service.AvailabilityRepository = (*stubAvailabilityRepo)(nil)
@@ -57,7 +58,7 @@ func (s *stubAvailabilityRepo) GetByParticipantAndDate(
 }
 
 func (s *stubAvailabilityRepo) GetByDate(context.Context, uuid.UUID, time.Time) ([]*models.Availability, error) {
-	return nil, nil
+	return s.onDate, nil
 }
 
 func (s *stubAvailabilityRepo) GetByCalendarDateRange(
@@ -161,7 +162,9 @@ func newHandler(t *testing.T, calendar *repository.Calendar, calendarErr error, 
 	t.Helper()
 
 	availabilityService := service.NewAvailabilityService(
-		&stubAvailabilityRepo{inRange: availabilities},
+		// The same rows answer both the range lookup and the single-date lookup, so
+		// the two summary endpoints can be driven over identical data.
+		&stubAvailabilityRepo{inRange: availabilities, onDate: availabilities},
 		&stubCalendarRepo{calendar: calendar, err: calendarErr},
 		&stubParticipantRepo{participants: participants},
 		&stubRecurrenceRepo{},
@@ -173,6 +176,7 @@ func newHandler(t *testing.T, calendar *repository.Calendar, calendarErr error, 
 
 	router := chi.NewRouter()
 	router.Get("/api/v1/public/calendars/{token}/availabilities/range", handler.GetRangeSummary)
+	router.Get("/api/v1/public/calendars/{token}/availabilities/dates/{date}", handler.GetDateSummary)
 	router.Get("/api/v1/public/calendars/{token}/participants/{pid}/availabilities", handler.GetParticipantAvailabilities)
 	router.Post("/api/v1/public/calendars/{token}/participants/{pid}/availabilities", handler.CreateAvailability)
 

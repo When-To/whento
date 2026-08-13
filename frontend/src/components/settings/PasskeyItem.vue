@@ -65,6 +65,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { confirm } from '@/composables/useConfirm';
 import type { Passkey } from '@/api/passkey';
 
 const { t } = useI18n();
@@ -98,8 +99,8 @@ function saveRename() {
   editing.value = false;
 }
 
-function handleDelete() {
-  if (confirm(t('settings.passkeys.confirmDelete'))) {
+async function handleDelete() {
+  if (await confirm({ message: t('settings.passkeys.confirmDelete') })) {
     emit('delete', props.passkey.id);
   }
 }

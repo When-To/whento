@@ -76,262 +76,22 @@
         </div>
 
         <!-- Email Notification Section (if notifications enabled for participants) -->
-        <div v-if="notificationsEnabled" class="card mb-6">
-          <h3 class="mb-4 font-display text-lg font-semibold text-gray-900 dark:text-white">
-            {{ t('notifications.emailVerification') }}
-          </h3>
-
-          <!-- No email added yet -->
-          <div v-if="!participant.email">
-            <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-              {{ t('notifications.addEmail') }}
-            </p>
-            <form class="flex gap-2" @submit.prevent="handleAddEmail">
-              <input
-                v-model="emailInput"
-                type="email"
-                class="input flex-1"
-                :placeholder="t('notifications.emailPlaceholder')"
-                required
-              />
-              <button type="submit" class="btn btn-primary" :disabled="addingEmail">
-                <svg
-                  v-if="addingEmail"
-                  class="mr-2 h-4 w-4 animate-spin"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                  />
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                {{ addingEmail ? t('common.saving') : t('common.save') }}
-              </button>
-            </form>
-          </div>
-
-          <!-- Email pending verification -->
-          <div v-else-if="!participant.email_verified" class="space-y-3">
-            <div v-if="!changingEmail" class="space-y-3">
-              <div class="rounded-lg bg-orange-50 p-4 dark:bg-orange-900/20">
-                <div class="flex">
-                  <svg
-                    class="h-5 w-5 text-orange-600 dark:text-orange-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
-                  <p class="ml-3 text-sm text-orange-600 dark:text-orange-400">
-                    {{ t('notifications.emailPending', { email: participant.email }) }}
-                  </p>
-                </div>
-              </div>
-              <div class="flex gap-2">
-                <button
-                  class="btn btn-ghost"
-                  :disabled="resendingEmail"
-                  @click="handleResendVerification"
-                >
-                  {{ resendingEmail ? t('common.sending') : t('notifications.resendVerification') }}
-                </button>
-                <button class="btn btn-ghost" @click="changingEmail = true">
-                  {{ t('notifications.changeEmail') }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Change email form -->
-            <div v-else class="space-y-3">
-              <p class="text-sm text-gray-600 dark:text-gray-400">
-                {{ t('notifications.changeEmailPrompt', { currentEmail: participant.email }) }}
-              </p>
-              <form class="flex gap-2" @submit.prevent="handleChangeEmail">
-                <input
-                  v-model="newEmailInput"
-                  type="email"
-                  class="input flex-1"
-                  :placeholder="t('notifications.newEmailPlaceholder')"
-                  required
-                />
-                <button type="submit" class="btn btn-primary" :disabled="addingEmail">
-                  {{ addingEmail ? t('common.saving') : t('common.save') }}
-                </button>
-                <button type="button" class="btn btn-ghost" @click="handleCancelChangeEmail">
-                  {{ t('common.cancel') }}
-                </button>
-              </form>
-            </div>
-          </div>
-
-          <!-- Email verified -->
-          <div v-else class="space-y-3">
-            <div v-if="!changingEmail" class="space-y-3">
-              <div class="rounded-lg bg-success-50 p-4 dark:bg-success-900/20">
-                <div class="flex">
-                  <svg
-                    class="h-5 w-5 text-success-600 dark:text-success-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <p class="ml-3 text-sm text-success-600 dark:text-success-400">
-                    {{ t('notifications.emailVerified', { email: participant.email }) }}
-                  </p>
-                </div>
-              </div>
-              <button class="btn btn-ghost" @click="changingEmail = true">
-                {{ t('notifications.changeEmail') }}
-              </button>
-            </div>
-
-            <!-- Change email form -->
-            <div v-else class="space-y-3">
-              <p class="text-sm text-gray-600 dark:text-gray-400">
-                {{ t('notifications.changeEmailPrompt', { currentEmail: participant.email }) }}
-              </p>
-              <form class="flex gap-2" @submit.prevent="handleChangeEmail">
-                <input
-                  v-model="newEmailInput"
-                  type="email"
-                  class="input flex-1"
-                  :placeholder="t('notifications.newEmailPlaceholder')"
-                  required
-                />
-                <button type="submit" class="btn btn-primary" :disabled="addingEmail">
-                  {{ addingEmail ? t('common.saving') : t('common.save') }}
-                </button>
-                <button type="button" class="btn btn-ghost" @click="handleCancelChangeEmail">
-                  {{ t('common.cancel') }}
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
+        <ParticipantEmailPanel
+          v-if="notificationsEnabled"
+          :token="token"
+          :participant-id="participantId"
+          :email="participant.email"
+          :email-verified="participant.email_verified"
+        />
 
         <!-- Calendar View -->
         <div class="card mb-6 px-0.5 py-0 md:p-6">
-          <!-- Mobile: Stacked layout with collapsible controls -->
-          <div class="mb-4 p-6">
-            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <!-- Title and description -->
-              <div class="flex-1">
-                <h2 class="font-display text-xl font-semibold text-gray-900 dark:text-white">
-                  {{ t('calendar.calendar', 'Calendar') }}
-                  <span
-                    v-if="calendarDateRangeText"
-                    class="text-base font-normal text-gray-600 dark:text-gray-400 block md:inline mt-1 md:mt-0"
-                  >
-                    {{ calendarDateRangeText }}
-                  </span>
-                </h2>
-                <p class="mt-2 text-sm text-gray-600 dark:text-gray-400 hidden md:block">
-                  {{
-                    t(
-                      'availability.clickOrDragToAdd',
-                      'Click on a date to add your availability, or drag to select multiple days'
-                    )
-                  }}
-                </p>
-              </div>
-
-              <!-- Controls: Responsive layout -->
-              <div class="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
-                <!-- Display mode selector -->
-                <div class="flex items-center gap-2">
-                  <label
-                    for="displayMode"
-                    class="text-sm text-gray-700 dark:text-gray-300 shrink-0"
-                  >
-                    {{ t('calendar.displayMode', 'Display') }}
-                  </label>
-                  <select
-                    id="displayMode"
-                    v-model="displayMode"
-                    class="input text-sm flex-1 md:w-32 min-h-11 md:min-h-0"
-                  >
-                    <option value="month">
-                      {{ t('calendar.monthView', 'Month') }}
-                    </option>
-                    <option value="week">
-                      {{ t('calendar.weekView', 'Week') }}
-                    </option>
-                  </select>
-                </div>
-
-                <!-- Grid or list -->
-                <div class="flex items-center gap-2">
-                  <label for="viewStyle" class="text-sm text-gray-700 dark:text-gray-300 shrink-0">
-                    {{ t('calendar.viewStyle') }}
-                  </label>
-                  <select
-                    id="viewStyle"
-                    v-model="viewStyle"
-                    class="input text-sm flex-1 md:w-32 min-h-11 md:min-h-0"
-                  >
-                    <option value="grid">{{ t('calendar.viewClassic') }}</option>
-                    <option value="list">{{ t('calendar.listView') }}</option>
-                  </select>
-                </div>
-
-                <!-- Period count selector -->
-                <div class="flex items-center gap-2">
-                  <label
-                    for="periodCount"
-                    class="text-sm text-gray-700 dark:text-gray-300 shrink-0"
-                  >
-                    {{
-                      displayMode === 'week'
-                        ? t('calendar.numberOfWeeks', 'Number of weeks')
-                        : t('calendar.numberOfMonths', 'Number of months')
-                    }}
-                  </label>
-                  <select
-                    id="periodCount"
-                    v-model.number="numberOfPeriods"
-                    class="input text-sm flex-1 md:w-20 min-h-11 md:min-h-0"
-                  >
-                    <option v-for="n in displayMode === 'week' ? 4 : 12" :key="n" :value="n">
-                      {{ n }}
-                    </option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <!-- Mobile instruction text (below controls) -->
-            <p class="mt-3 text-sm text-gray-600 dark:text-gray-400 md:hidden">
-              {{
-                t(
-                  'availability.clickOrDragToAdd',
-                  'Click on a date to add your availability, or drag to select multiple days'
-                )
-              }}
-            </p>
-          </div>
+          <CalendarViewToolbar
+            v-model:display-mode="displayMode"
+            v-model:view-style="viewStyle"
+            v-model:number-of-periods="numberOfPeriods"
+            :date-range-text="calendarDateRangeText"
+          />
 
           <!-- List view: the same model as the grids, laid out as rows -->
           <CalendarListView
@@ -340,8 +100,8 @@
             :label="listRangeLabel"
             @day-click="handleCalendarDayClick"
             @day-details="openDayDetails"
-            @previous="displayMode === 'week' ? shiftWeeks(-1) : shiftMonths(-1)"
-            @next="displayMode === 'week' ? shiftWeeks(1) : shiftMonths(1)"
+            @previous="shiftPrevious"
+            @next="shiftNext"
           />
 
           <!-- Month grids: one per displayed month, all sharing a single model -->
@@ -401,816 +161,45 @@
 
         <!-- Time Slot Form (only in month view) & Calendar Links - Side by side -->
         <div class="grid gap-6 mb-6" :class="{ 'lg:grid-cols-2': displayMode === 'month' }">
-          <!-- Time Slot Form (only in month view) -->
-          <div v-if="displayMode === 'month'" class="card">
-            <div class="mb-4 flex items-baseline gap-2">
-              <h2 class="font-display text-xl font-semibold text-gray-900 dark:text-white">
-                {{ t('availability.timeSlot', 'Plage horaire') }}
-              </h2>
-              <span
-                v-if="calendar?.min_duration_hours && calendar.min_duration_hours > 0"
-                class="text-sm text-gray-600 dark:text-gray-400"
-              >
-                ({{ t('calendar.minDurationHours') }}: {{ calendar.min_duration_hours }}h)
-              </span>
-            </div>
+          <AvailabilitySlotForm
+            v-if="displayMode === 'month'"
+            v-model:all-day="isAllDay"
+            v-model:start-time="newAvailability.start_time"
+            v-model:end-time="newAvailability.end_time"
+            v-model:note="newAvailability.note"
+            :min-duration-hours="calendar?.min_duration_hours"
+          />
 
-            <div class="space-y-3">
-              <!-- All Day Checkbox -->
-              <div class="flex items-center">
-                <input
-                  id="allDay"
-                  v-model="isAllDay"
-                  type="checkbox"
-                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <label for="allDay" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  {{ t('availability.allDay') }}
-                </label>
-              </div>
-
-              <!-- Time Range -->
-              <div class="grid grid-cols-2 gap-2">
-                <div>
-                  <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                    {{ t('availability.startTime') }}
-                  </label>
-                  <TimeSelect
-                    v-model="newAvailability.start_time"
-                    class="text-sm"
-                    :disabled="isAllDay"
-                    :max="newAvailability.end_time || undefined"
-                  />
-                </div>
-                <div>
-                  <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                    {{ t('availability.endTime') }}
-                  </label>
-                  <TimeSelect
-                    v-model="newAvailability.end_time"
-                    class="text-sm"
-                    :disabled="isAllDay"
-                    :min="newAvailability.start_time || undefined"
-                  />
-                </div>
-              </div>
-
-              <!-- Note -->
-              <div>
-                <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                  {{ t('availability.note') }}
-                </label>
-                <textarea
-                  v-model="newAvailability.note"
-                  rows="2"
-                  class="input text-sm"
-                  :placeholder="t('availability.note')"
-                />
-              </div>
-            </div>
-          </div>
-
-          <!-- Calendar Links -->
-          <div class="card">
-            <h2 class="mb-4 font-display text-xl font-semibold text-gray-900 dark:text-white">
-              {{ t('calendar.sharingLinks', 'Sharing Links') }}
-            </h2>
-            <div class="space-y-3">
-              <!-- Public Link -->
-              <div v-if="!calendar?.lock_participants">
-                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                  {{ t('calendar.publicLink', 'Public link') }}
-                </label>
-                <div class="flex gap-2">
-                  <input :value="publicLink" readonly class="input flex-1 text-sm" />
-                  <button
-                    class="btn btn-secondary"
-                    :title="t('calendar.copyLink', 'Copy link')"
-                    @click="copyToClipboard(publicLink)"
-                  >
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              <!-- ICS Link -->
-              <div>
-                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                  {{ t('calendar.icsLink', 'iCal subscription link') }}
-                </label>
-                <div class="flex gap-2">
-                  <input :value="icsLink" readonly class="input flex-1 text-sm" />
-                  <button
-                    class="btn btn-secondary"
-                    :title="t('calendar.copyLink', 'Copy link')"
-                    @click="copyToClipboard(icsLink)"
-                  >
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              <!-- Settings Link (Owner/Admin only) -->
-              <div v-if="canManageCalendar">
-                <router-link
-                  :to="`/calendars/${calendar.id}/settings`"
-                  class="btn btn-ghost w-full justify-center"
-                >
-                  <svg class="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                    />
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                  </svg>
-                  {{ t('calendar.editCalendar', 'Edit calendar') }}
-                </router-link>
-              </div>
-            </div>
-          </div>
+          <CalendarSharePanel
+            :public-link="publicLink"
+            :ics-link="icsLink"
+            :show-public-link="!calendar?.lock_participants"
+            :settings-path="settingsPath"
+            @copy="copyToClipboard"
+          />
         </div>
 
         <!-- Participants List -->
-        <div class="card mb-6">
-          <h2 class="mb-4 font-display text-xl font-semibold text-gray-900 dark:text-white">
-            {{ t('calendar.participants') }}
-          </h2>
-          <div v-if="participantsStats.length > 0" class="space-y-2">
-            <button
-              v-for="stat in participantsStats"
-              :key="stat.name"
-              type="button"
-              class="w-full flex items-center justify-between rounded-lg border p-3 transition-all cursor-pointer"
-              :class="
-                selectedParticipantNames.has(stat.name)
-                  ? 'border-purple-500 bg-purple-50 dark:border-purple-400 dark:bg-purple-900/30'
-                  : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
-              "
-              @click="toggleParticipantSelection(stat.name)"
-            >
-              <span class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ stat.name }}
-              </span>
-              <span
-                class="rounded-full px-3 py-1 text-sm font-semibold"
-                :class="
-                  selectedParticipantNames.has(stat.name)
-                    ? 'bg-purple-200 text-purple-900 dark:bg-purple-800 dark:text-purple-100'
-                    : 'bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200'
-                "
-              >
-                {{ stat.count }}
-                {{
-                  stat.count > 1 ? t('availability.availabilities') : t('availability.availability')
-                }}
-              </span>
-            </button>
-          </div>
-          <div v-else class="text-sm text-gray-600 dark:text-gray-400">
-            {{ t('availability.noParticipant') }}
-          </div>
-        </div>
+        <ParticipantStatsList
+          :stats="participantsStats"
+          :selected="selectedParticipantNames"
+          @toggle="toggleParticipantSelection"
+        />
 
         <div class="grid gap-6 lg:grid-cols-2 items-start">
-          <!-- Recurrences Section -->
-          <CollapsibleSection :title="t('availability.recurrence')" :default-open="false">
-            <!-- Add Recurrence Form -->
-            <div
-              class="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800"
-            >
-              <h3 class="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">
-                {{ t('availability.addRecurrence') }}
-              </h3>
-              <div class="space-y-3">
-                <div>
-                  <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                    {{ t('availability.dayOfWeek') }}
-                  </label>
-                  <select v-model.number="newRecurrence.day_of_week" class="input text-sm">
-                    <option v-for="day in weekDaysOptions" :key="day.value" :value="day.value">
-                      {{ day.label }}
-                    </option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                  <div>
-                    <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                      {{ t('availability.startTime') }}
-                    </label>
-                    <TimeSelect
-                      v-model="newRecurrence.start_time"
-                      class="text-sm"
-                      :min="newRecurrenceTimeRestrictions.min_time || undefined"
-                      :max="newRecurrenceStartTimeMax"
-                    />
-                  </div>
-                  <div>
-                    <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                      {{ t('availability.endTime') }}
-                    </label>
-                    <TimeSelect
-                      v-model="newRecurrence.end_time"
-                      class="text-sm"
-                      :min="newRecurrenceEndTimeMin"
-                      :max="newRecurrenceTimeRestrictions.max_time || undefined"
-                    />
-                  </div>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                  <div>
-                    <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                      {{ t('availability.startDate') }}
-                    </label>
-                    <input
-                      v-model="newRecurrence.start_date"
-                      type="date"
-                      class="input text-sm"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                      {{ t('availability.endDate') }}
-                    </label>
-                    <input v-model="newRecurrence.end_date" type="date" class="input text-sm" />
-                  </div>
-                </div>
-                <div>
-                  <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                    {{ t('availability.note') }}
-                  </label>
-                  <textarea
-                    v-model="newRecurrence.note"
-                    rows="2"
-                    class="input text-sm"
-                    :placeholder="t('availability.note')"
-                  />
-                </div>
-                <!-- Error message for equal times -->
-                <p
-                  v-if="hasEqualTimesNewRecurrence"
-                  class="text-sm text-danger-600 dark:text-danger-400"
-                >
-                  {{ t('availability.startEndTimeMustDiffer') }}
-                </p>
-                <button
-                  :disabled="
-                    newRecurrence.day_of_week === null ||
-                    !newRecurrence.start_date ||
-                    addingRecurrence ||
-                    hasEqualTimesNewRecurrence
-                  "
-                  class="btn btn-primary w-full text-sm"
-                  @click="handleAddRecurrence"
-                >
-                  <svg
-                    v-if="addingRecurrence"
-                    class="mr-2 h-4 w-4 animate-spin"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      class="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      stroke-width="4"
-                    />
-                    <path
-                      class="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
-                  {{ addingRecurrence ? t('common.creating') : t('common.create') }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Recurrences List -->
-            <div class="space-y-3">
-              <div
-                v-for="recurrence in recurrences"
-                :key="recurrence.id"
-                class="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
-              >
-                <!-- Editing Mode -->
-                <div v-if="editingRecurrenceId === recurrence.id">
-                  <div class="space-y-3">
-                    <!-- Day of Week (read-only in edit mode) -->
-                    <div>
-                      <label
-                        class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-                      >
-                        {{ t('availability.dayOfWeek', 'Day of week') }}
-                      </label>
-                      <div
-                        class="flex items-center gap-2 text-sm text-gray-900 dark:text-white py-2"
-                      >
-                        <svg
-                          class="h-4 w-4 text-gray-400"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                          />
-                        </svg>
-                        {{ getDayName(editingRecurrence.day_of_week) }}
-                      </div>
-                    </div>
-
-                    <!-- Time Range -->
-                    <div class="grid grid-cols-2 gap-2">
-                      <div>
-                        <label
-                          class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-                        >
-                          {{ t('availability.startTime', 'Start time') }}
-                        </label>
-                        <TimeSelect
-                          v-model="editingRecurrence.start_time"
-                          class="w-full"
-                          :min="editingRecurrenceTimeRestrictions.min_time || undefined"
-                          :max="editingRecurrenceStartTimeMax"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-                        >
-                          {{ t('availability.endTime', 'End time') }}
-                        </label>
-                        <TimeSelect
-                          v-model="editingRecurrence.end_time"
-                          class="w-full"
-                          :min="editingRecurrenceEndTimeMin"
-                          :max="editingRecurrenceTimeRestrictions.max_time || undefined"
-                        />
-                      </div>
-                    </div>
-
-                    <!-- Date Range -->
-                    <div class="grid grid-cols-2 gap-2">
-                      <div>
-                        <label
-                          class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-                        >
-                          {{ t('availability.startDate', 'Start date') }}
-                        </label>
-                        <input
-                          v-model="editingRecurrence.start_date"
-                          type="date"
-                          class="input w-full"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label
-                          class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-                        >
-                          {{ t('availability.endDate', 'End date') }}
-                        </label>
-                        <input
-                          v-model="editingRecurrence.end_date"
-                          type="date"
-                          class="input w-full"
-                        />
-                      </div>
-                    </div>
-
-                    <!-- Note -->
-                    <div>
-                      <label
-                        class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-                      >
-                        {{ t('availability.note', 'Note') }}
-                      </label>
-                      <input
-                        v-model="editingRecurrence.note"
-                        type="text"
-                        class="input w-full"
-                        :placeholder="t('availability.note')"
-                      />
-                    </div>
-
-                    <!-- Error message for equal times -->
-                    <p
-                      v-if="hasEqualTimesEditingRecurrence"
-                      class="text-sm text-danger-600 dark:text-danger-400"
-                    >
-                      {{ t('availability.startEndTimeMustDiffer') }}
-                    </p>
-
-                    <!-- Action Buttons -->
-                    <div class="flex gap-2 justify-end">
-                      <button class="btn btn-ghost btn-sm" @click="handleCancelEdit">
-                        {{ t('common.cancel', 'Cancel') }}
-                      </button>
-                      <button
-                        class="btn btn-primary btn-sm"
-                        :disabled="!editingRecurrence.start_date || hasEqualTimesEditingRecurrence"
-                        @click="handleSaveRecurrence"
-                      >
-                        {{ t('common.save', 'Save') }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Display Mode -->
-                <div v-else class="flex items-start justify-between">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                      <svg
-                        class="h-4 w-4 text-gray-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                        />
-                      </svg>
-                      <span class="text-sm font-medium text-gray-900 dark:text-white">
-                        {{ getDayName(recurrence.day_of_week) }}
-                      </span>
-                    </div>
-                    <div
-                      v-if="recurrence.start_time || recurrence.end_time"
-                      class="mt-1 flex items-center gap-2"
-                    >
-                      <svg
-                        class="h-4 w-4 text-gray-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                      <span class="text-xs text-gray-600 dark:text-gray-400">
-                        {{ formatTimeRange(recurrence.start_time, recurrence.end_time) }}
-                      </span>
-                    </div>
-                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {{ formatDate(recurrence.start_date) }}
-                      <span v-if="recurrence.end_date">
-                        - {{ formatDate(recurrence.end_date) }}</span
-                      >
-                    </div>
-                    <p v-if="recurrence.note" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {{ recurrence.note }}
-                    </p>
-
-                    <!-- Exceptions -->
-                    <div
-                      v-if="recurrence.exceptions && recurrence.exceptions.length > 0"
-                      class="mt-2"
-                    >
-                      <p class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                        {{ t('availability.exceptions') }}:
-                      </p>
-                      <div class="mt-1 flex flex-wrap gap-1">
-                        <span
-                          v-for="exception in recurrence.exceptions"
-                          :key="exception.id"
-                          class="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-700 dark:text-gray-300"
-                        >
-                          {{ formatDate(exception.excluded_date) }}
-                          <button
-                            class="hover:text-danger-600"
-                            @click="handleRemoveException(recurrence.id, exception.excluded_date)"
-                          >
-                            <svg
-                              class="h-3 w-3"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M6 18L18 6M6 6l12 12"
-                              />
-                            </svg>
-                          </button>
-                        </span>
-                      </div>
-                    </div>
-
-                    <!-- Add Exception Form -->
-                    <div class="mt-2 flex gap-2">
-                      <input
-                        v-model="exceptionDates[recurrence.id]"
-                        type="date"
-                        class="input flex-1 text-xs"
-                        :placeholder="t('availability.addException')"
-                      />
-                      <button
-                        :disabled="!exceptionDates[recurrence.id]"
-                        class="btn btn-secondary btn-sm"
-                        @click="handleAddException(recurrence.id)"
-                      >
-                        {{ t('availability.addException') }}
-                      </button>
-                    </div>
-                  </div>
-                  <div class="flex gap-2">
-                    <button
-                      class="text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                      :title="t('common.edit', 'Edit')"
-                      @click="handleEditRecurrence(recurrence)"
-                    >
-                      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      class="text-danger-600 hover:text-danger-700 dark:text-danger-400"
-                      :title="t('common.delete')"
-                      @click="handleDeleteRecurrence(recurrence.id)"
-                    >
-                      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Empty State -->
-              <div
-                v-if="recurrences.length === 0"
-                class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-6 text-center dark:border-gray-700 dark:bg-gray-800"
-              >
-                <svg
-                  class="mx-auto h-10 w-10 text-gray-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                  {{ t('availability.addRecurrence') }}
-                </p>
-              </div>
-            </div>
-          </CollapsibleSection>
-          <!-- My Availabilities List -->
-          <CollapsibleSection :title="t('availability.myAvailabilities')" :default-open="false">
-            <!-- Availabilities List -->
-            <div class="space-y-2">
-              <div
-                v-for="availability in sortedAvailabilities"
-                :key="availability.id"
-                class="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
-              >
-                <!-- Editing Mode -->
-                <div v-if="editingAvailabilityDate === availability.date">
-                  <div class="space-y-3">
-                    <!-- Date (read-only) -->
-                    <div>
-                      <label
-                        class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-                      >
-                        {{ t('availability.date', 'Date') }}
-                      </label>
-                      <div class="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
-                        <svg
-                          class="h-4 w-4 text-gray-400"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                          />
-                        </svg>
-                        {{ formatDate(availability.date) }}
-                      </div>
-                    </div>
-
-                    <!-- Time Range -->
-                    <div class="grid grid-cols-2 gap-2">
-                      <div>
-                        <label
-                          class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-                        >
-                          {{ t('availability.startTime', 'Start time') }}
-                        </label>
-                        <TimeSelect
-                          v-model="editingAvailability.start_time"
-                          class="w-full min-h-11"
-                          :max="editingAvailability.end_time || undefined"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-                        >
-                          {{ t('availability.endTime', 'End time') }}
-                        </label>
-                        <TimeSelect
-                          v-model="editingAvailability.end_time"
-                          class="w-full min-h-11"
-                          :min="editingAvailability.start_time || undefined"
-                        />
-                      </div>
-                    </div>
-
-                    <!-- Note -->
-                    <div>
-                      <label
-                        class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-                      >
-                        {{ t('availability.note', 'Note') }}
-                      </label>
-                      <textarea
-                        v-model="editingAvailability.note"
-                        rows="2"
-                        class="input w-full"
-                        :placeholder="t('availability.note')"
-                      />
-                    </div>
-
-                    <!-- Action Buttons -->
-                    <div class="flex flex-col md:flex-row gap-2 md:justify-end">
-                      <button
-                        class="btn btn-ghost btn-sm w-full md:w-auto min-h-11"
-                        @click="handleCancelAvailabilityEdit"
-                      >
-                        {{ t('common.cancel', 'Cancel') }}
-                      </button>
-                      <button
-                        class="btn btn-primary btn-sm w-full md:w-auto min-h-11"
-                        @click="handleSaveAvailability"
-                      >
-                        {{ t('common.save', 'Save') }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Display Mode -->
-                <div v-else class="flex items-start justify-between">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                      <svg
-                        class="h-4 w-4 text-gray-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                        />
-                      </svg>
-                      <span class="text-sm font-medium text-gray-900 dark:text-white">
-                        {{ formatDate(availability.date) }}
-                      </span>
-                    </div>
-                    <div
-                      v-if="availability.start_time || availability.end_time"
-                      class="mt-1 flex items-center gap-2"
-                    >
-                      <svg
-                        class="h-4 w-4 text-gray-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                      <span class="text-xs text-gray-600 dark:text-gray-400">
-                        {{ formatTimeRange(availability.start_time, availability.end_time) }}
-                      </span>
-                    </div>
-                    <p
-                      v-if="availability.note"
-                      class="mt-1 text-xs text-gray-500 dark:text-gray-400"
-                    >
-                      {{ availability.note }}
-                    </p>
-                  </div>
-                  <div v-if="isDateInFuture(availability.date)" class="flex gap-2 shrink-0">
-                    <button
-                      class="p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-0 flex items-center justify-center text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                      :title="t('common.edit', 'Edit')"
-                      @click="handleEditAvailability(availability)"
-                    >
-                      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      class="p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-0 flex items-center justify-center text-danger-600 hover:text-danger-700 dark:text-danger-400"
-                      :title="t('common.delete')"
-                      @click="handleDeleteAvailability(availability.date)"
-                    >
-                      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Empty State -->
-              <div
-                v-if="sortedAvailabilities.length === 0"
-                class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-6 text-center dark:border-gray-700 dark:bg-gray-800"
-              >
-                <svg
-                  class="mx-auto h-10 w-10 text-gray-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
-                <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                  {{ t('availability.noAvailabilities', 'No availability') }}
-                </p>
-              </div>
-            </div>
-          </CollapsibleSection>
+          <RecurrenceEditor
+            :token="token"
+            :participant-id="participantId"
+            :calendar="calendar"
+            :recurrences="recurrences"
+            :reload="reloadRecurrencesAndCounts"
+          />
+          <AvailabilityList
+            :token="token"
+            :participant-id="participantId"
+            :availabilities="availabilities"
+            :reload="reloadCounts"
+          />
         </div>
       </template>
     </div>
@@ -1218,7 +207,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef, reactive, computed, onMounted, watchEffect, watch } from 'vue';
+/**
+ * The participant screen: one calendar, one participant, and every way that person can
+ * answer it.
+ *
+ * What is left here is the orchestration — loading the calendar and the visible range,
+ * building the shared day model, and turning clicks and drags into API calls. The six
+ * unrelated panels that used to sit alongside it (e-mail enrolment, the view selector,
+ * the default time slot, the sharing links, the participant tally, the recurrence
+ * editor) are components under `components/participant/`, and the display state they
+ * share lives in `useParticipantDisplaySettings`.
+ *
+ * The calendar tree is deliberately *not* decomposed further: each grid receives one
+ * prepared `model` object plus events, which is already the right shape, and breaking it
+ * into per-field props would be a step backwards.
+ */
+import { ref, shallowRef, reactive, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { resolveWeekStart } from '@/utils/weekStart';
@@ -1233,22 +237,25 @@ import CalendarListView from '@/components/calendar/CalendarListView.vue';
 import CalendarWeekView from '@/components/calendar/CalendarWeekView.vue';
 import CalendarWeekControls from '@/components/calendar/CalendarWeekControls.vue';
 import CalendarLegend from '@/components/calendar/CalendarLegend.vue';
+import CalendarViewToolbar from '@/components/calendar/CalendarViewToolbar.vue';
+import ParticipantEmailPanel from '@/components/participant/ParticipantEmailPanel.vue';
+import AvailabilitySlotForm from '@/components/participant/AvailabilitySlotForm.vue';
+import CalendarSharePanel from '@/components/participant/CalendarSharePanel.vue';
+import ParticipantStatsList from '@/components/participant/ParticipantStatsList.vue';
+import RecurrenceEditor from '@/components/participant/RecurrenceEditor.vue';
+import AvailabilityList from '@/components/participant/AvailabilityList.vue';
 import type { AvailabilityOperation } from '@/types/calendar';
 import { buildCoverageMap } from '@/utils/calendar/segments';
 import { buildWeekModel } from '@/utils/calendar/weekModel';
-import TimeSelect from '@/components/TimeSelect.vue';
-import CollapsibleSection from '@/components/CollapsibleSection.vue';
 import { dayOfWeekISO, formatDateISO, parseISODate } from '@/utils/date/isoDate';
 import { useParticipantCalendar } from '@/composables/calendar/useParticipantCalendar';
+import { useParticipantDisplaySettings } from '@/composables/calendar/useParticipantDisplaySettings';
 import { useCalendarStream } from '@/composables/calendar/useCalendarStream';
-import { normalizeViewStyle, type ViewStyle } from '@/composables/calendar/useCalendarViewState';
-import { addParticipantEmail, resendVerificationEmail } from '@/api/notify';
 import type {
   Availability,
   AvailabilityItem,
   RecurrenceWithExceptions,
   CreateAvailabilityRequest,
-  CreateRecurrenceRequest,
   DateAvailabilitySummary,
   ParticipantAvailabilitiesResponse,
 } from '@/types';
@@ -1279,7 +286,6 @@ const dateSummaries = shallowRef<DateAvailabilitySummary[]>([]);
  */
 const ownAvailabilities = shallowRef<AvailabilityItem[]>([]);
 const addingAvailability = ref(false);
-const addingRecurrence = ref(false);
 const isAllDay = ref(true);
 
 // Track currently displayed month in calendar
@@ -1290,38 +296,8 @@ const displayedMonth = ref(now.getMonth());
 // Track current week start date for weekly view
 const currentWeekStartDate = ref<Date>(new Date());
 
-// Display mode: 'month' or 'week'
-const displayMode = ref<'month' | 'week'>('month');
-
-// View style: 'classic' (grid) or 'list' (vertical card list)
-// Default to 'list' on mobile (screen width < 768px), 'classic' on desktop
-const getDefaultViewStyle = (): ViewStyle => {
-  if (typeof window === 'undefined') return 'grid';
-  return window.innerWidth < 768 ? 'list' : 'grid';
-};
-const viewStyle = ref<ViewStyle>(getDefaultViewStyle());
-
-// Number of periods (months or weeks) to display (1-4 for weeks, 1-12 for months)
-const numberOfPeriods = ref(1);
-
-// Weekly view settings
-const startHour = ref(8);
-
 // Selected participants for highlighting common dates
 const selectedParticipantNames = ref<Set<string>>(new Set());
-const endHour = ref(20);
-const slotDuration = ref(30);
-
-// Email notification state
-const emailInput = ref('');
-const addingEmail = ref(false);
-const resendingEmail = ref(false);
-const changingEmail = ref(false);
-const newEmailInput = ref('');
-const notificationsEnabled = computed(() => {
-  // Check if calendar has notify_participants enabled
-  return calendar.value?.notify_participants === true;
-});
 
 const calendar = computed(() => calendarStore.currentPublicCalendar);
 
@@ -1329,6 +305,17 @@ const calendar = computed(() => calendarStore.currentPublicCalendar);
 const participant = computed(() => {
   return calendar.value?.participants.find(p => p.id === participantId.value);
 });
+
+const notificationsEnabled = computed(() => calendar.value?.notify_participants === true);
+
+// How the calendar is drawn, and the persistence of that choice. Only the two settings
+// that move the visible date range refetch; the week's hours and slot size do not.
+const { displayMode, viewStyle, numberOfPeriods, startHour, endHour, slotDuration, restore } =
+  useParticipantDisplaySettings({
+    token,
+    isReady: () => Boolean(calendar.value),
+    onRangeChange: () => reloadCounts(),
+  });
 
 // Extract current participant's availabilities from dateSummaries (all participants data)
 // This replaces the need for a separate API call to /participant/{id}
@@ -1384,61 +371,13 @@ const weeksToDisplay = computed(() => {
     const weekStart = new Date(currentWeekStartDate.value);
     weekStart.setDate(currentWeekStartDate.value.getDate() + i * 7);
 
-    // Calculate week number within the month (for compatibility with WeeklyCalendarGrid)
-    const firstDayOfMonth = new Date(weekStart.getFullYear(), weekStart.getMonth(), 1);
-    const diff = Math.floor(
-      (weekStart.getTime() - firstDayOfMonth.getTime()) / (7 * 24 * 60 * 60 * 1000)
-    );
-    const weekNumber = diff + 1;
-
     weeks.push({
-      year: weekStart.getFullYear(),
-      month: weekStart.getMonth(),
-      week: weekNumber,
       weekStartDate: weekStart, // Pass the actual date
       key: `${weekStart.getTime()}-${i}`, // Use timestamp for unique key
     });
   }
 
   return weeks;
-});
-
-const weekDaysOptions = computed(() => {
-  const firstDayOfWeek = resolveWeekStart(calendar.value?.timezone, locale.value);
-
-  const daysOrder = [];
-  for (let i = 0; i < 7; i++) {
-    const dayValue = (firstDayOfWeek + i) % 7;
-    const dayKey = [
-      'availability.sunday',
-      'availability.monday',
-      'availability.tuesday',
-      'availability.wednesday',
-      'availability.thursday',
-      'availability.friday',
-      'availability.saturday',
-    ][dayValue];
-
-    daysOrder.push({
-      value: dayValue,
-      label: t(dayKey),
-    });
-  }
-
-  // Filter days based on calendar's allowed weekdays
-  const allowedWeekdays = calendar.value?.allowed_weekdays;
-  if (allowedWeekdays && allowedWeekdays.length > 0) {
-    return daysOrder.filter(day => allowedWeekdays.includes(day.value));
-  }
-
-  return daysOrder;
-});
-
-const sortedAvailabilities = computed(() => {
-  if (!availabilities.value || !Array.isArray(availabilities.value)) {
-    return [];
-  }
-  return [...availabilities.value].sort((a, b) => a.date.localeCompare(b.date));
 });
 
 const publicLink = computed(() => {
@@ -1460,8 +399,8 @@ const participantsStats = computed(() => {
   const statsMap = new Map<string, { name: string; count: number }>();
 
   // Initialize all participants from calendar with count = 0
-  for (const participant of calendar.value.participants) {
-    statsMap.set(participant.name, { name: participant.name, count: 0 });
+  for (const entry of calendar.value.participants) {
+    statsMap.set(entry.name, { name: entry.name, count: 0 });
   }
 
   // Count availabilities from dateSummaries if available
@@ -1560,6 +499,17 @@ function shiftWeeks(delta: number) {
   handleWeekChange(start);
 }
 
+/** The list view's arrows step by whichever period is on screen. */
+function shiftPrevious() {
+  if (displayMode.value === 'week') shiftWeeks(-1);
+  else shiftMonths(-1);
+}
+
+function shiftNext() {
+  if (displayMode.value === 'week') shiftWeeks(1);
+  else shiftMonths(1);
+}
+
 // Participant details popup, opened from any view and rendered once at this level.
 const detailsDate = ref<string | null>(null);
 const detailsAnchor = ref<DOMRect | null>(null);
@@ -1618,6 +568,10 @@ const canManageCalendar = computed(() => {
   return calendarStore.calendars.some(owned => owned.id === current.id);
 });
 
+const settingsPath = computed(() =>
+  canManageCalendar.value && calendar.value ? `/calendars/${calendar.value.id}/settings` : null
+);
+
 const calendarDateRangeText = computed(() => {
   if (!calendar.value) return '';
 
@@ -1656,171 +610,13 @@ const calendarDateRangeText = computed(() => {
   return '';
 });
 
+/** The slot applied to the next day clicked; edited by `AvailabilitySlotForm`. */
 const newAvailability = reactive<CreateAvailabilityRequest>({
   date: '',
   start_time: '',
   end_time: '',
   note: '',
 });
-
-const newRecurrence = reactive<CreateRecurrenceRequest>({
-  day_of_week: 1, // Monday by default
-  start_time: '',
-  end_time: '',
-  note: '',
-  start_date: '',
-  end_date: '',
-});
-
-// Automatically set the default day_of_week to the first allowed weekday
-watchEffect(() => {
-  if (weekDaysOptions.value.length > 0 && newRecurrence.day_of_week !== null) {
-    // Only update if the current value is not in the allowed list
-    const isCurrentAllowed = weekDaysOptions.value.some(
-      day => day.value === newRecurrence.day_of_week
-    );
-    if (!isCurrentAllowed) {
-      newRecurrence.day_of_week = weekDaysOptions.value[0].value;
-    }
-  } else if (weekDaysOptions.value.length > 0) {
-    // Initialize with first value if day_of_week is null
-    newRecurrence.day_of_week = weekDaysOptions.value[0].value;
-  }
-});
-
-const exceptionDates = reactive<Record<string, string>>({});
-
-// Recurrence editing state
-const editingRecurrenceId = ref<string | null>(null);
-const editingRecurrence = reactive<CreateRecurrenceRequest>({
-  day_of_week: 1,
-  start_time: '',
-  end_time: '',
-  note: '',
-  start_date: '',
-  end_date: '',
-});
-
-// Availability editing state
-const editingAvailabilityDate = ref<string | null>(null);
-const editingAvailability = reactive({
-  start_time: '',
-  end_time: '',
-  note: '',
-});
-
-// Computed properties for weekday time restrictions
-const newRecurrenceTimeRestrictions = computed(() => {
-  if (!calendar.value?.weekday_times || newRecurrence.day_of_week === null) {
-    return {};
-  }
-  return calendar.value.weekday_times[newRecurrence.day_of_week] || {};
-});
-
-const editingRecurrenceTimeRestrictions = computed(() => {
-  if (!calendar.value?.weekday_times || editingRecurrence.day_of_week === null) {
-    return {};
-  }
-  return calendar.value.weekday_times[editingRecurrence.day_of_week] || {};
-});
-
-// Helper to compare time strings (HH:MM format)
-function minTime(a: string | undefined, b: string | undefined): string | undefined {
-  if (!a) return b;
-  if (!b) return a;
-  return a < b ? a : b;
-}
-
-function maxTime(a: string | undefined, b: string | undefined): string | undefined {
-  if (!a) return b;
-  if (!b) return a;
-  return a > b ? a : b;
-}
-
-// Computed properties for corrected min/max constraints for new recurrence
-const newRecurrenceStartTimeMax = computed(() => {
-  const restrictions = newRecurrenceTimeRestrictions.value;
-  return minTime(restrictions.max_time, newRecurrence.end_time || undefined);
-});
-
-const newRecurrenceEndTimeMin = computed(() => {
-  const restrictions = newRecurrenceTimeRestrictions.value;
-  return maxTime(newRecurrence.start_time || undefined, restrictions.min_time);
-});
-
-// Computed properties for corrected min/max constraints for editing recurrence
-const editingRecurrenceStartTimeMax = computed(() => {
-  const restrictions = editingRecurrenceTimeRestrictions.value;
-  return minTime(restrictions.max_time, editingRecurrence.end_time || undefined);
-});
-
-const editingRecurrenceEndTimeMin = computed(() => {
-  const restrictions = editingRecurrenceTimeRestrictions.value;
-  return maxTime(editingRecurrence.start_time || undefined, restrictions.min_time);
-});
-
-// Validation: check if start_time equals end_time (both must be defined and non-empty)
-const hasEqualTimesNewRecurrence = computed(() => {
-  const start = newRecurrence.start_time;
-  const end = newRecurrence.end_time;
-  return Boolean(start && end && start === end);
-});
-
-const hasEqualTimesEditingRecurrence = computed(() => {
-  const start = editingRecurrence.start_time;
-  const end = editingRecurrence.end_time;
-  return Boolean(start && end && start === end);
-});
-
-// Watch for day_of_week changes and apply time restrictions for new recurrence
-watch(
-  () => newRecurrence.day_of_week,
-  newDay => {
-    if (newDay !== null && calendar.value?.weekday_times) {
-      const restrictions = calendar.value.weekday_times[newDay] || {};
-
-      // Clear fields first, then auto-fill with new restrictions
-      newRecurrence.start_time = restrictions.min_time || '';
-      newRecurrence.end_time = restrictions.max_time || '';
-    }
-  }
-);
-
-// Watch for calendar loading to initialize new recurrence time fields
-watch(
-  () => calendar.value?.weekday_times,
-  weekdayTimes => {
-    if (weekdayTimes && newRecurrence.day_of_week !== null) {
-      const restrictions = weekdayTimes[newRecurrence.day_of_week] || {};
-      // Only initialize if fields are empty (don't override user input)
-      if (!newRecurrence.start_time) {
-        newRecurrence.start_time = restrictions.min_time || '';
-      }
-      if (!newRecurrence.end_time) {
-        newRecurrence.end_time = restrictions.max_time || '';
-      }
-    }
-  }
-);
-
-// Watch for day_of_week changes and apply time restrictions for editing recurrence
-watch(
-  () => editingRecurrence.day_of_week,
-  newDay => {
-    if (newDay !== null && calendar.value?.weekday_times && editingRecurrenceId.value) {
-      const restrictions = calendar.value.weekday_times[newDay] || {};
-
-      // Only auto-fill if the times are empty
-      if (restrictions.min_time && !editingRecurrence.start_time) {
-        editingRecurrence.start_time = restrictions.min_time;
-      }
-
-      if (restrictions.max_time && !editingRecurrence.end_time) {
-        editingRecurrence.end_time = restrictions.max_time;
-      }
-    }
-  }
-);
 
 // Save participant selection to history store
 function saveParticipantSelection() {
@@ -1862,28 +658,7 @@ async function loadCalendar() {
       historyStore.addCalendar(token.value, calendar.value.name, participantId.value);
 
       // Restore display settings from history if available
-      const savedSettings = historyStore.getDisplaySettings(token.value);
-      if (savedSettings) {
-        if (savedSettings.displayMode !== undefined) {
-          displayMode.value = savedSettings.displayMode;
-        }
-        if (savedSettings.periodCount !== undefined) {
-          numberOfPeriods.value = savedSettings.periodCount;
-        }
-        if (savedSettings.startHour !== undefined) {
-          startHour.value = savedSettings.startHour;
-        }
-        if (savedSettings.endHour !== undefined) {
-          endHour.value = savedSettings.endHour;
-        }
-        if (savedSettings.slotDuration !== undefined) {
-          slotDuration.value = savedSettings.slotDuration;
-        }
-        if (savedSettings.viewStyle !== undefined) {
-          // Older entries hold 'classic' or 'compact'; both mean the grid now.
-          viewStyle.value = normalizeViewStyle(savedSettings.viewStyle);
-        }
-      }
+      restore(historyStore.getDisplaySettings(token.value));
     }
 
     // Save participant selection
@@ -1900,10 +675,7 @@ async function loadCalendar() {
     currentWeekStartDate.value = weekStart;
 
     // Load recurrences and participant counts (which includes all participants' availabilities)
-    await Promise.all([
-      loadRecurrences(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ]);
+    await reloadRecurrencesAndCounts();
   } catch (err: any) {
     toastStore.error(err.message || t('calendar.fetchError', 'Failed to load calendar'));
     // Remove invalid calendar from history and redirect to home
@@ -1936,9 +708,9 @@ async function loadParticipantCounts(year?: number, month?: number) {
       endDate.setDate(endDate.getDate() + numberOfPeriods.value * 7 - 1); // Last day of last displayed week
     } else {
       // For month mode, calculate based on year/month and number of months
-      const now = new Date();
-      const targetYear = year ?? now.getFullYear();
-      const targetMonth = month ?? now.getMonth();
+      const today = new Date();
+      const targetYear = year ?? today.getFullYear();
+      const targetMonth = month ?? today.getMonth();
 
       startDate = new Date(targetYear, targetMonth, 1);
       endDate = new Date(targetYear, targetMonth + numberOfPeriods.value, 0); // Last day of last displayed month
@@ -1976,254 +748,19 @@ async function loadParticipantCounts(year?: number, month?: number) {
   }
 }
 
-async function handleDeleteAvailability(date: string) {
-  if (!confirm(t('availability.confirmDelete'))) return;
-
-  try {
-    await availabilitiesApi.delete(token.value, participantId.value, date);
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
-  } catch (err: any) {
-    toastStore.error(err.message || 'Failed to delete availability');
-  }
+/** Refetch the visible range for the month currently tracked. */
+function reloadCounts(): Promise<void> {
+  return loadParticipantCounts(displayedYear.value, displayedMonth.value);
 }
 
-async function handleAddRecurrence() {
-  if (newRecurrence.day_of_week === null || !newRecurrence.start_date) return;
-
-  addingRecurrence.value = true;
-  try {
-    const data: CreateRecurrenceRequest = {
-      day_of_week: newRecurrence.day_of_week,
-      start_date: newRecurrence.start_date,
-    };
-
-    if (newRecurrence.start_time) data.start_time = newRecurrence.start_time;
-    if (newRecurrence.end_time) data.end_time = newRecurrence.end_time;
-    if (newRecurrence.end_date) data.end_date = newRecurrence.end_date;
-    if (newRecurrence.note) data.note = newRecurrence.note;
-
-    await availabilitiesApi.createRecurrence(token.value, participantId.value, data);
-
-    // Reset form
-    newRecurrence.day_of_week = 1;
-    newRecurrence.start_time = '';
-    newRecurrence.end_time = '';
-    newRecurrence.start_date = '';
-    newRecurrence.end_date = '';
-    newRecurrence.note = '';
-
-    // Reload recurrences and participant counts
-    await Promise.all([
-      loadRecurrences(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ]);
-  } catch (err: any) {
-    toastStore.error(err.message || 'Failed to add recurrence');
-  } finally {
-    addingRecurrence.value = false;
-  }
-}
-
-async function handleDeleteRecurrence(recurrenceId: string) {
-  if (!confirm(t('availability.confirmDeleteRecurrence'))) return;
-
-  try {
-    await availabilitiesApi.deleteRecurrence(token.value, participantId.value, recurrenceId);
-    await Promise.all([
-      loadRecurrences(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ]);
-  } catch (err: any) {
-    toastStore.error(err.message || 'Failed to delete recurrence');
-  }
-}
-
-function handleEditRecurrence(recurrence: RecurrenceWithExceptions) {
-  editingRecurrenceId.value = recurrence.id;
-  editingRecurrence.day_of_week = recurrence.day_of_week;
-  editingRecurrence.start_time = recurrence.start_time || '';
-  editingRecurrence.end_time = recurrence.end_time || '';
-  editingRecurrence.note = recurrence.note || '';
-  editingRecurrence.start_date = recurrence.start_date;
-  editingRecurrence.end_date = recurrence.end_date || '';
-}
-
-async function handleSaveRecurrence() {
-  if (
-    editingRecurrence.day_of_week === null ||
-    !editingRecurrence.start_date ||
-    !editingRecurrenceId.value
-  )
-    return;
-
-  try {
-    const data: CreateRecurrenceRequest = {
-      day_of_week: editingRecurrence.day_of_week,
-      start_date: editingRecurrence.start_date,
-    };
-
-    if (editingRecurrence.start_time) data.start_time = editingRecurrence.start_time;
-    if (editingRecurrence.end_time) data.end_time = editingRecurrence.end_time;
-    if (editingRecurrence.end_date) data.end_date = editingRecurrence.end_date;
-    if (editingRecurrence.note) data.note = editingRecurrence.note;
-
-    await availabilitiesApi.updateRecurrence(
-      token.value,
-      participantId.value,
-      editingRecurrenceId.value,
-      data
-    );
-
-    // Reset editing state
-    editingRecurrenceId.value = null;
-    editingRecurrence.day_of_week = 1;
-    editingRecurrence.start_time = '';
-    editingRecurrence.end_time = '';
-    editingRecurrence.start_date = '';
-    editingRecurrence.end_date = '';
-    editingRecurrence.note = '';
-
-    // Reload recurrences and participant counts
-    await Promise.all([
-      loadRecurrences(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ]);
-  } catch (err: any) {
-    toastStore.error(err.message || 'Failed to update recurrence');
-  }
-}
-
-function handleCancelEdit() {
-  editingRecurrenceId.value = null;
-  editingRecurrence.day_of_week = 1;
-  editingRecurrence.start_time = '';
-  editingRecurrence.end_time = '';
-  editingRecurrence.start_date = '';
-  editingRecurrence.end_date = '';
-  editingRecurrence.note = '';
-}
-
-function handleEditAvailability(availability: Availability) {
-  editingAvailabilityDate.value = availability.date;
-  editingAvailability.start_time = availability.start_time || '';
-  editingAvailability.end_time = availability.end_time || '';
-  editingAvailability.note = availability.note || '';
-}
-
-async function handleSaveAvailability() {
-  if (!editingAvailabilityDate.value) return;
-
-  try {
-    const data: Partial<CreateAvailabilityRequest> = {};
-
-    // Include times even if empty (to allow clearing them)
-    data.start_time = editingAvailability.start_time || undefined;
-    data.end_time = editingAvailability.end_time || undefined;
-    data.note = editingAvailability.note || undefined;
-
-    await availabilitiesApi.update(
-      token.value,
-      participantId.value,
-      editingAvailabilityDate.value,
-      data
-    );
-
-    // Reset editing state
-    editingAvailabilityDate.value = null;
-    editingAvailability.start_time = '';
-    editingAvailability.end_time = '';
-    editingAvailability.note = '';
-
-    // Participant counts will be automatically reloaded, which updates availabilityData
-  } catch (err: any) {
-    toastStore.error(err.message || 'Failed to update availability');
-  }
-}
-
-function handleCancelAvailabilityEdit() {
-  editingAvailabilityDate.value = null;
-  editingAvailability.start_time = '';
-  editingAvailability.end_time = '';
-  editingAvailability.note = '';
-}
-
-async function handleAddException(recurrenceId: string) {
-  const date = exceptionDates[recurrenceId];
-  if (!date) return;
-
-  try {
-    await availabilitiesApi.createException(token.value, participantId.value, recurrenceId, date);
-    exceptionDates[recurrenceId] = '';
-    await Promise.all([
-      loadRecurrences(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ]);
-  } catch (err: any) {
-    toastStore.error(err.message || 'Failed to add exception');
-  }
-}
-
-async function handleRemoveException(recurrenceId: string, date: string) {
-  try {
-    await availabilitiesApi.deleteException(token.value, participantId.value, recurrenceId, date);
-    await Promise.all([
-      loadRecurrences(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ]);
-  } catch (err: any) {
-    toastStore.error(err.message || 'Failed to remove exception');
-  }
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const localeCode = locale.value;
-  return new Intl.DateTimeFormat(localeCode, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(date);
-}
-
-function formatTimeRange(startTime?: string, endTime?: string): string {
-  // Check if it's a full day range (00:00-23:59 or no times)
-  const start = startTime || '00:00';
-  const end = endTime || '23:59';
-
-  if (start === '00:00' && end === '23:59') {
-    return t('availability.allDay', 'All day');
-  }
-
-  if (startTime && endTime) {
-    return `${startTime} - ${endTime}`;
-  } else if (startTime) {
-    return `${t('availability.startTime')}: ${startTime}`;
-  } else if (endTime) {
-    return `${t('availability.endTime')}: ${endTime}`;
-  }
-  return t('availability.allDay', 'All day');
-}
-
-function getDayName(dayOfWeek: number): string {
-  const days = [
-    'availability.sunday',
-    'availability.monday',
-    'availability.tuesday',
-    'availability.wednesday',
-    'availability.thursday',
-    'availability.friday',
-    'availability.saturday',
-  ];
-  return t(days[dayOfWeek]);
-}
-
-function isDateInFuture(dateStr: string): boolean {
-  const date = new Date(dateStr);
-  date.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return date >= today;
+/**
+ * Refetch both the recurrence rules and the visible range.
+ *
+ * Every recurrence mutation needs both: the rule list changes, and so does every day the
+ * rule expands to in the range summary.
+ */
+async function reloadRecurrencesAndCounts(): Promise<void> {
+  await Promise.all([loadRecurrences(), reloadCounts()]);
 }
 
 /**
@@ -2251,7 +788,7 @@ async function handleCalendarDayClick(dateString: string) {
     // If it exists, delete it directly without confirmation
     try {
       await availabilitiesApi.delete(token.value, participantId.value, dateString);
-      await loadParticipantCounts(displayedYear.value, displayedMonth.value);
+      await reloadCounts();
     } catch (err: any) {
       toastStore.error(err.message || 'Failed to delete availability');
     }
@@ -2261,22 +798,10 @@ async function handleCalendarDayClick(dateString: string) {
   // Add availability directly with the current time slot settings
   addingAvailability.value = true;
   try {
-    const data: CreateAvailabilityRequest = {
-      date: dateString,
-    };
-
-    // Only add times if not all day
-    if (!isAllDay.value) {
-      if (newAvailability.start_time) data.start_time = newAvailability.start_time;
-      if (newAvailability.end_time) data.end_time = newAvailability.end_time;
-    }
-
-    if (newAvailability.note) data.note = newAvailability.note;
-
-    await availabilitiesApi.create(token.value, participantId.value, data);
+    await availabilitiesApi.create(token.value, participantId.value, slotRequestFor(dateString));
 
     // Reload participant counts (which includes all participants' availabilities)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
+    await reloadCounts();
   } catch (err: any) {
     // Check for specific error codes
     if (err.code === 'CONFLICT') {
@@ -2287,6 +812,23 @@ async function handleCalendarDayClick(dateString: string) {
   } finally {
     addingAvailability.value = false;
   }
+}
+
+/** The create request for one date, built from the default slot form. */
+function slotRequestFor(dateString: string): CreateAvailabilityRequest {
+  const data: CreateAvailabilityRequest = {
+    date: dateString,
+  };
+
+  // Only add times if not all day
+  if (!isAllDay.value) {
+    if (newAvailability.start_time) data.start_time = newAvailability.start_time;
+    if (newAvailability.end_time) data.end_time = newAvailability.end_time;
+  }
+
+  if (newAvailability.note) data.note = newAvailability.note;
+
+  return data;
 }
 
 async function handleCalendarDaysSelect(dates: string[]) {
@@ -2310,23 +852,11 @@ async function handleCalendarDaysSelect(dates: string[]) {
 
   // Create availabilities for all selected dates in parallel using allSettled
   // to continue even if some fail
-  const promises = datesToAdd.map(dateString => {
-    const data: CreateAvailabilityRequest = {
-      date: dateString,
-    };
-
-    // Only add times if not all day
-    if (!isAllDay.value) {
-      if (newAvailability.start_time) data.start_time = newAvailability.start_time;
-      if (newAvailability.end_time) data.end_time = newAvailability.end_time;
-    }
-
-    if (newAvailability.note) data.note = newAvailability.note;
-
-    return availabilitiesApi.create(token.value, participantId.value, data);
-  });
-
-  const results = await Promise.allSettled(promises);
+  const results = await Promise.allSettled(
+    datesToAdd.map(dateString =>
+      availabilitiesApi.create(token.value, participantId.value, slotRequestFor(dateString))
+    )
+  );
 
   // Count successes and failures
   const succeeded = results.filter(r => r.status === 'fulfilled').length;
@@ -2347,7 +877,7 @@ async function handleCalendarDaysSelect(dates: string[]) {
   }
 
   // Always reload participant counts (which includes all participants' availabilities)
-  await loadParticipantCounts(displayedYear.value, displayedMonth.value);
+  await reloadCounts();
 
   addingAvailability.value = false;
 }
@@ -2369,11 +899,11 @@ async function handleCalendarDaysDeselect(dates: string[]) {
 
   // Delete availabilities for all selected dates in parallel using allSettled
   // to continue even if some fail
-  const promises = datesToRemove.map(dateString =>
-    availabilitiesApi.delete(token.value, participantId.value, dateString)
+  const results = await Promise.allSettled(
+    datesToRemove.map(dateString =>
+      availabilitiesApi.delete(token.value, participantId.value, dateString)
+    )
   );
-
-  const results = await Promise.allSettled(promises);
 
   // Count successes and failures
   const succeeded = results.filter(r => r.status === 'fulfilled').length;
@@ -2394,7 +924,7 @@ async function handleCalendarDaysDeselect(dates: string[]) {
   }
 
   // Always reload participant counts (which includes all participants' availabilities)
-  await loadParticipantCounts(displayedYear.value, displayedMonth.value);
+  await reloadCounts();
 
   addingAvailability.value = false;
 }
@@ -2407,10 +937,7 @@ async function handleCalendarAddException(recurrenceId: string, dateString: stri
       recurrenceId,
       dateString
     );
-    await Promise.all([
-      loadRecurrences(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ]);
+    await reloadRecurrencesAndCounts();
   } catch (err: any) {
     toastStore.error(err.message || 'Failed to add exception');
   }
@@ -2507,55 +1034,12 @@ async function handleBatchOperations(operations: AvailabilityOperation[]) {
   }
 
   // Always reload participant counts (which includes all participants' availabilities)
-  await loadParticipantCounts(displayedYear.value, displayedMonth.value);
+  await reloadCounts();
 }
 
 async function handleAvailabilityUpdated() {
   // Reload participant counts for the displayed date range (which includes all participants' availabilities)
-  await loadParticipantCounts(displayedYear.value, displayedMonth.value);
-}
-
-// Email notification handlers
-async function handleAddEmail() {
-  if (!emailInput.value.trim() || !token.value || !participantId.value) {
-    return;
-  }
-
-  addingEmail.value = true;
-
-  try {
-    await addParticipantEmail(token.value, participantId.value, emailInput.value.trim());
-    toastStore.success(t('notifications.emailSent'));
-    emailInput.value = '';
-    // Reload calendar to get updated participant email info
-    await calendarStore.fetchPublicCalendar(token.value, participantId.value);
-  } catch (error: any) {
-    toastStore.error(error.message || t('notifications.emailError'));
-  } finally {
-    addingEmail.value = false;
-  }
-}
-
-async function handleResendVerification() {
-  if (!token.value || !participantId.value) {
-    return;
-  }
-
-  resendingEmail.value = true;
-
-  try {
-    await resendVerificationEmail(token.value, participantId.value);
-    toastStore.success(t('notifications.emailSent'));
-  } catch (error: any) {
-    toastStore.error(error.message || t('notifications.emailError'));
-  } finally {
-    resendingEmail.value = false;
-  }
-}
-
-function handleCancelChangeEmail() {
-  changingEmail.value = false;
-  newEmailInput.value = '';
+  await reloadCounts();
 }
 
 function toggleParticipantSelection(participantName: string) {
@@ -2566,27 +1050,6 @@ function toggleParticipantSelection(participantName: string) {
   }
   // Trigger reactivity for Set
   selectedParticipantNames.value = new Set(selectedParticipantNames.value);
-}
-
-async function handleChangeEmail() {
-  if (!newEmailInput.value.trim() || !token.value || !participantId.value) {
-    return;
-  }
-
-  addingEmail.value = true;
-
-  try {
-    await addParticipantEmail(token.value, participantId.value, newEmailInput.value.trim());
-    toastStore.success(t('notifications.emailChanged'));
-    newEmailInput.value = '';
-    changingEmail.value = false;
-    // Reload calendar to get updated participant email info
-    await calendarStore.fetchPublicCalendar(token.value, participantId.value);
-  } catch (error: any) {
-    toastStore.error(error.message || t('notifications.emailError'));
-  } finally {
-    addingEmail.value = false;
-  }
 }
 
 // Watch for changes in calendar settings that affect holidays and allowed dates
@@ -2612,48 +1075,6 @@ watch(
   }
 );
 
-// Save display settings to localStorage when they change
-watch(displayMode, async newMode => {
-  // Adjust numberOfPeriods if it exceeds the max for the new mode
-  // Month mode: max 12, Week mode: max 4
-  const maxPeriods = newMode === 'month' ? 12 : 4;
-  if (numberOfPeriods.value > maxPeriods) {
-    numberOfPeriods.value = maxPeriods;
-  }
-
-  if (calendar.value) {
-    historyStore.updateDisplaySettings(token.value, { displayMode: newMode });
-    // Reload participant counts with appropriate date range for the new mode
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
-  }
-});
-
-watch(numberOfPeriods, async newCount => {
-  if (calendar.value) {
-    historyStore.updateDisplaySettings(token.value, { periodCount: newCount });
-    // Reload participant counts to include all displayed periods
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
-  }
-});
-
-// The week grid used to emit these and the parent persisted them; now that the parent
-// owns the values it has to save them itself, or they reset on every visit.
-watch([startHour, endHour, slotDuration], ([newStart, newEnd, newDuration]) => {
-  if (token.value) {
-    historyStore.updateDisplaySettings(token.value, {
-      startHour: newStart,
-      endHour: newEnd,
-      slotDuration: newDuration,
-    });
-  }
-});
-
-watch(viewStyle, newStyle => {
-  if (calendar.value) {
-    historyStore.updateDisplaySettings(token.value, { viewStyle: newStyle });
-  }
-});
-
 // Watch for route changes to reload the calendar when navigating between calendars
 // The immediate flag ensures this runs on initial mount
 watch(
@@ -2677,7 +1098,7 @@ async function handleCancelFromEmail() {
     await availabilitiesApi.delete(token.value, participantId.value, cancelDate);
 
     // Reload participant counts (which includes all participants' availabilities)
-    await loadParticipantCounts(displayedYear.value, displayedMonth.value);
+    await reloadCounts();
 
     toastStore.success(`Your participation has been cancelled for ${cancelDate}`);
 
@@ -2699,12 +1120,7 @@ async function handleCancelFromEmail() {
 // and it is what reconciles the optimistic update with what the server actually stored.
 useCalendarStream({
   token,
-  onChange: async () => {
-    await Promise.all([
-      loadRecurrences(),
-      loadParticipantCounts(displayedYear.value, displayedMonth.value),
-    ]);
-  },
+  onChange: () => reloadRecurrencesAndCounts(),
 });
 
 onMounted(async () => {

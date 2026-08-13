@@ -917,8 +917,14 @@ func (s *CalendarService) RemoveParticipant(ctx context.Context, userID, userRol
 	return nil
 }
 
-// GetPublicCalendar retrieves a calendar by public token (no auth required)
-// Uses cache if available (skip cache when participant filtering is needed)
+// GetPublicCalendar retrieves a calendar by public token (no auth required).
+//
+// Deliberately uncached. The answer depends on participantID as well as on the token —
+// filterParticipants below leaves that one participant's id and email visible and masks
+// everybody else's — so a cache keyed on the token alone would serve one participant's
+// privileged view to the next caller, anonymous ones included. That is the whole of the
+// lock_participants guarantee, undone by a cache lookup. If this ever needs caching, the
+// participant has to be part of the key.
 func (s *CalendarService) GetPublicCalendar(ctx context.Context, token, participantID string) (*models.PublicCalendarResponse, error) {
 	// Fetch calendar from database
 	calendar, err := s.calendarRepo.GetByPublicToken(ctx, token)

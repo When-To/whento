@@ -17,6 +17,27 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!--
+      Resolve the theme before the first paint.
+
+      The app also does this on mount, but "on mount" is after the bundle has been
+      fetched, parsed and hydrated — so every dark-theme user saw a full light-coloured
+      flash first. This must stay in step with resolveTheme() in src/utils/theme.ts.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme');
+          var dark =
+            stored === 'dark' ||
+            (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {
+          /* private mode / storage disabled: fall through to the light default */
+        }
+      })();
+    </script>
   </head>
   <body class="antialiased">
     <div id="app"></div>
