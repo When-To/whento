@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: BSL-1.1
  */
 
+// Self-hosted Inter — see the note in index.html. Imported here rather than from
+// style.css because Tailwind v4 processes that file's @import itself and drops
+// this one, which silently produced a stylesheet naming a font it never shipped.
+// The variable file covers 100-900, so the six static weights the old
+// fonts.googleapis.com link fetched are now one request against our own origin.
+import '@fontsource-variable/inter';
+
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';

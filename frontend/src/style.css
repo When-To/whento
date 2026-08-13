@@ -55,8 +55,13 @@
   --color-danger-900: #7f1d1d;
 
   /* Font Family */
-  --font-sans: Inter, system-ui, sans-serif;
-  --font-display: 'Cal Sans', Inter, system-ui, sans-serif;
+  /* 'Inter Variable' is the family @fontsource-variable/inter registers; plain
+     Inter stays behind it so a system-installed copy still wins over the
+     fallback. 'Cal Sans' was never loaded by anything and resolved to Inter
+     already — kept as a first choice in case it is ever bundled, but it is not
+     a missing dependency. */
+  --font-sans: 'Inter Variable', Inter, system-ui, sans-serif;
+  --font-display: 'Cal Sans', 'Inter Variable', Inter, system-ui, sans-serif;
 
   /* Box Shadows */
   --shadow-soft: 0 2px 15px -3px rgb(0 0 0 / 0.07), 0 10px 20px -2px rgb(0 0 0 / 0.04);

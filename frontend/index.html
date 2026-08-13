@@ -13,10 +13,13 @@
     <link rel="alternate" hreflang="fr" href="https://whento.be/?lang=fr" />
     <link rel="alternate" hreflang="x-default" href="https://whento.be/" />
 
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!--
+      Inter is bundled, not fetched from fonts.googleapis.com. That request was a
+      render-blocking stylesheet on a third-party host: a self-hosted instance
+      behind a firewall waited for it to time out before painting anything, and
+      every visitor's IP address went to Google — which is the one thing this
+      product promises not to do with an address. See docs/adr/0005.
+    -->
 
     <!--
       Resolve the theme before the first paint.

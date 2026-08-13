@@ -337,3 +337,25 @@ The last row is the one people forget. Every verification, magic-link, reset and
 notification email goes through the SMTP provider configured in `SMTP_HOST`, and
 that provider sees recipient addresses and the links themselves. Choose it as
 carefully as you chose where to host the database.
+
+## No third-party requests from the browser
+
+The application makes no request to a host it does not control. This matters as
+much as what the server logs: a stylesheet, a font or a script fetched from
+another origin hands that origin the visitor's IP address, User-Agent and
+referring page, on every page load, before any consent is possible.
+
+Inter used to be fetched from `fonts.googleapis.com` as a render-blocking
+stylesheet. It is bundled now (`@fontsource-variable/inter`, imported from
+`src/main.ts`), served from the same origin as the application. Two things were
+wrong with the old arrangement, and only one of them was about privacy:
+
+- every visitor's address reached Google, which is precisely what the rest of
+  this document promises does not happen to an address;
+- a self-hosted instance on a network that cannot reach Google waited for that
+  request to time out before painting anything. An 18-second first paint was
+  observed in exactly that situation.
+
+Both are closed by the same change, and neither can come back quietly: a new
+external `<link>` or `@import` would show up in the network panel of any page
+load, and there is nothing in the build that fetches one.
