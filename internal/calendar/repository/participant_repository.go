@@ -14,12 +14,16 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/whento/pkg/dberr"
 	"github.com/whento/whento/internal/calendar/models"
 )
 
 var (
 	ErrParticipantNotFound      = errors.New("participant not found")
 	ErrParticipantAlreadyExists = errors.New("participant with this name already exists in this calendar")
+	// ErrParticipantEmailInUse was two inline errors.New calls, one per call site, so
+	// no caller could ever match it with errors.Is.
+	ErrParticipantEmailInUse = errors.New("email already in use for this calendar")
 )
 
 // ParticipantRepository handles participant database operations
@@ -47,7 +51,7 @@ func (r *ParticipantRepository) Create(ctx context.Context, participant *models.
 	).Scan(&participant.CreatedAt)
 
 	if err != nil {
-		if isDuplicateKeyError(err) {
+		if dberr.IsUniqueViolation(err) {
 			return ErrParticipantAlreadyExists
 		}
 		return fmt.Errorf("failed to create participant: %w", err)
@@ -169,7 +173,7 @@ func (r *ParticipantRepository) Update(ctx context.Context, id uuid.UUID, name s
 
 	result, err := r.pool.Exec(ctx, query, name, id)
 	if err != nil {
-		if isDuplicateKeyError(err) {
+		if dberr.IsUniqueViolation(err) {
 			return ErrParticipantAlreadyExists
 		}
 		return fmt.Errorf("failed to update participant: %w", err)
@@ -214,29 +218,6 @@ func (r *ParticipantRepository) UpdateLocale(ctx context.Context, id uuid.UUID, 
 	return nil
 }
 
-func isDuplicateKeyError(err error) bool {
-	return err != nil && (
-	// PostgreSQL unique constraint violation
-	err.Error() == "ERROR: duplicate key value violates unique constraint" ||
-		// pgx specific error code check
-		containsCode(err.Error(), "23505"))
-}
-
-func containsCode(errMsg, code string) bool {
-	return len(errMsg) > 0 && len(code) > 0 &&
-		(errMsg[0:min(len(errMsg), 100)] != "" &&
-			findSubstring(errMsg, code))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
 // SetEmailVerificationToken sets the email verification token for a participant
 func (r *ParticipantRepository) SetEmailVerificationToken(
 	ctx context.Context,
@@ -254,8 +235,8 @@ func (r *ParticipantRepository) SetEmailVerificationToken(
 
 	result, err := r.pool.Exec(ctx, query, email, token, expiresAt, participantID)
 	if err != nil {
-		if isDuplicateKeyError(err) {
-			return errors.New("email already in use for this calendar")
+		if dberr.IsUniqueViolation(err) {
+			return ErrParticipantEmailInUse
 		}
 		return fmt.Errorf("failed to set email verification token: %w", err)
 	}
@@ -362,8 +343,8 @@ func (r *ParticipantRepository) SetEmailAsVerified(
 
 	result, err := r.pool.Exec(ctx, query, email, participantID)
 	if err != nil {
-		if isDuplicateKeyError(err) {
-			return errors.New("email already in use for this calendar")
+		if dberr.IsUniqueViolation(err) {
+			return ErrParticipantEmailInUse
 		}
 		return fmt.Errorf("failed to set email as verified: %w", err)
 	}

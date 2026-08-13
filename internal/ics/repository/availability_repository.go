@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -31,10 +32,20 @@ func NewAvailabilityRepository(db *pgxpool.Pool) *AvailabilityRepository {
 	return &AvailabilityRepository{db: db}
 }
 
-// GetEventsAboveThreshold retrieves all dates with availability >= threshold for a calendar
-// This includes both manual availabilities and computed availabilities from recurrences
-func (r *AvailabilityRepository) GetEventsAboveThreshold(ctx context.Context, calendarID uuid.UUID, threshold int) (map[time.Time][]DateAvailability, error) {
-	query := `
+// CalendarThreshold names a calendar and the number of available participants its feed
+// treats as an event, so that several calendars can be asked for at once.
+type CalendarThreshold struct {
+	CalendarID uuid.UUID
+	Threshold  int
+}
+
+// eventsAboveThresholdQuery expands every recurrence of a calendar over its date range,
+// subtracts the exceptions and the dates already covered by a manual availability, then
+// keeps only the dates that reach the threshold. $1 is the calendar, $2 the threshold.
+//
+// It is shared verbatim by the single-calendar and the batched read, so the unified feed
+// cannot drift from the per-calendar feed.
+const eventsAboveThresholdQuery = `
 		WITH
 		-- Generate all dates in the calendar's recurrence range
 		date_series AS (
@@ -118,15 +129,81 @@ func (r *AvailabilityRepository) GetEventsAboveThreshold(ctx context.Context, ca
 		FROM all_availabilities aa
 		JOIN date_counts dc ON dc.date = aa.date
 		ORDER BY aa.date, aa.participant_name
-	`
+`
 
-	rows, err := r.db.Query(ctx, query, calendarID, threshold)
+// GetEventsAboveThreshold retrieves all dates with availability >= threshold for a
+// calendar. This includes both manual availabilities and computed availabilities from
+// recurrences.
+func (r *AvailabilityRepository) GetEventsAboveThreshold(
+	ctx context.Context,
+	calendarID uuid.UUID,
+	threshold int,
+) (map[time.Time][]DateAvailability, error) {
+	rows, err := r.db.Query(ctx, eventsAboveThresholdQuery, calendarID, threshold)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get events above threshold: %w", err)
 	}
+
+	return scanEventsByDate(rows)
+}
+
+// GetEventsAboveThresholdForCalendars retrieves the events of several calendars, each
+// with its own threshold, in a single round trip, keyed by calendar.
+//
+// The unified feed used to call GetEventsAboveThreshold once per included calendar: a
+// user with 20 calendars paid 20 sequential round trips on every poll, and ICS clients
+// poll on a timer. The queries are pipelined into one batch instead, so the cost is one
+// round trip whatever the number of calendars. The SQL each one runs is unchanged, which
+// is what keeps the recurrence and threshold semantics identical to the single-calendar
+// feed — this is a transport change, not a query change.
+func (r *AvailabilityRepository) GetEventsAboveThresholdForCalendars(
+	ctx context.Context,
+	calendars []CalendarThreshold,
+) (map[uuid.UUID]map[time.Time][]DateAvailability, error) {
+	eventsByCalendar := make(map[uuid.UUID]map[time.Time][]DateAvailability, len(calendars))
+	if len(calendars) == 0 {
+		return eventsByCalendar, nil
+	}
+
+	batch := &pgx.Batch{}
+	for _, cal := range calendars {
+		batch.Queue(eventsAboveThresholdQuery, cal.CalendarID, cal.Threshold)
+	}
+
+	br := r.db.SendBatch(ctx, batch)
+
+	for _, cal := range calendars {
+		rows, err := br.Query()
+		if err != nil {
+			_ = br.Close()
+
+			return nil, fmt.Errorf("failed to get events for calendar %s: %w", cal.CalendarID, err)
+		}
+
+		eventsByDate, err := scanEventsByDate(rows)
+		if err != nil {
+			_ = br.Close()
+
+			return nil, fmt.Errorf("failed to read events for calendar %s: %w", cal.CalendarID, err)
+		}
+
+		eventsByCalendar[cal.CalendarID] = eventsByDate
+	}
+
+	// Close reports the first error from any result the loop above did not consume.
+	// Swallowing it would let a half-read batch pass for a complete feed.
+	if err := br.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close events batch: %w", err)
+	}
+
+	return eventsByCalendar, nil
+}
+
+// scanEventsByDate drains one result set of eventsAboveThresholdQuery and groups it by
+// date. It takes ownership of rows and closes them.
+func scanEventsByDate(rows pgx.Rows) (map[time.Time][]DateAvailability, error) {
 	defer rows.Close()
 
-	// Group by date
 	eventsByDate := make(map[time.Time][]DateAvailability)
 
 	for rows.Next() {

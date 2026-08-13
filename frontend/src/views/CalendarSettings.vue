@@ -57,46 +57,12 @@
             </h2>
 
             <form class="space-y-4" @submit.prevent="handleUpdate">
-              <!-- Name -->
-              <div>
-                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t('calendar.calendarName') }}
-                  <span class="text-danger-600">*</span>
-                </label>
-                <input
-                  v-model="form.name"
-                  type="text"
-                  class="input"
-                  :class="{ 'border-danger-500': errors.name }"
-                  :placeholder="t('calendar.calendarNamePlaceholder')"
-                  required
-                />
-                <p v-if="errors.name" class="mt-1 text-sm text-danger-600">
-                  {{ errors.name }}
-                </p>
-              </div>
-
-              <!-- Description -->
-              <div>
-                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t('calendar.description') }}
-                </label>
-                <textarea
-                  v-model="form.description"
-                  rows="3"
-                  class="input"
-                  :placeholder="t('calendar.descriptionPlaceholder')"
-                />
-              </div>
-
-              <!-- Timezone -->
-              <div>
-                <TimezoneSelector
-                  v-model="form.timezone"
-                  :label="t('calendar.timezone')"
-                  :help="t('calendar.timezoneHelp')"
-                />
-              </div>
+              <CalendarInfoFields
+                v-model:name="form.name"
+                v-model:description="form.description"
+                v-model:timezone="form.timezone"
+                :name-error="errors.name"
+              />
 
               <!-- Actions -->
               <div class="flex items-center justify-end">
@@ -340,55 +306,12 @@
               </button>
             </form>
 
-            <!-- Lock Participants Toggle (hidden when anonymous registration is enabled) -->
-            <div
-              v-if="!form.allow_anonymous_participants"
-              class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800"
-            >
-              <div class="flex items-start">
-                <input
-                  id="lock-participants"
-                  v-model="form.lock_participants"
-                  type="checkbox"
-                  class="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
-                  @change="handleLockParticipantsChange"
-                />
-                <label
-                  for="lock-participants"
-                  class="ml-2 text-sm text-gray-700 dark:text-gray-300"
-                >
-                  <span class="font-medium">{{ t('calendar.lockParticipants') }}</span>
-                  <p class="text-gray-500 dark:text-gray-400">
-                    {{ t('calendar.lockParticipantsHelp') }}
-                  </p>
-                </label>
-              </div>
-            </div>
-
-            <!-- Allow Anonymous Participants Toggle (hidden when lock participants is enabled) -->
-            <div
-              v-if="!form.lock_participants"
-              class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800"
-            >
-              <div class="flex items-start">
-                <input
-                  id="allow-anonymous-participants"
-                  v-model="form.allow_anonymous_participants"
-                  type="checkbox"
-                  class="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
-                  @change="handleAllowAnonymousParticipantsChange"
-                />
-                <label
-                  for="allow-anonymous-participants"
-                  class="ml-2 text-sm text-gray-700 dark:text-gray-300"
-                >
-                  <span class="font-medium">{{ t('calendar.allowAnonymousParticipants') }}</span>
-                  <p class="text-gray-500 dark:text-gray-400">
-                    {{ t('calendar.allowAnonymousParticipantsHelp') }}
-                  </p>
-                </label>
-              </div>
-            </div>
+            <ParticipantAccessToggles
+              v-model:lock-participants="form.lock_participants"
+              v-model:allow-anonymous-participants="form.allow_anonymous_participants"
+              @change:lock="handleLockParticipantsChange"
+              @change:anonymous="handleAllowAnonymousParticipantsChange"
+            />
 
             <!-- Errors and Warnings -->
             <div v-if="!calendar.participants || calendar.participants.length === 0" class="mt-4">
@@ -425,52 +348,13 @@
             "
             :default-open="false"
           >
-            <!-- Threshold -->
-            <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                {{ t('calendar.threshold') }}
-                <span class="text-danger-600">*</span>
-              </label>
-              <input
-                v-model.number="form.threshold"
-                type="number"
-                min="1"
-                :max="
-                  form.allow_anonymous_participants
-                    ? undefined
-                    : calendar.participants?.length || undefined
-                "
-                class="input"
-                :class="{ 'border-danger-500': errors.threshold }"
-                required
-              />
-              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {{ t('calendar.thresholdHelp') }}
-                <span
-                  v-if="
-                    !form.allow_anonymous_participants &&
-                    calendar.participants &&
-                    calendar.participants.length > 0
-                  "
-                >
-                  ({{ t('common.max') }}: {{ calendar.participants.length }})
-                </span>
-              </p>
-              <p v-if="errors.threshold" class="mt-1 text-sm text-danger-600">
-                {{ errors.threshold }}
-              </p>
-            </div>
-
-            <!-- Minimum Duration -->
-            <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                {{ t('calendar.minDurationHours') }}
-              </label>
-              <input v-model.number="form.min_duration_hours" type="number" min="0" class="input" />
-              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {{ t('calendar.minDurationHelp') }}
-              </p>
-            </div>
+            <CalendarThresholdFields
+              v-model:threshold="form.threshold"
+              v-model:min-duration-hours="form.min_duration_hours"
+              :participant-count="calendar.participants?.length ?? 0"
+              :allow-anonymous-participants="form.allow_anonymous_participants"
+              :threshold-error="errors.threshold"
+            />
 
             <!-- Actions -->
             <div class="flex items-center justify-end">
@@ -512,208 +396,19 @@
             "
             :default-open="false"
           >
-            <!-- Date Range -->
-            <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                {{ t('calendar.calendarDateRange') }}
-              </label>
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <input
-                    v-model="form.start_date"
-                    type="date"
-                    class="input"
-                    :placeholder="t('calendar.calendarStartDatePlaceholder')"
-                  />
-                </div>
-                <div>
-                  <input
-                    v-model="form.end_date"
-                    type="date"
-                    class="input"
-                    :placeholder="t('calendar.calendarEndDatePlaceholder')"
-                  />
-                </div>
-              </div>
-              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                {{ t('calendar.calendarDateRangeHelp') }}
-              </p>
-            </div>
-
-            <!-- Allowed Weekdays -->
-            <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                {{ t('calendar.allowedWeekdays') }}
-              </label>
-
-              <!-- Grid layout: 8 columns (1 for labels + 7 for days) -->
-              <div
-                class="grid grid-cols-[auto_repeat(7,minmax(0,1fr))] gap-2 items-center overflow-x-auto"
-              >
-                <!-- Row 1: Label "Jour" + Day buttons -->
-                <label
-                  class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap pr-2"
-                >
-                  {{ locale === 'fr' ? 'Jour' : 'Day' }}
-                </label>
-                <button
-                  v-for="day in weekdays"
-                  :key="day.value"
-                  type="button"
-                  class="rounded-lg border-2 px-2 py-2 text-sm font-medium transition-colors"
-                  :class="{
-                    'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300':
-                      form.allowed_weekdays.includes(day.value),
-                    'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700':
-                      !form.allowed_weekdays.includes(day.value),
-                  }"
-                  @click.prevent="toggleWeekday(day.value)"
-                >
-                  {{ day.short }}
-                </button>
-
-                <!-- Row 2: Label + Start times -->
-                <label
-                  class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap pr-2"
-                >
-                  {{ t('availability.startTime') }}
-                </label>
-                <TimeSelect
-                  v-for="day in weekdays"
-                  :key="`min-${day.value}`"
-                  v-model="form.weekday_times[day.value].min_time"
-                  :disabled="!form.allowed_weekdays.includes(day.value)"
-                  class="text-sm min-w-0"
-                  :class="{
-                    'opacity-50 cursor-not-allowed': !form.allowed_weekdays.includes(day.value),
-                  }"
-                  placeholder="--:--"
-                />
-
-                <!-- Row 3: Label + End times -->
-                <label
-                  class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap pr-2"
-                >
-                  {{ t('availability.endTime') }}
-                </label>
-                <TimeSelect
-                  v-for="day in weekdays"
-                  :key="`max-${day.value}`"
-                  v-model="form.weekday_times[day.value].max_time"
-                  :disabled="!form.allowed_weekdays.includes(day.value)"
-                  class="text-sm min-w-0"
-                  :class="{
-                    'opacity-50 cursor-not-allowed': !form.allowed_weekdays.includes(day.value),
-                  }"
-                  placeholder="--:--"
-                />
-              </div>
-
-              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                {{ t('calendar.allowedWeekdaysHelp') }}
-              </p>
-            </div>
-
-            <!-- Holidays Policy -->
-            <div>
-              <div class="flex items-center justify-between">
-                <div class="flex items-start flex-1">
-                  <div class="flex flex-col gap-1">
-                    <label
-                      for="holidays-policy"
-                      class="text-sm font-medium text-gray-700 dark:text-gray-300"
-                    >
-                      {{ t('calendar.holidaysPolicy') }}
-                    </label>
-                    <select id="holidays-policy" v-model="form.holidays_policy" class="input w-48">
-                      <option value="ignore">
-                        {{ t('calendar.holidaysPolicyIgnore') }}
-                      </option>
-                      <option value="allow">
-                        {{ t('calendar.holidaysPolicyAllow') }}
-                      </option>
-                      <option value="block">
-                        {{ t('calendar.holidaysPolicyBlock') }}
-                      </option>
-                    </select>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                      {{ t('calendar.holidaysPolicyHelp') }}
-                    </p>
-                  </div>
-                </div>
-                <div class="flex items-center gap-2 ml-4">
-                  <TimeSelect
-                    v-model="form.holiday_min_time"
-                    :disabled="form.holidays_policy !== 'allow'"
-                    class="w-32 text-sm"
-                    :class="{
-                      'opacity-50 cursor-not-allowed': form.holidays_policy !== 'allow',
-                    }"
-                    placeholder="Min"
-                  />
-                  <span class="text-gray-500 dark:text-gray-400">-</span>
-                  <TimeSelect
-                    v-model="form.holiday_max_time"
-                    :disabled="form.holidays_policy !== 'allow'"
-                    class="w-32 text-sm"
-                    :class="{
-                      'opacity-50 cursor-not-allowed': form.holidays_policy !== 'allow',
-                    }"
-                    placeholder="Max"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <!-- Allow Holiday Eves -->
-            <div>
-              <div class="flex items-center justify-between">
-                <div class="flex items-start flex-1">
-                  <input
-                    id="allow-holiday-eves"
-                    v-model="form.allow_holiday_eves"
-                    type="checkbox"
-                    :disabled="allWeekdaysSelected"
-                    class="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-700"
-                  />
-                  <label
-                    for="allow-holiday-eves"
-                    class="ml-2 text-sm text-gray-700 dark:text-gray-300"
-                    :class="{
-                      'opacity-50 cursor-not-allowed': allWeekdaysSelected,
-                    }"
-                  >
-                    <span class="font-medium">{{ t('calendar.allowHolidayEves') }}</span>
-                    <p class="text-gray-500 dark:text-gray-400">
-                      {{ t('calendar.allowHolidayEvesHelp') }}
-                    </p>
-                  </label>
-                </div>
-                <div class="flex items-center gap-2 ml-4">
-                  <TimeSelect
-                    v-model="form.holiday_eve_min_time"
-                    :disabled="!form.allow_holiday_eves || allWeekdaysSelected"
-                    class="w-32 text-sm"
-                    :class="{
-                      'opacity-50 cursor-not-allowed':
-                        !form.allow_holiday_eves || allWeekdaysSelected,
-                    }"
-                    placeholder="Min"
-                  />
-                  <span class="text-gray-500 dark:text-gray-400">-</span>
-                  <TimeSelect
-                    v-model="form.holiday_eve_max_time"
-                    :disabled="!form.allow_holiday_eves || allWeekdaysSelected"
-                    class="w-32 text-sm"
-                    :class="{
-                      'opacity-50 cursor-not-allowed':
-                        !form.allow_holiday_eves || allWeekdaysSelected,
-                    }"
-                    placeholder="Max"
-                  />
-                </div>
-              </div>
-            </div>
+            <CalendarScheduleFields
+              v-model:start-date="form.start_date"
+              v-model:end-date="form.end_date"
+              v-model:allowed-weekdays="form.allowed_weekdays"
+              v-model:weekday-times="form.weekday_times"
+              v-model:holidays-policy="form.holidays_policy"
+              v-model:holiday-min-time="form.holiday_min_time"
+              v-model:holiday-max-time="form.holiday_max_time"
+              v-model:allow-holiday-eves="form.allow_holiday_eves"
+              v-model:holiday-eve-min-time="form.holiday_eve_min_time"
+              v-model:holiday-eve-max-time="form.holiday_eve_max_time"
+              :timezone="form.timezone"
+            />
 
             <!-- Actions -->
             <div class="flex items-center justify-end">
@@ -849,13 +544,20 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { resolveWeekStart } from '@/utils/weekStart';
 import { useCalendarStore } from '@/stores/calendar';
 import { useToastStore } from '@/stores/toast';
-import TimezoneSelector from '@/components/TimezoneSelector.vue';
-import TimeSelect from '@/components/TimeSelect.vue';
+import { confirm } from '@/composables/useConfirm';
 import CollapsibleSection from '@/components/CollapsibleSection.vue';
 import NotificationSettings from '@/components/NotificationSettings.vue';
+import CalendarInfoFields from '@/components/calendar/CalendarInfoFields.vue';
+import CalendarThresholdFields from '@/components/calendar/CalendarThresholdFields.vue';
+import CalendarScheduleFields from '@/components/calendar/CalendarScheduleFields.vue';
+import ParticipantAccessToggles from '@/components/calendar/ParticipantAccessToggles.vue';
+import {
+  createEmptyWeekdayTimes,
+  normalizeTime,
+  prepareWeekdayTimes,
+} from '@/utils/calendar/weekdayTimes';
 import {
   getNotifyConfig,
   updateNotifyConfig,
@@ -895,15 +597,7 @@ const form = reactive({
   allow_holiday_eves: false,
   lock_participants: false,
   allow_anonymous_participants: false,
-  weekday_times: {
-    0: { min_time: '', max_time: '' },
-    1: { min_time: '', max_time: '' },
-    2: { min_time: '', max_time: '' },
-    3: { min_time: '', max_time: '' },
-    4: { min_time: '', max_time: '' },
-    5: { min_time: '', max_time: '' },
-    6: { min_time: '', max_time: '' },
-  } as Record<number, { min_time: string; max_time: string }>,
+  weekday_times: createEmptyWeekdayTimes(),
   holiday_min_time: '',
   holiday_max_time: '',
   holiday_eve_min_time: '',
@@ -923,15 +617,7 @@ const originalForm = reactive({
   allow_holiday_eves: false,
   lock_participants: false,
   allow_anonymous_participants: false,
-  weekday_times: {
-    0: { min_time: '', max_time: '' },
-    1: { min_time: '', max_time: '' },
-    2: { min_time: '', max_time: '' },
-    3: { min_time: '', max_time: '' },
-    4: { min_time: '', max_time: '' },
-    5: { min_time: '', max_time: '' },
-    6: { min_time: '', max_time: '' },
-  } as Record<number, { min_time: string; max_time: string }>,
+  weekday_times: createEmptyWeekdayTimes(),
   holiday_min_time: '',
   holiday_max_time: '',
   holiday_eve_min_time: '',
@@ -970,33 +656,6 @@ const hasUnsavedChanges = computed(() => {
 const errors = reactive({
   name: '',
   threshold: '',
-});
-
-// Weekdays (0=Sunday, 6=Saturday)
-// Order follows the calendar's timezone, resolved through CLDR.
-const weekdays = computed(() => {
-  const days = [
-    { value: 0, short: t('weekdays.short.sunday') },
-    { value: 1, short: t('weekdays.short.monday') },
-    { value: 2, short: t('weekdays.short.tuesday') },
-    { value: 3, short: t('weekdays.short.wednesday') },
-    { value: 4, short: t('weekdays.short.thursday') },
-    { value: 5, short: t('weekdays.short.friday') },
-    { value: 6, short: t('weekdays.short.saturday') },
-  ];
-
-  // Rotated rather than special-cased: CLDR has weeks starting on Saturday in fourteen
-  // countries and on Friday in the Maldives, which a Sunday-or-Monday branch cannot
-  // express. The selector follows the timezone being chosen, so picking a German city
-  // reorders it to Monday-first straight away.
-  const first = resolveWeekStart(form.timezone, locale.value);
-
-  return [...days.slice(first), ...days.slice(0, first)];
-});
-
-// Check if all weekdays are selected
-const allWeekdaysSelected = computed(() => {
-  return form.allowed_weekdays.length === 7;
 });
 
 const calendar = computed(() => calendarStore.currentCalendar);
@@ -1093,42 +752,6 @@ async function loadCalendar() {
     router.push('/dashboard');
   } finally {
     loading.value = false;
-  }
-}
-
-// Normalise "00:00" to empty string (00:00 is not meaningful as a time restriction)
-function normalizeTime(time: string): string {
-  return time === '00:00' ? '' : time;
-}
-
-// Prepare weekday_times for API: normalize 00:00 to empty
-function prepareWeekdayTimes(
-  weekdayTimes: Record<number, { min_time: string; max_time: string }>
-): Record<number, { min_time?: string; max_time?: string }> {
-  const result: Record<number, { min_time?: string; max_time?: string }> = {};
-  for (const [day, times] of Object.entries(weekdayTimes)) {
-    const minTime = normalizeTime(times.min_time);
-    const maxTime = normalizeTime(times.max_time);
-    result[Number(day)] = {
-      ...(minTime ? { min_time: minTime } : {}),
-      ...(maxTime ? { max_time: maxTime } : {}),
-    };
-  }
-  return result;
-}
-
-function toggleWeekday(day: number) {
-  const index = form.allowed_weekdays.indexOf(day);
-  if (index > -1) {
-    // Remove if already selected (but keep at least one day)
-    if (form.allowed_weekdays.length > 1) {
-      form.allowed_weekdays.splice(index, 1);
-    }
-  } else {
-    // Add if not selected
-    form.allowed_weekdays.push(day);
-    // Sort to keep in order
-    form.allowed_weekdays.sort((a, b) => a - b);
   }
 }
 
@@ -1233,7 +856,7 @@ async function handleSaveNotifications(config: NotifyConfig) {
     await updateNotifyConfig(calendarId, config);
     toastStore.success(t('calendar.settingsSaved'));
   } catch (error: any) {
-    toastStore.error(error.message || 'Failed to save notification settings');
+    toastStore.error(error.message || t('notifications.saveError'));
   }
 }
 
@@ -1286,7 +909,9 @@ async function handleSaveParticipant(participantId: string) {
 }
 
 async function handleDeleteParticipant(participantId: string, participantName: string) {
-  if (!confirm(t('calendar.confirmDeleteParticipant', { name: participantName }))) {
+  if (
+    !(await confirm({ message: t('calendar.confirmDeleteParticipant', { name: participantName }) }))
+  ) {
     return;
   }
 
@@ -1312,7 +937,7 @@ async function handleRegenerateToken(tokenType: 'public' | 'ics') {
       ? t('calendar.confirmRegeneratePublic')
       : t('calendar.confirmRegenerateICS');
 
-  if (!confirm(confirmMessage)) {
+  if (!(await confirm({ message: confirmMessage }))) {
     return;
   }
 
@@ -1414,14 +1039,10 @@ const handleBeforeUnload = (e: BeforeUnloadEvent) => {
 };
 
 // Vue Router navigation guard
-onBeforeRouteLeave((_to, _from, next) => {
+onBeforeRouteLeave(async (_to, _from, next) => {
   if (hasUnsavedChanges.value) {
-    const answer = window.confirm(t('calendar.confirmUnsavedChanges'));
-    if (answer) {
-      next();
-    } else {
-      next(false);
-    }
+    const answer = await confirm({ message: t('calendar.confirmUnsavedChanges') });
+    next(answer ? undefined : false);
   } else {
     next();
   }

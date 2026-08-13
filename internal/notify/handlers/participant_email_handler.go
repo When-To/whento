@@ -5,6 +5,7 @@
 package handlers
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -16,24 +17,47 @@ import (
 	// would otherwise shadow the package.
 	pkglog "github.com/whento/pkg/logger"
 	"github.com/whento/pkg/validator"
-	calendarModels "github.com/whento/whento/internal/calendar/models"
-	calendarRepo "github.com/whento/whento/internal/calendar/repository"
-	"github.com/whento/whento/internal/notify/service"
+	"github.com/whento/whento/internal/calendar/models"
 )
+
+// ParticipantEmailService is what this handler asks of the notification domain.
+//
+// It was taking *service.ParticipantEmailService, which parses templates and talks
+// SMTP from its constructor, so none of the three endpoints below could be reached
+// from a test. The interface names only the three calls that are actually made.
+type ParticipantEmailService interface {
+	AddEmail(ctx context.Context, participantID uuid.UUID, emailAddress, participantName, locale string) error
+	VerifyEmail(ctx context.Context, token string) error
+	ResendVerification(ctx context.Context, participantID uuid.UUID, locale string) error
+}
+
+// CalendarByToken resolves a public calendar token, which is what authorises these
+// endpoints. Two calendar repositories were reached into directly from here, past
+// both this domain's service and the calendar domain's; what was actually needed of
+// them is this lookup and the one below.
+type CalendarByToken interface {
+	GetByPublicToken(ctx context.Context, token string) (*models.Calendar, error)
+}
+
+// ParticipantByID fetches the participant named in the path, so that it can be
+// checked against the calendar the token names.
+type ParticipantByID interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Participant, error)
+}
 
 // ParticipantEmailHandler handles participant email verification HTTP requests
 type ParticipantEmailHandler struct {
-	emailService    *service.ParticipantEmailService
-	participantRepo *calendarRepo.ParticipantRepository
-	calendarRepo    *calendarRepo.CalendarRepository
+	emailService    ParticipantEmailService
+	participantRepo ParticipantByID
+	calendarRepo    CalendarByToken
 	logger          *slog.Logger
 }
 
 // NewParticipantEmailHandler creates a new participant email handler
 func NewParticipantEmailHandler(
-	emailService *service.ParticipantEmailService,
-	participantRepo *calendarRepo.ParticipantRepository,
-	calendarRepo *calendarRepo.CalendarRepository,
+	emailService ParticipantEmailService,
+	participantRepo ParticipantByID,
+	calendarRepo CalendarByToken,
 	logger *slog.Logger,
 ) *ParticipantEmailHandler {
 	return &ParticipantEmailHandler{
@@ -51,10 +75,10 @@ func NewParticipantEmailHandler(
 //	@Tags			Notifications
 //	@Accept			json
 //	@Produce		json
-//	@Param			token	path		string							true	"Calendar public token"
-//	@Param			pid		path		string							true	"Participant ID"
-//	@Param			request	body		object{email=string}			true	"Email address"
-//	@Success		200		{object}	object{participant_id=string,email=string,verified=bool,message=string}
+//	@Param			token	path		string								true	"Calendar public token"
+//	@Param			pid		path		string								true	"Participant ID"
+//	@Param			request	body		models.AddParticipantEmailRequest	true	"Email address"
+//	@Success		200		{object}	models.ParticipantEmailResponse
 //	@Failure		400		{object}	httputil.ErrorResponse
 //	@Failure		404		{object}	httputil.ErrorResponse
 //	@Failure		500		{object}	httputil.ErrorResponse
@@ -72,7 +96,7 @@ func (h *ParticipantEmailHandler) AddEmail(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Parse request
-	var req calendarModels.AddParticipantEmailRequest
+	var req models.AddParticipantEmailRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, err.Error())
 		return
@@ -115,7 +139,7 @@ func (h *ParticipantEmailHandler) AddEmail(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, calendarModels.ParticipantEmailResponse{
+	httputil.JSON(w, http.StatusOK, models.ParticipantEmailResponse{
 		ParticipantID: pid,
 		Email:         req.Email,
 		Verified:      false,
@@ -130,7 +154,7 @@ func (h *ParticipantEmailHandler) AddEmail(w http.ResponseWriter, r *http.Reques
 //	@Tags			Notifications
 //	@Produce		json
 //	@Param			token	path		string	true	"Verification token"
-//	@Success		200		{object}	map[string]string
+//	@Success		200		{object}	models.ParticipantEmailMessageResponse
 //	@Failure		400		{object}	httputil.ErrorResponse
 //	@Failure		500		{object}	httputil.ErrorResponse
 //	@Router			/api/v1/calendars/participants/verify-email/{token} [get]
@@ -149,8 +173,8 @@ func (h *ParticipantEmailHandler) VerifyEmail(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, map[string]string{
-		"message": "Email verified successfully",
+	httputil.JSON(w, http.StatusOK, models.ParticipantEmailMessageResponse{
+		Message: "Email verified successfully",
 	})
 }
 
@@ -162,7 +186,7 @@ func (h *ParticipantEmailHandler) VerifyEmail(w http.ResponseWriter, r *http.Req
 //	@Produce		json
 //	@Param			token	path		string	true	"Calendar public token"
 //	@Param			pid		path		string	true	"Participant ID"
-//	@Success		200		{object}	map[string]string
+//	@Success		200		{object}	models.ParticipantEmailMessageResponse
 //	@Failure		400		{object}	httputil.ErrorResponse
 //	@Failure		404		{object}	httputil.ErrorResponse
 //	@Failure		500		{object}	httputil.ErrorResponse
@@ -206,7 +230,7 @@ func (h *ParticipantEmailHandler) ResendVerification(w http.ResponseWriter, r *h
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, map[string]string{
-		"message": "Verification email resent",
+	httputil.JSON(w, http.StatusOK, models.ParticipantEmailMessageResponse{
+		Message: "Verification email resent",
 	})
 }

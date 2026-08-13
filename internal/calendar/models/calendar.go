@@ -135,6 +135,16 @@ type ParticipantEmailResponse struct {
 	Message       string    `json:"message"`
 }
 
+// ParticipantEmailMessageResponse is the body of the two participant-email endpoints
+// that answer with nothing but a sentence: verification and resend.
+//
+// It replaces a bare map[string]string, whose Swagger rendering was an object with
+// arbitrary string keys — true, but useless to a generated client, which then had to
+// keep the shape by hand. The JSON is unchanged: one "message" field.
+type ParticipantEmailMessageResponse struct {
+	Message string `json:"message"`
+}
+
 // RegenerateTokenRequest represents a request to regenerate a token
 type RegenerateTokenRequest struct {
 	TokenType string `json:"token_type" validate:"required,oneof=public ics"`

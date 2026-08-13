@@ -52,6 +52,21 @@ func (m *mockAvailabilityRepository) GetEventsAboveThreshold(ctx context.Context
 	return m.events, nil
 }
 
+func (m *mockAvailabilityRepository) GetEventsAboveThresholdForCalendars(
+	_ context.Context, calendars []repository.CalendarThreshold,
+) (map[uuid.UUID]map[time.Time][]repository.DateAvailability, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+
+	out := make(map[uuid.UUID]map[time.Time][]repository.DateAvailability, len(calendars))
+	for _, cal := range calendars {
+		out[cal.CalendarID] = m.events
+	}
+
+	return out, nil
+}
+
 type mockQuotaChecker struct {
 	isOverQuota bool
 	err         error

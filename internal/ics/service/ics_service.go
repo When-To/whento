@@ -42,6 +42,10 @@ type CalendarRepository interface {
 // AvailabilityRepository defines the interface for availability repository operations
 type AvailabilityRepository interface {
 	GetEventsAboveThreshold(ctx context.Context, calendarID uuid.UUID, threshold int) (map[time.Time][]repository.DateAvailability, error)
+	GetEventsAboveThresholdForCalendars(
+		ctx context.Context,
+		calendars []repository.CalendarThreshold,
+	) (map[uuid.UUID]map[time.Time][]repository.DateAvailability, error)
 }
 
 // QuotaChecker defines the interface for checking if a user is over quota
@@ -397,17 +401,27 @@ func (s *ICSService) GenerateUnifiedFeed(ctx context.Context, unifiedToken strin
 		return "", fmt.Errorf("failed to get calendars for unified feed: %w", err)
 	}
 
+	// Ask for every calendar's events at once. This was one query per calendar, paid
+	// on every poll by clients that poll on a timer.
+	wanted := make([]repository.CalendarThreshold, 0, len(calendars))
+	for _, calendar := range calendars {
+		wanted = append(wanted, repository.CalendarThreshold{
+			CalendarID: calendar.ID,
+			Threshold:  calendar.Threshold,
+		})
+	}
+
+	eventsByCalendar, err := s.availabilityRepo.GetEventsAboveThresholdForCalendars(ctx, wanted)
+	if err != nil {
+		return "", fmt.Errorf("failed to get events for unified feed: %w", err)
+	}
+
 	// Collect events from all calendars
 	var allEvents []models.CalendarEvent
 	globalEventNumber := 0
 
 	for _, calendar := range calendars {
-		eventsByDate, err := s.availabilityRepo.GetEventsAboveThreshold(ctx, calendar.ID, calendar.Threshold)
-		if err != nil {
-			return "", fmt.Errorf("failed to get events for calendar %s: %w", calendar.ID, err)
-		}
-
-		events := s.buildCalendarEvents(calendar, eventsByDate)
+		events := s.buildCalendarEvents(calendar, eventsByCalendar[calendar.ID])
 
 		// Re-number events with global sequence
 		for i := range events {

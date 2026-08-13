@@ -53,6 +53,21 @@ func (f *fakeAvailabilityRepo) GetEventsAboveThreshold(
 	return f.events[calendarID], nil
 }
 
+func (f *fakeAvailabilityRepo) GetEventsAboveThresholdForCalendars(
+	_ context.Context, calendars []repository.CalendarThreshold,
+) (map[uuid.UUID]map[time.Time][]repository.DateAvailability, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+
+	out := make(map[uuid.UUID]map[time.Time][]repository.DateAvailability, len(calendars))
+	for _, cal := range calendars {
+		out[cal.CalendarID] = f.events[cal.CalendarID]
+	}
+
+	return out, nil
+}
+
 type fakeQuotaChecker struct {
 	over bool
 	err  error

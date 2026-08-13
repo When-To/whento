@@ -18,7 +18,7 @@ import { useCalendarFormatters } from '../src/composables/calendar/useCalendarFo
 import { buildCalendarRules } from '../src/utils/calendar/dateRules';
 import { buildDayIndex } from '../src/utils/calendar/dayIndex';
 import { buildMonthModel, type ModelDeps } from '../src/utils/calendar/dayModel';
-import { getHolidayIndex } from '../src/utils/calendar/holidays';
+import { getHolidayIndex, holidaysReady, preloadHolidays } from '../src/utils/calendar/holidays';
 import { getWeekStartDay } from '../src/i18n';
 import type { Availability, RecurrenceWithExceptions } from '../src/types';
 
@@ -95,21 +95,31 @@ const participantCounts: Record<string, number> = {
   [iso(30)]: 2,
 };
 
-const deps = computed<ModelDeps>(() => ({
-  rules: buildCalendarRules({
-    timeZone: 'Europe/Paris',
-    todayISO: TODAY,
-    allowedWeekdays: [1, 2, 3, 4, 5],
-    holidaysPolicy: 'ignore',
-    allowHolidayEves: true,
-    threshold: THRESHOLD,
-  }),
-  holidays: getHolidayIndex('Europe/Paris', locale.value),
-  index: buildDayIndex({ availabilities, recurrences, participantCounts }),
-  fmt: formatters.value,
-  weekStartDay: getWeekStartDay(locale.value),
-  highlighted: new Set([iso(22)]),
-}));
+// date-holidays is fetched on demand, so the first render has no holidays and a
+// later one does. useParticipantCalendar reads holidaysReady for exactly this
+// reason; without the same read here the preview computes once, before the module
+// lands, and never recomputes — which is what made the holiday e2e test flip to
+// null after the import became dynamic.
+void preloadHolidays();
+
+const deps = computed<ModelDeps>(() => {
+  void holidaysReady.value;
+  return {
+    rules: buildCalendarRules({
+      timeZone: 'Europe/Paris',
+      todayISO: TODAY,
+      allowedWeekdays: [1, 2, 3, 4, 5],
+      holidaysPolicy: 'ignore',
+      allowHolidayEves: true,
+      threshold: THRESHOLD,
+    }),
+    holidays: getHolidayIndex('Europe/Paris', locale.value),
+    index: buildDayIndex({ availabilities, recurrences, participantCounts }),
+    fmt: formatters.value,
+    weekStartDay: getWeekStartDay(locale.value),
+    highlighted: new Set([iso(22)]),
+  };
+});
 
 const model = computed(() => buildMonthModel(YEAR, MONTH, deps.value));
 

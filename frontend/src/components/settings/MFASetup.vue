@@ -72,6 +72,7 @@ import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { mfaApi } from '@/api/mfa';
 import { useToastStore } from '@/stores/toast';
+import { confirm } from '@/composables/useConfirm';
 import MFAQRCodeModal from './MFAQRCodeModal.vue';
 import BackupCodesModal from './BackupCodesModal.vue';
 
@@ -144,7 +145,7 @@ function closeSetupModal() {
 
 async function disable2FA() {
   // Confirm the action
-  if (!confirm(t('settings.mfa.confirmDisable'))) {
+  if (!(await confirm({ message: t('settings.mfa.confirmDisable') }))) {
     return;
   }
 
@@ -162,7 +163,12 @@ async function disable2FA() {
 }
 
 async function regenerateBackupCodes() {
-  if (!confirm(t('settings.mfa.backupCodesWarning'))) {
+  if (
+    !(await confirm({
+      message: t('settings.mfa.backupCodesWarning'),
+      tone: 'primary',
+    }))
+  ) {
     return;
   }
 

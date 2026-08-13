@@ -305,6 +305,61 @@ func (r *RecurrenceRepository) GetExceptionsByRecurrence(ctx context.Context, re
 	return exceptions, nil
 }
 
+// GetExceptionsByRecurrenceIDs retrieves the exceptions of several recurrences at once,
+// grouped by recurrence ID.
+//
+// The summary endpoints load every recurrence of a calendar and then need each one's
+// exceptions. Calling GetExceptionsByRecurrence in a loop cost one round trip per
+// recurrence, on the two paths the SSE availability notification asks every open
+// browser to reload; this collapses them into one.
+//
+// Recurrences with no exception are simply absent from the map, so a lookup returns a
+// nil slice — the same value GetExceptionsByRecurrence returns for an empty result set.
+func (r *RecurrenceRepository) GetExceptionsByRecurrenceIDs(
+	ctx context.Context,
+	recurrenceIDs []uuid.UUID,
+) (map[uuid.UUID][]models.RecurrenceException, error) {
+	exceptionsByRecurrence := make(map[uuid.UUID][]models.RecurrenceException, len(recurrenceIDs))
+	if len(recurrenceIDs) == 0 {
+		return exceptionsByRecurrence, nil
+	}
+
+	query := `
+		SELECT id, recurrence_id, TO_CHAR(excluded_date, 'YYYY-MM-DD') as excluded_date, created_at
+		FROM recurrence_exceptions
+		WHERE recurrence_id = ANY($1)
+		ORDER BY recurrence_id, excluded_date
+	`
+
+	rows, err := r.db.Query(ctx, query, recurrenceIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get exceptions: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var exc models.RecurrenceException
+
+		err := rows.Scan(
+			&exc.ID,
+			&exc.RecurrenceID,
+			&exc.ExcludedDate,
+			&exc.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan exception: %w", err)
+		}
+
+		exceptionsByRecurrence[exc.RecurrenceID] = append(exceptionsByRecurrence[exc.RecurrenceID], exc)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating exceptions: %w", err)
+	}
+
+	return exceptionsByRecurrence, nil
+}
+
 // DeleteException deletes an exception
 func (r *RecurrenceRepository) DeleteException(ctx context.Context, recurrenceID uuid.UUID, excludedDate string) error {
 	query := `DELETE FROM recurrence_exceptions WHERE recurrence_id = $1 AND excluded_date = $2`

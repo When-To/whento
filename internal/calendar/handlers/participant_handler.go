@@ -5,6 +5,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -17,13 +18,24 @@ import (
 	"github.com/whento/whento/internal/calendar/service"
 )
 
+// ParticipantService is the participant half of the calendar domain, and all this
+// handler needs of it. Kept separate from CalendarService above so that neither
+// handler declares a dependency on methods it never calls; *service.CalendarService
+// satisfies both.
+type ParticipantService interface {
+	AddParticipant(ctx context.Context, userID, userRole, calendarID string, req *models.AddParticipantRequest) (*models.Participant, error)
+	AddAnonymousParticipant(ctx context.Context, publicToken string, req *models.AddParticipantRequest) (*models.Participant, error)
+	UpdateParticipant(ctx context.Context, userID, userRole, calendarID, participantID string, req *models.UpdateParticipantRequest) (*models.Participant, error)
+	RemoveParticipant(ctx context.Context, userID, userRole, calendarID, participantID string) error
+}
+
 // ParticipantHandler handles participant HTTP requests
 type ParticipantHandler struct {
-	calendarService *service.CalendarService
+	calendarService ParticipantService
 }
 
 // NewParticipantHandler creates a new participant handler
-func NewParticipantHandler(calendarService *service.CalendarService) *ParticipantHandler {
+func NewParticipantHandler(calendarService ParticipantService) *ParticipantHandler {
 	return &ParticipantHandler{calendarService: calendarService}
 }
 

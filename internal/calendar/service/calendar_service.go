@@ -342,25 +342,6 @@ func buildPublicCalendarResponse(calendar *models.Calendar, participants []model
 	}, nil
 }
 
-// isDuplicateKeyError checks if an error is a duplicate key constraint violation
-func isDuplicateKeyError(err error) bool {
-	return err != nil && (err.Error() == "ERROR: duplicate key value violates unique constraint" ||
-		containsCode(err.Error(), "23505"))
-}
-
-func containsCode(errMsg, code string) bool {
-	return len(errMsg) > 0 && len(code) > 0 && findSubstring(errMsg, code)
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
 // filterParticipants masks participant IDs based on lock_participants setting and participant_id
 func filterParticipants(lockParticipants bool, participantID string, participants []models.Participant) []models.PublicParticipant {
 	// Parse participant ID if provided
@@ -936,8 +917,14 @@ func (s *CalendarService) RemoveParticipant(ctx context.Context, userID, userRol
 	return nil
 }
 
-// GetPublicCalendar retrieves a calendar by public token (no auth required)
-// Uses cache if available (skip cache when participant filtering is needed)
+// GetPublicCalendar retrieves a calendar by public token (no auth required).
+//
+// Deliberately uncached. The answer depends on participantID as well as on the token —
+// filterParticipants below leaves that one participant's id and email visible and masks
+// everybody else's — so a cache keyed on the token alone would serve one participant's
+// privileged view to the next caller, anonymous ones included. That is the whole of the
+// lock_participants guarantee, undone by a cache lookup. If this ever needs caching, the
+// participant has to be part of the key.
 func (s *CalendarService) GetPublicCalendar(ctx context.Context, token, participantID string) (*models.PublicCalendarResponse, error) {
 	// Fetch calendar from database
 	calendar, err := s.calendarRepo.GetByPublicToken(ctx, token)

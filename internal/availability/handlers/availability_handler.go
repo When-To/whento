@@ -176,16 +176,17 @@ func (h *AvailabilityHandler) DeleteAvailability(w http.ResponseWriter, r *http.
 //	@Description	Returns all participants available on a specific date with their time slots. Public endpoint.
 //	@Tags			Availabilities
 //	@Produce		json
-//	@Param			token	path		string	true	"Calendar public token"
-//	@Param			date	path		string	true	"Date (YYYY-MM-DD)"
-//	@Success		200		{object}	models.DateAvailabilitySummary
+//	@Param			token			path		string	true	"Calendar public token"
+//	@Param			date			path		string	true	"Date (YYYY-MM-DD)"
+//	@Param			participant_id	query		string	false	"Caller's participant ID: the one ID left unmasked when the calendar hides participants"
+//	@Success		200				{object}	models.PublicDateAvailabilitySummary
 //	@Failure		404		{object}	httputil.ErrorResponse	"Calendar not found"
 //	@Router			/api/v1/availabilities/calendar/{token}/dates/{date} [get]
 func (h *AvailabilityHandler) GetDateSummary(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
 	date := chi.URLParam(r, "date")
 
-	summary, err := h.availabilityService.GetDateSummary(r.Context(), token, date)
+	summary, err := h.availabilityService.GetDateSummary(r.Context(), token, date, r.URL.Query().Get("participant_id"))
 	if err != nil {
 		handleAvailabilityError(w, r, err, "Failed to get date summary")
 		return
@@ -201,9 +202,10 @@ func (h *AvailabilityHandler) GetDateSummary(w http.ResponseWriter, r *http.Requ
 //	@Tags			Availabilities
 //	@Produce		json
 //	@Param			token	path		string	true	"Calendar public token"
-//	@Param			start	query		string	true	"Start date (YYYY-MM-DD)"
-//	@Param			end		query		string	true	"End date (YYYY-MM-DD)"
-//	@Success		200		{array}		models.DateAvailabilitySummary
+//	@Param			start			query		string	true	"Start date (YYYY-MM-DD)"
+//	@Param			end				query		string	true	"End date (YYYY-MM-DD)"
+//	@Param			participant_id	query		string	false	"Caller's participant ID: the one ID left unmasked when the calendar hides participants"
+//	@Success		200				{array}		models.PublicDateAvailabilitySummary
 //	@Failure		400		{object}	httputil.ErrorResponse	"Missing start/end parameters"
 //	@Failure		404		{object}	httputil.ErrorResponse	"Calendar not found"
 //	@Router			/api/v1/availabilities/calendar/{token}/range [get]

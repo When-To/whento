@@ -81,7 +81,10 @@ type RecurrenceRepository interface {
 	UpdateRecurrence(ctx context.Context, recurrence *models.Recurrence) error
 	DeleteRecurrence(ctx context.Context, id uuid.UUID) error
 	CreateException(ctx context.Context, exception *models.RecurrenceException) error
-	GetExceptionsByRecurrence(ctx context.Context, recurrenceID uuid.UUID) ([]models.RecurrenceException, error)
+	GetExceptionsByRecurrenceIDs(
+		ctx context.Context,
+		recurrenceIDs []uuid.UUID,
+	) (map[uuid.UUID][]models.RecurrenceException, error)
 	DeleteException(ctx context.Context, recurrenceID uuid.UUID, excludedDate string) error
 }
 
@@ -285,7 +288,7 @@ func (s *AvailabilityService) CreateAvailability(ctx context.Context, token, par
 	availability.ID = uuid.New()
 
 	if err := s.availabilityRepo.Create(ctx, availability); err != nil {
-		if isDuplicateError(err) {
+		if errors.Is(err, repository.ErrAvailabilityExists) {
 			return nil, ErrAvailabilityExists
 		}
 		return nil, err
@@ -559,8 +562,35 @@ func (s *AvailabilityService) DeleteAvailability(ctx context.Context, token, par
 	return nil
 }
 
-// GetDateSummary gets all participants available on a specific date
-func (s *AvailabilityService) GetDateSummary(ctx context.Context, token, dateStr string) (*models.DateAvailabilitySummary, error) {
+// exceptionsFor loads the exceptions of every given recurrence in a single query.
+//
+// This used to be a loop issuing one query per recurrence. GetDateSummary and
+// GetRangeSummary both walk every recurrence of a calendar, and both are what the SSE
+// availability notification makes each open browser reload, so the fan-out multiplied
+// with the number of recurrences and the number of viewers at once. Cost is now one
+// round trip regardless of how many recurrences the calendar has.
+func (s *AvailabilityService) exceptionsFor(
+	ctx context.Context,
+	recurrences []models.Recurrence,
+) (map[uuid.UUID][]models.RecurrenceException, error) {
+	ids := make([]uuid.UUID, 0, len(recurrences))
+	for _, rec := range recurrences {
+		ids = append(ids, rec.ID)
+	}
+
+	return s.recurrenceRepo.GetExceptionsByRecurrenceIDs(ctx, ids)
+}
+
+// GetDateSummary gets all participants available on a specific date.
+//
+// participantID is the caller's own participant id, and is the one id left unmasked
+// when the calendar has lock_participants set — exactly as in GetRangeSummary. This
+// endpoint used to answer with models.DateAvailabilitySummary, whose ParticipantID is
+// a plain uuid.UUID and therefore always serialised, so a locked calendar handed every
+// participant's id to anyone holding the public token. Since participant access here is
+// capability-based (public token + participant id *is* the authorisation), that was
+// both halves of the credential for every participant on the calendar.
+func (s *AvailabilityService) GetDateSummary(ctx context.Context, token, dateStr, participantID string) (*models.PublicDateAvailabilitySummary, error) {
 	// Validate calendar token and get calendar info (including min_duration_hours)
 	calendarInfo, err := s.calendarRepo.GetCalendarInfoByPublicToken(ctx, token)
 	if err != nil {
@@ -601,14 +631,10 @@ func (s *AvailabilityService) GetDateSummary(ctx context.Context, token, dateStr
 		return nil, err
 	}
 
-	// Get exceptions for all recurrences
-	exceptionsMap := make(map[uuid.UUID][]models.RecurrenceException)
-	for _, rec := range recurrences {
-		exceptions, err := s.recurrenceRepo.GetExceptionsByRecurrence(ctx, rec.ID)
-		if err != nil {
-			return nil, err
-		}
-		exceptionsMap[rec.ID] = exceptions
+	// Get exceptions for all recurrences, in one query rather than one per recurrence
+	exceptionsMap, err := s.exceptionsFor(ctx, recurrences)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create a set of participants that have explicit availabilities
@@ -684,18 +710,18 @@ func (s *AvailabilityService) GetDateSummary(ctx context.Context, token, dateStr
 		duration := calculateDurationForDate(participantSummaries)
 		if duration < float64(calendarInfo.MinDurationHours) {
 			// Return empty summary if duration is less than minimum
-			return &models.DateAvailabilitySummary{
+			return &models.PublicDateAvailabilitySummary{
 				Date:         dateStr,
 				TotalCount:   0,
-				Participants: []models.ParticipantAvailabilitySummary{},
+				Participants: []models.PublicParticipantAvailabilitySummary{},
 			}, nil
 		}
 	}
 
-	return &models.DateAvailabilitySummary{
+	return &models.PublicDateAvailabilitySummary{
 		Date:         dateStr,
 		TotalCount:   calculateMaxSimultaneousParticipants(participantSummaries),
-		Participants: participantSummaries,
+		Participants: filterParticipantSummaries(calendarInfo.LockParticipants, participantID, participantSummaries),
 	}, nil
 }
 
@@ -798,14 +824,10 @@ func (s *AvailabilityService) GetRangeSummary(ctx context.Context, token, startD
 		return nil, err
 	}
 
-	// Get exceptions for all recurrences
-	exceptionsMap := make(map[uuid.UUID][]models.RecurrenceException)
-	for _, rec := range recurrences {
-		exceptions, err := s.recurrenceRepo.GetExceptionsByRecurrence(ctx, rec.ID)
-		if err != nil {
-			return nil, err
-		}
-		exceptionsMap[rec.ID] = exceptions
+	// Get exceptions for all recurrences, in one query rather than one per recurrence
+	exceptionsMap, err := s.exceptionsFor(ctx, recurrences)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create a set of dates that have explicit availabilities per participant
@@ -984,10 +1006,6 @@ func calculateDuration(startTime, endTime string) float64 {
 	}
 
 	return duration
-}
-
-func isDuplicateError(err error) bool {
-	return err != nil && (err.Error() == "availability already exists for this date")
 }
 
 func toAvailabilityResponse(availability *models.Availability, participantName string, participantEmail *string, participantEmailVerified bool) *models.AvailabilityResponse {
@@ -1213,13 +1231,15 @@ func (s *AvailabilityService) GetParticipantRecurrences(ctx context.Context, tok
 		return nil, err
 	}
 
-	// Get exceptions for each recurrence
+	// Get the exceptions of every recurrence in one query rather than one per recurrence
+	exceptionsMap, err := s.exceptionsFor(ctx, recurrences)
+	if err != nil {
+		return nil, err
+	}
+
 	var result []models.RecurrenceWithExceptions
 	for _, rec := range recurrences {
-		exceptions, err := s.recurrenceRepo.GetExceptionsByRecurrence(ctx, rec.ID)
-		if err != nil {
-			return nil, err
-		}
+		exceptions := exceptionsMap[rec.ID]
 		if exceptions == nil {
 			exceptions = []models.RecurrenceException{}
 		}

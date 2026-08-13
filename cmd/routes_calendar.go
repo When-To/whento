@@ -1,0 +1,80 @@
+// WhenTo - Collaborative event calendar for self-hosted environments
+// Copyright (C) 2025 WhenTo Contributors
+// SPDX-License-Identifier: BSL-1.1
+
+package main
+
+import (
+	"time"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/whento/pkg/middleware"
+)
+
+// registerCalendarRoutes mounts /api/v1/calendars: the public, token-addressed
+// half that a participant reaches from a shared link, and the authenticated half
+// that an owner reaches from their account.
+func registerCalendarRoutes(r chi.Router, d *deps, h *handlers) {
+	l := d.limiter
+
+	r.Route("/api/v1/calendars", func(r chi.Router) {
+		// Public routes
+		r.Group(func(r chi.Router) {
+			// Public calendar access: 60 requests/minute/IP
+			l.on(r, perIP(60, time.Minute)).Get("/public/{token}", h.calendar.GetPublicCalendar)
+
+			// Anonymous participant registration: 10 requests/minute/IP
+			l.on(r, perIP(10, time.Minute)).Post("/public/{token}/participants", h.participant.AddAnonymousParticipant)
+
+			// Public participant email verification: 5 requests/15 minutes/IP
+			l.on(r, perPathIP(5, 15*time.Minute)).Get("/participants/verify-email/{token}", h.participantEmail.VerifyEmail)
+
+			// Public participant email management: 5 requests/15 minutes/IP.
+			//
+			// This route was the only one in the group without a limiter, and it is
+			// the one that sends mail to an address the caller picks — unauthenticated,
+			// so an open relay for anyone holding a public calendar link. The budget
+			// matches resend-verification below rather than the looser per-IP defaults,
+			// because both spend the same resource: outbound mail to a third party.
+			l.on(r, perIP(5, 15*time.Minute)).Post("/{token}/participants/{pid}/email", h.participantEmail.AddEmail)
+
+			// Resend verification: 3 requests/15 minutes/IP
+			l.on(r, perIP(3, 15*time.Minute)).Post("/{token}/participants/{pid}/resend-verification", h.participantEmail.ResendVerification)
+		})
+
+		// Authenticated routes
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.Auth(d.jwtManager, d.cacheStore))
+
+			// Authenticated routes: 100 requests/minute/user
+			l.use(r, perUser(100, time.Minute))
+
+			// Calendar CRUD
+			r.Post("/", h.calendar.CreateCalendar)
+			r.Get("/", h.calendar.ListMyCalendars)
+			r.Get("/{id}", h.calendar.GetCalendar)
+			r.Patch("/{id}", h.calendar.UpdateCalendar)
+			r.Delete("/{id}", h.calendar.DeleteCalendar)
+
+			// Token regeneration
+			r.Post("/{id}/regenerate-token", h.calendar.RegenerateToken)
+
+			// Participant management
+			r.Post("/{id}/participants", h.participant.AddParticipant)
+			r.Patch("/{id}/participants/{pid}", h.participant.UpdateParticipant)
+			r.Delete("/{id}/participants/{pid}", h.participant.RemoveParticipant)
+
+			// Notification config (owner only)
+			r.Get("/{id}/notify-config", h.notifyConfig.GetConfig)
+			r.Patch("/{id}/notify-config", h.notifyConfig.UpdateConfig)
+
+			// Admin routes
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireRole("admin"))
+
+				r.Get("/admin/users/{id}/calendars", h.calendar.ListUserCalendars)
+			})
+		})
+	})
+}

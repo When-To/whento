@@ -24,7 +24,7 @@ import (
 	// Aliased: the constructor below takes a *slog.Logger named `logger`, which
 	// would otherwise shadow the package.
 	pkglog "github.com/whento/pkg/logger"
-	"github.com/whento/whento/internal/calendar/repository"
+	calendarModels "github.com/whento/whento/internal/calendar/models"
 	"github.com/whento/whento/internal/config"
 )
 
@@ -34,10 +34,23 @@ var participantEmailVerificationTemplate string
 //go:embed templates/locales/participant_email_verification.json
 var participantEmailVerificationTranslations string
 
+// ParticipantEmailStore is the slice of the participant repository this service
+// needs: the three calls that move a participant through email verification.
+//
+// Declared here rather than taking *repository.ParticipantRepository so the token
+// lifecycle can be exercised without a database, and returning the calendar *models*
+// participant so a fake needs no repository import.
+type ParticipantEmailStore interface {
+	SetEmailVerificationToken(ctx context.Context, participantID uuid.UUID, emailAddress, token string, expiresAt time.Time) error
+	GetByVerificationToken(ctx context.Context, token string) (*calendarModels.Participant, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*calendarModels.Participant, error)
+	VerifyEmail(ctx context.Context, participantID uuid.UUID) error
+}
+
 // ParticipantEmailService handles email verification for participants
 type ParticipantEmailService struct {
-	participantRepo *repository.ParticipantRepository
-	emailService    *email.Service
+	participantRepo ParticipantEmailStore
+	emailService    Mailer
 	cfg             *config.Config
 	logger          *slog.Logger
 	template        *template.Template
@@ -46,8 +59,8 @@ type ParticipantEmailService struct {
 
 // NewParticipantEmailService creates a new participant email service
 func NewParticipantEmailService(
-	participantRepo *repository.ParticipantRepository,
-	emailService *email.Service,
+	participantRepo ParticipantEmailStore,
+	emailService Mailer,
 	cfg *config.Config,
 	logger *slog.Logger,
 ) *ParticipantEmailService {

@@ -41,7 +41,10 @@
     "verifying": "Verifying...",
     "verify": "Verify",
     "rename": "Rename",
-    "notFoundMessage": "Sorry, we couldn't find the page you're looking for."
+    "notFoundMessage": "Sorry, we couldn't find the page you're looking for.",
+    "confirm": "Confirm",
+    "confirmTitle": "Please confirm",
+    "dismissNotification": "Dismiss notification"
   },
   "home": {
     "heroTitle": "When to Play?",
@@ -152,7 +155,10 @@
       "expired": "This magic link has expired. Please request a new one.",
       "missingToken": "No magic link token provided."
     },
-    "invalidPassword": "Invalid password"
+    "invalidPassword": "Invalid password",
+    "logoutError": "Failed to log out",
+    "fetchUserError": "Failed to load your account",
+    "updateProfileError": "Failed to update profile"
   },
   "nav": {
     "home": "Home",
@@ -373,7 +379,8 @@
     "listView": "List",
     "noActionableDays": "No available days in this period",
     "noParticipantsDescription": "This calendar has no participants yet. No availability can be entered at this time.",
-    "contactOwnerToAddParticipants": "Contact the calendar owner to add participants."
+    "contactOwnerToAddParticipants": "Contact the calendar owner to add participants.",
+    "updateParticipantError": "Failed to update participant"
   },
   "weekdays": {
     "short": {
@@ -457,7 +464,22 @@
     "invalidEmail": "Invalid email",
     "passwordTooShort": "Password must be at least 12 characters with uppercase, lowercase, number, and special character",
     "availabilityConflict": "Cannot add availability on this day, there can only be one availability per day per participant",
-    "deleteFailed": "Failed to delete"
+    "deleteFailed": "Failed to delete",
+    "badRequest": "The request could not be processed",
+    "forbidden": "You don't have permission to do that",
+    "conflict": "That conflicts with something that already exists",
+    "rateLimited": "Too many attempts. Please wait a moment and try again.",
+    "serverError": "Something went wrong on our side. Please try again.",
+    "serviceUnavailable": "The service is temporarily unavailable. Please try again shortly.",
+    "timeout": "The request took too long. Please try again.",
+    "unexpected": "Something went wrong. Please try again.",
+    "boundary": {
+      "title": "Something went wrong",
+      "message": "The page could not be displayed. Reloading usually fixes it, and your data is safe.",
+      "reload": "Reload the page",
+      "home": "Back to home",
+      "reference": "Reference: {reference}"
+    }
   },
   "validation": {
     "generic": {
@@ -809,7 +831,8 @@
     "verificationFailed": "Email verification failed",
     "invalidToken": "The verification link is invalid.",
     "tokenExpired": "The verification link has expired. Please request a new one.",
-    "verificationError": "An error occurred during verification. Please try again."
+    "verificationError": "An error occurred during verification. Please try again.",
+    "saveError": "Failed to save notification settings"
   },
   "unifiedFeed": {
     "title": "Unified ICS Feed",
@@ -822,6 +845,10 @@
     "regenerateConfirm": "Regenerating the token will invalidate the current URL. Anyone using the old URL will need the new one. Continue?",
     "tokenRegenerated": "Token regenerated. Update your calendar subscriptions with the new URL.",
     "includeInFeed": "Include in unified feed",
-    "noCalendarsSelected": "No calendars selected. Use the checkboxes on your calendars below to choose which ones to include."
+    "noCalendarsSelected": "No calendars selected. Use the checkboxes on your calendars below to choose which ones to include.",
+    "fetchError": "Failed to load the unified feed",
+    "createError": "Failed to create the unified feed",
+    "updateError": "Failed to update the unified feed calendars",
+    "regenerateError": "Failed to regenerate the feed token"
   }
 }

@@ -105,6 +105,15 @@ onMounted(async () => {
     // Verify magic link
     const response = await authApi.verifyMagicLink(token);
 
+    // A verified magic link always carries a session. Without one there is nothing
+    // to sign in with, and setting the user anyway would leave the app looking
+    // authenticated with no token behind it.
+    if (!response.access_token) {
+      error.value = t('auth.magicLink.verifyError');
+      loading.value = false;
+      return;
+    }
+
     // Set auth tokens in store
     authStore.user = response.user;
     apiClient.setToken(response.access_token);

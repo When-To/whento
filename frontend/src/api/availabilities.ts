@@ -129,9 +129,24 @@ export const availabilitiesApi = {
   },
 
   // Aggregated data
-  async getDateSummary(token: string, date: string): Promise<DateAvailabilitySummary> {
+
+  /**
+   * Availability on a single date.
+   *
+   * `participantId` identifies the caller to the backend. On a calendar with
+   * `lock_participants`, every `participant_id` in the answer is withheld except
+   * that one — so passing it is what lets the caller still recognise their own row,
+   * and omitting it is the safe default for a read-only viewer.
+   */
+  async getDateSummary(
+    token: string,
+    date: string,
+    participantId?: string
+  ): Promise<DateAvailabilitySummary> {
+    const query = participantId ? `?participant_id=${encodeURIComponent(participantId)}` : '';
+
     return apiClient.get<DateAvailabilitySummary>(
-      `/availabilities/calendar/${token}/dates/${date}`
+      `/availabilities/calendar/${token}/dates/${date}${query}`
     );
   },
 

@@ -346,7 +346,7 @@ const loading = ref(false);
 const newParticipantName = ref('');
 const joiningAsParticipant = ref(false);
 
-const calendar = computed(() => calendarStore.currentCalendar);
+const calendar = computed(() => calendarStore.currentPublicCalendar);
 
 async function loadCalendar() {
   loading.value = true;

@@ -79,7 +79,13 @@ type ParticipantAvailabilitiesResponse struct {
 	Availabilities []AvailabilityItem `json:"availabilities"`
 }
 
-// ParticipantAvailabilitySummary represents availability summary for a participant
+// ParticipantAvailabilitySummary represents availability summary for a participant.
+//
+// Internal to the service layer: its ParticipantID is a plain uuid.UUID and is
+// therefore always serialised, so this type must never be handed to a public
+// endpoint. Both summary endpoints build these, then convert with
+// filterParticipantSummaries into the Public* pair below, which is what actually
+// crosses the wire.
 type ParticipantAvailabilitySummary struct {
 	ParticipantID   uuid.UUID `json:"participant_id"`
 	ParticipantName string    `json:"participant_name"`
@@ -96,13 +102,6 @@ type PublicParticipantAvailabilitySummary struct {
 	StartTime       *string    `json:"start_time,omitempty"`
 	EndTime         *string    `json:"end_time,omitempty"`
 	Note            string     `json:"note,omitempty"`
-}
-
-// DateAvailabilitySummary represents all participants available on a specific date
-type DateAvailabilitySummary struct {
-	Date         string                           `json:"date"`
-	TotalCount   int                              `json:"total_count"`
-	Participants []ParticipantAvailabilitySummary `json:"participants"`
 }
 
 // PublicDateAvailabilitySummary represents all participants available on a specific date (public view)

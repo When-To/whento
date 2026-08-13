@@ -4,9 +4,17 @@
  * SPDX-License-Identifier: BSL-1.1
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { inTimezone, SAMPLE_TIMEZONES } from '@/test/timezone';
-import { clearHolidayCache, getHolidayIndex, resolveCountry } from './holidays';
+import { clearHolidayCache, getHolidayIndex, preloadHolidays, resolveCountry } from './holidays';
+
+// `date-holidays` is imported dynamically so it lands in its own chunk instead of the
+// entry bundle. Every assertion below is about a *loaded* engine, so the file waits for
+// it once, up front — pulling 1.4 MB through the transform pipeline is well outside the
+// default 5 s per-hook budget on a loaded machine.
+beforeAll(async () => {
+  await preloadHolidays();
+}, 60_000);
 
 beforeEach(() => {
   clearHolidayCache();
@@ -46,6 +54,31 @@ describe('isHoliday', () => {
     // Independence Day is not a French holiday.
     expect(us.isHoliday('2026-07-03')).toBe(true);
     expect(fr.isHoliday('2026-07-04')).toBe(false);
+  });
+
+  it('answers "no holidays" while the engine is still loading', async () => {
+    // The lazy import means the first render happens before date-holidays exists.
+    // A fresh module registry is the only way back to that state once the engine has
+    // been pulled in. The index must be usable then — not undefined, not throwing —
+    // so the grid renders straight away and simply carries no holiday shading yet.
+    vi.resetModules();
+    const fresh = await import('./holidays');
+
+    const index = fresh.getHolidayIndex('Europe/Paris', 'fr');
+    expect(fresh.holidaysReady.value).toBe(false);
+    expect(index.countryCode).toBe('FR');
+    expect(index.isHoliday('2026-01-01')).toBe(false);
+    expect(index.isHolidayEve('2025-12-31')).toBe(false);
+    expect(index.getName('2026-01-01')).toBeNull();
+
+    // Merely asking is enough to start the fetch; once it lands the same call yields
+    // a *different* index object, which is what makes dependent computeds re-run.
+    await fresh.preloadHolidays();
+    expect(fresh.holidaysReady.value).toBe(true);
+
+    const loaded = fresh.getHolidayIndex('Europe/Paris', 'fr');
+    expect(loaded).not.toBe(index);
+    expect(loaded.isHoliday('2026-01-01')).toBe(true);
   });
 
   it('reports nothing for an unsupported timezone instead of throwing', () => {
