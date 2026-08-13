@@ -655,6 +655,19 @@ jobs:
       # ignore-unfixed, because an advisory with no fixed version available is not
       # something this build can act on; it would only teach people to ignore the job.
       # Findings stay in the log — no SARIF upload, nothing to store.
+      #
+      # The bundled golang-migrate binary is skipped *here* and scanned separately
+      # below. It is an upstream release artefact, not something this build
+      # compiles: at v4.19.1 — the latest — it embeds pgx 5.5.4, go-jose 4.0.5 and
+      # x/crypto 0.45.0, which is 38 advisories this repository cannot patch. Our
+      # own modules are on pgx 5.10.0 and x/crypto 0.55.0, app/whento scans clean,
+      # and so does the Alpine base.
+      #
+      # Blocking on it would mean the gate is permanently red for a reason no
+      # commit here can address, which is how a security job stops being read.
+      # Blocking on everything else keeps it meaningful. The real fix is upstream,
+      # or removing migrate from the runtime image and running migrations as a
+      # separate step — both larger decisions than a scanner flag.
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -663,7 +676,21 @@ jobs:
           scanners: vuln
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          skip-files: usr/local/bin/migrate
           exit-code: '1'
+
+      # Reported, never blocking, so the upstream debt stays visible and someone
+      # can see the day it shrinks — or the day it gets worse.
+      - name: Scan the bundled migrate binary (informational)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: whento-scan:candidate
+          format: table
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'
 
       - name: Build and push Docker image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
