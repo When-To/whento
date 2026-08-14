@@ -18,15 +18,17 @@ func TestReplaceVar(t *testing.T) {
 		want  string
 	}{
 		{name: "substitutes", in: "Hi {{.ParticipantName}}", vari: "ParticipantName", value: "Ada", want: "Hi Ada"},
-		{name: "escapes", in: "Hi {{.ParticipantName}}", vari: "ParticipantName", value: "<b>", want: "Hi &lt;b&gt;"},
 		{name: "leaves other placeholders alone", in: "Hi {{.Other}}", vari: "ParticipantName", value: "Ada", want: "Hi {{.Other}}"},
 		{name: "substitutes every occurrence", in: "{{.X}}/{{.X}}", vari: "X", value: "a", want: "a/a"},
 		{
-			name:  "escapes a quote, which would otherwise break out of an attribute",
+			// Deliberately not escaped here. html/template escapes the value when the
+			// body is rendered; doing it twice would show the reader the entities.
+			// internal/auth/handlers/email_body_test.go pins the end result.
+			name:  "passes markup through for the renderer to escape",
 			in:    "Hi {{.ParticipantName}}",
 			vari:  "ParticipantName",
-			value: `" onmouseover="x`,
-			want:  "Hi &#34; onmouseover=&#34;x",
+			value: "<b>",
+			want:  "Hi <b>",
 		},
 	}
 

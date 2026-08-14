@@ -12,8 +12,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log/slog"
-	"text/template"
 	"time"
 
 	"github.com/google/uuid"
@@ -179,7 +179,7 @@ func (s *MagicLinkService) sendMagicLinkEmail(to, displayName, locale, token str
 	}
 
 	// Prepare template data
-	data := map[string]string{
+	data := map[string]any{
 		"Subject":        trans["subject"],
 		"Greeting":       email.ReplaceVar(trans["greeting"], "DisplayName", displayName),
 		"Intro":          trans["intro"],
@@ -188,8 +188,12 @@ func (s *MagicLinkService) sendMagicLinkEmail(to, displayName, locale, token str
 		"OrCopy":         trans["or_copy"],
 		"ExpiryNotice":   trans["expiry_notice"],
 		"SecurityNotice": trans["security_notice"],
-		"Signature":      trans["signature"],
-		"MagicLinkURL":   magicLinkURL,
+		// The one locale string holding deliberate markup: the signature ends with a
+		// <br> between the sign-off and the team name. Everything else in this map is a
+		// plain string, so html/template escapes it — which is exactly what has to
+		// happen to a display name.
+		"Signature":    template.HTML(trans["signature"]),
+		"MagicLinkURL": magicLinkURL,
 	}
 
 	// Execute template

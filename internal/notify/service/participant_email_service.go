@@ -12,8 +12,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log/slog"
-	"text/template"
 	"time"
 
 	"github.com/google/uuid"

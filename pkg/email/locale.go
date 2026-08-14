@@ -4,12 +4,9 @@
 
 package email
 
-import (
-	"html"
-	"strings"
-)
+import "strings"
 
-// ReplaceVar substitutes {{.VarName}} in a locale string with an HTML-escaped value.
+// ReplaceVar substitutes {{.VarName}} in a locale string with a value.
 //
 // The locale JSON files carry their own placeholders — "Hello {{.DisplayName}}," — which
 // are not executed as templates: each mail builder substitutes them by hand before
@@ -17,10 +14,13 @@ import (
 // copies of this function existed, three of them differing only by a suffix invented to
 // dodge a same-package name collision.
 //
-// The escaping is what keeps a display name from carrying markup into a mail that
-// someone else reads.
+// It does not escape. It used to, because the layout templates were text/template and
+// nothing else would have. They are html/template now, so the value is escaped when the
+// body is rendered — escaping here as well would show the reader "&lt;b&gt;" where the
+// display name said "<b>". Callers pass the result as a plain string so the engine
+// escapes it; only locale strings holding deliberate markup are typed template.HTML.
 func ReplaceVar(str, varName, value string) string {
 	placeholder := "{{." + varName + "}}"
 
-	return strings.ReplaceAll(str, placeholder, html.EscapeString(value))
+	return strings.ReplaceAll(str, placeholder, value)
 }
