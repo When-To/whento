@@ -123,9 +123,9 @@ Two things that will otherwise bite you:
 
 The long version — pinned tool versions, how to add a domain, a migration or a
 locale, and the full pre-push checklist — is in
-[docs/development.md](../docs/development.md). The design behind it is in
-[docs/architecture.md](../docs/architecture.md) and the
-[ADRs](../docs/adr/README.md).
+[docs/development.md](/docs/development.md). The design behind it is in
+[docs/architecture.md](/docs/architecture.md) and the
+[ADRs](/docs/adr/README.md).
 
 ## Release process
 
@@ -145,12 +145,12 @@ Semantic versioning, as applied here:
 A dependency bump that changes a base image major version (Postgres, Redis) is
 **not** a patch: it needs a release note and, in the Postgres case, a documented
 dump-and-restore. See
-[docs/upgrade-postgres-redis.md](../docs/upgrade-postgres-redis.md).
+[docs/upgrade-postgres-redis.md](/docs/upgrade-postgres-redis.md).
 
 ### 2. Update the changelog
 
 Move the `## [Unreleased]` entries into a new version section in
-[CHANGELOG.md](../CHANGELOG.md), dated, and add the comparison link at the
+[CHANGELOG.md](/CHANGELOG.md), dated, and add the comparison link at the
 bottom. The draft comes straight out of the history:
 
 ```bash
@@ -210,7 +210,7 @@ Then check the release page: the body should open with your tag message, and
 
 `release-please` and equivalents were considered and deliberately not adopted;
 the reasoning is in
-[docs/adr/0006-manual-releases.md](../docs/adr/0006-manual-releases.md). The
+[docs/adr/0006-manual-releases.md](/docs/adr/0006-manual-releases.md). The
 short version: this repository has one maintainer, a release cadence measured in
 weeks, and the actual failure was tag hygiene — which the annotated-tag rule
 above and the CI title check fix directly, without adding a bot with write access
@@ -219,7 +219,7 @@ to `main`. Revisit it when there is more than one person cutting releases.
 ## Questions?
 
 - Open a [Discussion](https://github.com/When-To/whento/discussions)
-- Check the [README](../README.md) for documentation
+- Check the [README](/README.md) for documentation
 
 ## License
 
