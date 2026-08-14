@@ -24,7 +24,7 @@
 //	@description				Rate limit headers are included in responses: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
 //	@description
 //	@description				## Deployment Modes
-//	@description				WhenTo supports two deployment modes: **Cloud** (SaaS with Stripe subscriptions) and **Self-hosted** (Ed25519 cryptographic licenses). Some endpoints are only available in specific deployment modes.
+//	@description				WhenTo supports two deployment modes: **Cloud** (hosted, three calendars per account) and **Self-hosted** (unlimited). Both are free and neither requires a licence key. Some endpoints are only available in specific deployment modes.
 //
 //	@contact.name				WhenTo Support
 //	@contact.url				https://github.com/When-To/whento

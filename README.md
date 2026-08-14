@@ -326,7 +326,6 @@ whento/
 | Frontend                | Vue 3, Vite 8, TypeScript, Tailwind CSS 4, Pinia 4 |
 | Database                | PostgreSQL 16, Redis 7                             |
 | Auth                    | JWT RS256 (asymmetric keys), bcrypt                |
-| Licensing (Self-hosted) | Ed25519 cryptographic signatures                   |
 | i18n                    | vue-i18n (FR/EN)                                   |
 | iCalendar               | arran4/golang-ical                                 |
 
@@ -782,8 +781,9 @@ Please ensure:
 
 - **Community Support** — GitHub Discussions
 - **Bug Reports** — GitHub Issues
-- **Email Support** — Available for Pro/Power subscribers (Cloud) or Pro/Enterprise license holders (Self-hosted)
-- **Priority Support** — Available for Power subscribers (Cloud) or Enterprise license holders (Self-hosted)
+- **Commercial Support** — Included with a [commercial license](LICENSE-COMMERCIAL), which is
+  only needed to offer WhenTo as a service to third parties. Running it, hosted or
+  self-hosted, needs no licence and comes with community support.
 
 ---
 

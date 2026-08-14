@@ -183,7 +183,7 @@ Two orderings there are load-bearing rather than cosmetic:
 `GET /api/v1/calendars` →
 
 1. global middleware above;
-2. `middleware.Auth(jwtManager, cacheStore)` — validates the Ed25519-signed JWT
+2. `middleware.Auth(jwtManager, cacheStore)` — validates the RS256-signed JWT
    and puts the user id and role in the request context;
 3. `routeLimiter` bucket `perUser(100, time.Minute)`, keyed on the authenticated
    user id (which only means anything *below* `Auth` — above it the key is empty
@@ -242,7 +242,7 @@ what a calendar is, it belongs in `internal/`.
 | `dberr` | Classifies PostgreSQL errors by SQLSTATE via `errors.As` on `*pgconn.PgError` — never by message text, which is localised and reworded between major versions. |
 | `email` | SMTP sending; reports `IsConfigured()` so features degrade instead of erroring. |
 | `httputil` | The `{success, data, error}` response envelope and the error codes. |
-| `jwt` | Ed25519 access/refresh tokens. The signing method is pinned, with a test guarding against algorithm confusion. |
+| `jwt` | RS256 access/refresh tokens. The signing method is pinned, with a test guarding against algorithm confusion. |
 | `logger` | `log/slog` setup, `Fingerprint` for correlating without identifying, and the AST guard described below. |
 | `metrics` | Prometheus collectors and the exposition handler. Labels are method, chi route *pattern*, status, build variant — nothing else. |
 | `middleware` | `RequestID`, `Logger`, `Metrics`, `Recoverer`, `SecurityHeaders`, `LimitRequestSize`, `CORS`, `Auth`, `RequireRole`, the rate limiter and its key functions, `SetTrustedProxies`. |
