@@ -178,6 +178,32 @@ describe('apiClient', () => {
     });
   });
 
+  describe('signing out across tabs', () => {
+    it('tells the other tabs when the user signs out', () => {
+      const posted: unknown[] = [];
+      vi.spyOn(BroadcastChannel.prototype, 'postMessage').mockImplementation(m => posted.push(m));
+      apiClient.setToken('a-token');
+
+      apiClient.signOut();
+
+      expect(apiClient.hasSession()).toBe(false);
+      expect(posted).toContainEqual({ type: 'logout' });
+    });
+
+    it('stays quiet when a request merely fails', () => {
+      const posted: unknown[] = [];
+      vi.spyOn(BroadcastChannel.prototype, 'postMessage').mockImplementation(m => posted.push(m));
+      apiClient.setToken('a-token');
+      posted.length = 0;
+
+      // The error paths — a refused /auth/me, a failed restore — go through
+      // clearToken. A transient failure in one tab must not sign the others out.
+      apiClient.clearToken();
+
+      expect(posted).toEqual([]);
+    });
+  });
+
   describe('the 401 refresh', () => {
     it('refreshes once and replays the original request', async () => {
       apiClient.setToken('expired');
