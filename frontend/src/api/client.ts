@@ -15,6 +15,22 @@ const SESSION_FLAG = 'whento.session';
 const AUTH_CHANNEL = 'whento.auth';
 const REFRESH_LOCK = 'whento.refresh';
 
+/**
+ * How far ahead of expiry to refresh.
+ *
+ * Wide enough that a slow round trip still lands before the token dies, narrow enough
+ * that it is a rounding error against the fifteen-minute lifetime.
+ */
+const REFRESH_LEAD_MS = 60_000;
+
+/**
+ * The soonest a scheduled refresh may fire.
+ *
+ * A token already inside the lead window — or, through a misconfigured server, shorter
+ * than it — would otherwise schedule at zero and spin.
+ */
+const MIN_REFRESH_DELAY_MS = 5_000;
+
 type AuthMessage = { type: 'token'; token: string } | { type: 'logout' };
 
 class ApiClient {
@@ -23,6 +39,10 @@ class ApiClient {
   /** The one refresh in progress, shared by every caller that needs it. */
   private refreshInFlight: Promise<void> | null = null;
   private channel: BroadcastChannel | null = null;
+  /** The pending proactive refresh, if the current token carried an expiry. */
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  /** When the current token dies, so a tab returning from sleep can tell. */
+  private expiresAt: number | null = null;
 
   constructor() {
     this.client = axios.create({
@@ -36,6 +56,74 @@ class ApiClient {
 
     this.setupInterceptors();
     this.setupChannel();
+    this.setupWakeUp();
+  }
+
+  /**
+   * Refresh on the way back from sleep, rather than on the user's next click.
+   *
+   * A backgrounded tab does not get its timers on time — browsers throttle them heavily
+   * and suspend them outright on a discarded tab — so a tab left alone for an hour wakes
+   * with a token that expired long ago. Waiting for the next request means the first
+   * thing the user does after coming back is a 401, a refresh and a replay.
+   *
+   * Both events are cheap and idempotent: refreshIfDue does nothing while the token has
+   * life left in it.
+   */
+  private setupWakeUp() {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    // visibilitychange is fired at the document, not the window.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        this.refreshIfDue();
+      }
+    });
+    // Coming back from a dropped connection has the same shape: whatever the timer
+    // tried to do while offline did not happen.
+    window.addEventListener('online', () => this.refreshIfDue());
+  }
+
+  /** Refresh when the token is at or past its lead window. Silent on failure: the 401 path remains. */
+  private refreshIfDue() {
+    if (!this.accessToken || this.expiresAt === null) {
+      return;
+    }
+    if (this.expiresAt - Date.now() > REFRESH_LEAD_MS) {
+      return;
+    }
+
+    void this.refreshToken().catch(() => {
+      // Already handled by the interceptor's forced sign-out; nothing to add here,
+      // and an unhandled rejection would reach the global handler in main.ts.
+    });
+  }
+
+  /**
+   * Replace the pending proactive refresh.
+   *
+   * Cleared and reset on every token, so the timer always describes the token in hand
+   * rather than the one before it.
+   */
+  private scheduleRefresh(expiresInSeconds?: number) {
+    if (this.refreshTimer !== null) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+
+    if (!expiresInSeconds || expiresInSeconds <= 0) {
+      // No expiry to work from — the MFA and passkey paths hand over a token without
+      // one. The 401 path still covers it; this is an optimisation, not the mechanism.
+      this.expiresAt = null;
+      return;
+    }
+
+    this.expiresAt = Date.now() + expiresInSeconds * 1000;
+    const delay = Math.max(expiresInSeconds * 1000 - REFRESH_LEAD_MS, MIN_REFRESH_DELAY_MS);
+
+    this.refreshTimer = setTimeout(() => this.refreshIfDue(), delay);
   }
 
   /**
@@ -149,16 +237,36 @@ class ApiClient {
     this.broadcast({ type: 'logout' });
   }
 
+  /**
+   * Send the visitor to the login page, remembering where they were.
+   *
+   * Still a full page load rather than a router navigation. The reload is doing real
+   * work: it drops every Pinia store with it, and this client cannot reset them itself
+   * without importing the stores that import it. A soft navigation would leave the
+   * previous account's user, calendars and settings in memory on the login screen.
+   *
+   * What was missing is the query. The guard sends an anonymous visitor to
+   * `?redirect=<where they were going>` and Login.vue returns them there afterwards,
+   * but an expiry mid-session went to a bare `/login` — so signing back in always
+   * landed on the dashboard, however deep the page they were thrown out of.
+   */
   private redirectToLogin() {
     // Only redirect to login if current route is not public: a participant following
     // a calendar link has no account to sign back in to.
     const currentRoute = router.currentRoute.value;
-    const isPublicRoute = currentRoute.meta.public === true;
-
-    if (!isPublicRoute) {
-      // Force full page reload to login to reset all UI state
-      window.location.href = '/login';
+    if (currentRoute.meta.public === true) {
+      return;
     }
+
+    const target = currentRoute.fullPath;
+    // The login route itself, and anything with no path to speak of, has nothing worth
+    // coming back to.
+    if (!target || target === '/' || currentRoute.name === 'login') {
+      window.location.href = '/login';
+      return;
+    }
+
+    window.location.href = `/login?redirect=${encodeURIComponent(target)}`;
   }
 
   private normalizeError(error: AxiosError<ApiResponse<never>>): ApiError {
@@ -172,8 +280,9 @@ class ApiClient {
     };
   }
 
-  setToken(token: string) {
+  setToken(token: string, expiresInSeconds?: number) {
     this.accessToken = token;
+    this.scheduleRefresh(expiresInSeconds);
     // A flag, not a secret. The token itself never leaves memory: anything persisted
     // is readable by any script that gets to run on the page, which is exactly what
     // CodeQL's js/clear-text-storage-of-sensitive-data flagged when the JWT lived
@@ -186,6 +295,7 @@ class ApiClient {
 
   clearToken() {
     this.accessToken = null;
+    this.scheduleRefresh();
     localStorage.removeItem(SESSION_FLAG);
   }
 
@@ -235,10 +345,14 @@ class ApiClient {
       }
 
       const response =
-        await this.client.post<ApiResponse<{ access_token: string }>>('/auth/refresh');
+        await this.client.post<ApiResponse<{ access_token: string; expires_in?: number }>>(
+          '/auth/refresh'
+        );
       const newToken = response.data.data?.access_token;
       if (newToken) {
-        this.setToken(newToken);
+        // expires_in was being discarded here, which is why every refresh had to be
+        // provoked by a 401 rather than anticipated.
+        this.setToken(newToken, response.data.data?.expires_in);
       }
     });
   }

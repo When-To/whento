@@ -108,7 +108,16 @@ describe('auth store', () => {
       await store.login({ email: 'ada@example.com', password: 'pw' });
 
       expect(store.user).toEqual(USER);
-      expect(apiClient.setToken).toHaveBeenCalledWith('tok');
+      expect(apiClient.setToken).toHaveBeenCalledWith('tok', undefined);
+    });
+
+    it('passes the token lifetime on, so the client can refresh ahead of it', async () => {
+      authApi.login.mockResolvedValue(authResponse({ expires_in: 900 }));
+      const store = freshStore();
+
+      await store.login({ email: 'ada@example.com', password: 'pw' });
+
+      expect(apiClient.setToken).toHaveBeenCalledWith('tok', 900);
     });
 
     it('does not start a session when a second factor is required', async () => {
@@ -166,7 +175,7 @@ describe('auth store', () => {
       await store.register({ email: 'ada@example.com', password: 'pw', display_name: 'Ada' });
 
       expect(store.user).toEqual(USER);
-      expect(apiClient.setToken).toHaveBeenCalledWith('tok');
+      expect(apiClient.setToken).toHaveBeenCalledWith('tok', undefined);
     });
 
     it('reports failure through i18n', async () => {
@@ -258,7 +267,7 @@ describe('auth store', () => {
       await store.resetPassword('reset-token', 'new-password');
 
       expect(store.user).toEqual(USER);
-      expect(apiClient.setToken).toHaveBeenCalledWith('fresh');
+      expect(apiClient.setToken).toHaveBeenCalledWith('fresh', undefined);
     });
 
     it('translates a forgotten-password failure', async () => {
@@ -273,7 +282,7 @@ describe('auth store', () => {
   describe('setTokens', () => {
     it('hands the token straight to the client', () => {
       freshStore().setTokens('mfa-issued');
-      expect(apiClient.setToken).toHaveBeenCalledWith('mfa-issued');
+      expect(apiClient.setToken).toHaveBeenCalledWith('mfa-issued', undefined);
     });
   });
 

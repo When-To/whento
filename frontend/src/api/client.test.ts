@@ -10,15 +10,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AxiosAdapter, AxiosInstance, AxiosRequestConfig } from 'axios';
 
 // The client imports the router at module scope, which would drag in every view and the
-// auth store. Only currentRoute.meta.public is read, so a stub is enough — and it lets
-// the tests choose whether the current route is public.
+// auth store. It reads currentRoute.meta.public, .fullPath and .name, so a stub is
+// enough — and it lets the tests choose the route the visitor is being thrown out of.
 const routeMeta = { public: false as boolean };
+const currentRoute = { fullPath: '/dashboard', name: 'dashboard' as string | undefined };
 vi.mock('@/router', () => ({
   default: {
     currentRoute: {
       value: {
         get meta() {
           return routeMeta;
+        },
+        get fullPath() {
+          return currentRoute.fullPath;
+        },
+        get name() {
+          return currentRoute.name;
         },
       },
     },
@@ -99,6 +106,8 @@ describe('apiClient', () => {
     localStorage.clear();
     apiClient.clearToken();
     routeMeta.public = false;
+    currentRoute.fullPath = '/dashboard';
+    currentRoute.name = 'dashboard';
     // jsdom refuses real navigation; forceLogout assigns to it.
     Object.defineProperty(window, 'location', {
       configurable: true,
@@ -204,6 +213,84 @@ describe('apiClient', () => {
     });
   });
 
+  describe('refreshing before the token dies', () => {
+    it('schedules a refresh a minute short of expiry', async () => {
+      vi.useFakeTimers();
+      try {
+        const seen = withAdapter(() => ok({ access_token: 'fresh', expires_in: 900 }));
+
+        // A fifteen-minute token: the refresh is due at fourteen.
+        apiClient.setToken('current', 900);
+
+        vi.advanceTimersByTime(13 * 60_000);
+        expect(seen.filter(r => r.url === '/auth/refresh')).toHaveLength(0);
+
+        await vi.advanceTimersByTimeAsync(2 * 60_000);
+        expect(seen.filter(r => r.url === '/auth/refresh')).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does nothing when the token carries no expiry', () => {
+      vi.useFakeTimers();
+      try {
+        const seen = withAdapter(() => ok({ access_token: 'fresh' }));
+
+        // The MFA and passkey paths used to hand over a token without one. The 401
+        // path still covers those; this is an optimisation, not the mechanism.
+        apiClient.setToken('current');
+
+        vi.advanceTimersByTime(60 * 60_000);
+        expect(seen.filter(r => r.url === '/auth/refresh')).toHaveLength(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('drops the pending refresh when the session ends', () => {
+      vi.useFakeTimers();
+      try {
+        const seen = withAdapter(() => ok({ access_token: 'fresh', expires_in: 900 }));
+        apiClient.setToken('current', 900);
+
+        apiClient.clearToken();
+
+        vi.advanceTimersByTime(60 * 60_000);
+        expect(seen.filter(r => r.url === '/auth/refresh')).toHaveLength(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    // A backgrounded tab does not get its timers on time — browsers throttle them and
+    // suspend them outright on a discarded tab — so the wake-up is what covers a tab
+    // left alone for an hour. Without it the user's first click is a 401 and a replay.
+    it('refreshes on the way back from a sleeping tab', async () => {
+      const seen = withAdapter(() => ok({ access_token: 'fresh', expires_in: 900 }));
+
+      // A token already inside the lead window, as one restored from sleep would be.
+      apiClient.setToken('nearly-dead', 30);
+
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      await vi.waitFor(() => expect(seen.filter(r => r.url === '/auth/refresh')).toHaveLength(1));
+    });
+
+    it('leaves a healthy token alone when the tab comes back', async () => {
+      const seen = withAdapter(() => ok({ access_token: 'fresh', expires_in: 900 }));
+      apiClient.setToken('plenty-of-life', 900);
+
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('online'));
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(seen.filter(r => r.url === '/auth/refresh')).toHaveLength(0);
+    });
+  });
+
   describe('the 401 refresh', () => {
     it('refreshes once and replays the original request', async () => {
       apiClient.setToken('expired');
@@ -298,6 +385,33 @@ describe('apiClient', () => {
       await expect(apiClient.get('/calendars')).rejects.toBeTruthy();
 
       expect(apiClient.hasSession()).toBe(false);
+      expect(window.location.href).toBe('/login?redirect=%2Fdashboard');
+    });
+
+    it('carries the page they were thrown out of into the login URL', async () => {
+      // Without the query, signing back in always landed on the dashboard however deep
+      // the page the session expired on. The guard already produces this shape for an
+      // anonymous visitor; a mid-session expiry now matches it.
+      currentRoute.fullPath = '/calendars/abc-123/settings';
+      currentRoute.name = 'calendar-settings';
+      apiClient.setToken('expired');
+
+      withAdapter(() => unauthorized());
+
+      await expect(apiClient.get('/calendars')).rejects.toBeTruthy();
+
+      expect(window.location.href).toBe('/login?redirect=%2Fcalendars%2Fabc-123%2Fsettings');
+    });
+
+    it('does not ask to be sent back to the login page', async () => {
+      currentRoute.fullPath = '/login';
+      currentRoute.name = 'login';
+      apiClient.setToken('expired');
+
+      withAdapter(() => unauthorized());
+
+      await expect(apiClient.get('/calendars')).rejects.toBeTruthy();
+
       expect(window.location.href).toBe('/login');
     });
 

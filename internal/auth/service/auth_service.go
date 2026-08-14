@@ -479,9 +479,13 @@ func (s *AuthService) generateAuthResponse(ctx context.Context, user *models.Use
 	}
 
 	return &models.AuthResponse{
-		AccessToken:  accessToken,
+		AccessToken: accessToken,
+		// Read from the manager rather than written here. The literal 900 that used to
+		// sit in this field agreed with the token's real lifetime only at the default
+		// setting: an instance configuring JWT_ACCESS_EXPIRY got a number that did not
+		// describe the token it came with. The client schedules its refresh off this.
+		ExpiresIn:    int64(s.jwtManager.AccessExpiry().Seconds()),
 		RefreshToken: refreshToken,
-		ExpiresIn:    900, // 15 minutes in seconds
 		User:         user,
 	}, nil
 }
