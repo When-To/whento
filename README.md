@@ -739,7 +739,7 @@ WhenTo is licensed under the [Business Source License 1.1](LICENSE):
 | Use Case                                   | Free?  | License Required?                         |
 | ------------------------------------------ | ------ | ----------------------------------------- |
 | Self-host for personal use                 | ✅ Yes | No                                        |
-| Self-host for your organization (internal) | ✅ Yes | No (or Pro/Enterprise for more calendars) |
+| Self-host for your organization (internal) | ✅ Yes | No                                        |
 | Offer as SaaS to customers                 | ❌ No  | Yes (Commercial license)                  |
 | Fork and modify for yourself               | ✅ Yes | No                                        |
 | Resell as a product                        | ❌ No  | Yes (Commercial license)                  |

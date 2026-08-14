@@ -13,6 +13,23 @@ You need a commercial license if you want to:
 2. **Resell WhenTo** as part of your product or service offering
 3. **Use WhenTo beyond your organization's internal use** in a commercial context
 
+## What Does Not Require a Commercial License
+
+The only thing a commercial license buys is the right the Business Source
+License withholds: serving WhenTo to third parties. Running it is free, and
+there is nothing to buy, unlock or activate in order to run it fully.
+
+- **Self-hosting is unrestricted.** No license key, no activation, no calendar
+  limit, and nothing to renew. The software does not check for a license file
+  and has no code path that could refuse to run without one.
+- **The hosted service at whento.be is free of charge.** No paid plan, no
+  subscription and no payment details. Each account may create up to three
+  calendars; that allowance is the same for everyone and is not for sale.
+
+Neither of those is a tier of anything. Self-hosting for yourself or for your
+organization's internal use is covered by the Additional Use Grant in
+[LICENSE](LICENSE) and needs nothing from this document.
+
 ## What's Included
 
 A commercial license grants you:
@@ -63,26 +80,6 @@ Even with a commercial license:
 - ❌ Use for illegal purposes
 - ❌ Resell the commercial license itself
 
-## Self-Hosted Licenses (Ed25519 Cryptographic Licenses)
-
-For self-hosted deployments with increased calendar limits:
-
-| Tier       | Calendar Limit | Price          | Support       |
-| ---------- | -------------- | -------------- | ------------- |
-| Community  | 30 calendars   | FREE           | Community     |
-| Pro        | 300 calendars  | 100€ (+ VAT)   | 1 year email  |
-| Enterprise | Unlimited      | 250€ (+ VAT)   | 2 years email |
-
-**Support renewals**: 60€/year after initial period
-
-These licenses are:
-
-- ✅ Perpetual (no expiration)
-- ✅ Cryptographically signed (Ed25519)
-- ✅ Offline validation (no phone-home)
-
-See [cmd/licensegen/README.md](cmd/licensegen/README.md) for technical details.
-
 ## Term and Termination
 
 - Commercial licenses are valid for 12 months from purchase
@@ -111,7 +108,7 @@ This Agreement shall be governed by the laws of France.
 For commercial licensing inquiries:
 
 - Email: contact@whento.be
-- Website: https://whento.be/pricing
+- Website: https://whento.be
 
 ---
 
