@@ -321,12 +321,19 @@ func SecurityHeaders(next http.Handler) http.Handler {
 			w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
 		}
 
-		// Content Security Policy - restricts resources the page can load
-		// This is a strict policy, adjust based on your needs
+		// Content Security Policy - restricts resources the page can load.
+		//
+		// No external origin is allowed to serve code, styles or fonts. Inter used to
+		// come from fonts.googleapis.com and the two Google hosts were listed here for
+		// it; it is bundled now, so the allowance outlived what it was for. An origin
+		// nobody fetches from is one more place a compromise could serve from.
+		//
+		// 'unsafe-inline' stays in style-src, and is not about fonts: the Swagger UI
+		// handler emits a <style> block and inline style attributes of its own.
 		csp := "default-src 'self'; " +
 			"script-src 'self'; " +
-			"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-			"font-src 'self' https://fonts.gstatic.com; " +
+			"style-src 'self' 'unsafe-inline'; " +
+			"font-src 'self'; " +
 			"img-src 'self' data: https:; " +
 			"connect-src 'self'; " +
 			"frame-ancestors 'none'; " +

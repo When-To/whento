@@ -1097,7 +1097,16 @@ func TestSecurityHeaders(t *testing.T) {
 	// frame-ancestors 'none' is what actually stops framing in modern browsers;
 	// X-Frame-Options above is the fallback for older ones.
 	csp := rec.Header().Get("Content-Security-Policy")
-	for _, directive := range []string{"default-src 'self'", "frame-ancestors 'none'", "base-uri 'self'", "form-action 'self'"} {
+	for _, directive := range []string{
+		"default-src 'self'",
+		"frame-ancestors 'none'",
+		"base-uri 'self'",
+		"form-action 'self'",
+		// Spelled out rather than merely "not Google", so that reintroducing an
+		// external origin has to fail a test rather than pass one by omission.
+		"style-src 'self' 'unsafe-inline'",
+		"font-src 'self'",
+	} {
 		if !strings.Contains(csp, directive) {
 			t.Errorf("the CSP is missing %q: %q", directive, csp)
 		}
@@ -1105,6 +1114,13 @@ func TestSecurityHeaders(t *testing.T) {
 	// A script-src that allowed inline code would make the CSP decorative.
 	if strings.Contains(csp, "script-src 'self' 'unsafe-inline'") {
 		t.Errorf("the CSP allows inline scripts: %q", csp)
+	}
+	// Inter is bundled and served from this origin. Nothing should reach out to
+	// Google — or to any other host — for a stylesheet or a font.
+	for _, host := range []string{"fonts.googleapis.com", "fonts.gstatic.com"} {
+		if strings.Contains(csp, host) {
+			t.Errorf("the CSP still allows %s: %q", host, csp)
+		}
 	}
 }
 
