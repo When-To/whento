@@ -72,6 +72,102 @@ func TestRefreshTokenRoundTrip(t *testing.T) {
 	}
 }
 
+// TestConsumeIsWonByExactlyOneCaller is the property the whole grace window rests on.
+// The UPDATE carries `consumed_at IS NULL`, so two callers presenting the same token
+// cannot both believe they rotated it — which is what lets the loser be told apart from
+// somebody replaying a stolen cookie.
+func TestConsumeIsWonByExactlyOneCaller(t *testing.T) {
+	pool := dbtest.Pool(t)
+	users := repository.NewUserRepository(pool)
+	tokens := repository.NewTokenRepository(pool)
+	ctx := dbtest.Context(t)
+
+	user := newUser(t, pool)
+	if err := users.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	hash := repository.HashToken(uuid.NewString())
+	token := &models.RefreshToken{
+		UserID:    user.ID,
+		TokenHash: hash,
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+	}
+	token.ID = uuid.New()
+	if err := tokens.Create(ctx, token); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	won, err := tokens.Consume(ctx, hash)
+	if err != nil {
+		t.Fatalf("Consume: %v", err)
+	}
+	if !won {
+		t.Fatal("the first caller did not win the rotation")
+	}
+
+	again, err := tokens.Consume(ctx, hash)
+	if err != nil {
+		t.Fatalf("Consume (second): %v", err)
+	}
+	if again {
+		t.Error("a second caller also believed it rotated the token")
+	}
+
+	// The row survives, and says when it was spent. That is what the grace window
+	// reads to tell a racing tab from a replay.
+	stored, err := tokens.GetByHash(ctx, hash)
+	if err != nil {
+		t.Fatalf("GetByHash after Consume: %v", err)
+	}
+	if stored.ConsumedAt == nil {
+		t.Error("the token was rotated but carries no consumed_at")
+	}
+}
+
+// TestDeleteConsumedBeforeSparesLiveTokens keeps the purge from ending sessions. It runs
+// on every refresh, so a predicate that missed would sign people out wholesale.
+func TestDeleteConsumedBeforeSparesLiveTokens(t *testing.T) {
+	pool := dbtest.Pool(t)
+	users := repository.NewUserRepository(pool)
+	tokens := repository.NewTokenRepository(pool)
+	ctx := dbtest.Context(t)
+
+	user := newUser(t, pool)
+	if err := users.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	live := repository.HashToken(uuid.NewString())
+	spent := repository.HashToken(uuid.NewString())
+	for _, hash := range []string{live, spent} {
+		token := &models.RefreshToken{
+			UserID:    user.ID,
+			TokenHash: hash,
+			ExpiresAt: time.Now().Add(24 * time.Hour),
+		}
+		token.ID = uuid.New()
+		if err := tokens.Create(ctx, token); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+	}
+	if _, err := tokens.Consume(ctx, spent); err != nil {
+		t.Fatalf("Consume: %v", err)
+	}
+
+	// A cutoff in the future, so the just-consumed row is unambiguously past it.
+	if err := tokens.DeleteConsumedBefore(ctx, user.ID, time.Now().Add(time.Minute)); err != nil {
+		t.Fatalf("DeleteConsumedBefore: %v", err)
+	}
+
+	if _, err := tokens.GetByHash(ctx, spent); !errors.Is(err, repository.ErrTokenNotFound) {
+		t.Errorf("the consumed token survived the purge: %v", err)
+	}
+	if _, err := tokens.GetByHash(ctx, live); err != nil {
+		t.Errorf("the purge took a live token with it: %v", err)
+	}
+}
+
 func TestUnknownRefreshTokenIsASentinel(t *testing.T) {
 	pool := dbtest.Pool(t)
 	tokens := repository.NewTokenRepository(pool)

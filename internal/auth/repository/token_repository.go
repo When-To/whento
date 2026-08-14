@@ -58,7 +58,7 @@ func (r *TokenRepository) Create(ctx context.Context, token *models.RefreshToken
 // GetByHash retrieves a refresh token by its hash
 func (r *TokenRepository) GetByHash(ctx context.Context, tokenHash string) (*models.RefreshToken, error) {
 	query := `
-		SELECT id, user_id, token_hash, expires_at, created_at
+		SELECT id, user_id, token_hash, expires_at, created_at, consumed_at
 		FROM refresh_tokens
 		WHERE token_hash = $1`
 
@@ -69,6 +69,7 @@ func (r *TokenRepository) GetByHash(ctx context.Context, tokenHash string) (*mod
 		&token.TokenHash,
 		&token.ExpiresAt,
 		&token.CreatedAt,
+		&token.ConsumedAt,
 	)
 
 	if err != nil {
@@ -83,6 +84,45 @@ func (r *TokenRepository) GetByHash(ctx context.Context, tokenHash string) (*mod
 	}
 
 	return token, nil
+}
+
+// Consume marks a refresh token as rotated, and reports whether this call is the one
+// that did it.
+//
+// The `consumed_at IS NULL` in the WHERE clause is what makes concurrent refreshes
+// decidable rather than racy: two callers presenting the same token both run this
+// statement, and exactly one sees a row affected. The loser learns it lost instead of
+// finding the row deleted and having to guess whether that was a race or a replay.
+func (r *TokenRepository) Consume(ctx context.Context, tokenHash string) (bool, error) {
+	query := `
+		UPDATE refresh_tokens
+		SET consumed_at = NOW()
+		WHERE token_hash = $1 AND consumed_at IS NULL`
+
+	result, err := r.pool.Exec(ctx, query, tokenHash)
+	if err != nil {
+		return false, fmt.Errorf("failed to consume token: %w", err)
+	}
+
+	return result.RowsAffected() == 1, nil
+}
+
+// DeleteConsumedBefore drops a user's spent tokens once they are past the grace window.
+//
+// Without it the table would keep one row per refresh — roughly one every fifteen
+// minutes per active session — for the seven days until it expired. They are of no use
+// after the window: a replay that late is answered by revoking the whole family, which
+// does not need the individual row to say so.
+func (r *TokenRepository) DeleteConsumedBefore(ctx context.Context, userID uuid.UUID, cutoff time.Time) error {
+	query := `
+		DELETE FROM refresh_tokens
+		WHERE user_id = $1 AND consumed_at IS NOT NULL AND consumed_at < $2`
+
+	if _, err := r.pool.Exec(ctx, query, userID, cutoff); err != nil {
+		return fmt.Errorf("failed to purge consumed tokens: %w", err)
+	}
+
+	return nil
 }
 
 // DeleteByHash deletes a refresh token by its hash

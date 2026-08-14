@@ -40,6 +40,10 @@ type contextTokenRepo struct {
 
 	creates   int
 	createCtx context.Context
+	// persisted counts the writes that actually landed. Row counts are no longer a
+	// proxy for that: rotation consumes the previous token rather than deleting it,
+	// so a refresh leaves the old row in place on purpose.
+	persisted int
 }
 
 var _ TokenRepository = (*contextTokenRepo)(nil)
@@ -52,7 +56,22 @@ func (r *contextTokenRepo) Create(ctx context.Context, token *models.RefreshToke
 		return err
 	}
 
-	return r.fakeTokenRepo.Create(ctx, token)
+	if err := r.fakeTokenRepo.Create(ctx, token); err != nil {
+		return err
+	}
+	r.persisted++
+
+	return nil
+}
+
+// Consume refuses on a dead context, as the pgx-backed Exec would. Without this the
+// fake would rotate a token for a request that no longer exists.
+func (r *contextTokenRepo) Consume(ctx context.Context, hash string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+
+	return r.fakeTokenRepo.Consume(ctx, hash)
 }
 
 type contextFixture struct {
@@ -230,8 +249,8 @@ func TestAuthFlowsAbortTheRefreshTokenWriteOnADeadContext(t *testing.T) {
 					if !errors.Is(err, dead.want) {
 						t.Errorf("error = %v, want it to wrap %v", err, dead.want)
 					}
-					if len(f.tokens.stored) != 0 {
-						t.Errorf("%d refresh token(s) persisted despite the dead context", len(f.tokens.stored))
+					if f.tokens.persisted != 0 {
+						t.Errorf("%d refresh token(s) persisted despite the dead context", f.tokens.persisted)
 					}
 				})
 			}
@@ -259,8 +278,8 @@ func TestAuthFlowsStoreTheRefreshTokenUnderTheRequestContext(t *testing.T) {
 				t.Errorf("Create ran under a context carrying %v, want %q: the request context was not propagated",
 					got, requestCtxMarker)
 			}
-			if len(f.tokens.stored) != 1 {
-				t.Errorf("%d refresh token(s) stored, want 1", len(f.tokens.stored))
+			if f.tokens.persisted != 1 {
+				t.Errorf("%d refresh token(s) persisted, want 1", f.tokens.persisted)
 			}
 		})
 	}

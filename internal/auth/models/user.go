@@ -48,6 +48,10 @@ type RefreshToken struct {
 	TokenHash string    `json:"-"`
 	ExpiresAt time.Time `json:"expires_at"`
 	CreatedAt time.Time `json:"created_at"`
+	// ConsumedAt is nil while the token is live, and set at the moment rotation
+	// replaced it. A consumed token is not simply gone: presented again inside the
+	// grace window it is a racing client, and outside it, a replay.
+	ConsumedAt *time.Time `json:"-"`
 }
 
 // IsAdmin checks if user has admin role
