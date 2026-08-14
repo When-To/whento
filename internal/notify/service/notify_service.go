@@ -534,7 +534,7 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 			"is_owner", recipient.IsOwner,
 			"personalised_link", recipient.ParticipantID != nil)
 
-		if err := s.sendEmailNotification(ctx, recipient.Email, recipient.Name, htmlMessage, recipient.Locale, true); err != nil {
+		if err := s.sendEmailNotification(recipient.Email, htmlMessage, recipient.Locale, true); err != nil {
 			s.logger.Error("Failed to send email",
 				"recipient_ref", recipientRef,
 				"recipient_id_ref", recipientIDRef,
@@ -696,8 +696,11 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 		cancelButton = fmt.Sprintf(`<a href="%s" class="btn btn-danger">%s</a>`, cancelURL, cancelButtonText)
 	}
 
-	// Build HTML with clickable calendar link and conditional cancel button
-	html := fmt.Sprintf(`
+	// Build HTML with clickable calendar link and conditional cancel button.
+	// Named `body`, not `html`: the latter shadows the imported html package for the
+	// rest of the function, so the next person to reach for html.EscapeString below
+	// this line gets a confusing type error instead.
+	body := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
 <head>
@@ -783,14 +786,15 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 </html>
 	`, emoji, messageText, calendarLabel, html.EscapeString(calendar.Name), dateLabel, dateStr, participantsLabel, transition.NewCount, transition.Threshold, participantListHTML, calendarURL, viewButton, cancelButton)
 
-	return html
+	return body
 }
 
-// sendEmailNotification sends email notification
+// sendEmailNotification sends email notification.
+//
+// It takes neither a context nor a recipient name: email.Send has no context to give
+// one to, and the subject is chosen by locale alone. Both were carried unread.
 func (s *NotifyService) sendEmailNotification(
-	ctx context.Context,
 	to string,
-	name string,
 	message string,
 	locale string,
 	isHTML bool,
