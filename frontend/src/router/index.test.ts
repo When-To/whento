@@ -25,7 +25,7 @@ const authApi = {
 const apiClient = {
   setToken: vi.fn(),
   clearToken: vi.fn(),
-  loadToken: vi.fn(),
+  hasSession: vi.fn(() => false),
 };
 
 vi.mock('@/api/auth', () => ({ authApi }));
@@ -72,6 +72,9 @@ async function navigate(to: RouteLocationNormalized) {
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  // clearAllMocks clears calls, not implementations: without this a test that
+  // opts into a session leaves every later test signed in.
+  apiClient.hasSession.mockReturnValue(false);
   setActivePinia(createPinia());
 });
 
@@ -125,7 +128,7 @@ describe('authGuard', () => {
       // gave up after fifty attempts. A slow `/auth/me` therefore either blocked
       // navigation for five seconds or, worse, timed out and evaluated `requiresAuth`
       // against an empty store — bouncing a signed-in user to /login.
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       const gate = deferred<User>();
       authApi.getMe.mockReturnValue(gate.promise);
 
@@ -144,7 +147,7 @@ describe('authGuard', () => {
     });
 
     it('lets a slow restore through however long it takes', async () => {
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       const gate = deferred<User>();
       authApi.getMe.mockReturnValue(gate.promise);
 
@@ -164,7 +167,7 @@ describe('authGuard', () => {
     });
 
     it('starts the restore itself when main.ts has not', async () => {
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       authApi.getMe.mockResolvedValue(USER);
 
       await navigate(target({ requiresAuth: true }, '/dashboard'));
@@ -174,7 +177,7 @@ describe('authGuard', () => {
     });
 
     it('does not re-restore on a second navigation', async () => {
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       authApi.getMe.mockResolvedValue(USER);
 
       await navigate(target({ requiresAuth: true }, '/dashboard'));
@@ -195,7 +198,7 @@ describe('authGuard', () => {
     });
 
     it('lets a signed-in user through', async () => {
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       authApi.getMe.mockResolvedValue(USER);
 
       const next = await navigate(target({ requiresAuth: true }, '/dashboard'));
@@ -204,7 +207,7 @@ describe('authGuard', () => {
     });
 
     it('redirects when the stored token turns out to be stale', async () => {
-      localStorage.setItem('access_token', 'stale');
+      apiClient.hasSession.mockReturnValue(true);
       authApi.getMe.mockRejectedValue({ code: 'UNAUTHORIZED' });
 
       const next = await navigate(target({ requiresAuth: true }, '/dashboard'));
@@ -218,7 +221,7 @@ describe('authGuard', () => {
 
   describe('requiresAdmin', () => {
     it('sends a non-admin back to the dashboard', async () => {
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       authApi.getMe.mockResolvedValue(USER);
 
       const next = await navigate(target({ requiresAuth: true, requiresAdmin: true }, '/admin'));
@@ -227,7 +230,7 @@ describe('authGuard', () => {
     });
 
     it('lets an admin through', async () => {
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       authApi.getMe.mockResolvedValue(ADMIN);
 
       const next = await navigate(target({ requiresAuth: true, requiresAdmin: true }, '/admin'));
@@ -244,7 +247,7 @@ describe('authGuard', () => {
 
   describe('hideForAuth', () => {
     it('keeps a signed-in user off the login page', async () => {
-      localStorage.setItem('access_token', 'stored');
+      apiClient.hasSession.mockReturnValue(true);
       authApi.getMe.mockResolvedValue(USER);
 
       const next = await navigate(target({ public: true, hideForAuth: true }, '/login'));
@@ -278,7 +281,7 @@ describe('authGuard', () => {
   });
 
   it('calls next exactly once on every path', async () => {
-    localStorage.setItem('access_token', 'stored');
+    apiClient.hasSession.mockReturnValue(true);
     authApi.getMe.mockResolvedValue(USER);
 
     for (const meta of [

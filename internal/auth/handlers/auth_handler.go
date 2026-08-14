@@ -211,6 +211,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Same as Login: the refresh token is generated and stored either way, and
+	// without the cookie a freshly registered account had nothing to restore its
+	// session from once the access token stopped being persisted.
+	if resp.RefreshToken != "" {
+		setRefreshTokenCookie(w, r, resp.RefreshToken)
+		resp.RefreshToken = ""
+	}
+
 	httputil.JSON(w, http.StatusCreated, resp)
 }
 
