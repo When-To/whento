@@ -185,7 +185,7 @@ async function handleVerify() {
     authStore.clearTempToken();
 
     // Store real JWT tokens
-    authStore.setTokens(response.access_token);
+    authStore.setTokens(response.access_token, response.expires_in);
     authStore.user = response.user;
 
     // Redirect to dashboard

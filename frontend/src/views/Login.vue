@@ -410,7 +410,7 @@ async function loginWithDiscoverablePasskey() {
 
     // Store tokens in auth store
     if (response.access_token) {
-      authStore.setTokens(response.access_token);
+      authStore.setTokens(response.access_token, response.expires_in);
       authStore.user = response.user;
     }
 

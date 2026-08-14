@@ -43,7 +43,7 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await authApi.register(data);
       user.value = response.user;
       if (response.access_token) {
-        apiClient.setToken(response.access_token);
+        apiClient.setToken(response.access_token, response.expires_in);
       }
       return response;
     });
@@ -66,7 +66,7 @@ export const useAuthStore = defineStore('auth', () => {
 
         user.value = response.user;
         if (response.access_token) {
-          apiClient.setToken(response.access_token);
+          apiClient.setToken(response.access_token, response.expires_in);
         }
         return response;
       },
@@ -127,7 +127,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Auto-login after successful reset
       user.value = response.user;
       if (response.access_token) {
-        apiClient.setToken(response.access_token);
+        apiClient.setToken(response.access_token, response.expires_in);
       }
 
       return response;
@@ -135,8 +135,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // Set tokens directly (for MFA verification and passkey login)
-  function setTokens(accessToken: string) {
-    apiClient.setToken(accessToken);
+  function setTokens(accessToken: string, expiresIn?: number) {
+    apiClient.setToken(accessToken, expiresIn);
     // Note: refresh_token is httpOnly cookie, handled by backend
   }
 

@@ -262,6 +262,14 @@ var sharedKey *rsa.PrivateKey
 func testJWT(t *testing.T) *jwt.Manager {
 	t.Helper()
 
+	return testJWTWithExpiry(t, 15*time.Minute)
+}
+
+// testJWTWithExpiry builds a manager whose access tokens live for a chosen duration, so
+// a test can tell a value read from the configuration apart from one written in.
+func testJWTWithExpiry(t *testing.T, accessExpiry time.Duration) *jwt.Manager {
+	t.Helper()
+
 	if sharedKey == nil {
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
@@ -296,7 +304,7 @@ func testJWT(t *testing.T) *jwt.Manager {
 	manager, err := jwt.NewManager(&jwt.Config{
 		PrivateKeyPath: privatePath,
 		PublicKeyPath:  publicPath,
-		AccessExpiry:   15 * time.Minute,
+		AccessExpiry:   accessExpiry,
 		RefreshExpiry:  7 * 24 * time.Hour,
 		Issuer:         "whento-test",
 	})
@@ -704,6 +712,36 @@ func TestRefreshTokenRotates(t *testing.T) {
 	// The old one is deleted, so replaying it fails.
 	if _, err := fixture.service.RefreshToken(context.Background(), first.RefreshToken); !errors.Is(err, ErrInvalidToken) {
 		t.Errorf("the spent refresh token was accepted again: %v", err)
+	}
+}
+
+// TestExpiresInDescribesTheTokenItCameWith guards a value the client now schedules
+// against. The field used to be a literal 900, which agreed with the token's real
+// lifetime only at the default setting — an instance configuring JWT_ACCESS_EXPIRY got
+// a number describing a token it had never issued, and a client refreshing off it would
+// have aimed at the wrong moment. Deliberately not 15 minutes, so the old constant
+// would fail this.
+func TestExpiresInDescribesTheTokenItCameWith(t *testing.T) {
+	const accessExpiry = 5 * time.Minute
+
+	manager := testJWTWithExpiry(t, accessExpiry)
+	users := newFakeUserRepo()
+	service := NewAuthService(
+		users, newFakeTokenRepo(), &fakeMFARepo{}, manager, newCountingCache(),
+		bcrypt.MinCost, true, []string{"*"},
+	)
+
+	resp, err := service.Register(context.Background(), &models.RegisterRequest{
+		Email:       "expiry@example.test",
+		Password:    "Str0ng!Passw0rd",
+		DisplayName: "Expiry",
+	})
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	if want := int64(accessExpiry.Seconds()); resp.ExpiresIn != want {
+		t.Errorf("ExpiresIn = %d, want %d — the field does not follow JWT_ACCESS_EXPIRY", resp.ExpiresIn, want)
 	}
 }
 
