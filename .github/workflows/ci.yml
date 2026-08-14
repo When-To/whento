@@ -631,9 +631,7 @@ jobs:
     # Dependabot pull requests run with a read-only GITHUB_TOKEN whatever the
     # permissions block says, so pushing to ghcr would always fail. Skip the
     # job for them rather than let a dependency bump show a red CI.
-    if: >-
-      (github.ref != 'refs/heads/main' || github.event_name == 'workflow_dispatch')
-      && github.actor != 'dependabot[bot]'
+    if: github.actor != 'dependabot[bot]'
     needs: [build-frontend, generate-swagger, test-backend]
     permissions:
       contents: read
