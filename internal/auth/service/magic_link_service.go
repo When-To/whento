@@ -12,9 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html"
 	"log/slog"
-	"strings"
 	"text/template"
 	"time"
 
@@ -183,7 +181,7 @@ func (s *MagicLinkService) sendMagicLinkEmail(to, displayName, locale, token str
 	// Prepare template data
 	data := map[string]string{
 		"Subject":        trans["subject"],
-		"Greeting":       replaceVar(trans["greeting"], "DisplayName", displayName),
+		"Greeting":       email.ReplaceVar(trans["greeting"], "DisplayName", displayName),
 		"Intro":          trans["intro"],
 		"CTAInstruction": trans["cta_instruction"],
 		"CTAButton":      trans["cta_button"],
@@ -214,10 +212,4 @@ func (s *MagicLinkService) sendMagicLinkEmail(to, displayName, locale, token str
 	} else {
 		s.logger.Info("Magic link email sent", "recipient_ref", pkglog.Fingerprint(to), "locale", locale)
 	}
-}
-
-// replaceVar replaces {{.VarName}} with HTML-escaped value in a string
-func replaceVar(str, varName, value string) string {
-	placeholder := "{{." + varName + "}}"
-	return strings.ReplaceAll(str, placeholder, html.EscapeString(value))
 }

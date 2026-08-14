@@ -354,28 +354,3 @@ func TestParticipantEmailResendVerification(t *testing.T) {
 		})
 	}
 }
-
-// TestReplaceVar covers the tiny substitution the templates rely on, including the
-// escaping that keeps a participant's name from becoming markup.
-func TestReplaceVar(t *testing.T) {
-	tests := []struct {
-		name  string
-		in    string
-		vari  string
-		value string
-		want  string
-	}{
-		{name: "substitutes", in: "Hi {{.ParticipantName}}", vari: "ParticipantName", value: "Ada", want: "Hi Ada"},
-		{name: "escapes", in: "Hi {{.ParticipantName}}", vari: "ParticipantName", value: "<b>", want: "Hi &lt;b&gt;"},
-		{name: "leaves other placeholders alone", in: "Hi {{.Other}}", vari: "ParticipantName", value: "Ada", want: "Hi {{.Other}}"},
-		{name: "substitutes every occurrence", in: "{{.X}}/{{.X}}", vari: "X", value: "a", want: "a/a"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := replaceVar(tt.in, tt.vari, tt.value); got != tt.want {
-				t.Errorf("replaceVar() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}

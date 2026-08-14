@@ -12,9 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html"
 	"log/slog"
-	"strings"
 	"text/template"
 	"time"
 
@@ -234,12 +232,12 @@ func (s *ParticipantEmailService) sendVerificationEmail(
 	expiryDuration := s.cfg.Email.VerificationExpiry.String()
 	data := map[string]string{
 		"Subject":         trans["subject"],
-		"Greeting":        replaceVar(trans["greeting"], "ParticipantName", name),
+		"Greeting":        email.ReplaceVar(trans["greeting"], "ParticipantName", name),
 		"Intro":           trans["intro"],
 		"CTAInstruction":  trans["cta_instruction"],
 		"CTAButton":       trans["cta_button"],
 		"OrCopy":          trans["or_copy"],
-		"ExpiryNotice":    replaceVar(trans["expiry_notice"], "ExpiryDuration", expiryDuration),
+		"ExpiryNotice":    email.ReplaceVar(trans["expiry_notice"], "ExpiryDuration", expiryDuration),
 		"SecurityNotice":  trans["security_notice"],
 		"Signature":       trans["signature"],
 		"VerificationURL": verificationURL,
@@ -265,10 +263,4 @@ func (s *ParticipantEmailService) sendVerificationEmail(
 	s.logger.Info("Participant verification email sent",
 		"recipient_ref", pkglog.Fingerprint(to), "locale", locale)
 	return nil
-}
-
-// replaceVar replaces {{.VarName}} with HTML-escaped value in a string
-func replaceVar(str, varName, value string) string {
-	placeholder := "{{." + varName + "}}"
-	return strings.ReplaceAll(str, placeholder, html.EscapeString(value))
 }

@@ -12,9 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html"
 	"log/slog"
-	"strings"
 	"text/template"
 	"time"
 
@@ -262,12 +260,12 @@ func (s *PasswordResetService) sendPasswordResetEmail(user *models.User, resetUR
 	expiryDuration := passwordResetTokenExpiry.String()
 	data := map[string]string{
 		"Subject":        trans["subject"],
-		"Greeting":       replaceVarPR(trans["greeting"], "DisplayName", user.DisplayName),
+		"Greeting":       email.ReplaceVar(trans["greeting"], "DisplayName", user.DisplayName),
 		"Intro":          trans["intro"],
 		"CTAInstruction": trans["cta_instruction"],
 		"CTAButton":      trans["cta_button"],
 		"OrCopy":         trans["or_copy"],
-		"ExpiryNotice":   replaceVarPR(trans["expiry_notice"], "ExpiryDuration", expiryDuration),
+		"ExpiryNotice":   email.ReplaceVar(trans["expiry_notice"], "ExpiryDuration", expiryDuration),
 		"SecurityNotice": trans["security_notice"],
 		"Signature":      trans["signature"],
 		"ResetURL":       resetURL,
@@ -292,12 +290,6 @@ func (s *PasswordResetService) sendPasswordResetEmail(user *models.User, resetUR
 
 	s.logger.Info("Password reset email sent", "user_id", user.ID, "locale", user.Locale)
 	return nil
-}
-
-// replaceVarPR replaces {{.VarName}} with HTML-escaped value in a string
-func replaceVarPR(str, varName, value string) string {
-	placeholder := "{{." + varName + "}}"
-	return strings.ReplaceAll(str, placeholder, html.EscapeString(value))
 }
 
 // toUserResponse converts User to UserResponse

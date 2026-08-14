@@ -11,10 +11,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html"
 	"log/slog"
 	"net/http"
-	"strings"
 	"text/template"
 	"time"
 
@@ -222,12 +220,12 @@ func (h *EmailVerificationHandler) sendVerificationEmail(to, displayName, locale
 	expiryDuration := h.cfg.Email.VerificationExpiry.String()
 	data := map[string]string{
 		"Subject":         trans["subject"],
-		"Greeting":        replaceVarEV(trans["greeting"], "DisplayName", displayName),
+		"Greeting":        email.ReplaceVar(trans["greeting"], "DisplayName", displayName),
 		"Intro":           trans["intro"],
 		"CTAInstruction":  trans["cta_instruction"],
 		"CTAButton":       trans["cta_button"],
 		"OrCopy":          trans["or_copy"],
-		"ExpiryNotice":    replaceVarEV(trans["expiry_notice"], "ExpiryDuration", expiryDuration),
+		"ExpiryNotice":    email.ReplaceVar(trans["expiry_notice"], "ExpiryDuration", expiryDuration),
 		"SecurityNotice":  trans["security_notice"],
 		"Signature":       trans["signature"],
 		"VerificationURL": verificationURL,
@@ -252,10 +250,4 @@ func (h *EmailVerificationHandler) sendVerificationEmail(to, displayName, locale
 
 	h.logger.Info("Verification email sent", "recipient_ref", pkglog.Fingerprint(to), "locale", locale)
 	return nil
-}
-
-// replaceVarEV replaces {{.VarName}} with HTML-escaped value in a string
-func replaceVarEV(str, varName, value string) string {
-	placeholder := "{{." + varName + "}}"
-	return strings.ReplaceAll(str, placeholder, html.EscapeString(value))
 }
