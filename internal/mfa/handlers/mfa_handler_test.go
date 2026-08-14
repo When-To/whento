@@ -263,6 +263,12 @@ func (s *stubAuthTokenRepo) GetByHash(context.Context, string) (*authModels.Refr
 func (s *stubAuthTokenRepo) DeleteByHash(context.Context, string) error      { return nil }
 func (s *stubAuthTokenRepo) DeleteByUserID(context.Context, uuid.UUID) error { return nil }
 
+func (s *stubAuthTokenRepo) Consume(context.Context, string) (bool, error) { return true, nil }
+
+func (s *stubAuthTokenRepo) DeleteConsumedBefore(context.Context, uuid.UUID, time.Time) error {
+	return nil
+}
+
 type stubAuthMFARepo struct{ record *models.UserMFA }
 
 func (s *stubAuthMFARepo) GetByUserID(context.Context, uuid.UUID) (*models.UserMFA, error) {

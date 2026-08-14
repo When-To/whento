@@ -182,6 +182,30 @@ func (f *fakeTokenRepo) DeleteByUserID(_ context.Context, userID uuid.UUID) erro
 	return nil
 }
 
+// Consume mirrors the SQL: the UPDATE carries `consumed_at IS NULL`, so only the first
+// caller sees a row affected and the rest learn they lost the race.
+func (f *fakeTokenRepo) Consume(_ context.Context, hash string) (bool, error) {
+	token, ok := f.stored[hash]
+	if !ok || token.ConsumedAt != nil {
+		return false, nil
+	}
+
+	now := time.Now()
+	token.ConsumedAt = &now
+
+	return true, nil
+}
+
+func (f *fakeTokenRepo) DeleteConsumedBefore(_ context.Context, userID uuid.UUID, cutoff time.Time) error {
+	for hash, token := range f.stored {
+		if token.UserID == userID && token.ConsumedAt != nil && token.ConsumedAt.Before(cutoff) {
+			delete(f.stored, hash)
+		}
+	}
+
+	return nil
+}
+
 type fakeMFARepo struct {
 	mfa *mfaModels.UserMFA
 	err error
@@ -701,9 +725,97 @@ func TestRefreshTokenRotates(t *testing.T) {
 	if second.RefreshToken == first.RefreshToken {
 		t.Error("the refresh token was not rotated")
 	}
-	// The old one is deleted, so replaying it fails.
+}
+
+// TestRefreshTokenToleratesARace is the reason the grace window exists. Two tabs waking
+// together, or a retry after a lost response, both present the token that was just
+// rotated. Rotation used to delete the row, so the second one found nothing and the user
+// was signed out of a perfectly good session.
+func TestRefreshTokenToleratesARace(t *testing.T) {
+	fixture := newFixture(t, nil)
+	user := fixture.withUser(t, "user@example.com", "Str0ng!Passw0rd", models.RoleUser)
+
+	first, err := fixture.service.Login(context.Background(), &models.LoginRequest{
+		Email: user.Email, Password: "Str0ng!Passw0rd",
+	})
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+
+	if _, err := fixture.service.RefreshToken(context.Background(), first.RefreshToken); err != nil {
+		t.Fatalf("the first refresh failed: %v", err)
+	}
+
+	// The straggler, moments later.
+	late, err := fixture.service.RefreshToken(context.Background(), first.RefreshToken)
+	if err != nil {
+		t.Fatalf("a refresh inside the grace window was refused: %v", err)
+	}
+	if late.AccessToken == "" {
+		t.Error("the racing caller got no access token")
+	}
+	// Tolerating the race must not mean tolerating the reuse it is meant to catch.
+	if len(fixture.tokens.deletedByUserIDs) != 0 {
+		t.Error("a race inside the window revoked the user's sessions")
+	}
+}
+
+// TestRefreshTokenDetectsReuse is the other half. A token used, superseded, and used
+// again well after the fact is not a race — nothing legitimate does that — so the
+// assumption is that the cookie is in someone else's hands.
+func TestRefreshTokenDetectsReuse(t *testing.T) {
+	fixture := newFixture(t, nil)
+	user := fixture.withUser(t, "user@example.com", "Str0ng!Passw0rd", models.RoleUser)
+
+	first, err := fixture.service.Login(context.Background(), &models.LoginRequest{
+		Email: user.Email, Password: "Str0ng!Passw0rd",
+	})
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+
+	if _, err := fixture.service.RefreshToken(context.Background(), first.RefreshToken); err != nil {
+		t.Fatalf("the first refresh failed: %v", err)
+	}
+
+	// Age the consumption past the window rather than sleeping through it.
+	stale := time.Now().Add(-refreshGraceWindow - time.Second)
+	fixture.tokens.stored[repository.HashToken(first.RefreshToken)].ConsumedAt = &stale
+
 	if _, err := fixture.service.RefreshToken(context.Background(), first.RefreshToken); !errors.Is(err, ErrInvalidToken) {
-		t.Errorf("the spent refresh token was accepted again: %v", err)
+		t.Errorf("a replayed refresh token was accepted: %v", err)
+	}
+	// Refusing this one request is not enough: whoever holds the cookie would simply
+	// wait for the next rotation. Every session the user has goes.
+	if len(fixture.tokens.deletedByUserIDs) != 1 || fixture.tokens.deletedByUserIDs[0] != user.ID {
+		t.Errorf("reuse did not revoke the user's sessions: %v", fixture.tokens.deletedByUserIDs)
+	}
+}
+
+// TestRefreshTokenChecksOwnershipBeforeWriting guards an ordering that used to be the
+// other way round: the row was deleted and only then checked against the user, so a
+// token belonging to somebody else was destroyed on its way to being rejected.
+func TestRefreshTokenChecksOwnershipBeforeWriting(t *testing.T) {
+	fixture := newFixture(t, nil)
+	owner := fixture.withUser(t, "owner@example.com", "Str0ng!Passw0rd", models.RoleUser)
+
+	issued, err := fixture.service.Login(context.Background(), &models.LoginRequest{
+		Email: owner.Email, Password: "Str0ng!Passw0rd",
+	})
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+
+	// Re-point the stored row at a different user, so the token no longer matches the
+	// subject of its own JWT.
+	hash := repository.HashToken(issued.RefreshToken)
+	fixture.tokens.stored[hash].UserID = uuid.New()
+
+	if _, err := fixture.service.RefreshToken(context.Background(), issued.RefreshToken); !errors.Is(err, ErrInvalidToken) {
+		t.Errorf("a token belonging to another user was accepted: %v", err)
+	}
+	if fixture.tokens.stored[hash].ConsumedAt != nil {
+		t.Error("the token was consumed before the ownership check")
 	}
 }
 

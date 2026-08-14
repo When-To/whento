@@ -6,6 +6,7 @@ package handlers_test
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -118,6 +119,14 @@ func (m *mockTokenRepository) DeleteByHash(ctx context.Context, tokenHash string
 }
 
 func (m *mockTokenRepository) DeleteByUserID(ctx context.Context, userID uuid.UUID) error {
+	return m.err
+}
+
+func (m *mockTokenRepository) Consume(context.Context, string) (bool, error) {
+	return m.err == nil, m.err
+}
+
+func (m *mockTokenRepository) DeleteConsumedBefore(context.Context, uuid.UUID, time.Time) error {
 	return m.err
 }
 

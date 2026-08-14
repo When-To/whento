@@ -15,6 +15,7 @@ import (
 
 	"github.com/whento/pkg/cache"
 	"github.com/whento/pkg/jwt"
+	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/auth/repository"
@@ -59,9 +60,20 @@ type UserRepository interface {
 type TokenRepository interface {
 	Create(ctx context.Context, token *models.RefreshToken) error
 	GetByHash(ctx context.Context, tokenHash string) (*models.RefreshToken, error)
+	// Consume marks a token rotated and reports whether this call won the race.
+	Consume(ctx context.Context, tokenHash string) (bool, error)
+	DeleteConsumedBefore(ctx context.Context, userID uuid.UUID, cutoff time.Time) error
 	DeleteByHash(ctx context.Context, tokenHash string) error
 	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
 }
+
+// refreshGraceWindow is how long a rotated refresh token keeps working.
+//
+// Long enough to cover what honest clients actually do — two tabs waking together, a
+// retry after a response was lost, a tab restored from sleep — and far too short to be
+// a useful window for someone replaying a stolen cookie, who has no reason to be within
+// seconds of the legitimate holder.
+const refreshGraceWindow = 30 * time.Second
 
 // MFARepository defines the interface for MFA repository operations
 type MFARepository interface {
@@ -231,7 +243,16 @@ func (s *AuthService) incrementLoginAttempts(ctx context.Context, key string) {
 	_ = s.cache.Set(ctx, key, attempts, loginLockoutWindow)
 }
 
-// RefreshToken refreshes the access token using a refresh token
+// RefreshToken rotates a refresh token, tolerating a racing client and refusing a
+// replay.
+//
+// Rotation used to delete the row, which made the two indistinguishable: a second
+// caller found nothing and was signed out, whether it was the user's other tab or
+// somebody with a stolen cookie. Consuming the row keeps the difference legible.
+//
+//	live                      → rotate
+//	consumed, inside window   → rotate again; this is the other tab, or a retry
+//	consumed, outside window  → reuse: revoke every session this user has
 func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*models.AuthResponse, error) {
 	// Validate refresh token format
 	userID, err := s.jwtManager.ValidateRefreshToken(refreshToken)
@@ -253,12 +274,42 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*m
 		return nil, ErrUserNotFound
 	}
 
-	// Delete old refresh token
-	_ = s.tokenRepo.DeleteByHash(ctx, tokenHash)
-
-	// Verify stored token matches user
+	// Verify stored token matches user, before anything is written. The previous
+	// order deleted first and checked after, so a token belonging to somebody else
+	// was destroyed on the way to being rejected.
 	if storedToken.UserID != user.ID {
 		return nil, ErrInvalidToken
+	}
+
+	if storedToken.ConsumedAt != nil {
+		if time.Since(*storedToken.ConsumedAt) > refreshGraceWindow {
+			// Used, superseded, and used again. No honest client does that, so the
+			// cookie is assumed to be in someone else's hands and every session goes.
+			// The user signs in again; whoever else held it gets nothing.
+			if err := s.tokenRepo.DeleteByUserID(ctx, user.ID); err != nil {
+				logger.FromContext(ctx).Error("failed to revoke sessions after refresh token reuse",
+					"error", err, "user_ref", logger.Fingerprint(user.ID.String()))
+			}
+			// The one place a stolen refresh cookie becomes visible. Warn, not Info:
+			// somebody should be able to alert on it.
+			logger.FromContext(ctx).Warn("refresh token reused after rotation; revoked every session for the user",
+				"user_ref", logger.Fingerprint(user.ID.String()),
+				"consumed_ago", time.Since(*storedToken.ConsumedAt).String())
+
+			return nil, ErrInvalidToken
+		}
+		// Inside the window: the other tab beat this one to it by a moment. Issuing a
+		// fresh pair is what keeps both of them signed in. Returning the *same* pair
+		// is not an option — only the hash was ever stored.
+	} else if _, err := s.tokenRepo.Consume(ctx, tokenHash); err != nil {
+		return nil, fmt.Errorf("failed to consume refresh token: %w", err)
+	}
+
+	// Spent tokens past the window are of no further use; dropping them here keeps
+	// the table from growing by one row per refresh for the life of the session.
+	if err := s.tokenRepo.DeleteConsumedBefore(ctx, user.ID, time.Now().Add(-refreshGraceWindow)); err != nil {
+		logger.FromContext(ctx).Error("failed to purge consumed refresh tokens",
+			"error", err, "user_ref", logger.Fingerprint(user.ID.String()))
 	}
 
 	// Generate new tokens
