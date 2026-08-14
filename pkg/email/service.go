@@ -281,7 +281,20 @@ func (s *Service) buildMessage(email Email) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("smtp: invalid recipient address: %w", err)
 		}
-		recipients = append(recipients, parsed.String())
+		// ParseAddress cannot return a CR or LF in either field — it would not have
+		// parsed. Checked anyway, because the cost is a comparison and the thing on
+		// the other side of it is an attacker-authored Bcc header.
+		if strings.ContainsAny(parsed.Name, "\r\n") || strings.ContainsAny(parsed.Address, "\r\n") {
+			return nil, fmt.Errorf("smtp: invalid recipient address")
+		}
+		// Bare mailboxes only. Every caller passes an address a user typed into a
+		// validated field — never "Name <addr>" — so refusing the display-name form
+		// costs nothing and keeps free text out of the To header entirely. A caller
+		// that wants to personalise has the body for it.
+		if parsed.Name != "" {
+			return nil, fmt.Errorf("smtp: recipient must be a bare address, not a display name")
+		}
+		recipients = append(recipients, parsed.Address)
 	}
 
 	subject, err := encodeHeaderValue(email.Subject)

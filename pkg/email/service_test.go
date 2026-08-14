@@ -460,6 +460,22 @@ func TestBuildMessageRefusesHeaderInjection(t *testing.T) {
 			},
 		},
 		{
+			// A display name is free text, and free text has no business in a header
+			// when every caller has a validated bare address to hand.
+			name: "a recipient carrying a display name",
+			email: Email{
+				To:      []string{`"Ada" <ada@example.test>`},
+				Subject: "Hello",
+			},
+		},
+		{
+			name: "a display name is not a way to smuggle a header either",
+			email: Email{
+				To:      []string{`"Ada\r\nBcc: victim@example.test" <ada@example.test>`},
+				Subject: "Hello",
+			},
+		},
+		{
 			name:  "no recipient",
 			email: Email{Subject: "Hello"},
 		},
@@ -502,7 +518,7 @@ func TestBuildMessageHeaders(t *testing.T) {
 		}
 
 		want := "From: \"WhenTo\" <calendar@example.test>\r\n" +
-			"To: <ada@example.test>, <grace@example.test>\r\n" +
+			"To: ada@example.test, grace@example.test\r\n" +
 			"Subject: Verify your WhenTo email address\r\n" +
 			"MIME-Version: 1.0\r\n" +
 			"Content-Type: text/html; charset=UTF-8\r\n" +
