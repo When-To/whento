@@ -13,11 +13,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
+	"html/template"
 	"log/slog"
 	"net/http"
-	"strings"
-	"text/template"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -239,16 +237,20 @@ func (h *AuthHandler) sendVerificationEmail(to, displayName, locale, token strin
 
 	// Prepare template data
 	expiryDuration := h.cfg.Email.VerificationExpiry.String()
-	data := map[string]string{
-		"Subject":         trans["subject"],
-		"Greeting":        replaceVar(trans["greeting"], "DisplayName", displayName),
-		"Intro":           trans["intro"],
-		"CTAInstruction":  trans["cta_instruction"],
-		"CTAButton":       trans["cta_button"],
-		"OrCopy":          trans["or_copy"],
-		"ExpiryNotice":    replaceVar(trans["expiry_notice"], "ExpiryDuration", expiryDuration),
-		"SecurityNotice":  trans["security_notice"],
-		"Signature":       trans["signature"],
+	data := map[string]any{
+		"Subject":        trans["subject"],
+		"Greeting":       email.ReplaceVar(trans["greeting"], "DisplayName", displayName),
+		"Intro":          trans["intro"],
+		"CTAInstruction": trans["cta_instruction"],
+		"CTAButton":      trans["cta_button"],
+		"OrCopy":         trans["or_copy"],
+		"ExpiryNotice":   email.ReplaceVar(trans["expiry_notice"], "ExpiryDuration", expiryDuration),
+		"SecurityNotice": trans["security_notice"],
+		// The one locale string holding deliberate markup: the signature ends with a
+		// <br> between the sign-off and the team name. Everything else in this map is a
+		// plain string, so html/template escapes it — which is exactly what has to
+		// happen to a display name.
+		"Signature":       template.HTML(trans["signature"]),
 		"VerificationURL": verificationURL,
 	}
 
@@ -272,12 +274,6 @@ func (h *AuthHandler) sendVerificationEmail(to, displayName, locale, token strin
 	} else {
 		h.logger.Info("Verification email sent", "recipient_ref", logger.Fingerprint(to), "locale", locale)
 	}
-}
-
-// replaceVar replaces {{.VarName}} with HTML-escaped value in a string
-func replaceVar(str, varName, value string) string {
-	placeholder := "{{." + varName + "}}"
-	return strings.ReplaceAll(str, placeholder, html.EscapeString(value))
 }
 
 // Login handles user login

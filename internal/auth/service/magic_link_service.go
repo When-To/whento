@@ -12,10 +12,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html"
+	"html/template"
 	"log/slog"
-	"strings"
-	"text/template"
 	"time"
 
 	"github.com/google/uuid"
@@ -181,17 +179,21 @@ func (s *MagicLinkService) sendMagicLinkEmail(to, displayName, locale, token str
 	}
 
 	// Prepare template data
-	data := map[string]string{
+	data := map[string]any{
 		"Subject":        trans["subject"],
-		"Greeting":       replaceVar(trans["greeting"], "DisplayName", displayName),
+		"Greeting":       email.ReplaceVar(trans["greeting"], "DisplayName", displayName),
 		"Intro":          trans["intro"],
 		"CTAInstruction": trans["cta_instruction"],
 		"CTAButton":      trans["cta_button"],
 		"OrCopy":         trans["or_copy"],
 		"ExpiryNotice":   trans["expiry_notice"],
 		"SecurityNotice": trans["security_notice"],
-		"Signature":      trans["signature"],
-		"MagicLinkURL":   magicLinkURL,
+		// The one locale string holding deliberate markup: the signature ends with a
+		// <br> between the sign-off and the team name. Everything else in this map is a
+		// plain string, so html/template escapes it — which is exactly what has to
+		// happen to a display name.
+		"Signature":    template.HTML(trans["signature"]),
+		"MagicLinkURL": magicLinkURL,
 	}
 
 	// Execute template
@@ -214,10 +216,4 @@ func (s *MagicLinkService) sendMagicLinkEmail(to, displayName, locale, token str
 	} else {
 		s.logger.Info("Magic link email sent", "recipient_ref", pkglog.Fingerprint(to), "locale", locale)
 	}
-}
-
-// replaceVar replaces {{.VarName}} with HTML-escaped value in a string
-func replaceVar(str, varName, value string) string {
-	placeholder := "{{." + varName + "}}"
-	return strings.ReplaceAll(str, placeholder, html.EscapeString(value))
 }

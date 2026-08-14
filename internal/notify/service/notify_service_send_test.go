@@ -803,9 +803,7 @@ func TestSendEmailNotificationSubject(t *testing.T) {
 			mailer := &fakeMailer{configured: true}
 			service := &NotifyService{emailService: mailer, logger: quietLogger()}
 
-			err := service.sendEmailNotification(
-				context.Background(), "someone@example.test", "Someone", "<p>body</p>", tt.locale, true,
-			)
+			err := service.sendEmailNotification("someone@example.test", "<p>body</p>", tt.locale, true)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -828,7 +826,7 @@ func TestSendEmailNotificationPropagatesFailure(t *testing.T) {
 	mailer := &fakeMailer{configured: true, err: errors.New("smtp refused")}
 	service := &NotifyService{emailService: mailer, logger: quietLogger()}
 
-	err := service.sendEmailNotification(context.Background(), "a@example.test", "A", "body", "en", false)
+	err := service.sendEmailNotification("a@example.test", "body", "en", false)
 	if err == nil {
 		t.Fatal("expected the SMTP failure to propagate")
 	}

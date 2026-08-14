@@ -12,10 +12,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html"
+	"html/template"
 	"log/slog"
-	"strings"
-	"text/template"
 	"time"
 
 	"github.com/google/uuid"
@@ -260,17 +258,21 @@ func (s *PasswordResetService) sendPasswordResetEmail(user *models.User, resetUR
 
 	// Prepare template data
 	expiryDuration := passwordResetTokenExpiry.String()
-	data := map[string]string{
+	data := map[string]any{
 		"Subject":        trans["subject"],
-		"Greeting":       replaceVarPR(trans["greeting"], "DisplayName", user.DisplayName),
+		"Greeting":       email.ReplaceVar(trans["greeting"], "DisplayName", user.DisplayName),
 		"Intro":          trans["intro"],
 		"CTAInstruction": trans["cta_instruction"],
 		"CTAButton":      trans["cta_button"],
 		"OrCopy":         trans["or_copy"],
-		"ExpiryNotice":   replaceVarPR(trans["expiry_notice"], "ExpiryDuration", expiryDuration),
+		"ExpiryNotice":   email.ReplaceVar(trans["expiry_notice"], "ExpiryDuration", expiryDuration),
 		"SecurityNotice": trans["security_notice"],
-		"Signature":      trans["signature"],
-		"ResetURL":       resetURL,
+		// The one locale string holding deliberate markup: the signature ends with a
+		// <br> between the sign-off and the team name. Everything else in this map is a
+		// plain string, so html/template escapes it — which is exactly what has to
+		// happen to a display name.
+		"Signature": template.HTML(trans["signature"]),
+		"ResetURL":  resetURL,
 	}
 
 	// Execute template
@@ -292,12 +294,6 @@ func (s *PasswordResetService) sendPasswordResetEmail(user *models.User, resetUR
 
 	s.logger.Info("Password reset email sent", "user_id", user.ID, "locale", user.Locale)
 	return nil
-}
-
-// replaceVarPR replaces {{.VarName}} with HTML-escaped value in a string
-func replaceVarPR(str, varName, value string) string {
-	placeholder := "{{." + varName + "}}"
-	return strings.ReplaceAll(str, placeholder, html.EscapeString(value))
 }
 
 // toUserResponse converts User to UserResponse
