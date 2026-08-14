@@ -85,7 +85,9 @@ export const useAuthStore = defineStore('auth', () => {
       clearError();
     } finally {
       user.value = null;
-      apiClient.clearToken();
+      // signOut rather than clearToken: the other tabs on this browser share the
+      // refresh cookie the backend just revoked, and have to be told.
+      apiClient.signOut();
     }
   }
 

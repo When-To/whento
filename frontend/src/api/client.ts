@@ -63,8 +63,13 @@ class ApiClient {
         this.accessToken = message.token;
         localStorage.setItem(SESSION_FLAG, '1');
       } else if (message?.type === 'logout') {
-        this.accessToken = null;
-        localStorage.removeItem(SESSION_FLAG);
+        // Another tab signed out. Dropping the token here is not enough: this tab
+        // would keep rendering the account it no longer has a session for —
+        // calendars, settings, the lot — until its next request happened to 401.
+        // On a shared machine that is the thing signing out is meant to prevent.
+        // No re-broadcast: the tab that sent this already told everyone.
+        this.clearToken();
+        this.redirectToLogin();
       }
     };
   }
@@ -127,9 +132,26 @@ class ApiClient {
   }
 
   private forceLogout() {
+    this.signOut();
+    this.redirectToLogin();
+  }
+
+  /**
+   * End the session in this tab and in every other one.
+   *
+   * The deliberate sign-out goes through here rather than through clearToken, which
+   * stays local on purpose: the error paths call it too — a refused /auth/me, a
+   * failed restore — and a transient failure in one tab must not sign the others out.
+   * Choosing to log out is different, and has to reach them all at once.
+   */
+  signOut() {
     this.clearToken();
     this.broadcast({ type: 'logout' });
-    // Only redirect to login if current route is not public
+  }
+
+  private redirectToLogin() {
+    // Only redirect to login if current route is not public: a participant following
+    // a calendar link has no account to sign back in to.
     const currentRoute = router.currentRoute.value;
     const isPublicRoute = currentRoute.meta.public === true;
 

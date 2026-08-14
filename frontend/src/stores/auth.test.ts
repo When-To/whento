@@ -26,6 +26,7 @@ const apiClient = {
   setToken: vi.fn(),
   clearToken: vi.fn(),
   hasSession: vi.fn(() => false),
+  signOut: vi.fn(),
 };
 
 vi.mock('@/api/auth', () => ({ authApi }));
@@ -190,7 +191,7 @@ describe('auth store', () => {
       await store.logout();
 
       expect(store.user).toBeNull();
-      expect(apiClient.clearToken).toHaveBeenCalled();
+      expect(apiClient.signOut).toHaveBeenCalled();
     });
 
     it('drops the session even when the call fails, and surfaces no error', async () => {
@@ -202,7 +203,7 @@ describe('auth store', () => {
       await expect(store.logout()).resolves.toBeUndefined();
 
       expect(store.user).toBeNull();
-      expect(apiClient.clearToken).toHaveBeenCalled();
+      expect(apiClient.signOut).toHaveBeenCalled();
       expect(store.error).toBeNull();
       expect(store.loading).toBe(false);
     });
@@ -217,6 +218,9 @@ describe('auth store', () => {
 
       expect(store.user).toBeNull();
       expect(apiClient.clearToken).toHaveBeenCalled();
+      // Local only. A refused /auth/me is not a decision to sign out, and must not
+      // reach the other tabs on this browser.
+      expect(apiClient.signOut).not.toHaveBeenCalled();
     });
   });
 
