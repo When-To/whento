@@ -343,50 +343,89 @@ func (r *AvailabilityRepository) Delete(ctx context.Context, participantID uuid.
 }
 
 // GetParticipantCountForDate counts unique participants with availability for a specific date
+// GetAvailableParticipantsForDate returns everyone who counts as available on a date,
+// by name, whether they said so directly or a recurrence says it for them.
+//
+// This is the single answer to "who is available on this date". It exists because there
+// were several: the threshold count expanded recurrences in SQL, the notification list
+// read the availabilities table raw, and they disagreed. A participant available only
+// through a recurrence was counted towards the threshold, left out of the participant
+// list in the email, and — worse, and silently — dropped from the recipients of the
+// notification about the very date they had made themselves available for.
+//
+// Two conditions that used to differ between the two queries are settled here. The
+// availabilities half no longer filters on source = 'manual': nothing writes any other
+// value, so the filter selected nothing today while quietly discarding rows written by
+// an older version. And the recurrence half no longer tests start_date IS NULL, because
+// the column is NOT NULL — that branch could never be taken.
+func (r *AvailabilityRepository) GetAvailableParticipantsForDate(
+	ctx context.Context,
+	calendarID uuid.UUID,
+	date time.Time,
+) ([]models.AvailableParticipant, error) {
+	// Written as two EXISTS against participants rather than a UNION of ids followed by
+	// a name lookup: one participant matching both halves is one row either way, and the
+	// name comes back with it.
+	query := `
+		SELECT p.id, p.name
+		FROM participants p
+		WHERE p.calendar_id = $1
+		  AND (
+			EXISTS (
+				SELECT 1 FROM availabilities a
+				WHERE a.participant_id = p.id AND a.date = $2::DATE
+			)
+			OR EXISTS (
+				SELECT 1 FROM recurrences r
+				WHERE r.participant_id = p.id
+				  AND EXTRACT(DOW FROM $2::DATE)::int = r.day_of_week
+				  AND $2::DATE >= r.start_date
+				  AND (r.end_date IS NULL OR $2::DATE <= r.end_date)
+				  AND NOT EXISTS (
+					SELECT 1 FROM recurrence_exceptions re
+					WHERE re.recurrence_id = r.id
+					  AND re.excluded_date = $2::DATE
+				  )
+			)
+		  )
+		ORDER BY p.name ASC`
+
+	rows, err := r.pool.Query(ctx, query, calendarID, date)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get available participants for date: %w", err)
+	}
+	defer rows.Close()
+
+	var participants []models.AvailableParticipant
+	for rows.Next() {
+		var participant models.AvailableParticipant
+		if err := rows.Scan(&participant.ID, &participant.Name); err != nil {
+			return nil, fmt.Errorf("failed to scan available participant: %w", err)
+		}
+		participants = append(participants, participant)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating available participants: %w", err)
+	}
+
+	return participants, nil
+}
+
+// GetParticipantCountForDate returns how many participants are available on a date.
+//
+// Derived from the list rather than counted by a query of its own, so the number in
+// "3/3 participants available" and the names printed underneath it cannot disagree.
+// They used to.
 func (r *AvailabilityRepository) GetParticipantCountForDate(
 	ctx context.Context,
 	calendarID uuid.UUID,
 	date time.Time,
 ) (int, error) {
-	// Query counts distinct participants who have availability on this date
-	// This includes both manual availabilities and recurrence-generated ones
-	query := `
-		WITH calendar_participants AS (
-			SELECT id as participant_id
-			FROM participants
-			WHERE calendar_id = $1
-		),
-		date_availabilities AS (
-			-- Manual availabilities for this date
-			SELECT DISTINCT a.participant_id
-			FROM availabilities a
-			JOIN calendar_participants cp ON a.participant_id = cp.participant_id
-			WHERE a.date = $2
-			  AND a.source = 'manual'
-
-			UNION
-
-			-- Recurrence-generated availabilities for this date
-			SELECT DISTINCT r.participant_id
-			FROM recurrences r
-			JOIN calendar_participants cp ON r.participant_id = cp.participant_id
-			WHERE EXTRACT(DOW FROM $2::DATE) = r.day_of_week
-			  AND (r.start_date IS NULL OR $2::DATE >= r.start_date)
-			  AND (r.end_date IS NULL OR $2::DATE <= r.end_date)
-			  -- Exclude if there's an exception for this date
-			  AND NOT EXISTS (
-				SELECT 1 FROM recurrence_exceptions re
-				WHERE re.recurrence_id = r.id
-				  AND re.excluded_date = $2::DATE
-			  )
-		)
-		SELECT COUNT(*) FROM date_availabilities`
-
-	var count int
-	err := r.pool.QueryRow(ctx, query, calendarID, date).Scan(&count)
+	participants, err := r.GetAvailableParticipantsForDate(ctx, calendarID, date)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get participant count for date: %w", err)
+		return 0, err
 	}
 
-	return count, nil
+	return len(participants), nil
 }

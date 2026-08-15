@@ -366,6 +366,125 @@ func TestGetByDateIsScopedToTheCalendar(t *testing.T) {
 	}
 }
 
+// TestAvailableParticipantsIncludeRecurrences is the defect this method exists for.
+// Recurrences are expanded when read and never stored, so asking the availabilities
+// table who is available answers "who has a row" — and a participant available every
+// Friday has none. The threshold count expanded them and saw three of three; the
+// notification read the table and saw two. The participant was counted towards the
+// event, left out of the list in the email, and never told about it.
+func TestAvailableParticipantsIncludeRecurrences(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewAvailabilityRepository(pool)
+	recurrences := repository.NewRecurrenceRepository(pool)
+	ctx := dbtest.Context(t)
+
+	f := seed(t, pool)
+
+	// day(0) is 2027-03-01, a Monday.
+	monday := day(0)
+	if got := monday.Weekday(); got != time.Monday {
+		t.Fatalf("the fixture date is a %s; this test assumes Monday", got)
+	}
+
+	// One participant answers directly, the other stands on a weekly recurrence.
+	if err := repo.Create(ctx, availability(f.participant.ID, monday, nil, nil)); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	weekly := recurrence(f.other.ID, int(time.Monday), nil, nil)
+	if err := recurrences.CreateRecurrence(ctx, weekly); err != nil {
+		t.Fatalf("CreateRecurrence: %v", err)
+	}
+
+	available, err := repo.GetAvailableParticipantsForDate(ctx, f.calendar.ID, monday)
+	if err != nil {
+		t.Fatalf("GetAvailableParticipantsForDate: %v", err)
+	}
+
+	got := map[uuid.UUID]string{}
+	for _, p := range available {
+		got[p.ID] = p.Name
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d available participants, want 2: %v", len(got), got)
+	}
+	if _, ok := got[f.other.ID]; !ok {
+		t.Error("the participant available through a recurrence is missing")
+	}
+	// The name is what the email prints, so an id alone would not have caught the
+	// half of this defect that was visible.
+	if got[f.other.ID] == "" {
+		t.Error("the recurrence-only participant came back without a name")
+	}
+
+	// The count is derived from this list, so the two cannot disagree — which is the
+	// property that failed in production.
+	count, err := repo.GetParticipantCountForDate(ctx, f.calendar.ID, monday)
+	if err != nil {
+		t.Fatalf("GetParticipantCountForDate: %v", err)
+	}
+	if count != len(available) {
+		t.Errorf("count = %d but the list holds %d: they have diverged again", count, len(available))
+	}
+}
+
+// TestAvailableParticipantsHonourRecurrenceBounds covers the three ways a recurrence
+// does not apply to a date it otherwise matches.
+func TestAvailableParticipantsHonourRecurrenceBounds(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewAvailabilityRepository(pool)
+	recurrences := repository.NewRecurrenceRepository(pool)
+	ctx := dbtest.Context(t)
+
+	f := seed(t, pool)
+	monday := day(0)
+
+	weekly := recurrence(f.other.ID, int(time.Monday), nil, nil)
+	if err := recurrences.CreateRecurrence(ctx, weekly); err != nil {
+		t.Fatalf("CreateRecurrence: %v", err)
+	}
+
+	available := func(t *testing.T, date time.Time) bool {
+		t.Helper()
+
+		people, err := repo.GetAvailableParticipantsForDate(ctx, f.calendar.ID, date)
+		if err != nil {
+			t.Fatalf("GetAvailableParticipantsForDate: %v", err)
+		}
+		for _, p := range people {
+			if p.ID == f.other.ID {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	if !available(t, monday) {
+		t.Fatal("the recurrence does not apply on its own weekday")
+	}
+	// A Tuesday: the same week, the wrong day.
+	if available(t, day(1)) {
+		t.Error("the recurrence applied on a day it does not fall on")
+	}
+	// Before the recurrence starts. StartDate is 2027-03-01, so day(-7) precedes it.
+	if available(t, day(-7)) {
+		t.Error("the recurrence applied before its start date")
+	}
+
+	// An exception on the matching Monday removes it for that date only.
+	exception := &models.RecurrenceException{RecurrenceID: weekly.ID, ExcludedDate: "2027-03-08"}
+	exception.ID = uuid.New()
+	if err := recurrences.CreateException(ctx, exception); err != nil {
+		t.Fatalf("CreateException: %v", err)
+	}
+	if available(t, day(7)) {
+		t.Error("an excluded date still counted the participant as available")
+	}
+	if !available(t, monday) {
+		t.Error("the exception removed a date it was not for")
+	}
+}
+
 func TestGetParticipantCountForDate(t *testing.T) {
 	pool := dbtest.Pool(t)
 	repo := repository.NewAvailabilityRepository(pool)
