@@ -23,8 +23,8 @@ func registerPasskeyLoginRoutes(r chi.Router, d *deps, h *handlers) {
 
 	r.Group(func(r chi.Router) {
 		// Passkey login (usernameless/passwordless): 5 requests/minute/IP
-		l.on(r, perPathIP(5, time.Minute)).Post("/passkey/login/begin", h.passkey.BeginDiscoverableAuthentication)
-		l.on(r, perPathIP(5, time.Minute)).Post("/passkey/login/finish", h.passkey.FinishAuthentication)
+		l.on(r, perPathIP("passkey-login-begin", 5, time.Minute)).Post("/passkey/login/begin", h.passkey.BeginDiscoverableAuthentication)
+		l.on(r, perPathIP("passkey-login-finish", 5, time.Minute)).Post("/passkey/login/finish", h.passkey.FinishAuthentication)
 	})
 }
 
@@ -37,8 +37,8 @@ func registerPasskeyRoutes(r chi.Router, d *deps, h *handlers) {
 		r.Use(middleware.Auth(d.jwtManager, d.cacheStore))
 
 		// Passkey operations: 5 requests/minute/user
-		l.on(r, perUser(5, time.Minute)).Post("/register/begin", h.passkey.BeginRegistration)
-		l.on(r, perUser(5, time.Minute)).Post("/register/finish", h.passkey.FinishRegistration)
+		l.on(r, perUser("passkey-register-begin", 5, time.Minute)).Post("/register/begin", h.passkey.BeginRegistration)
+		l.on(r, perUser("passkey-register-finish", 5, time.Minute)).Post("/register/finish", h.passkey.FinishRegistration)
 
 		r.Get("/list", h.passkey.List)
 		r.Patch("/{id}/name", h.passkey.Rename)

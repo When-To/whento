@@ -23,7 +23,7 @@ func registerMFALoginRoutes(r chi.Router, d *deps, h *handlers) {
 
 	r.Group(func(r chi.Router) {
 		// MFA verification: 5 requests/5 minutes/IP
-		l.on(r, perPathIP(5, 5*time.Minute)).Post("/mfa/verify", h.mfa.VerifyLogin)
+		l.on(r, perPathIP("mfa-verify", 5, 5*time.Minute)).Post("/mfa/verify", h.mfa.VerifyLogin)
 	})
 }
 
@@ -36,9 +36,9 @@ func registerMFARoutes(r chi.Router, d *deps, h *handlers) {
 		r.Use(middleware.Auth(d.jwtManager, d.cacheStore))
 
 		// MFA setup/disable: 5 requests/minute/user
-		l.on(r, perUser(5, time.Minute)).Post("/setup/begin", h.mfa.BeginSetup)
-		l.on(r, perUser(5, time.Minute)).Post("/setup/finish", h.mfa.FinishSetup)
-		l.on(r, perUser(3, time.Minute)).Post("/disable", h.mfa.Disable)
+		l.on(r, perUser("mfa-setup-begin", 5, time.Minute)).Post("/setup/begin", h.mfa.BeginSetup)
+		l.on(r, perUser("mfa-setup-finish", 5, time.Minute)).Post("/setup/finish", h.mfa.FinishSetup)
+		l.on(r, perUser("mfa-disable", 3, time.Minute)).Post("/disable", h.mfa.Disable)
 
 		r.Get("/status", h.mfa.GetStatus)
 		r.Post("/backup-codes/regenerate", h.mfa.RegenerateBackupCodes)

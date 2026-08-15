@@ -22,27 +22,27 @@ func registerAuthRoutes(r chi.Router, d *deps, h *handlers) {
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		// Public routes with rate limiting
 		r.Group(func(r chi.Router) {
-			l.on(r, perPathIP(5, time.Minute)).Post("/login", h.auth.Login)
-			l.on(r, perPathIP(3, time.Minute)).Post("/register", h.auth.Register)
+			l.on(r, perPathIP("auth-login", 5, time.Minute)).Post("/login", h.auth.Login)
+			l.on(r, perPathIP("auth-register", 3, time.Minute)).Post("/register", h.auth.Register)
 			// Higher than its neighbours because the access token now lives only in
 			// memory: every cold page load spends one refresh, where it used to take
 			// one only after the token expired. At five a minute, reloading a few
 			// times in a row signed the user out. Guessing the value this protects is
 			// not the threat — it is an RSA-signed JWT — so the headroom costs nothing.
-			l.on(r, perPathIP(30, time.Minute)).Post("/refresh", h.auth.Refresh)
+			l.on(r, perPathIP("auth-refresh", 30, time.Minute)).Post("/refresh", h.auth.Refresh)
 			r.Post("/logout", h.auth.Logout)
 
 			// Password reset (public - no auth required)
-			l.on(r, perIP(3, 15*time.Minute)).Post("/forgot-password", h.passwordReset.ForgotPassword)
-			l.on(r, perPathIP(5, 15*time.Minute)).Post("/reset-password", h.passwordReset.ResetPassword)
+			l.on(r, perIP("auth-forgot-password", 3, 15*time.Minute)).Post("/forgot-password", h.passwordReset.ForgotPassword)
+			l.on(r, perPathIP("auth-reset-password", 5, 15*time.Minute)).Post("/reset-password", h.passwordReset.ResetPassword)
 
 			// Magic link authentication (public)
-			l.on(r, perIP(3, 15*time.Minute)).Post("/magic-link/request", h.magicLink.RequestMagicLink)
-			l.on(r, perPathIP(5, 15*time.Minute)).Get("/magic-link/verify/{token}", h.magicLink.VerifyMagicLink)
+			l.on(r, perIP("auth-magic-link-request", 3, 15*time.Minute)).Post("/magic-link/request", h.magicLink.RequestMagicLink)
+			l.on(r, perPathIP("auth-magic-link-verify", 5, 15*time.Minute)).Get("/magic-link/verify/{token}", h.magicLink.VerifyMagicLink)
 			r.Get("/magic-link/available", h.magicLink.CheckAvailable)
 
 			// Email verification (public - no auth required)
-			l.on(r, perPathIP(5, 15*time.Minute)).Get("/verify-email/{token}", h.emailVerification.VerifyEmail)
+			l.on(r, perPathIP("auth-verify-email", 5, 15*time.Minute)).Get("/verify-email/{token}", h.emailVerification.VerifyEmail)
 		})
 
 		// Authenticated routes

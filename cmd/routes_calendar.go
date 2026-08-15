@@ -22,25 +22,30 @@ func registerCalendarRoutes(r chi.Router, d *deps, h *handlers) {
 		// Public routes
 		r.Group(func(r chi.Router) {
 			// Public calendar access: 60 requests/minute/IP
-			l.on(r, perIP(60, time.Minute)).Get("/public/{token}", h.calendar.GetPublicCalendar)
+			l.on(r, perIP("calendar-public-read", 60, time.Minute)).Get("/public/{token}", h.calendar.GetPublicCalendar)
 
 			// Anonymous participant registration: 10 requests/minute/IP
-			l.on(r, perIP(10, time.Minute)).Post("/public/{token}/participants", h.participant.AddAnonymousParticipant)
+			l.on(r, perIP("calendar-anonymous-participant", 10, time.Minute)).Post("/public/{token}/participants", h.participant.AddAnonymousParticipant)
 
 			// Public participant email verification: 5 requests/15 minutes/IP
-			l.on(r, perPathIP(5, 15*time.Minute)).Get("/participants/verify-email/{token}", h.participantEmail.VerifyEmail)
+			l.on(r, perPathIP("participant-verify-email", 5, 15*time.Minute)).Get("/participants/verify-email/{token}", h.participantEmail.VerifyEmail)
 
 			// Public participant email management: 5 requests/15 minutes/IP.
 			//
 			// This route was the only one in the group without a limiter, and it is
 			// the one that sends mail to an address the caller picks — unauthenticated,
-			// so an open relay for anyone holding a public calendar link. The budget
-			// matches resend-verification below rather than the looser per-IP defaults,
-			// because both spend the same resource: outbound mail to a third party.
-			l.on(r, perIP(5, 15*time.Minute)).Post("/{token}/participants/{pid}/email", h.participantEmail.AddEmail)
+			// so an open relay for anyone holding a public calendar link. The budget is
+			// deliberately tight rather than following the looser per-IP defaults,
+			// because what it spends is outbound mail to a third party.
+			//
+			// Ten rather than five: a household or an office is one public address, and
+			// several participants filling in their own address one after another is
+			// ordinary use, not abuse. Five was also never really five — until this
+			// bucket was named, opening the calendar page spent four of them on reads.
+			l.on(r, perIP("participant-email-add", 10, 15*time.Minute)).Post("/{token}/participants/{pid}/email", h.participantEmail.AddEmail)
 
 			// Resend verification: 3 requests/15 minutes/IP
-			l.on(r, perIP(3, 15*time.Minute)).Post("/{token}/participants/{pid}/resend-verification", h.participantEmail.ResendVerification)
+			l.on(r, perIP("participant-email-resend", 3, 15*time.Minute)).Post("/{token}/participants/{pid}/resend-verification", h.participantEmail.ResendVerification)
 		})
 
 		// Authenticated routes
@@ -48,7 +53,7 @@ func registerCalendarRoutes(r chi.Router, d *deps, h *handlers) {
 			r.Use(middleware.Auth(d.jwtManager, d.cacheStore))
 
 			// Authenticated routes: 100 requests/minute/user
-			l.use(r, perUser(100, time.Minute))
+			l.use(r, perUser("calendar-authenticated", 100, time.Minute))
 
 			// Calendar CRUD
 			r.Post("/", h.calendar.CreateCalendar)

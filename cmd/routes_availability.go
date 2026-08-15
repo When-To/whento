@@ -29,7 +29,7 @@ func registerAvailabilityRoutes(r chi.Router, d *deps, h *handlers) {
 		// reconnect loop cannot starve another, and sized for several tabs behind a
 		// shared NAT rather than for API call volume.
 		r.Group(func(r chi.Router) {
-			l.use(r, perPathIP(300, time.Minute))
+			l.use(r, perPathIP("availability-stream", 300, time.Minute))
 
 			r.Get("/calendar/{token}/events", h.events.Stream)
 		})
@@ -56,7 +56,7 @@ func registerAvailabilityRoutes(r chi.Router, d *deps, h *handlers) {
 		// this through the interface. The limiter is here to bound a runaway client,
 		// not to ration normal use.
 		r.Group(func(r chi.Router) {
-			l.use(r, perIP(400, time.Minute))
+			l.use(r, perIP("availability-write", 400, time.Minute))
 
 			// One notice per successful write, for every route below. Placed here
 			// rather than in the nine service methods so a tenth write route cannot

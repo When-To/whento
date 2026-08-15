@@ -103,6 +103,16 @@ func (rl *RateLimiter) Stop() {
 
 // RateLimitConfig holds rate limit configuration
 type RateLimitConfig struct {
+	// Bucket names the budget. It is part of the key, so two routes only share a
+	// counter when they are deliberately given the same name.
+	//
+	// Without it the key was whatever KeyFunc returned and nothing else, which for
+	// an IP-keyed rule meant *one* counter per address for every such route in the
+	// application. Each request compared that shared total against its own limit, so
+	// opening a calendar page — a public read plus three availability reads — spent
+	// four of the five a participant's email address was allowed per quarter hour,
+	// and the second attempt to add one was refused.
+	Bucket   string
 	Requests int                          // Number of requests allowed
 	Window   time.Duration                // Time window
 	KeyFunc  func(r *http.Request) string // Function to extract rate limit key
@@ -124,7 +134,11 @@ func (rl *RateLimiter) Limit(cfg RateLimitConfig) func(http.Handler) http.Handle
 			// request path that in this API carries a calendar token and a
 			// participant UUID. None of it may be written to Redis or held in
 			// the in-memory map, so only its digest ever reaches a backend.
-			allowed, remaining, resetAt, backend, err := rl.check(r.Context(), hashRateLimitKey(key), cfg.Requests, cfg.Window)
+			//
+			// The bucket name goes in before the digest rather than beside it, so
+			// two budgets cannot collide by sharing a key prefix.
+			allowed, remaining, resetAt, backend, err := rl.check(
+				r.Context(), hashRateLimitKey(cfg.Bucket+"|"+key), cfg.Requests, cfg.Window)
 			if err != nil {
 				// Should not happen: memory backend never errors. Allow the
 				// request rather than block on an unexpected internal error.

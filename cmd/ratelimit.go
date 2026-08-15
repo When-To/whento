@@ -17,6 +17,10 @@ import (
 // against whom. It is pkg/middleware's RateLimitConfig minus the question of
 // whether rate limiting is switched on at all, which is the routeLimiter's.
 type rateLimitRule struct {
+	// bucket names the budget, and is what keeps one route's traffic from
+	// spending another's. Two rules sharing a name share a counter — which is
+	// occasionally what you want, and must always be deliberate.
+	bucket   string
 	requests int
 	window   time.Duration
 	keyFunc  func(r *http.Request) string
@@ -24,21 +28,27 @@ type rateLimitRule struct {
 
 // perIP buckets by client address. Proxy headers are honoured only for
 // connections coming from a configured trusted proxy; see middleware.IPKeyFunc.
-func perIP(requests int, window time.Duration) rateLimitRule {
-	return rateLimitRule{requests: requests, window: window, keyFunc: middleware.IPKeyFunc}
+//
+// The name is not decoration. Before it existed the key was the address alone,
+// so every perIP route in the application counted into the same bucket and each
+// one compared that shared total against its own limit: loading a calendar page
+// spent four of the five an email address was allowed per quarter hour, and the
+// next attempt to add one got a 429 it had done nothing to earn.
+func perIP(bucket string, requests int, window time.Duration) rateLimitRule {
+	return rateLimitRule{bucket: bucket, requests: requests, window: window, keyFunc: middleware.IPKeyFunc}
 }
 
 // perUser buckets by authenticated user id, and therefore only means anything
 // below middleware.Auth: without it the key is empty and the limiter lets the
 // request through.
-func perUser(requests int, window time.Duration) rateLimitRule {
-	return rateLimitRule{requests: requests, window: window, keyFunc: middleware.UserKeyFunc}
+func perUser(bucket string, requests int, window time.Duration) rateLimitRule {
+	return rateLimitRule{bucket: bucket, requests: requests, window: window, keyFunc: middleware.UserKeyFunc}
 }
 
 // perPathIP buckets by exact request path *and* client address, so two
 // calendars — or two participants of one calendar — never share a budget.
-func perPathIP(requests int, window time.Duration) rateLimitRule {
-	return rateLimitRule{requests: requests, window: window, keyFunc: middleware.CombinedKeyFunc}
+func perPathIP(bucket string, requests int, window time.Duration) rateLimitRule {
+	return rateLimitRule{bucket: bucket, requests: requests, window: window, keyFunc: middleware.CombinedKeyFunc}
 }
 
 // routeLimiter decides once whether rate limiting applies, so that no route has
@@ -75,6 +85,7 @@ func (l *routeLimiter) middlewares(rule rateLimitRule) chi.Middlewares {
 	}
 
 	return chi.Middlewares{l.limiter.Limit(middleware.RateLimitConfig{
+		Bucket:   rule.bucket,
 		Requests: rule.requests,
 		Window:   rule.window,
 		KeyFunc:  rule.keyFunc,
