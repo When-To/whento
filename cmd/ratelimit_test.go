@@ -46,7 +46,7 @@ func TestRouteLimiterMiddlewares(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := newTestLimiter(t, tc.enabled).middlewares(perIP(5, time.Minute))
+			got := newTestLimiter(t, tc.enabled).middlewares(perIP("test", 5, time.Minute))
 			if len(got) != tc.want {
 				t.Fatalf("middlewares() has %d entries, want %d", len(got), tc.want)
 			}
@@ -62,10 +62,10 @@ func TestRouteLimiterMiddlewares(t *testing.T) {
 func TestRouteLimiterOnIsIdentityWhenDisabled(t *testing.T) {
 	r := chi.NewRouter()
 
-	if got := newTestLimiter(t, false).on(r, perIP(5, time.Minute)); got != chi.Router(r) {
+	if got := newTestLimiter(t, false).on(r, perIP("test", 5, time.Minute)); got != chi.Router(r) {
 		t.Error("on() returned a different router with rate limiting disabled")
 	}
-	if got := newTestLimiter(t, true).on(r, perIP(5, time.Minute)); got == chi.Router(r) {
+	if got := newTestLimiter(t, true).on(r, perIP("test", 5, time.Minute)); got == chi.Router(r) {
 		t.Error("on() returned the same router with rate limiting enabled")
 	}
 }
@@ -83,21 +83,21 @@ func TestRouteLimiterHeadersAndRejection(t *testing.T) {
 			name:    "on, enabled",
 			enabled: true,
 			mount: func(l *routeLimiter, r chi.Router, h http.HandlerFunc) {
-				l.on(r, perIP(2, time.Minute)).Get("/x", h)
+				l.on(r, perIP("test", 2, time.Minute)).Get("/x", h)
 			},
 		},
 		{
 			name:    "on, disabled",
 			enabled: false,
 			mount: func(l *routeLimiter, r chi.Router, h http.HandlerFunc) {
-				l.on(r, perIP(2, time.Minute)).Get("/x", h)
+				l.on(r, perIP("test", 2, time.Minute)).Get("/x", h)
 			},
 		},
 		{
 			name:    "use, enabled",
 			enabled: true,
 			mount: func(l *routeLimiter, r chi.Router, h http.HandlerFunc) {
-				l.use(r, perIP(2, time.Minute))
+				l.use(r, perIP("test", 2, time.Minute))
 				r.Get("/x", h)
 			},
 		},
@@ -105,7 +105,7 @@ func TestRouteLimiterHeadersAndRejection(t *testing.T) {
 			name:    "use, disabled",
 			enabled: false,
 			mount: func(l *routeLimiter, r chi.Router, h http.HandlerFunc) {
-				l.use(r, perIP(2, time.Minute))
+				l.use(r, perIP("test", 2, time.Minute))
 				r.Get("/x", h)
 			},
 		},
@@ -167,7 +167,7 @@ func TestRateLimitRuleKeys(t *testing.T) {
 		r := chi.NewRouter()
 		reached := 0
 		l := newTestLimiter(t, true)
-		l.use(r, perIP(2, time.Minute))
+		l.use(r, perIP("test", 2, time.Minute))
 		r.Get("/a", okHandler(&reached))
 		r.Get("/b", okHandler(&reached))
 
@@ -181,7 +181,7 @@ func TestRateLimitRuleKeys(t *testing.T) {
 		r := chi.NewRouter()
 		reached := 0
 		l := newTestLimiter(t, true)
-		l.use(r, perPathIP(2, time.Minute))
+		l.use(r, perPathIP("test", 2, time.Minute))
 		r.Get("/a", okHandler(&reached))
 		r.Get("/b", okHandler(&reached))
 
@@ -193,6 +193,53 @@ func TestRateLimitRuleKeys(t *testing.T) {
 		}
 	})
 
+	// The defect this guards: the bucket key used to be whatever the key function
+	// returned and nothing else, so every perIP rule in the application counted into
+	// one bucket per address — and each compared that shared total against its own
+	// limit. Opening a calendar page (a public read plus three availability reads)
+	// spent four of the five a participant email address was allowed per quarter hour,
+	// and the next attempt to add one was refused having done nothing wrong.
+	//
+	// Both rules carry the same numbers on purpose. The in-memory backend builds its
+	// limiter once per key, from the parameters of whichever request created it, so a
+	// test using different limits would pass even with the bucket name removed — the
+	// looser rule's limiter would simply be the one both routes found. With identical
+	// numbers the name is the only thing that can separate them.
+	t.Run("two rules with different names do not share a budget", func(t *testing.T) {
+		r := chi.NewRouter()
+		reached := 0
+		l := newTestLimiter(t, true)
+		l.on(r, perIP("first", 2, time.Minute)).Get("/a", okHandler(&reached))
+		l.on(r, perIP("second", 2, time.Minute)).Get("/b", okHandler(&reached))
+
+		// Spend /a's budget in full, then ask /b for its own.
+		requestPaths(r, "/a", "/a")
+
+		codes := requestPaths(r, "/b", "/b")
+		for i, code := range codes {
+			if code != http.StatusOK {
+				t.Errorf("request %d to /b = %d, want %d: /a spent a budget that was not its own",
+					i, code, http.StatusOK)
+			}
+		}
+	})
+
+	t.Run("two rules sharing a name share a budget", func(t *testing.T) {
+		// The other half: naming is what decides, so it has to be able to join two
+		// routes deliberately as well as separate them.
+		r := chi.NewRouter()
+		reached := 0
+		l := newTestLimiter(t, true)
+		l.on(r, perIP("shared", 2, time.Minute)).Get("/a", okHandler(&reached))
+		l.on(r, perIP("shared", 2, time.Minute)).Get("/b", okHandler(&reached))
+
+		codes := requestPaths(r, "/a", "/b", "/a")
+		if codes[2] != http.StatusTooManyRequests {
+			t.Errorf("third request across the shared bucket = %d, want %d",
+				codes[2], http.StatusTooManyRequests)
+		}
+	})
+
 	t.Run("perUser is inert without an authenticated user", func(t *testing.T) {
 		// UserKeyFunc reads the user id the Auth middleware puts on the context.
 		// With no Auth above it the key is empty, and pkg/middleware lets an
@@ -201,7 +248,7 @@ func TestRateLimitRuleKeys(t *testing.T) {
 		r := chi.NewRouter()
 		reached := 0
 		l := newTestLimiter(t, true)
-		l.use(r, perUser(1, time.Minute))
+		l.use(r, perUser("test", 1, time.Minute))
 		r.Get("/a", okHandler(&reached))
 
 		codes := requestPaths(r, "/a", "/a", "/a")

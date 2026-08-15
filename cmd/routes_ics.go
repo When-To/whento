@@ -22,7 +22,7 @@ func registerICSRoutes(r chi.Router, d *deps, h *handlers) {
 		// Public routes with rate limiting
 		r.Group(func(r chi.Router) {
 			// ICS feed access: 30 requests/minute/IP
-			l.use(r, perIP(30, time.Minute))
+			l.use(r, perIP("ics-feed", 30, time.Minute))
 
 			// ICS feed endpoint (accepts both /feed/{token} and /feed/{token}.ics)
 			r.Get("/feed/{token}", h.ics.GetFeed)
@@ -33,7 +33,7 @@ func registerICSRoutes(r chi.Router, d *deps, h *handlers) {
 		// Authenticated routes for managing unified feed
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Auth(d.jwtManager, d.cacheStore))
-			l.use(r, perUser(30, time.Minute))
+			l.use(r, perUser("ics-authenticated", 30, time.Minute))
 
 			r.Get("/unified-feed", h.unifiedFeed.GetConfig)
 			r.Post("/unified-feed", h.unifiedFeed.Create)
