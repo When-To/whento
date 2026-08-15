@@ -48,8 +48,16 @@ type (
 
 	// AvailabilityStore says who declared themselves available on the date that
 	// moved, which is who gets told about it.
+	//
+	// It asks for the participants rather than the availability rows on purpose. This
+	// used to read the rows and take their participant ids, which silently meant "the
+	// people with a row in the availabilities table" — leaving out everyone whose
+	// availability comes from a recurrence, since those are expanded when read and
+	// never stored.
 	AvailabilityStore interface {
-		GetByDate(ctx context.Context, calendarID uuid.UUID, date time.Time) ([]*availabilityModels.Availability, error)
+		GetAvailableParticipantsForDate(
+			ctx context.Context, calendarID uuid.UUID, date time.Time,
+		) ([]availabilityModels.AvailableParticipant, error)
 	}
 
 	// UserStore resolves the calendar owner, the one recipient who is an account.
@@ -396,37 +404,29 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 		}
 	}
 
-	// Get availabilities for the specific date to find who has availability
-	// This will be used both for participant notification filtering and for building the participant list
-	availabilities, err := s.availabilityRepo.GetByDate(ctx, calendar.ID, transition.Date)
+	// Who is available on this date — the same question, and now the same answer, as
+	// the count that decided the threshold was reached. It settles two things at once:
+	// which participants get told, and which names the email lists.
+	//
+	// Recurrences are expanded when read rather than stored, so asking the
+	// availabilities table directly answered "who has a row", not "who is available".
+	// A participant available every Friday was counted towards the threshold, missing
+	// from the list in the email, and — silently — absent from the recipients of the
+	// notification about their own Friday.
+	availableParticipants, err := s.availabilityRepo.GetAvailableParticipantsForDate(ctx, calendar.ID, transition.Date)
 	if err != nil {
-		s.logger.Error("Failed to get availabilities for date", "calendar_id", calendar.ID, "date", transition.Date, "error", err)
-		availabilities = []*availabilityModels.Availability{} // Empty list on error
+		s.logger.Error("Failed to get available participants for date", "calendar_id", calendar.ID, "date", transition.Date, "error", err)
+		availableParticipants = nil // Empty list on error
 	}
 
-	// Build a map of participant IDs who have availability on this date
-	participantIDsWithAvailability := make(map[uuid.UUID]bool)
-	for _, avail := range availabilities {
-		participantIDsWithAvailability[avail.ParticipantID] = true
+	participantIDsWithAvailability := make(map[uuid.UUID]bool, len(availableParticipants))
+	participantNames := make([]string, 0, len(availableParticipants))
+	for _, p := range availableParticipants {
+		participantIDsWithAvailability[p.ID] = true
+		participantNames = append(participantNames, p.Name)
 	}
 
 	s.logger.Debug("Participants with availability on date", "count", len(participantIDsWithAvailability))
-
-	// Build list of participant names for display in email
-	participantNames := make([]string, 0, len(participantIDsWithAvailability))
-	if len(participantIDsWithAvailability) > 0 {
-		// Get all participants to build the name list
-		allParticipants, err := s.participantRepo.GetByCalendarID(ctx, calendar.ID)
-		if err != nil {
-			s.logger.Error("Failed to get all participants for name list", "calendar_id", calendar.ID, "error", err)
-		} else {
-			for _, p := range allParticipants {
-				if participantIDsWithAvailability[p.ID] {
-					participantNames = append(participantNames, p.Name)
-				}
-			}
-		}
-	}
 
 	// The names themselves go into the email body and stop there. A participant
 	// is often someone who never signed up for anything and gave only a first

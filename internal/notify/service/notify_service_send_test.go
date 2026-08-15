@@ -56,12 +56,14 @@ func (f *fakeParticipantStore) GetVerifiedParticipantsByCalendar(_ context.Conte
 }
 
 type fakeAvailabilityStore struct {
-	availabilities []*availabilityModels.Availability
-	err            error
+	available []availabilityModels.AvailableParticipant
+	err       error
 }
 
-func (f *fakeAvailabilityStore) GetByDate(_ context.Context, _ uuid.UUID, _ time.Time) ([]*availabilityModels.Availability, error) {
-	return f.availabilities, f.err
+func (f *fakeAvailabilityStore) GetAvailableParticipantsForDate(
+	_ context.Context, _ uuid.UUID, _ time.Time,
+) ([]availabilityModels.AvailableParticipant, error) {
+	return f.available, f.err
 }
 
 type fakeUserStore struct {
@@ -282,8 +284,13 @@ func newNotifyFixture(t *testing.T, config models.NotifyConfig) *notifyFixture {
 	}
 	ownerParticipant.ID = uuid.New()
 
-	available := &availabilityModels.Availability{ParticipantID: participant.ID, Date: date}
-	ownerAvailable := &availabilityModels.Availability{ParticipantID: ownerParticipant.ID, Date: date}
+	// The store answers with participants now, not rows: whether an availability was
+	// typed in or comes from a recurrence is the repository's business, and the
+	// distinction had no place in this service.
+	available := []availabilityModels.AvailableParticipant{
+		{ID: participant.ID, Name: participant.Name},
+		{ID: ownerParticipant.ID, Name: ownerParticipant.Name},
+	}
 
 	return &notifyFixture{
 		calendar:    calendar,
@@ -294,7 +301,7 @@ func newNotifyFixture(t *testing.T, config models.NotifyConfig) *notifyFixture {
 			all:      []calendarModels.Participant{participant, ownerParticipant},
 			verified: []calendarModels.Participant{participant, ownerParticipant},
 		},
-		slots:    &fakeAvailabilityStore{availabilities: []*availabilityModels.Availability{available, ownerAvailable}},
+		slots:    &fakeAvailabilityStore{available: available},
 		users:    &fakeUserStore{user: owner},
 		log:      &fakeNotificationLog{sentRecently: map[string]bool{}},
 		mailer:   &fakeMailer{configured: true},
@@ -443,10 +450,13 @@ func TestCheckThresholdAndNotifyDeduplicatesRecipients(t *testing.T) {
 // TestCheckThresholdAndNotifyEmailRecipientRules covers who is left out.
 func TestCheckThresholdAndNotifyEmailRecipientRules(t *testing.T) {
 	tests := []struct {
-		name       string
-		config     models.NotifyConfig
-		arrange    func(*notifyFixture)
-		wantTo     []string
+		name    string
+		config  models.NotifyConfig
+		arrange func(*notifyFixture)
+		wantTo  []string
+		// wantBody is checked against every message sent, for the cases where who is
+		// listed in the mail matters as much as who receives it.
+		wantBody   []string
 		wantNoMail bool
 	}{
 		{
@@ -479,17 +489,39 @@ func TestCheckThresholdAndNotifyEmailRecipientRules(t *testing.T) {
 			arrange: func(f *notifyFixture) {
 				// Only Ada declared herself available, so the owner participant
 				// is not told even though her address is verified.
-				f.slots.availabilities = []*availabilityModels.Availability{
-					{ParticipantID: f.participant.ID, Date: f.date},
+				f.slots.available = []availabilityModels.AvailableParticipant{
+					{ID: f.participant.ID, Name: f.participant.Name},
 				}
 			},
 			wantTo: []string{"ada@example.test"},
 		},
 		{
+			// The reported defect. Recurrences are expanded when read and never
+			// stored, so a service asking the availabilities table for rows saw
+			// nobody — while the threshold count, which expands them, saw three of
+			// three. The participant was counted towards the event, left out of the
+			// list in the email, and never told about their own Friday.
+			name: "a participant available only through a recurrence is told, and listed",
+			config: models.NotifyConfig{
+				Enabled:            true,
+				NotifyParticipants: true,
+				Channels:           models.ChannelConfig{Email: models.EmailChannelConfig{Enabled: true}},
+			},
+			arrange: func(f *notifyFixture) {
+				// The store answers with the participant either way; what used to
+				// differ is whether a row existed to answer from.
+				f.slots.available = []availabilityModels.AvailableParticipant{
+					{ID: f.participant.ID, Name: f.participant.Name},
+				}
+			},
+			wantTo:   []string{"ada@example.test"},
+			wantBody: []string{"Ada"},
+		},
+		{
 			name:   "nobody is available on the date",
 			config: emailConfig(),
 			arrange: func(f *notifyFixture) {
-				f.slots.availabilities = nil
+				f.slots.available = nil
 			},
 			wantTo: []string{"owner@example.test"},
 		},
@@ -528,8 +560,8 @@ func TestCheckThresholdAndNotifyEmailRecipientRules(t *testing.T) {
 			config: emailConfig(),
 			arrange: func(f *notifyFixture) {
 				f.users.err = errors.New("no such user")
-				f.slots.availabilities = []*availabilityModels.Availability{
-					{ParticipantID: f.participant.ID, Date: f.date},
+				f.slots.available = []availabilityModels.AvailableParticipant{
+					{ID: f.participant.ID, Name: f.participant.Name},
 				}
 				f.people.verified = []calendarModels.Participant{f.participant}
 			},
@@ -584,6 +616,14 @@ func TestCheckThresholdAndNotifyEmailRecipientRules(t *testing.T) {
 				}
 				if !found {
 					t.Errorf("expected %s among the recipients, got %v", want, got)
+				}
+			}
+
+			for _, want := range tt.wantBody {
+				for _, msg := range f.mailer.messages() {
+					if !strings.Contains(msg.Body, want) {
+						t.Errorf("the mail body is missing %q:\n%s", want, msg.Body)
+					}
 				}
 			}
 		})

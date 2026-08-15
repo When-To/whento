@@ -24,6 +24,18 @@ type Availability struct {
 	RecurrenceID  *uuid.UUID `json:"recurrence_id,omitempty"`
 }
 
+// AvailableParticipant is one participant who counts as available on a given date,
+// whether they said so directly or a recurrence says it for them.
+//
+// The distinction matters nowhere it is used, which is the point: a recurrence is how
+// someone answers "every Friday" once instead of fifty times, not a lesser kind of
+// answer. Reading it any other way is what kept recurrence-only participants out of
+// their own threshold notifications.
+type AvailableParticipant struct {
+	ID   uuid.UUID
+	Name string
+}
+
 // CreateAvailabilityRequest represents a request to create availability
 type CreateAvailabilityRequest struct {
 	Date      string  `json:"date" validate:"required"`                  // Format: "2006-01-02"
