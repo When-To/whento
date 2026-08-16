@@ -1,0 +1,31 @@
+<!doctype html>
+<!--
+  Served in place of the one github.com/swaggo/http-swagger renders.
+
+  That one builds the interface from an inline <script>, which the Content-Security-Policy
+  refuses: script-src is 'self', so the bundle loaded and #swagger-ui stayed empty. The
+  template is an unexported const parsed inside the handler, and its Config offers neither a
+  nonce nor a hash, so there was nothing to configure — only to replace.
+
+  This is the shape github.com/swaggo/files already ships in dist/index.html, which is
+  CSP-clean and unreachable only because the handler intercepts index.html to render its own.
+  Every asset below is a relative file served by that same handler; nothing here is inline.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WhenTo API</title>
+    <link rel="stylesheet" type="text/css" href="./swagger-ui.css" />
+    <link rel="stylesheet" type="text/css" href="./index.css" />
+    <link rel="icon" type="image/png" href="./favicon-32x32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="./favicon-16x16.png" sizes="16x16" />
+  </head>
+
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="./swagger-ui-bundle.js" charset="UTF-8"></script>
+    <script src="./swagger-ui-standalone-preset.js" charset="UTF-8"></script>
+    <script src="./swagger-initializer.js" charset="UTF-8"></script>
+  </body>
+</html>
