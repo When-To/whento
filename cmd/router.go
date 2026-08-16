@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	httpSwagger "github.com/swaggo/http-swagger/v2"
 
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/middleware"
@@ -62,7 +61,9 @@ func newRouter(d *deps, h *handlers, spa http.Handler) chi.Router {
 	registerSEORoutes(r, h)
 
 	// ========== SWAGGER DOCUMENTATION ==========
-	r.Get("/swagger/*", httpSwagger.WrapHandler)
+	// swaggerHandler, not httpSwagger.WrapHandler: the library's index builds the UI from
+	// an inline script the CSP refuses. See cmd/swagger.go.
+	r.Get("/swagger/*", swaggerHandler())
 
 	registerFallbacks(r, spa)
 
