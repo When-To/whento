@@ -175,7 +175,7 @@ func TestCalculateMaxSimultaneousParticipants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := calculateMaxSimultaneousParticipants(tt.participants)
+			result := countThatCanMeet(tt.participants, 0)
 			if result != tt.expected {
 				t.Errorf("%s: expected %d, got %d", tt.description, tt.expected, result)
 			}

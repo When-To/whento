@@ -619,22 +619,15 @@ func (s *AvailabilityService) GetDateSummary(ctx context.Context, token, dateStr
 
 	participantSummaries := summariesFrom(occurrences)
 
-	// Apply min_duration_hours filter if configured
-	if calendarInfo.MinDurationHours > 0 && len(participantSummaries) > 0 {
-		duration := calculateDurationForDate(participantSummaries)
-		if duration < float64(calendarInfo.MinDurationHours) {
-			// Return empty summary if duration is less than minimum
-			return &models.PublicDateAvailabilitySummary{
-				Date:         dateStr,
-				TotalCount:   0,
-				Participants: []models.PublicParticipantAvailabilitySummary{},
-			}, nil
-		}
-	}
-
+	// The minimum duration bounds which overlaps count, not whether the date is worth
+	// answering about. It used to blank the whole summary — count and participants —
+	// whenever the window shared by *everyone* fell short, so a day where two people
+	// were free at different hours reported nobody available at all, with nothing to
+	// say why. The feed never worked that way: it drops a slot that is too short and
+	// keeps the rest.
 	return &models.PublicDateAvailabilitySummary{
 		Date:         dateStr,
-		TotalCount:   calculateMaxSimultaneousParticipants(participantSummaries),
+		TotalCount:   countThatCanMeet(participantSummaries, calendarInfo.MinDurationHours),
 		Participants: filterParticipantSummaries(calendarInfo.LockParticipants, participantID, participantSummaries),
 	}, nil
 }
@@ -733,18 +726,9 @@ func (s *AvailabilityService) GetRangeSummary(ctx context.Context, token, startD
 	// calling .map() on the payload would have thrown.
 	summaries := make([]models.PublicDateAvailabilitySummary, 0, len(dateMap))
 	for date, participants := range dateMap {
-		// Apply min_duration_hours filter if configured
-		if calendarInfo.MinDurationHours > 0 {
-			duration := calculateDurationForDate(participants)
-			if duration < float64(calendarInfo.MinDurationHours) {
-				// Skip this date if duration is less than minimum
-				continue
-			}
-		}
-
 		summaries = append(summaries, models.PublicDateAvailabilitySummary{
 			Date:         date,
-			TotalCount:   calculateMaxSimultaneousParticipants(participants),
+			TotalCount:   countThatCanMeet(participants, calendarInfo.MinDurationHours),
 			Participants: filterParticipantSummaries(calendarInfo.LockParticipants, participantID, participants),
 		})
 	}
@@ -836,62 +820,6 @@ func toAvailabilityResponse(availability *models.Availability, participantName s
 		CreatedAt:                availability.CreatedAt,
 		UpdatedAt:                availability.UpdatedAt,
 	}
-}
-
-// calculateDurationForDate calculates the event duration for a date based on participant availabilities
-// Returns duration in hours
-func calculateDurationForDate(participants []models.ParticipantAvailabilitySummary) float64 {
-	// Check if all participants have no times (all-day event)
-	hasAnyTime := false
-	for _, p := range participants {
-		if p.StartTime != nil || p.EndTime != nil {
-			hasAnyTime = true
-			break
-		}
-	}
-
-	// If all-day event, return 24 hours
-	if !hasAnyTime {
-		return 24.0
-	}
-
-	// Calculate MAX(start_time) and MIN(end_time)
-	var maxStart, minEnd *time.Time
-
-	for _, p := range participants {
-		if p.StartTime != nil && *p.StartTime != "" {
-			t, err := time.Parse("15:04", *p.StartTime)
-			if err == nil {
-				if maxStart == nil || t.After(*maxStart) {
-					maxStart = &t
-				}
-			}
-		}
-
-		if p.EndTime != nil && *p.EndTime != "" {
-			t, err := time.Parse("15:04", *p.EndTime)
-			if err == nil {
-				if minEnd == nil || t.Before(*minEnd) {
-					minEnd = &t
-				}
-			}
-		}
-	}
-
-	// If we couldn't determine both times, treat as all-day
-	if maxStart == nil || minEnd == nil {
-		return 24.0
-	}
-
-	// Calculate duration in hours
-	duration := minEnd.Sub(*maxStart).Hours()
-
-	// Handle negative or zero duration (invalid case)
-	if duration <= 0 {
-		return 0.0
-	}
-
-	return duration
 }
 
 // Recurrence methods
@@ -1549,18 +1477,6 @@ func compareTime(t1, t2 string) int {
 	return 0
 }
 
-// calculateMaxSimultaneousParticipants calculates the maximum number of participants
-// that are available at the same time on a given date.
-// This uses the same logic as the ICS feed generation (time slot segmentation).
-func calculateMaxSimultaneousParticipants(participants []models.ParticipantAvailabilitySummary) int {
-	windows := make([]models.TimeWindow, 0, len(participants))
-	for _, p := range participants {
-		windows = append(windows, p.Window())
-	}
-
-	return models.MaxSimultaneous(windows)
-}
-
 // recurrencesOverlap checks if two recurrences on the same day of week have overlapping date ranges.
 // Returns true if the date ranges overlap.
 // Rules:
@@ -1725,4 +1641,17 @@ func summariesFrom(occurrences []models.Occurrence) []models.ParticipantAvailabi
 	}
 
 	return summaries
+}
+
+// countThatCanMeet is how many participants are free together for long enough to hold
+// the event, which is what both summary endpoints report and what the grid badge shows.
+//
+// minDurationHours of zero means any overlap counts, however brief.
+func countThatCanMeet(participants []models.ParticipantAvailabilitySummary, minDurationHours int) int {
+	windows := make([]models.TimeWindow, 0, len(participants))
+	for _, p := range participants {
+		windows = append(windows, p.Window())
+	}
+
+	return models.MaxSimultaneousFor(windows, minDurationHours*60)
 }
