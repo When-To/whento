@@ -31,6 +31,11 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
+  # A floating minor, deliberately. What makes it safe is check-latest on every
+  # setup-go step below: without it the action resolves the spec against the runner's
+  # toolcache first, and the hosted image ships a Go of its own — '1.26' matched the
+  # preinstalled 1.26.5 and the version manifest was never consulted, which is how a
+  # toolchain with six known stdlib advisories kept being used after 1.26.6 shipped.
   GO_VERSION: '1.26'
 
 jobs:
@@ -47,6 +52,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
+          check-latest: true
 
       # Reachability analysis type-checks the packages, so cmd/ needs its generated docs
       # package and web/embed.go needs something behind its //go:embed.
@@ -136,6 +142,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
+          check-latest: true
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4

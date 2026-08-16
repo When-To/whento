@@ -38,6 +38,11 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
+  # A floating minor, deliberately. What makes it safe is check-latest on every
+  # setup-go step below: without it the action resolves the spec against the runner's
+  # toolcache first, and the hosted image ships a Go of its own — '1.26' matched the
+  # preinstalled 1.26.5 and the version manifest was never consulted, which is how a
+  # toolchain with six known stdlib advisories kept being used after 1.26.6 shipped.
   GO_VERSION: '1.26'
   NODE_VERSION: '24'
   # Must match the version the Dockerfiles install, or migrations are validated with a
@@ -90,6 +95,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
+          check-latest: true
 
       - name: Install actionlint
         run: GOWORK=off go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
@@ -110,6 +116,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
+          check-latest: true
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -213,6 +220,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
+          check-latest: true
 
       - name: Install swag CLI
         run: go install github.com/swaggo/swag/cmd/swag@v1.16.6
@@ -269,6 +277,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
+          check-latest: true
 
       - name: Install golangci-lint
         run: |
@@ -329,6 +338,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
+          check-latest: true
 
       - name: Download dependencies
         run: go mod download
@@ -437,6 +447,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
+          check-latest: true
 
       - name: Build selfhosted
         run: go build -tags selfhosted -o /dev/null ./cmd/
@@ -501,6 +512,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
+          check-latest: true
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
