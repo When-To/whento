@@ -283,7 +283,9 @@ func (s *NotifyService) notifyOwnerExternalChannels(
 				)
 			}
 		} else {
-			s.logger.Debug("Discord notification already sent recently")
+			// Info, not Debug: this is the whole outcome for the channel, and at Debug
+			// a suppressed notice was indistinguishable from one that never ran.
+			s.logger.Info("Discord notification suppressed: already sent for this transition within the hour")
 		}
 	} else {
 		s.logger.Debug("Discord channel disabled or webhook not configured")
@@ -308,7 +310,9 @@ func (s *NotifyService) notifyOwnerExternalChannels(
 				)
 			}
 		} else {
-			s.logger.Debug("Slack notification already sent recently")
+			// Info, not Debug: this is the whole outcome for the channel, and at Debug
+			// a suppressed notice was indistinguishable from one that never ran.
+			s.logger.Info("Slack notification suppressed: already sent for this transition within the hour")
 		}
 	} else {
 		s.logger.Debug("Slack channel disabled or webhook not configured")
@@ -340,7 +344,9 @@ func (s *NotifyService) notifyOwnerExternalChannels(
 				)
 			}
 		} else {
-			s.logger.Debug("Telegram notification already sent recently")
+			// Info, not Debug: this is the whole outcome for the channel, and at Debug
+			// a suppressed notice was indistinguishable from one that never ran.
+			s.logger.Info("Telegram notification suppressed: already sent for this transition within the hour")
 		}
 	} else {
 		s.logger.Debug("Telegram channel disabled or credentials not configured")
@@ -490,6 +496,8 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 		"calendar_id", calendar.ID)
 
 	// 3. Send one email per unique recipient
+	var sentCount, suppressed, failed int
+
 	for email, recipient := range recipients {
 		// One tag per recipient, reused by every line in this iteration, so an
 		// operator can follow a single send through the loop without the address
@@ -508,9 +516,12 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 		}
 
 		if sent {
+			suppressed++
+
 			s.logger.Debug("Email notification already sent recently, skipping",
 				"recipient_ref", recipientRef,
 				"recipient_id_ref", recipientIDRef)
+
 			continue
 		}
 
@@ -535,11 +546,15 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 			"personalised_link", recipient.ParticipantID != nil)
 
 		if err := s.sendEmailNotification(recipient.Email, htmlMessage, recipient.Locale, true); err != nil {
+			failed++
+
 			s.logger.Error("Failed to send email",
 				"recipient_ref", recipientRef,
 				"recipient_id_ref", recipientIDRef,
 				"error", err)
 		} else {
+			sentCount++
+
 			s.logger.Info("Email notification sent successfully",
 				"recipient_ref", recipientRef,
 				"recipient_id_ref", recipientIDRef)
@@ -555,7 +570,18 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 		}
 	}
 
-	s.logger.Debug("sendDeduplicatedEmailNotifications completed")
+	// One line saying what became of the whole batch, at the level an operator watches.
+	//
+	// The two lines above this loop announce a transition and a recipient count, and
+	// every outcome after them used to be Debug — so a batch entirely suppressed by the
+	// anti-spam ledger looked identical to a batch that crashed: the log said
+	// "SENDING NOTIFICATIONS", then nothing at all. Suppression is the expected
+	// behaviour on a second crossing within the hour, and it has to say so.
+	s.logger.Info("Threshold email notifications complete",
+		"calendar_id", calendar.ID,
+		"sent", sentCount,
+		"suppressed_as_already_sent", suppressed,
+		"failed", failed)
 	return nil
 }
 
