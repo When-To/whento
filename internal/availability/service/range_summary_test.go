@@ -20,16 +20,31 @@ import (
 
 var errStore = errors.New("store unavailable")
 
+// Four tests were dropped from this file when the expansion moved into SQL, because the
+// service no longer decides any of it. Each is carried by a repository database test:
+//
+//   - expanding a recurrence into the dates it falls on — TestOccurrencesExpandRecurrencesAndCarryTimes
+//   - a manual answer suppressing that day's occurrence — TestAManualAnswerSuppressesTheRecurrence
+//   - an exception removing a single date from a range — TestOccurrencesForRangeCoverEveryDay
+//   - recurrence start and end bounds — TestAvailableParticipantsHonourRecurrenceBounds
+//
+// A fifth, TestGetRangeSummaryUnknownParticipant, is answered by the occurrence query's
+// JOIN on participants scoped to the calendar rather than by any loop here.
+
 // The mocks below are hand-written and deliberately narrow: only the methods the
 // summary paths reach carry behaviour, the rest satisfy the interface and would fail
 // loudly if a future change started calling them.
 
 type mockAvailabilityRepo struct {
-	inRange    []*models.Availability
-	inRangeErr error
-	onDate     []*models.Availability
-	onDateErr  error
-	createErr  error
+	createErr error
+
+	// The expansion the summary endpoints now read. Recurrence semantics — which
+	// occurrences a manual answer suppresses, which an exception removes — moved to SQL
+	// with it, so they are covered by the repository's database tests rather than mocked
+	// here. What is left for these tests is what the service still decides: masking,
+	// minimum duration, overlap, and the shape of an empty answer.
+	occurrences    []models.Occurrence
+	occurrencesErr error
 }
 
 var _ AvailabilityRepository = (*mockAvailabilityRepo)(nil)
@@ -54,18 +69,20 @@ func (m *mockAvailabilityRepo) GetByParticipantAndDate(
 	return nil, nil
 }
 
-func (m *mockAvailabilityRepo) GetByDate(context.Context, uuid.UUID, time.Time) ([]*models.Availability, error) {
-	return m.onDate, m.onDateErr
-}
-
-func (m *mockAvailabilityRepo) GetByCalendarDateRange(
-	context.Context, uuid.UUID, time.Time, time.Time,
-) ([]*models.Availability, error) {
-	return m.inRange, m.inRangeErr
-}
-
 func (m *mockAvailabilityRepo) GetParticipantCountForDate(context.Context, uuid.UUID, time.Time) (int, error) {
 	return 0, nil
+}
+
+func (m *mockAvailabilityRepo) GetOccurrencesForDate(
+	context.Context, uuid.UUID, time.Time,
+) ([]models.Occurrence, error) {
+	return m.occurrences, m.occurrencesErr
+}
+
+func (m *mockAvailabilityRepo) GetOccurrencesForRange(
+	context.Context, uuid.UUID, time.Time, time.Time,
+) ([]models.Occurrence, error) {
+	return m.occurrences, m.occurrencesErr
 }
 
 func (m *mockAvailabilityRepo) Update(context.Context, *models.Availability) error { return nil }
@@ -113,8 +130,7 @@ func (m *mockParticipantsRepo) GetByCalendarID(context.Context, uuid.UUID) ([]*r
 }
 
 type mockRecurrenceRepo struct {
-	byCalendar    []models.Recurrence
-	byCalendarErr error
+	byParticipant []models.Recurrence
 	exceptions    map[uuid.UUID][]models.RecurrenceException
 	exceptionsErr error
 }
@@ -124,11 +140,11 @@ var _ RecurrenceRepository = (*mockRecurrenceRepo)(nil)
 func (m *mockRecurrenceRepo) CreateRecurrence(context.Context, *models.Recurrence) error { return nil }
 
 func (m *mockRecurrenceRepo) GetRecurrencesByParticipant(context.Context, uuid.UUID) ([]models.Recurrence, error) {
-	return nil, nil
+	return m.byParticipant, nil
 }
 
 func (m *mockRecurrenceRepo) GetRecurrencesByCalendar(context.Context, uuid.UUID) ([]models.Recurrence, error) {
-	return m.byCalendar, m.byCalendarErr
+	return nil, nil
 }
 
 func (m *mockRecurrenceRepo) GetRecurrenceByID(context.Context, uuid.UUID) (*models.Recurrence, error) {
@@ -169,6 +185,19 @@ var _ NotifyService = (*mockNotifyService)(nil)
 
 func (m *mockNotifyService) CheckThresholdAndNotify(context.Context, uuid.UUID, time.Time, int) error {
 	return nil
+}
+
+// available seeds one occurrence, which is what the repository now hands the service.
+// Whether it came from a typed answer or a recurrence is settled before this point — see
+// the repository's database tests — so these tests no longer have to say.
+func available(p *repository.Participant, date time.Time, start, end *string) models.Occurrence {
+	return models.Occurrence{
+		Date:            date,
+		ParticipantID:   p.ID,
+		ParticipantName: p.Name,
+		StartTime:       start,
+		EndTime:         end,
+	}
 }
 
 // summaryFixture assembles a calendar, two participants and a service around them.
@@ -220,32 +249,6 @@ func newSummaryFixture(t *testing.T, configure func(*repository.Calendar)) *summ
 	}
 }
 
-func availabilityOn(t *testing.T, participantID uuid.UUID, iso string, start, end *string) *models.Availability {
-	t.Helper()
-
-	availability := &models.Availability{
-		ParticipantID: participantID,
-		Date:          mustDate(t, iso),
-		StartTime:     start,
-		EndTime:       end,
-	}
-	availability.ID = uuid.New()
-
-	return availability
-}
-
-func recurrenceOn(participantID uuid.UUID, dayOfWeek int, startDate string, endDate *string) models.Recurrence {
-	recurrence := models.Recurrence{
-		ParticipantID: participantID,
-		DayOfWeek:     dayOfWeek,
-		StartDate:     startDate,
-		EndDate:       endDate,
-	}
-	recurrence.ID = uuid.New()
-
-	return recurrence
-}
-
 // byDate makes the assertions independent of map iteration order, which GetRangeSummary
 // does not control.
 func byDate(summaries []models.PublicDateAvailabilitySummary) map[string]models.PublicDateAvailabilitySummary {
@@ -267,17 +270,27 @@ func dates(summaries []models.PublicDateAvailabilitySummary) []string {
 	return out
 }
 
-// TestGetRangeSummaryExpandsRecurrences is the behaviour the frontend is built around:
-// the range summary hands back recurrence *occurrences* alongside explicit answers,
-// with no marker distinguishing the two. That is why ParticipantView fetches its own
+// TestGetRangeSummaryGroupsOccurrencesByDate covers the bucketing, which is all the range
+// endpoint still does with the expansion: one summary per date that has an occurrence,
+// several participants on a date collapsing into that one summary, and no marker telling
+// an occurrence a recurrence produced from one somebody typed. That last part is the
+// behaviour the frontend is built around, and why ParticipantView fetches its own
 // availabilities separately.
-func TestGetRangeSummaryExpandsRecurrences(t *testing.T) {
+func TestGetRangeSummaryGroupsOccurrencesByDate(t *testing.T) {
 	fixture := newSummaryFixture(t, nil)
 
-	// Every Thursday from 1 March. 2026-03-05, 03-12, 03-19 and 03-26 are Thursdays.
-	fixture.recurrences.byCalendar = []models.Recurrence{
-		recurrenceOn(fixture.alice.ID, 4, "2026-03-01", nil),
+	// Alice on every Thursday of March, as the repository expands a weekly rule, with Bob
+	// answering one of them.
+	for _, iso := range []string{"2026-03-05", "2026-03-12", "2026-03-19", "2026-03-26"} {
+		fixture.availRepo.occurrences = append(
+			fixture.availRepo.occurrences,
+			available(fixture.alice, mustDate(t, iso), nil, nil),
+		)
 	}
+	fixture.availRepo.occurrences = append(
+		fixture.availRepo.occurrences,
+		available(fixture.bob, mustDate(t, "2026-03-12"), ptr("09:00"), ptr("17:00")),
+	)
 
 	got, err := fixture.service.GetRangeSummary(
 		context.Background(), "token", "2026-03-01", "2026-03-31", "",
@@ -287,165 +300,30 @@ func TestGetRangeSummaryExpandsRecurrences(t *testing.T) {
 	}
 
 	want := []string{"2026-03-05", "2026-03-12", "2026-03-19", "2026-03-26"}
-	if gotDates := dates(got); len(gotDates) != len(want) {
+	gotDates := dates(got)
+	if len(gotDates) != len(want) {
 		t.Fatalf("got dates %v, want %v", gotDates, want)
 	}
-	for i, date := range dates(got) {
+	for i, date := range gotDates {
 		if date != want[i] {
 			t.Errorf("date %d = %s, want %s", i, date, want[i])
 		}
 	}
 
 	for _, summary := range got {
-		if len(summary.Participants) != 1 || summary.Participants[0].ParticipantName != "Alice" {
-			t.Errorf("%s: participants = %+v, want Alice alone", summary.Date, summary.Participants)
+		wantParticipants := 1
+		if summary.Date == "2026-03-12" {
+			wantParticipants = 2
 		}
-	}
-}
-
-// TestGetRangeSummaryDeduplicates covers the guard that stops one participant being
-// counted twice on a date they both answered explicitly and are covered for by a
-// recurrence. Without it, a threshold of two could be "met" by one person.
-func TestGetRangeSummaryDeduplicates(t *testing.T) {
-	fixture := newSummaryFixture(t, nil)
-
-	// Alice recurs every Thursday, and has also answered explicitly on 2026-03-05.
-	fixture.recurrences.byCalendar = []models.Recurrence{
-		recurrenceOn(fixture.alice.ID, 4, "2026-03-01", nil),
-	}
-	fixture.availRepo.inRange = []*models.Availability{
-		availabilityOn(t, fixture.alice.ID, "2026-03-05", ptr("14:00"), ptr("18:00")),
-	}
-
-	got, err := fixture.service.GetRangeSummary(
-		context.Background(), "token", "2026-03-05", "2026-03-05", "",
-	)
-	if err != nil {
-		t.Fatalf("GetRangeSummary: %v", err)
-	}
-
-	summary, ok := byDate(got)["2026-03-05"]
-	if !ok {
-		t.Fatal("2026-03-05 is missing from the summary")
-	}
-
-	if len(summary.Participants) != 1 {
-		t.Fatalf("Alice appears %d times, want once", len(summary.Participants))
-	}
-
-	// The explicit answer wins: its times are the ones reported, not the
-	// recurrence's.
-	if deref(summary.Participants[0].StartTime) != "14:00" {
-		t.Errorf("start = %s, want the explicit 14:00", deref(summary.Participants[0].StartTime))
-	}
-	if summary.TotalCount != 1 {
-		t.Errorf("TotalCount = %d, want 1", summary.TotalCount)
-	}
-}
-
-// TestGetRangeSummaryHonoursExceptions covers the subtraction: an excepted date must
-// disappear from the expansion entirely, not merely be marked.
-func TestGetRangeSummaryHonoursExceptions(t *testing.T) {
-	fixture := newSummaryFixture(t, nil)
-
-	recurrence := recurrenceOn(fixture.alice.ID, 4, "2026-03-01", nil)
-	fixture.recurrences.byCalendar = []models.Recurrence{recurrence}
-	fixture.recurrences.exceptions[recurrence.ID] = []models.RecurrenceException{
-		{RecurrenceID: recurrence.ID, ExcludedDate: "2026-03-12"},
-	}
-
-	got, err := fixture.service.GetRangeSummary(
-		context.Background(), "token", "2026-03-01", "2026-03-31", "",
-	)
-	if err != nil {
-		t.Fatalf("GetRangeSummary: %v", err)
-	}
-
-	if _, excepted := byDate(got)["2026-03-12"]; excepted {
-		t.Error("the excepted date is still present in the summary")
-	}
-	if _, kept := byDate(got)["2026-03-05"]; !kept {
-		t.Error("an unexcepted occurrence was dropped along with the exception")
-	}
-	if len(got) != 3 {
-		t.Errorf("got %d dates, want 3 (four Thursdays minus one exception)", len(got))
-	}
-}
-
-// TestGetRangeSummaryRecurrenceBounds pins the window arithmetic. The comparison is
-// done on the ISO strings rather than on parsed dates, deliberately, to sidestep
-// timezone drift — so the bounds are inclusive at both ends.
-func TestGetRangeSummaryRecurrenceBounds(t *testing.T) {
-	tests := []struct {
-		name      string
-		start     string
-		end       *string
-		queryFrom string
-		queryTo   string
-		wantDates []string
-	}{
-		{
-			name:      "starts mid-range",
-			start:     "2026-03-10",
-			queryFrom: "2026-03-01", queryTo: "2026-03-31",
-			wantDates: []string{"2026-03-12", "2026-03-19", "2026-03-26"},
-		},
-		{
-			name:  "ends mid-range, inclusively",
-			start: "2026-03-01", end: ptr("2026-03-12"),
-			queryFrom: "2026-03-01", queryTo: "2026-03-31",
-			wantDates: []string{"2026-03-05", "2026-03-12"},
-		},
-		{
-			name:      "starts exactly on an occurrence",
-			start:     "2026-03-05",
-			queryFrom: "2026-03-01", queryTo: "2026-03-10",
-			wantDates: []string{"2026-03-05"},
-		},
-		{
-			name:  "a single-day window",
-			start: "2026-03-01", end: ptr("2026-03-05"),
-			queryFrom: "2026-03-05", queryTo: "2026-03-05",
-			wantDates: []string{"2026-03-05"},
-		},
-		{
-			name:  "the recurrence ends before the query starts",
-			start: "2026-01-01", end: ptr("2026-02-01"),
-			queryFrom: "2026-03-01", queryTo: "2026-03-31",
-			wantDates: nil,
-		},
-		{
-			name:      "the recurrence starts after the query ends",
-			start:     "2026-06-01",
-			queryFrom: "2026-03-01", queryTo: "2026-03-31",
-			wantDates: nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			fixture := newSummaryFixture(t, nil)
-			fixture.recurrences.byCalendar = []models.Recurrence{
-				recurrenceOn(fixture.alice.ID, 4, tt.start, tt.end),
-			}
-
-			got, err := fixture.service.GetRangeSummary(
-				context.Background(), "token", tt.queryFrom, tt.queryTo, "",
+		if len(summary.Participants) != wantParticipants {
+			t.Errorf(
+				"%s: participants = %+v, want %d",
+				summary.Date, summary.Participants, wantParticipants,
 			)
-			if err != nil {
-				t.Fatalf("GetRangeSummary: %v", err)
-			}
-
-			gotDates := dates(got)
-			if len(gotDates) != len(tt.wantDates) {
-				t.Fatalf("got %v, want %v", gotDates, tt.wantDates)
-			}
-			for i, date := range gotDates {
-				if date != tt.wantDates[i] {
-					t.Errorf("date %d = %s, want %s", i, date, tt.wantDates[i])
-				}
-			}
-		})
+		}
+		if summary.Participants[0].ParticipantName != "Alice" {
+			t.Errorf("%s: first participant = %s, want Alice", summary.Date, summary.Participants[0].ParticipantName)
+		}
 	}
 }
 
@@ -493,9 +371,9 @@ func TestGetRangeSummaryMinDuration(t *testing.T) {
 				c.MinDurationHours = tt.minDuration
 			})
 
-			fixture.availRepo.inRange = []*models.Availability{
-				availabilityOn(t, fixture.alice.ID, "2026-03-05", ptr(tt.aliceStart), ptr(tt.aliceEnd)),
-				availabilityOn(t, fixture.bob.ID, "2026-03-05", ptr(tt.bobStart), ptr(tt.bobEnd)),
+			fixture.availRepo.occurrences = []models.Occurrence{
+				available(fixture.alice, mustDate(t, "2026-03-05"), ptr(tt.aliceStart), ptr(tt.aliceEnd)),
+				available(fixture.bob, mustDate(t, "2026-03-05"), ptr(tt.bobStart), ptr(tt.bobEnd)),
 			}
 
 			got, err := fixture.service.GetRangeSummary(
@@ -520,9 +398,9 @@ func TestGetRangeSummaryCountsSimultaneous(t *testing.T) {
 
 	// Two people on the same date who never overlap: two answers, but never two at
 	// once, so the count must be one.
-	fixture.availRepo.inRange = []*models.Availability{
-		availabilityOn(t, fixture.alice.ID, "2026-03-05", ptr("09:00"), ptr("10:00")),
-		availabilityOn(t, fixture.bob.ID, "2026-03-05", ptr("14:00"), ptr("16:00")),
+	fixture.availRepo.occurrences = []models.Occurrence{
+		available(fixture.alice, mustDate(t, "2026-03-05"), ptr("09:00"), ptr("10:00")),
+		available(fixture.bob, mustDate(t, "2026-03-05"), ptr("14:00"), ptr("16:00")),
 	}
 
 	got, err := fixture.service.GetRangeSummary(
@@ -544,9 +422,9 @@ func TestGetRangeSummaryCountsSimultaneous(t *testing.T) {
 func TestGetRangeSummaryPrivacy(t *testing.T) {
 	fixture := newSummaryFixture(t, func(c *repository.Calendar) { c.LockParticipants = true })
 
-	fixture.availRepo.inRange = []*models.Availability{
-		availabilityOn(t, fixture.alice.ID, "2026-03-05", ptr("09:00"), ptr("17:00")),
-		availabilityOn(t, fixture.bob.ID, "2026-03-05", ptr("09:00"), ptr("17:00")),
+	fixture.availRepo.occurrences = []models.Occurrence{
+		available(fixture.alice, mustDate(t, "2026-03-05"), ptr("09:00"), ptr("17:00")),
+		available(fixture.bob, mustDate(t, "2026-03-05"), ptr("09:00"), ptr("17:00")),
 	}
 
 	got, err := fixture.service.GetRangeSummary(
@@ -569,30 +447,6 @@ func TestGetRangeSummaryPrivacy(t *testing.T) {
 	}
 	if identified != 1 {
 		t.Errorf("%d participants were identified, want 1 under lock_participants", identified)
-	}
-}
-
-// TestGetRangeSummaryUnknownParticipant covers a consistency gap: an availability or
-// recurrence whose participant is no longer on the calendar is dropped rather than
-// reported under an empty name.
-func TestGetRangeSummaryUnknownParticipant(t *testing.T) {
-	fixture := newSummaryFixture(t, nil)
-
-	ghost := uuid.New()
-	fixture.availRepo.inRange = []*models.Availability{
-		availabilityOn(t, ghost, "2026-03-05", ptr("09:00"), ptr("17:00")),
-	}
-	fixture.recurrences.byCalendar = []models.Recurrence{recurrenceOn(ghost, 4, "2026-03-01", nil)}
-
-	got, err := fixture.service.GetRangeSummary(
-		context.Background(), "token", "2026-03-05", "2026-03-05", "",
-	)
-	if err != nil {
-		t.Fatalf("GetRangeSummary: %v", err)
-	}
-
-	if len(got) != 0 {
-		t.Errorf("got %d dates, want none: the participant is unknown", len(got))
 	}
 }
 
@@ -644,24 +498,33 @@ func TestGetRangeSummaryErrors(t *testing.T) {
 
 	t.Run("a store failure is propagated", func(t *testing.T) {
 		fixture := newSummaryFixture(t, nil)
-		fixture.availRepo.inRangeErr = errStore
+		fixture.availRepo.occurrencesErr = errStore
 
 		_, err := fixture.service.GetRangeSummary(context.Background(), "token", "2026-03-01", "2026-03-31", "")
 		if !errors.Is(err, errStore) {
 			t.Errorf("error = %v, want the store failure", err)
 		}
 	})
+}
 
-	t.Run("an exception lookup failure is propagated", func(t *testing.T) {
-		fixture := newSummaryFixture(t, nil)
-		fixture.recurrences.byCalendar = []models.Recurrence{recurrenceOn(fixture.alice.ID, 4, "2026-03-01", nil)}
-		fixture.recurrences.exceptionsErr = errStore
+// TestExceptionLookupFailureIsPropagated used to be a subtest of TestGetRangeSummaryErrors,
+// back when the range summary loaded exceptions to subtract them itself. GetParticipantRecurrences
+// is the last caller of exceptionsFor, and the assertion is the one that mattered either
+// way: a failed lookup is reported, not swallowed into an answer missing its exceptions.
+func TestExceptionLookupFailureIsPropagated(t *testing.T) {
+	fixture := newSummaryFixture(t, nil)
 
-		_, err := fixture.service.GetRangeSummary(context.Background(), "token", "2026-03-01", "2026-03-31", "")
-		if !errors.Is(err, errStore) {
-			t.Errorf("error = %v, want the store failure", err)
-		}
-	})
+	recurrence := models.Recurrence{ParticipantID: fixture.alice.ID, DayOfWeek: 4, StartDate: "2026-03-01"}
+	recurrence.ID = uuid.New()
+	fixture.recurrences.byParticipant = []models.Recurrence{recurrence}
+	fixture.recurrences.exceptionsErr = errStore
+
+	_, err := fixture.service.GetParticipantRecurrences(
+		context.Background(), "token", fixture.alice.ID.String(),
+	)
+	if !errors.Is(err, errStore) {
+		t.Errorf("error = %v, want the store failure", err)
+	}
 }
 
 // TestGetRangeSummaryEmptyRange confirms a quiet calendar produces no rows rather than

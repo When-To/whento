@@ -24,6 +24,25 @@ type Availability struct {
 	RecurrenceID  *uuid.UUID `json:"recurrence_id,omitempty"`
 }
 
+// Occurrence is one participant being available on one date, whether they said so
+// directly or a recurrence says it for them.
+//
+// This is what the several expansions of "who is available" had each been deriving
+// separately — the day view and the range view in Go, the threshold count in SQL — and
+// disagreeing about. A recurrence occurrence and a manual answer are the same thing to
+// everyone who reads them; which record explains it matters only to the query that
+// produced it, and it applies the one rule they all shared: a manual answer suppresses
+// the recurrence for that participant on that date, times and all.
+type Occurrence struct {
+	Date            time.Time
+	ParticipantID   uuid.UUID
+	ParticipantName string
+	// StartTime and EndTime are "15:04", or nil for an all-day answer.
+	StartTime *string
+	EndTime   *string
+	Note      string
+}
+
 // AvailableParticipant is one participant who counts as available on a given date,
 // whether they said so directly or a recurrence says it for them.
 //
@@ -121,4 +140,128 @@ type PublicDateAvailabilitySummary struct {
 	Date         string                                 `json:"date"`
 	TotalCount   int                                    `json:"total_count"`
 	Participants []PublicParticipantAvailabilitySummary `json:"participants"`
+}
+
+// TimeWindow is one availability's span, "15:04" or nil for all day.
+type TimeWindow struct {
+	Start *string
+	End   *string
+}
+
+// Window is how an occurrence enters the overlap calculation.
+func (o Occurrence) Window() TimeWindow {
+	return TimeWindow{Start: o.StartTime, End: o.EndTime}
+}
+
+// Window is how a summary row enters it.
+func (p ParticipantAvailabilitySummary) Window() TimeWindow {
+	return TimeWindow{Start: p.StartTime, End: p.EndTime}
+}
+
+// MaxSimultaneous returns the largest number of the given windows that are open at the
+// same moment. A nil start or end means all day, so a calendar answered entirely in whole
+// days gives the same number as simply counting the answers.
+//
+// It lives here rather than in the availability service because the notification threshold
+// needs it too, and the dependency runs availability -> notify: the detector cannot reach
+// back into the service without a cycle. Both packages already import this one.
+func MaxSimultaneous(windows []TimeWindow) int {
+	if len(windows) == 0 {
+		return 0
+	}
+
+	// Normalize participant times (treat nil as 00:00-23:59)
+	type normalizedParticipant struct {
+		startMinutes int
+		endMinutes   int
+		valid        bool
+	}
+
+	normalized := make([]normalizedParticipant, len(windows))
+	validCount := 0
+	for i, p := range windows {
+		startStr := "00:00"
+		endStr := "23:59"
+
+		if p.Start != nil && *p.Start != "" {
+			startStr = *p.Start
+		}
+		if p.End != nil && *p.End != "" {
+			endStr = *p.End
+		}
+
+		startTime, err1 := time.Parse("15:04", startStr)
+		endTime, err2 := time.Parse("15:04", endStr)
+
+		if err1 != nil || err2 != nil {
+			// If parsing fails, mark as invalid
+			normalized[i] = normalizedParticipant{valid: false}
+			continue
+		}
+
+		normalized[i] = normalizedParticipant{
+			startMinutes: startTime.Hour()*60 + startTime.Minute(),
+			endMinutes:   endTime.Hour()*60 + endTime.Minute(),
+			valid:        true,
+		}
+		validCount++
+	}
+
+	if validCount == 0 {
+		return 0
+	}
+
+	// Collect all unique time boundaries
+	boundarySet := make(map[int]bool)
+	for _, p := range normalized {
+		if p.valid {
+			boundarySet[p.startMinutes] = true
+			boundarySet[p.endMinutes] = true
+		}
+	}
+
+	if len(boundarySet) == 0 {
+		return 0
+	}
+
+	// Sort boundaries
+	boundaries := make([]int, 0, len(boundarySet))
+	for b := range boundarySet {
+		boundaries = append(boundaries, b)
+	}
+	sortInts := func(arr []int) {
+		for i := 0; i < len(arr); i++ {
+			for j := i + 1; j < len(arr); j++ {
+				if arr[i] > arr[j] {
+					arr[i], arr[j] = arr[j], arr[i]
+				}
+			}
+		}
+	}
+	sortInts(boundaries)
+
+	// Calculate the maximum number of participants for each segment
+	maxCount := 0
+
+	for i := 0; i < len(boundaries)-1; i++ {
+		segStart := boundaries[i]
+		segEnd := boundaries[i+1]
+
+		// Count participants available for this entire segment
+		count := 0
+		for _, p := range normalized {
+			if p.valid {
+				// Participant is available if their range completely covers the segment
+				if p.startMinutes <= segStart && p.endMinutes >= segEnd {
+					count++
+				}
+			}
+		}
+
+		if count > maxCount {
+			maxCount = count
+		}
+	}
+
+	return maxCount
 }

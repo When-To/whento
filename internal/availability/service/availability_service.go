@@ -53,8 +53,11 @@ type AvailabilityRepository interface {
 	GetByParticipantID(ctx context.Context, participantID uuid.UUID) ([]*models.Availability, error)
 	GetByParticipantIDWithDateRange(ctx context.Context, participantID uuid.UUID, startDate, endDate *time.Time) ([]*models.Availability, error)
 	GetByParticipantAndDate(ctx context.Context, participantID uuid.UUID, date time.Time) (*models.Availability, error)
-	GetByDate(ctx context.Context, calendarID uuid.UUID, date time.Time) ([]*models.Availability, error)
-	GetByCalendarDateRange(ctx context.Context, calendarID uuid.UUID, startDate, endDate time.Time) ([]*models.Availability, error)
+	// The expansion the summary endpoints read: manual answers plus the recurrence
+	// occurrences that survive them, which is a question the availabilities table alone
+	// cannot answer since recurrences are never stored.
+	GetOccurrencesForDate(ctx context.Context, calendarID uuid.UUID, date time.Time) ([]models.Occurrence, error)
+	GetOccurrencesForRange(ctx context.Context, calendarID uuid.UUID, startDate, endDate time.Time) ([]models.Occurrence, error)
 	GetParticipantCountForDate(ctx context.Context, calendarID uuid.UUID, date time.Time) (int, error)
 	Update(ctx context.Context, availability *models.Availability) error
 	Delete(ctx context.Context, participantID uuid.UUID, date time.Time) error
@@ -76,7 +79,6 @@ type ParticipantRepository interface {
 type RecurrenceRepository interface {
 	CreateRecurrence(ctx context.Context, recurrence *models.Recurrence) error
 	GetRecurrencesByParticipant(ctx context.Context, participantID uuid.UUID) ([]models.Recurrence, error)
-	GetRecurrencesByCalendar(ctx context.Context, calendarID uuid.UUID) ([]models.Recurrence, error)
 	GetRecurrenceByID(ctx context.Context, id uuid.UUID) (*models.Recurrence, error)
 	UpdateRecurrence(ctx context.Context, recurrence *models.Recurrence) error
 	DeleteRecurrence(ctx context.Context, id uuid.UUID) error
@@ -607,103 +609,15 @@ func (s *AvailabilityService) GetDateSummary(ctx context.Context, token, dateStr
 		return nil, ErrInvalidDate
 	}
 
-	// Get all availabilities for this date
-	availabilities, err := s.availabilityRepo.GetByDate(ctx, calendarID, date)
+	// One question, one answer. This used to read the availabilities table and then
+	// expand the recurrences again in Go — a third copy of a rule that the threshold
+	// count and the ICS feed each had their own version of, and the copies disagreed.
+	occurrences, err := s.availabilityRepo.GetOccurrencesForDate(ctx, calendarID, date)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get participant info
-	participants, err := s.participantRepo.GetByCalendarID(ctx, calendarID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create participant map for quick lookup
-	participantMap := make(map[uuid.UUID]*repository.Participant)
-	for _, p := range participants {
-		participantMap[p.ID] = p
-	}
-
-	// Get all recurrences for the calendar
-	recurrences, err := s.recurrenceRepo.GetRecurrencesByCalendar(ctx, calendarID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get exceptions for all recurrences, in one query rather than one per recurrence
-	exceptionsMap, err := s.exceptionsFor(ctx, recurrences)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a set of participants that have explicit availabilities
-	explicitParticipants := make(map[uuid.UUID]bool)
-	for _, avail := range availabilities {
-		explicitParticipants[avail.ParticipantID] = true
-	}
-
-	// Build summary - start with explicit availabilities
-	var participantSummaries []models.ParticipantAvailabilitySummary
-	for _, avail := range availabilities {
-		if participant, ok := participantMap[avail.ParticipantID]; ok {
-			participantSummaries = append(participantSummaries, models.ParticipantAvailabilitySummary{
-				ParticipantID:   avail.ParticipantID,
-				ParticipantName: participant.Name,
-				StartTime:       avail.StartTime,
-				EndTime:         avail.EndTime,
-				Note:            avail.Note,
-			})
-		}
-	}
-
-	// Add recurrence-based availabilities
-	dayOfWeek := int(date.Weekday())
-	for _, rec := range recurrences {
-		// Skip if day of week doesn't match
-		if rec.DayOfWeek != dayOfWeek {
-			continue
-		}
-
-		// Compare dates as strings to avoid timezone issues
-		// Skip if date is before recurrence start
-		if dateStr < rec.StartDate {
-			continue
-		}
-
-		// Skip if date is after recurrence end (if end date is set)
-		if rec.EndDate != nil && dateStr > *rec.EndDate {
-			continue
-		}
-
-		// Check if this date is in the exceptions
-		isException := false
-		for _, exc := range exceptionsMap[rec.ID] {
-			if exc.ExcludedDate == dateStr {
-				isException = true
-				break
-			}
-		}
-		if isException {
-			continue
-		}
-
-		// Skip if there's already an explicit availability for this participant
-		if explicitParticipants[rec.ParticipantID] {
-			continue
-		}
-
-		// Add this participant to the summary
-		if participant, ok := participantMap[rec.ParticipantID]; ok {
-			participantSummaries = append(participantSummaries, models.ParticipantAvailabilitySummary{
-				ParticipantID:   rec.ParticipantID,
-				ParticipantName: participant.Name,
-				StartTime:       rec.StartTime,
-				EndTime:         rec.EndTime,
-				Note:            rec.Note,
-			})
-		}
-	}
+	participantSummaries := summariesFrom(occurrences)
 
 	// Apply min_duration_hours filter if configured
 	if calendarInfo.MinDurationHours > 0 && len(participantSummaries) > 0 {
@@ -800,117 +714,17 @@ func (s *AvailabilityService) GetRangeSummary(ctx context.Context, token, startD
 		return nil, fmt.Errorf("%w (%s..%s)", ErrInvalidDateRange, startDateStr, endDateStr)
 	}
 
-	// Get all availabilities in range
-	availabilities, err := s.availabilityRepo.GetByCalendarDateRange(ctx, calendarID, startDate, endDate)
+	occurrences, err := s.availabilityRepo.GetOccurrencesForRange(ctx, calendarID, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get participant info
-	participants, err := s.participantRepo.GetByCalendarID(ctx, calendarID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create participant map
-	participantMap := make(map[uuid.UUID]*repository.Participant)
-	for _, p := range participants {
-		participantMap[p.ID] = p
-	}
-
-	// Get all recurrences for the calendar
-	recurrences, err := s.recurrenceRepo.GetRecurrencesByCalendar(ctx, calendarID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get exceptions for all recurrences, in one query rather than one per recurrence
-	exceptionsMap, err := s.exceptionsFor(ctx, recurrences)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a set of dates that have explicit availabilities per participant
-	// This prevents counting the same participant twice (once from recurrence, once from explicit)
-	explicitAvailabilities := make(map[string]map[uuid.UUID]bool)
-	for _, avail := range availabilities {
-		dateKey := formatDate(avail.Date)
-		if explicitAvailabilities[dateKey] == nil {
-			explicitAvailabilities[dateKey] = make(map[uuid.UUID]bool)
-		}
-		explicitAvailabilities[dateKey][avail.ParticipantID] = true
-	}
-
-	// Group by date - start with explicit availabilities
+	// Grouped here rather than expanded here: the repository already decided which
+	// recurrence occurrences survive a manual answer, so this only has to bucket them.
 	dateMap := make(map[string][]models.ParticipantAvailabilitySummary)
-	for _, avail := range availabilities {
-		dateKey := formatDate(avail.Date)
-		if participant, ok := participantMap[avail.ParticipantID]; ok {
-			dateMap[dateKey] = append(dateMap[dateKey], models.ParticipantAvailabilitySummary{
-				ParticipantID:   avail.ParticipantID,
-				ParticipantName: participant.Name,
-				StartTime:       avail.StartTime,
-				EndTime:         avail.EndTime,
-				Note:            avail.Note,
-			})
-		}
-	}
-
-	// Add recurrence-based availabilities for each date in range
-	currentDate := startDate
-	for !currentDate.After(endDate) {
-		dateKey := formatDate(currentDate)
-		dayOfWeek := int(currentDate.Weekday())
-
-		// Check each recurrence
-		for _, rec := range recurrences {
-			// Skip if day of week doesn't match
-			if rec.DayOfWeek != dayOfWeek {
-				continue
-			}
-
-			// Compare dates as strings to avoid timezone issues
-			// Skip if date is before recurrence start
-			if dateKey < rec.StartDate {
-				continue
-			}
-
-			// Skip if date is after recurrence end (if end date is set)
-			if rec.EndDate != nil && dateKey > *rec.EndDate {
-				continue
-			}
-
-			// Check if this date is in the exceptions
-			isException := false
-			for _, exc := range exceptionsMap[rec.ID] {
-				if exc.ExcludedDate == dateKey {
-					isException = true
-					break
-				}
-			}
-			if isException {
-				continue
-			}
-
-			// Skip if there's already an explicit availability for this participant on this date
-			if explicitAvailabilities[dateKey] != nil && explicitAvailabilities[dateKey][rec.ParticipantID] {
-				continue
-			}
-
-			// Add this participant to the date
-			if participant, ok := participantMap[rec.ParticipantID]; ok {
-				dateMap[dateKey] = append(dateMap[dateKey], models.ParticipantAvailabilitySummary{
-					ParticipantID:   rec.ParticipantID,
-					ParticipantName: participant.Name,
-					StartTime:       rec.StartTime,
-					EndTime:         rec.EndTime,
-					Note:            rec.Note,
-				})
-			}
-		}
-
-		// Move to next day
-		currentDate = currentDate.AddDate(0, 0, 1)
+	for _, occurrence := range occurrences {
+		dateKey := formatDate(occurrence.Date)
+		dateMap[dateKey] = append(dateMap[dateKey], summaryFrom(occurrence))
 	}
 
 	// Build response (with min_duration_hours filter if configured)
@@ -1739,104 +1553,12 @@ func compareTime(t1, t2 string) int {
 // that are available at the same time on a given date.
 // This uses the same logic as the ICS feed generation (time slot segmentation).
 func calculateMaxSimultaneousParticipants(participants []models.ParticipantAvailabilitySummary) int {
-	if len(participants) == 0 {
-		return 0
+	windows := make([]models.TimeWindow, 0, len(participants))
+	for _, p := range participants {
+		windows = append(windows, p.Window())
 	}
 
-	// Normalize participant times (treat nil as 00:00-23:59)
-	type normalizedParticipant struct {
-		startMinutes int
-		endMinutes   int
-		valid        bool
-	}
-
-	normalized := make([]normalizedParticipant, len(participants))
-	validCount := 0
-	for i, p := range participants {
-		startStr := "00:00"
-		endStr := "23:59"
-
-		if p.StartTime != nil && *p.StartTime != "" {
-			startStr = *p.StartTime
-		}
-		if p.EndTime != nil && *p.EndTime != "" {
-			endStr = *p.EndTime
-		}
-
-		startTime, err1 := time.Parse("15:04", startStr)
-		endTime, err2 := time.Parse("15:04", endStr)
-
-		if err1 != nil || err2 != nil {
-			// If parsing fails, mark as invalid
-			normalized[i] = normalizedParticipant{valid: false}
-			continue
-		}
-
-		normalized[i] = normalizedParticipant{
-			startMinutes: startTime.Hour()*60 + startTime.Minute(),
-			endMinutes:   endTime.Hour()*60 + endTime.Minute(),
-			valid:        true,
-		}
-		validCount++
-	}
-
-	if validCount == 0 {
-		return 0
-	}
-
-	// Collect all unique time boundaries
-	boundarySet := make(map[int]bool)
-	for _, p := range normalized {
-		if p.valid {
-			boundarySet[p.startMinutes] = true
-			boundarySet[p.endMinutes] = true
-		}
-	}
-
-	if len(boundarySet) == 0 {
-		return 0
-	}
-
-	// Sort boundaries
-	boundaries := make([]int, 0, len(boundarySet))
-	for b := range boundarySet {
-		boundaries = append(boundaries, b)
-	}
-	sortInts := func(arr []int) {
-		for i := 0; i < len(arr); i++ {
-			for j := i + 1; j < len(arr); j++ {
-				if arr[i] > arr[j] {
-					arr[i], arr[j] = arr[j], arr[i]
-				}
-			}
-		}
-	}
-	sortInts(boundaries)
-
-	// Calculate the maximum number of participants for each segment
-	maxCount := 0
-
-	for i := 0; i < len(boundaries)-1; i++ {
-		segStart := boundaries[i]
-		segEnd := boundaries[i+1]
-
-		// Count participants available for this entire segment
-		count := 0
-		for _, p := range normalized {
-			if p.valid {
-				// Participant is available if their range completely covers the segment
-				if p.startMinutes <= segStart && p.endMinutes >= segEnd {
-					count++
-				}
-			}
-		}
-
-		if count > maxCount {
-			maxCount = count
-		}
-	}
-
-	return maxCount
+	return models.MaxSimultaneous(windows)
 }
 
 // recurrencesOverlap checks if two recurrences on the same day of week have overlapping date ranges.
@@ -1982,4 +1704,25 @@ func (s *AvailabilityService) checkRecurrenceOverlap(ctx context.Context, partic
 	}
 
 	return nil
+}
+
+// summaryFrom is the one conversion between what the repository expands and what the
+// summary endpoints return.
+func summaryFrom(occurrence models.Occurrence) models.ParticipantAvailabilitySummary {
+	return models.ParticipantAvailabilitySummary{
+		ParticipantID:   occurrence.ParticipantID,
+		ParticipantName: occurrence.ParticipantName,
+		StartTime:       occurrence.StartTime,
+		EndTime:         occurrence.EndTime,
+		Note:            occurrence.Note,
+	}
+}
+
+func summariesFrom(occurrences []models.Occurrence) []models.ParticipantAvailabilitySummary {
+	summaries := make([]models.ParticipantAvailabilitySummary, 0, len(occurrences))
+	for _, occurrence := range occurrences {
+		summaries = append(summaries, summaryFrom(occurrence))
+	}
+
+	return summaries
 }

@@ -35,6 +35,9 @@ import (
 type stubAvailabilityRepo struct {
 	inRange []*models.Availability
 	onDate  []*models.Availability
+	// What the summary endpoints read: the repository expands recurrences in SQL, so
+	// the service is handed occurrences rather than table rows.
+	occurrences []models.Occurrence
 }
 
 var _ service.AvailabilityRepository = (*stubAvailabilityRepo)(nil)
@@ -57,18 +60,20 @@ func (s *stubAvailabilityRepo) GetByParticipantAndDate(
 	return nil, nil
 }
 
-func (s *stubAvailabilityRepo) GetByDate(context.Context, uuid.UUID, time.Time) ([]*models.Availability, error) {
-	return s.onDate, nil
-}
-
-func (s *stubAvailabilityRepo) GetByCalendarDateRange(
-	context.Context, uuid.UUID, time.Time, time.Time,
-) ([]*models.Availability, error) {
-	return s.inRange, nil
-}
-
 func (s *stubAvailabilityRepo) GetParticipantCountForDate(context.Context, uuid.UUID, time.Time) (int, error) {
 	return 0, nil
+}
+
+func (s *stubAvailabilityRepo) GetOccurrencesForDate(
+	context.Context, uuid.UUID, time.Time,
+) ([]models.Occurrence, error) {
+	return s.occurrences, nil
+}
+
+func (s *stubAvailabilityRepo) GetOccurrencesForRange(
+	context.Context, uuid.UUID, time.Time, time.Time,
+) ([]models.Occurrence, error) {
+	return s.occurrences, nil
 }
 
 func (s *stubAvailabilityRepo) Update(context.Context, *models.Availability) error { return nil }
@@ -161,10 +166,32 @@ func (s *stubNotifyService) CheckThresholdAndNotify(context.Context, uuid.UUID, 
 func newHandler(t *testing.T, calendar *repository.Calendar, calendarErr error, availabilities []*models.Availability, participants []*repository.Participant) http.Handler {
 	t.Helper()
 
+	// The tests seed table rows because that is what they are about; the summary
+	// endpoints read occurrences, so convert once here rather than at every call site.
+	occurrences := make([]models.Occurrence, 0, len(availabilities))
+	for _, a := range availabilities {
+		occurrences = append(occurrences, models.Occurrence{
+			Date:          a.Date,
+			ParticipantID: a.ParticipantID,
+			ParticipantName: func() string {
+				for _, p := range participants {
+					if p.ID == a.ParticipantID {
+						return p.Name
+					}
+				}
+
+				return ""
+			}(),
+			StartTime: a.StartTime,
+			EndTime:   a.EndTime,
+			Note:      a.Note,
+		})
+	}
+
 	availabilityService := service.NewAvailabilityService(
 		// The same rows answer both the range lookup and the single-date lookup, so
 		// the two summary endpoints can be driven over identical data.
-		&stubAvailabilityRepo{inRange: availabilities, onDate: availabilities},
+		&stubAvailabilityRepo{inRange: availabilities, onDate: availabilities, occurrences: occurrences},
 		&stubCalendarRepo{calendar: calendar, err: calendarErr},
 		&stubParticipantRepo{participants: participants},
 		&stubRecurrenceRepo{},
