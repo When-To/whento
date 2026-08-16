@@ -30,13 +30,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Patch-exact rather than the '1.26' it used to be. The 2026-08-13 Go security
-  # release fixed six stdlib advisories (GO-2026-6218, -6091, -6090, -6089, -6088,
-  # -5972) in 1.26.6, and govulncheck reports them against every build until the
-  # toolchain moves. actions/go-versions had not published 1.26.6 yet, so a floating
-  # minor still resolved to the vulnerable 1.26.5; naming the patch makes setup-go
-  # fetch it from go.dev directly. Safe to float again once the manifest catches up.
-  GO_VERSION: '1.26.6'
+  GO_VERSION: '1.26'
   NODE_VERSION: '24'
 
 jobs:
