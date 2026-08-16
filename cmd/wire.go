@@ -85,12 +85,11 @@ type deps struct {
 // other's thirty-odd local variables.
 type handlers struct {
 	// Auth
-	health            *authHandlers.HealthHandler
-	auth              *authHandlers.AuthHandler
-	emailVerification *authHandlers.EmailVerificationHandler
-	passwordReset     *authHandlers.PasswordResetHandler
-	magicLink         *authHandlers.MagicLinkHandler
-	adminMFA          *authHandlers.AdminMFAHandler
+	health        *authHandlers.HealthHandler
+	auth          *authHandlers.AuthHandler
+	passwordReset *authHandlers.PasswordResetHandler
+	magicLink     *authHandlers.MagicLinkHandler
+	adminMFA      *authHandlers.AdminMFAHandler
 
 	// Passkey and MFA
 	passkey *passkeyHandlers.PasskeyHandler
@@ -225,12 +224,11 @@ func buildHandlers(d *deps) (*handlers, error) {
 	)
 
 	return &handlers{
-		health:            authHandlers.NewHealthHandler(d.pool, d.cacheProbe),
-		auth:              authHandler,
-		emailVerification: authHandlers.NewEmailVerificationHandler(authSvc, userRepo, d.mailer, d.cfg, d.log),
-		passwordReset:     authHandlers.NewPasswordResetHandler(passwordResetSvc),
-		magicLink:         authHandlers.NewMagicLinkHandler(magicLinkSvc, d.mailer, d.log),
-		adminMFA:          authHandlers.NewAdminMFAHandler(mfaSvc, d.log),
+		health:        authHandlers.NewHealthHandler(d.pool, d.cacheProbe),
+		auth:          authHandler,
+		passwordReset: authHandlers.NewPasswordResetHandler(passwordResetSvc),
+		magicLink:     authHandlers.NewMagicLinkHandler(magicLinkSvc, d.mailer, d.log),
+		adminMFA:      authHandlers.NewAdminMFAHandler(mfaSvc, d.log),
 
 		passkey: passkeyHandler,
 		mfa:     mfaHandler,

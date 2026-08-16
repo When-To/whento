@@ -7,6 +7,7 @@ package handlers_test
 import (
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -26,7 +27,7 @@ import (
 // SendVerificationEmail is the seam: it is the one auth path that sends synchronously.
 // Registration and magic links hand the same builders to a detached goroutine.
 
-func verificationRig(t *testing.T, user *models.User) (*handlers.EmailVerificationHandler, *fakeEmailSender) {
+func verificationRig(t *testing.T, user *models.User) (*handlers.AuthHandler, *fakeEmailSender) {
 	t.Helper()
 
 	store := &fakeUserStore{user: user}
@@ -40,7 +41,10 @@ func verificationRig(t *testing.T, user *models.User) (*handlers.EmailVerificati
 	}
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	return handlers.NewEmailVerificationHandler(nil, store, mail, cfg, discard), mail
+	// nil for the service and the two repositories: SendVerificationEmail reaches none
+	// of them. That was true of the handler this replaced too — its authService field
+	// was declared, assigned and never read.
+	return handlers.NewAuthHandler(nil, store, mail, cfg, discard, nil, nil), mail
 }
 
 func resend(t *testing.T, user *models.User) string {
@@ -121,5 +125,29 @@ func TestVerificationMailEscapesTheDisplayName(t *testing.T) {
 	// direction: the reader sees "&lt;script&gt;" instead of "<script>".
 	if strings.Contains(body, "&amp;lt;") {
 		t.Errorf("the display name is double-escaped:\n%s", body)
+	}
+}
+
+// TestVerificationMailSaysSoWhenSMTPIsOff pins the one behaviour this merge changed.
+// The endpoint answered 200 "Verification email sent successfully" on an instance with no
+// SMTP, having sent nothing. The status is right — verifying an address is optional, and
+// failing the request would be the wrong shape — but the message was not.
+func TestVerificationMailSaysSoWhenSMTPIsOff(t *testing.T) {
+	user := &models.User{Email: "ada@example.test", DisplayName: "Ada", Locale: "en"}
+
+	handler, mail := verificationRig(t, user)
+	mail.configured = false
+
+	rec := httptest.NewRecorder()
+	handler.SendVerificationEmail(rec, asUser(post("/api/v1/auth/send-verification", `{}`), user.ID))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: an unconfigured instance must not fail the request", rec.Code)
+	}
+	if len(mail.sent) != 0 {
+		t.Fatalf("sent %d mails with SMTP off", len(mail.sent))
+	}
+	if strings.Contains(rec.Body.String(), "sent successfully") {
+		t.Errorf("the response claims a mail was sent: %s", rec.Body.String())
 	}
 }

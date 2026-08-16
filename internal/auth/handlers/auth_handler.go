@@ -5,14 +5,12 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -203,8 +201,15 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			if err := h.userRepo.SetVerificationToken(r.Context(), resp.User.ID, token, expiresAt); err != nil {
 				h.logger.Error("Failed to save verification token", "error", err)
 			} else {
-				// Send verification email (async, don't block registration)
-				go h.sendVerificationEmail(resp.User.Email, resp.User.DisplayName, resp.User.Locale, token)
+				// Send verification email (async, don't block registration).
+				// The closure exists to swallow the error deliberately rather than by
+				// having nowhere to put it: the response has already been decided, and
+				// sendVerificationEmail has logged the failure with a recipient
+				// fingerprint by the time this runs.
+				user := resp.User
+				go func() {
+					_ = h.sendVerificationEmail(user.Email, user.DisplayName, user.Locale, token)
+				}()
 			}
 		}
 	}
@@ -218,62 +223,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httputil.JSON(w, http.StatusCreated, resp)
-}
-
-// sendVerificationEmail sends the verification email (helper for Register)
-func (h *AuthHandler) sendVerificationEmail(to, displayName, locale, token string) {
-	if !h.emailService.IsConfigured() {
-		h.logger.Warn("Email service not configured, cannot send verification email")
-		return
-	}
-
-	verificationURL := fmt.Sprintf("%s/verify-email/%s", h.cfg.AppURL, token)
-
-	// Get translations for locale (fallback to english)
-	trans, ok := h.verificationTranslations[locale]
-	if !ok {
-		trans = h.verificationTranslations["en"]
-	}
-
-	// Prepare template data
-	expiryDuration := h.cfg.Email.VerificationExpiry.String()
-	data := map[string]any{
-		"Subject":        trans["subject"],
-		"Greeting":       email.ReplaceVar(trans["greeting"], "DisplayName", displayName),
-		"Intro":          trans["intro"],
-		"CTAInstruction": trans["cta_instruction"],
-		"CTAButton":      trans["cta_button"],
-		"OrCopy":         trans["or_copy"],
-		"ExpiryNotice":   email.ReplaceVar(trans["expiry_notice"], "ExpiryDuration", expiryDuration),
-		"SecurityNotice": trans["security_notice"],
-		// The one locale string holding deliberate markup: the signature ends with a
-		// <br> between the sign-off and the team name. Everything else in this map is a
-		// plain string, so html/template escapes it — which is exactly what has to
-		// happen to a display name.
-		"Signature":       template.HTML(trans["signature"]),
-		"VerificationURL": verificationURL,
-	}
-
-	// Execute template
-	var htmlBody bytes.Buffer
-	if err := h.verificationTemplate.Execute(&htmlBody, data); err != nil {
-		h.logger.Error("Failed to execute verification template", "error", err)
-		return
-	}
-
-	// Send email
-	err := h.emailService.Send(email.Email{
-		To:      []string{to},
-		Subject: trans["subject"],
-		Body:    htmlBody.String(),
-		HTML:    true,
-	})
-
-	if err != nil {
-		h.logger.Error("Failed to send verification email", "error", err, "recipient_ref", logger.Fingerprint(to))
-	} else {
-		h.logger.Info("Verification email sent", "recipient_ref", logger.Fingerprint(to), "locale", locale)
-	}
 }
 
 // Login handles user login

@@ -42,7 +42,7 @@ func registerAuthRoutes(r chi.Router, d *deps, h *handlers) {
 			r.Get("/magic-link/available", h.magicLink.CheckAvailable)
 
 			// Email verification (public - no auth required)
-			l.on(r, perPathIP("auth-verify-email", 5, 15*time.Minute)).Get("/verify-email/{token}", h.emailVerification.VerifyEmail)
+			l.on(r, perPathIP("auth-verify-email", 5, 15*time.Minute)).Get("/verify-email/{token}", h.auth.VerifyEmail)
 		})
 
 		// Authenticated routes
@@ -54,7 +54,7 @@ func registerAuthRoutes(r chi.Router, d *deps, h *handlers) {
 			r.Patch("/me/password", h.auth.ChangePassword)
 
 			// Email verification (authenticated - requires login)
-			r.Post("/send-verification", h.emailVerification.SendVerificationEmail)
+			r.Post("/send-verification", h.auth.SendVerificationEmail)
 
 			// Admin routes
 			r.Group(func(r chi.Router) {
