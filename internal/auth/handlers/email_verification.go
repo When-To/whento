@@ -9,10 +9,8 @@ import (
 	"crypto/rand"
 	_ "embed"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"html/template"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -21,62 +19,13 @@ import (
 
 	"github.com/whento/pkg/email"
 	"github.com/whento/pkg/httputil"
+	"github.com/whento/pkg/logger"
 
 	// Aliased: the constructor below takes a *slog.Logger named `logger`, which
 	// would otherwise shadow the package.
 	pkglog "github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
-	"github.com/whento/whento/internal/auth/service"
-	"github.com/whento/whento/internal/config"
 )
-
-//go:embed templates/email_verification.html
-var emailVerificationTemplateEV string
-
-//go:embed templates/locales/email_verification.json
-var emailVerificationTranslationsEV string
-
-// EmailVerificationHandler handles email verification HTTP requests
-type EmailVerificationHandler struct {
-	authService              *service.AuthService
-	userRepo                 UserStore
-	emailService             EmailSender
-	cfg                      *config.Config
-	logger                   *slog.Logger
-	verificationTemplate     *template.Template
-	verificationTranslations map[string]map[string]string
-}
-
-// NewEmailVerificationHandler creates a new email verification handler
-func NewEmailVerificationHandler(
-	authService *service.AuthService,
-	userRepo UserStore,
-	emailService EmailSender,
-	cfg *config.Config,
-	logger *slog.Logger,
-) *EmailVerificationHandler {
-	// Parse email verification template
-	verificationTmpl, err := template.New("email_verification").Parse(emailVerificationTemplateEV)
-	if err != nil {
-		logger.Error("Failed to parse email verification template", "error", err)
-	}
-
-	// Load email verification translations
-	var verificationTrans map[string]map[string]string
-	if err := json.Unmarshal([]byte(emailVerificationTranslationsEV), &verificationTrans); err != nil {
-		logger.Error("Failed to load email verification translations", "error", err)
-	}
-
-	return &EmailVerificationHandler{
-		authService:              authService,
-		userRepo:                 userRepo,
-		emailService:             emailService,
-		cfg:                      cfg,
-		logger:                   logger,
-		verificationTemplate:     verificationTmpl,
-		verificationTranslations: verificationTrans,
-	}
-}
 
 // SendVerificationEmail sends a verification email to the authenticated user
 //
@@ -90,7 +39,7 @@ func NewEmailVerificationHandler(
 //	@Failure		404	{object}	httputil.ErrorResponse	"User not found"
 //	@Failure		500	{object}	httputil.ErrorResponse	"Failed to generate or send verification email"
 //	@Router			/api/v1/auth/send-verification [post]
-func (h *EmailVerificationHandler) SendVerificationEmail(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) SendVerificationEmail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userIDStr := middleware.GetUserID(ctx)
 	if userIDStr == "" {
@@ -139,8 +88,18 @@ func (h *EmailVerificationHandler) SendVerificationEmail(w http.ResponseWriter, 
 
 	// Send verification email
 	if err := h.sendVerificationEmail(user.Email, user.DisplayName, user.Locale, token); err != nil {
-		h.logger.Error("Failed to send verification email", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to send verification email")
+		return
+	}
+
+	// An instance with no SMTP configured answers 200 rather than 500 — verifying an
+	// address is optional, and failing the request would be the wrong shape. But it had
+	// been claiming to have sent something, which was untrue.
+	if !h.emailService.IsConfigured() {
+		httputil.JSON(w, http.StatusOK, map[string]string{
+			"message": "Email sending is not configured on this instance",
+		})
+
 		return
 	}
 
@@ -160,7 +119,7 @@ func (h *EmailVerificationHandler) SendVerificationEmail(w http.ResponseWriter, 
 //	@Failure		400		{object}	httputil.ErrorResponse	"Invalid or expired verification token"
 //	@Failure		500		{object}	httputil.ErrorResponse	"Failed to verify email"
 //	@Router			/api/v1/auth/verify-email/{token} [get]
-func (h *EmailVerificationHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	token := chi.URLParam(r, "token")
 
@@ -202,7 +161,7 @@ func (h *EmailVerificationHandler) VerifyEmail(w http.ResponseWriter, r *http.Re
 }
 
 // sendVerificationEmail sends the actual verification email
-func (h *EmailVerificationHandler) sendVerificationEmail(to, displayName, locale, token string) error {
+func (h *AuthHandler) sendVerificationEmail(to, displayName, locale, token string) error {
 	if !h.emailService.IsConfigured() {
 		h.logger.Warn("Email service not configured, skipping verification email")
 		return nil
@@ -249,6 +208,12 @@ func (h *EmailVerificationHandler) sendVerificationEmail(to, displayName, locale
 		Body:    htmlBody.String(),
 		HTML:    true,
 	}); err != nil {
+		// Logged here as well as returned. Registration sends in a goroutine, so this
+		// fingerprint is the only thing that attributes a delivery failure to a
+		// recipient — the caller there has no response to put it in.
+		h.logger.Error("Failed to send verification email",
+			"error", err, "recipient_ref", logger.Fingerprint(to))
+
 		return err
 	}
 
