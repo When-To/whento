@@ -342,90 +342,162 @@ func (r *AvailabilityRepository) Delete(ctx context.Context, participantID uuid.
 	return nil
 }
 
-// GetParticipantCountForDate counts unique participants with availability for a specific date
-// GetAvailableParticipantsForDate returns everyone who counts as available on a date,
-// by name, whether they said so directly or a recurrence says it for them.
+// occurrencesQuery expands a calendar's availability over a date range.
 //
-// This is the single answer to "who is available on this date". It exists because there
-// were several: the threshold count expanded recurrences in SQL, the notification list
-// read the availabilities table raw, and they disagreed. A participant available only
-// through a recurrence was counted towards the threshold, left out of the participant
-// list in the email, and — worse, and silently — dropped from the recipients of the
-// notification about the very date they had made themselves available for.
+// The single answer to "who is available, when". It exists because there were several and
+// they disagreed: the threshold count expanded recurrences in SQL, the day and range views
+// expanded them again in Go, and the notification list read the availabilities table raw —
+// so a participant available every Friday was counted towards the threshold, missing from
+// the list in the email, and never told about their own Friday.
 //
-// Two conditions that used to differ between the two queries are settled here. The
-// availabilities half no longer filters on source = 'manual': nothing writes any other
-// value, so the filter selected nothing today while quietly discarding rows written by
-// an older version. And the recurrence half no longer tests start_date IS NULL, because
-// the column is NOT NULL — that branch could never be taken.
+// Recurrences are expanded here rather than stored, which is why reading the table alone
+// was never the same question. $1 is the calendar, $2 and $3 the inclusive bounds.
+//
+// The manual half comes back untouched. The recurrence half drops any date already covered
+// by a manual answer for the same participant — the rule all three implementations already
+// shared, and the one worth stating once: an answer someone typed wins over the pattern
+// they set earlier, times and all, even when the typed one is all-day and the pattern is
+// not.
+//
+// Two conditions that used to differ between the implementations are settled. The
+// availabilities half does not filter on source = 'manual': nothing writes any other value,
+// so it selected nothing today while quietly discarding rows an older version had written.
+// And the recurrence half does not test start_date IS NULL, because the column is NOT NULL.
+const occurrencesQuery = `
+		SELECT a.date, a.participant_id, p.name,
+		       TO_CHAR(a.start_time, 'HH24:MI') AS start_time,
+		       TO_CHAR(a.end_time, 'HH24:MI') AS end_time,
+		       COALESCE(a.note, '') AS note
+		FROM availabilities a
+		JOIN participants p ON p.id = a.participant_id
+		WHERE p.calendar_id = $1
+		  AND a.date BETWEEN $2::DATE AND $3::DATE
+
+		UNION ALL
+
+		SELECT d.date, r.participant_id, p.name,
+		       TO_CHAR(r.start_time, 'HH24:MI') AS start_time,
+		       TO_CHAR(r.end_time, 'HH24:MI') AS end_time,
+		       COALESCE(r.note, '') AS note
+		FROM recurrences r
+		JOIN participants p ON p.id = r.participant_id
+		CROSS JOIN (
+			SELECT generate_series($2::DATE, $3::DATE, '1 day'::INTERVAL)::DATE AS date
+		) d
+		WHERE p.calendar_id = $1
+		  AND EXTRACT(DOW FROM d.date)::int = r.day_of_week
+		  AND d.date >= r.start_date
+		  AND (r.end_date IS NULL OR d.date <= r.end_date)
+		  AND NOT EXISTS (
+			SELECT 1 FROM recurrence_exceptions re
+			WHERE re.recurrence_id = r.id AND re.excluded_date = d.date
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM availabilities a
+			WHERE a.participant_id = r.participant_id AND a.date = d.date
+		  )
+		ORDER BY 1 ASC, 3 ASC`
+
+// GetOccurrencesForRange returns every availability in the range, recurrences expanded.
+func (r *AvailabilityRepository) GetOccurrencesForRange(
+	ctx context.Context,
+	calendarID uuid.UUID,
+	startDate, endDate time.Time,
+) ([]models.Occurrence, error) {
+	rows, err := r.pool.Query(ctx, occurrencesQuery, calendarID, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get occurrences: %w", err)
+	}
+	defer rows.Close()
+
+	var occurrences []models.Occurrence
+	for rows.Next() {
+		var occurrence models.Occurrence
+		if err := rows.Scan(
+			&occurrence.Date,
+			&occurrence.ParticipantID,
+			&occurrence.ParticipantName,
+			&occurrence.StartTime,
+			&occurrence.EndTime,
+			&occurrence.Note,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan occurrence: %w", err)
+		}
+		occurrences = append(occurrences, occurrence)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating occurrences: %w", err)
+	}
+
+	return occurrences, nil
+}
+
+// GetOccurrencesForDate is the single-date grain of the same question.
+func (r *AvailabilityRepository) GetOccurrencesForDate(
+	ctx context.Context,
+	calendarID uuid.UUID,
+	date time.Time,
+) ([]models.Occurrence, error) {
+	return r.GetOccurrencesForRange(ctx, calendarID, date, date)
+}
+
+// GetAvailableParticipantsForDate returns who is available on a date, by name.
+//
+// A projection of the occurrences rather than a query of its own, so it cannot answer a
+// different question from the one the day view and the feed are answering. The notify
+// service wants identities and deliberately not times — see the comment where it builds
+// the recipient list.
 func (r *AvailabilityRepository) GetAvailableParticipantsForDate(
 	ctx context.Context,
 	calendarID uuid.UUID,
 	date time.Time,
 ) ([]models.AvailableParticipant, error) {
-	// Written as two EXISTS against participants rather than a UNION of ids followed by
-	// a name lookup: one participant matching both halves is one row either way, and the
-	// name comes back with it.
-	query := `
-		SELECT p.id, p.name
-		FROM participants p
-		WHERE p.calendar_id = $1
-		  AND (
-			EXISTS (
-				SELECT 1 FROM availabilities a
-				WHERE a.participant_id = p.id AND a.date = $2::DATE
-			)
-			OR EXISTS (
-				SELECT 1 FROM recurrences r
-				WHERE r.participant_id = p.id
-				  AND EXTRACT(DOW FROM $2::DATE)::int = r.day_of_week
-				  AND $2::DATE >= r.start_date
-				  AND (r.end_date IS NULL OR $2::DATE <= r.end_date)
-				  AND NOT EXISTS (
-					SELECT 1 FROM recurrence_exceptions re
-					WHERE re.recurrence_id = r.id
-					  AND re.excluded_date = $2::DATE
-				  )
-			)
-		  )
-		ORDER BY p.name ASC`
-
-	rows, err := r.pool.Query(ctx, query, calendarID, date)
+	occurrences, err := r.GetOccurrencesForDate(ctx, calendarID, date)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get available participants for date: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
 
-	var participants []models.AvailableParticipant
-	for rows.Next() {
-		var participant models.AvailableParticipant
-		if err := rows.Scan(&participant.ID, &participant.Name); err != nil {
-			return nil, fmt.Errorf("failed to scan available participant: %w", err)
+	seen := make(map[uuid.UUID]struct{}, len(occurrences))
+	participants := make([]models.AvailableParticipant, 0, len(occurrences))
+	for _, occurrence := range occurrences {
+		if _, ok := seen[occurrence.ParticipantID]; ok {
+			continue
 		}
-		participants = append(participants, participant)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating available participants: %w", err)
+		seen[occurrence.ParticipantID] = struct{}{}
+		participants = append(participants, models.AvailableParticipant{
+			ID:   occurrence.ParticipantID,
+			Name: occurrence.ParticipantName,
+		})
 	}
 
 	return participants, nil
 }
 
-// GetParticipantCountForDate returns how many participants are available on a date.
+// GetParticipantCountForDate returns how many participants are available at once.
 //
-// Derived from the list rather than counted by a query of its own, so the number in
-// "3/3 participants available" and the names printed underneath it cannot disagree.
-// They used to.
+// The number the notification threshold is compared against, and it now means what the
+// interface has always shown: participants whose windows actually overlap, not merely
+// participants who answered for that day. Those were different numbers, so a calendar
+// could send "3/3 available" for three people who were never free at the same moment,
+// while the page for that date showed 1 and the feed emitted no event at all.
+//
+// An all-day answer spans the whole day, so a calendar answered in whole days — the
+// common case — gives exactly the count it always did.
 func (r *AvailabilityRepository) GetParticipantCountForDate(
 	ctx context.Context,
 	calendarID uuid.UUID,
 	date time.Time,
 ) (int, error) {
-	participants, err := r.GetAvailableParticipantsForDate(ctx, calendarID, date)
+	occurrences, err := r.GetOccurrencesForDate(ctx, calendarID, date)
 	if err != nil {
 		return 0, err
 	}
 
-	return len(participants), nil
+	windows := make([]models.TimeWindow, 0, len(occurrences))
+	for _, occurrence := range occurrences {
+		windows = append(windows, occurrence.Window())
+	}
+
+	return models.MaxSimultaneous(windows), nil
 }

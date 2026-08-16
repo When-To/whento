@@ -540,3 +540,205 @@ func TestAvailabilitiesGoWithTheirParticipant(t *testing.T) {
 }
 
 func timePtr(t time.Time) *time.Time { return &t }
+
+// The occurrence expansion is the one answer to "who is available, when". These tests
+// carry the semantics that used to live in the availability service's Go loops — a manual
+// answer suppressing a recurrence, exceptions, bounds — because that is where the logic
+// went, not because they were invented here.
+
+func TestOccurrencesExpandRecurrencesAndCarryTimes(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewAvailabilityRepository(pool)
+	recurrences := repository.NewRecurrenceRepository(pool)
+	ctx := dbtest.Context(t)
+
+	f := seed(t, pool)
+	monday := day(0)
+
+	start, end := ptr("18:00"), ptr("22:00")
+	weekly := recurrence(f.other.ID, int(time.Monday), start, end)
+	if err := recurrences.CreateRecurrence(ctx, weekly); err != nil {
+		t.Fatalf("CreateRecurrence: %v", err)
+	}
+	if err := repo.Create(ctx, availability(f.participant.ID, monday, nil, nil)); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := repo.GetOccurrencesForDate(ctx, f.calendar.ID, monday)
+	if err != nil {
+		t.Fatalf("GetOccurrencesForDate: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d occurrences, want 2: %+v", len(got), got)
+	}
+
+	byParticipant := map[uuid.UUID]models.Occurrence{}
+	for _, occurrence := range got {
+		byParticipant[occurrence.ParticipantID] = occurrence
+	}
+
+	// The recurrence's own times come through — a summary that lost them would show an
+	// evening slot as an all-day one, and the overlap count would be wrong with it.
+	fromRecurrence, ok := byParticipant[f.other.ID]
+	if !ok {
+		t.Fatal("the recurrence produced no occurrence")
+	}
+	if fromRecurrence.StartTime == nil || *fromRecurrence.StartTime != "18:00" {
+		t.Errorf("start = %v, want 18:00", fromRecurrence.StartTime)
+	}
+	if fromRecurrence.EndTime == nil || *fromRecurrence.EndTime != "22:00" {
+		t.Errorf("end = %v, want 22:00", fromRecurrence.EndTime)
+	}
+	if fromRecurrence.ParticipantName == "" {
+		t.Error("the occurrence carries no participant name")
+	}
+
+	// An all-day answer stays all-day rather than being filled in with a whole-day span.
+	manual, ok := byParticipant[f.participant.ID]
+	if !ok {
+		t.Fatal("the manual answer produced no occurrence")
+	}
+	if manual.StartTime != nil || manual.EndTime != nil {
+		t.Errorf("the all-day answer gained times: %v..%v", manual.StartTime, manual.EndTime)
+	}
+}
+
+// TestAManualAnswerSuppressesTheRecurrence is the precedence rule, and the reason a
+// participant is never counted twice for one date. It held in three separate places
+// before; it holds in one now.
+func TestAManualAnswerSuppressesTheRecurrence(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewAvailabilityRepository(pool)
+	recurrences := repository.NewRecurrenceRepository(pool)
+	ctx := dbtest.Context(t)
+
+	f := seed(t, pool)
+	monday := day(0)
+
+	weekly := recurrence(f.participant.ID, int(time.Monday), ptr("18:00"), ptr("22:00"))
+	if err := recurrences.CreateRecurrence(ctx, weekly); err != nil {
+		t.Fatalf("CreateRecurrence: %v", err)
+	}
+	// The same participant then answers that date by hand, all day.
+	if err := repo.Create(ctx, availability(f.participant.ID, monday, nil, nil)); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := repo.GetOccurrencesForDate(ctx, f.calendar.ID, monday)
+	if err != nil {
+		t.Fatalf("GetOccurrencesForDate: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("got %d occurrences for one participant, want 1: %+v", len(got), got)
+	}
+	// Wholesale, not merged: the typed answer wins even though it is the vaguer one.
+	if got[0].StartTime != nil || got[0].EndTime != nil {
+		t.Errorf("the recurrence's times survived the manual answer: %v..%v", got[0].StartTime, got[0].EndTime)
+	}
+}
+
+func TestOccurrencesForRangeCoverEveryDay(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewAvailabilityRepository(pool)
+	recurrences := repository.NewRecurrenceRepository(pool)
+	ctx := dbtest.Context(t)
+
+	f := seed(t, pool)
+
+	weekly := recurrence(f.other.ID, int(time.Monday), nil, nil)
+	if err := recurrences.CreateRecurrence(ctx, weekly); err != nil {
+		t.Fatalf("CreateRecurrence: %v", err)
+	}
+	// An exception on the second Monday, so the range has to skip exactly one of them.
+	exception := &models.RecurrenceException{RecurrenceID: weekly.ID, ExcludedDate: "2027-03-08"}
+	exception.ID = uuid.New()
+	if err := recurrences.CreateException(ctx, exception); err != nil {
+		t.Fatalf("CreateException: %v", err)
+	}
+
+	// Three weeks: three Mondays, minus the excluded one.
+	got, err := repo.GetOccurrencesForRange(ctx, f.calendar.ID, day(0), day(20))
+	if err != nil {
+		t.Fatalf("GetOccurrencesForRange: %v", err)
+	}
+
+	dates := map[string]bool{}
+	for _, occurrence := range got {
+		dates[occurrence.Date.Format("2006-01-02")] = true
+	}
+	for _, want := range []string{"2027-03-01", "2027-03-15"} {
+		if !dates[want] {
+			t.Errorf("the range is missing the Monday of %s: %v", want, dates)
+		}
+	}
+	if dates["2027-03-08"] {
+		t.Errorf("the excluded Monday is in the range: %v", dates)
+	}
+	// Ordered by date, so the caller never has to sort what SQL already knows.
+	for i := 1; i < len(got); i++ {
+		if got[i].Date.Before(got[i-1].Date) {
+			t.Errorf("occurrence %d is out of order: %v before %v", i, got[i].Date, got[i-1].Date)
+		}
+	}
+}
+
+// TestCountMeasuresOverlapNotAnswers is the behaviour change. Three people answering for
+// the same day at hours that never meet is not three people who can meet.
+func TestCountMeasuresOverlapNotAnswers(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewAvailabilityRepository(pool)
+	ctx := dbtest.Context(t)
+
+	f := seed(t, pool)
+	monday := day(0)
+
+	if err := repo.Create(ctx, availability(f.participant.ID, monday, ptr("08:00"), ptr("10:00"))); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := repo.Create(ctx, availability(f.other.ID, monday, ptr("18:00"), ptr("20:00"))); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	count, err := repo.GetParticipantCountForDate(ctx, f.calendar.ID, monday)
+	if err != nil {
+		t.Fatalf("GetParticipantCountForDate: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("count = %d, want 1: two people free the same day at hours that never meet", count)
+	}
+
+	// Both are still available that day — the list is a different question from the count.
+	available, err := repo.GetAvailableParticipantsForDate(ctx, f.calendar.ID, monday)
+	if err != nil {
+		t.Fatalf("GetAvailableParticipantsForDate: %v", err)
+	}
+	if len(available) != 2 {
+		t.Errorf("got %d available participants, want 2", len(available))
+	}
+}
+
+// TestCountIsUnchangedForWholeDayAnswers bounds the change above: a calendar answered in
+// whole days — the common case — counts exactly as it always did.
+func TestCountIsUnchangedForWholeDayAnswers(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewAvailabilityRepository(pool)
+	ctx := dbtest.Context(t)
+
+	f := seed(t, pool)
+	monday := day(0)
+
+	for _, id := range []uuid.UUID{f.participant.ID, f.other.ID} {
+		if err := repo.Create(ctx, availability(id, monday, nil, nil)); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+	}
+
+	count, err := repo.GetParticipantCountForDate(ctx, f.calendar.ID, monday)
+	if err != nil {
+		t.Fatalf("GetParticipantCountForDate: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("count = %d, want 2: all-day answers span the whole day", count)
+	}
+}

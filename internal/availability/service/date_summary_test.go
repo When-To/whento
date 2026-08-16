@@ -18,6 +18,12 @@ import (
 	"github.com/whento/whento/internal/availability/repository"
 )
 
+// One test was dropped when the expansion moved into SQL, because the service no longer
+// decides it: TestGetDateSummaryUnknownParticipant asserted that an availability whose
+// participant has left the calendar is not reported. The occurrence query answers that
+// with its JOIN on participants scoped to the calendar, covered by the repository's
+// TestOccurrencesExpandRecurrencesAndCarryTimes.
+
 // identifiedIDs collects the participant ids that actually survived masking.
 func identifiedIDs(participants []models.PublicParticipantAvailabilitySummary) []uuid.UUID {
 	out := make([]uuid.UUID, 0, len(participants))
@@ -55,12 +61,11 @@ func summariesWithBothParticipants(t *testing.T, locked bool) *summaryFixture {
 
 	fixture := newSummaryFixture(t, func(c *repository.Calendar) { c.LockParticipants = locked })
 
-	availabilities := []*models.Availability{
-		availabilityOn(t, fixture.alice.ID, "2026-03-05", ptr("09:00"), ptr("17:00")),
-		availabilityOn(t, fixture.bob.ID, "2026-03-05", ptr("10:00"), ptr("12:00")),
+	// The one seeding serves both endpoints, so they are asked about identical data.
+	fixture.availRepo.occurrences = []models.Occurrence{
+		available(fixture.alice, mustDate(t, "2026-03-05"), ptr("09:00"), ptr("17:00")),
+		available(fixture.bob, mustDate(t, "2026-03-05"), ptr("10:00"), ptr("12:00")),
 	}
-	fixture.availRepo.onDate = availabilities
-	fixture.availRepo.inRange = availabilities
 
 	return fixture
 }
@@ -227,17 +232,18 @@ func TestSummaryEndpointsAgreeOnMasking(t *testing.T) {
 	}
 }
 
-// TestGetDateSummaryMasksRecurrenceOccurrences covers the second way a participant
-// reaches this response. Availabilities expanded from a recurrence are appended by a
-// separate branch, so masking the explicit ones alone would have left the leak open
-// for anyone whose availability comes from a weekly rule.
-func TestGetDateSummaryMasksRecurrenceOccurrences(t *testing.T) {
+// TestGetDateSummaryMasksUntimedOccurrences covers the second way a participant reaches
+// this response. An occurrence a recurrence produced is an ordinary row by the time the
+// service sees it — usually an untimed one, since a weekly rule is most often set for a
+// whole day — and masking has to cover it just the same. It used to arrive through a
+// branch of its own, so masking the explicitly answered ones alone left the leak open for
+// anyone whose availability comes from a weekly rule.
+func TestGetDateSummaryMasksUntimedOccurrences(t *testing.T) {
 	fixture := newSummaryFixture(t, func(c *repository.Calendar) { c.LockParticipants = true })
 
-	// 2026-03-05 is a Thursday.
-	fixture.recurrences.byCalendar = []models.Recurrence{
-		recurrenceOn(fixture.alice.ID, 4, "2026-03-01", nil),
-		recurrenceOn(fixture.bob.ID, 4, "2026-03-01", nil),
+	fixture.availRepo.occurrences = []models.Occurrence{
+		available(fixture.alice, mustDate(t, "2026-03-05"), nil, nil),
+		available(fixture.bob, mustDate(t, "2026-03-05"), nil, nil),
 	}
 
 	got, err := fixture.service.GetDateSummary(
@@ -248,13 +254,13 @@ func TestGetDateSummaryMasksRecurrenceOccurrences(t *testing.T) {
 	}
 
 	if len(got.Participants) != 2 {
-		t.Fatalf("got %d participants, want 2 recurrence occurrences", len(got.Participants))
+		t.Fatalf("got %d participants, want 2 untimed occurrences", len(got.Participants))
 	}
 	if !containsUUID(t, got, fixture.alice.ID) {
 		t.Error("the asker cannot see their own id, so they cannot edit their own slot")
 	}
 	if containsUUID(t, got, fixture.bob.ID) {
-		t.Error("a recurrence-derived participant's id leaked past lock_participants")
+		t.Error("an untimed occurrence's participant id leaked past lock_participants")
 	}
 }
 
@@ -279,8 +285,8 @@ func TestGetDateSummaryEmptySerialisesAsArray(t *testing.T) {
 				c.MinDurationHours = tt.minDuration
 			})
 			if tt.minDuration > 0 {
-				fixture.availRepo.onDate = []*models.Availability{
-					availabilityOn(t, fixture.alice.ID, "2026-03-05", ptr("09:00"), ptr("10:00")),
+				fixture.availRepo.occurrences = []models.Occurrence{
+					available(fixture.alice, mustDate(t, "2026-03-05"), ptr("09:00"), ptr("10:00")),
 				}
 			}
 
@@ -301,30 +307,6 @@ func TestGetDateSummaryEmptySerialisesAsArray(t *testing.T) {
 				t.Errorf("participants = %s, want an empty array rather than null", encoded)
 			}
 		})
-	}
-}
-
-// TestGetDateSummaryUnknownParticipant mirrors the range-side guard: an availability
-// whose participant has since left the calendar is dropped, not reported nameless.
-func TestGetDateSummaryUnknownParticipant(t *testing.T) {
-	fixture := newSummaryFixture(t, nil)
-
-	ghost := uuid.New()
-	fixture.availRepo.onDate = []*models.Availability{
-		availabilityOn(t, ghost, "2026-03-05", ptr("09:00"), ptr("17:00")),
-	}
-	fixture.recurrences.byCalendar = []models.Recurrence{recurrenceOn(ghost, 4, "2026-03-01", nil)}
-
-	got, err := fixture.service.GetDateSummary(context.Background(), "token", "2026-03-05", "")
-	if err != nil {
-		t.Fatalf("GetDateSummary: %v", err)
-	}
-
-	if len(got.Participants) != 0 {
-		t.Errorf("got %d participants, want none: the participant is unknown", len(got.Participants))
-	}
-	if containsUUID(t, got, ghost) {
-		t.Error("the id of a participant who is not on the calendar was echoed back")
 	}
 }
 
@@ -367,7 +349,7 @@ func TestGetDateSummaryErrors(t *testing.T) {
 
 	t.Run("a store failure is propagated", func(t *testing.T) {
 		fixture := newSummaryFixture(t, nil)
-		fixture.availRepo.onDateErr = errStore
+		fixture.availRepo.occurrencesErr = errStore
 
 		_, err := fixture.service.GetDateSummary(context.Background(), "token", "2026-03-05", "")
 		if !errors.Is(err, errStore) {
