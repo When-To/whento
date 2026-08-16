@@ -20,10 +20,6 @@ import (
 	"github.com/whento/pkg/email"
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/logger"
-
-	// Aliased: the constructor below takes a *slog.Logger named `logger`, which
-	// would otherwise shadow the package.
-	pkglog "github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
 )
 
@@ -217,6 +213,6 @@ func (h *AuthHandler) sendVerificationEmail(to, displayName, locale, token strin
 		return err
 	}
 
-	h.logger.Info("Verification email sent", "recipient_ref", pkglog.Fingerprint(to), "locale", locale)
+	h.logger.Info("Verification email sent", "recipient_ref", logger.Fingerprint(to), "locale", locale)
 	return nil
 }
