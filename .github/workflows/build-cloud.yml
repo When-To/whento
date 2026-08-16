@@ -30,13 +30,12 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Patch-exact rather than the '1.26' it used to be. The 2026-08-13 Go security
-  # release fixed six stdlib advisories (GO-2026-6218, -6091, -6090, -6089, -6088,
-  # -5972) in 1.26.6, and govulncheck reports them against every build until the
-  # toolchain moves. actions/go-versions had not published 1.26.6 yet, so a floating
-  # minor still resolved to the vulnerable 1.26.5; naming the patch makes setup-go
-  # fetch it from go.dev directly. Safe to float again once the manifest catches up.
-  GO_VERSION: '1.26.6'
+  # A floating minor, deliberately. What makes it safe is check-latest on every
+  # setup-go step below: without it the action resolves the spec against the runner's
+  # toolcache first, and the hosted image ships a Go of its own — '1.26' matched the
+  # preinstalled 1.26.5 and the version manifest was never consulted, which is how a
+  # toolchain with six known stdlib advisories kept being used after 1.26.6 shipped.
+  GO_VERSION: '1.26'
   NODE_VERSION: '24'
 
 jobs:
@@ -82,6 +81,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
+          check-latest: true
 
       - name: Install swag CLI
         run: go install github.com/swaggo/swag/cmd/swag@v1.16.6
