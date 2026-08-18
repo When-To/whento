@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: BSL-1.1
 
 //	@title						WhenTo API
-//	@version					1.6.3
+//	@version					2.0.0
 //	@description				WhenTo is a self-hosted web application for organizing events among friends through collaborative calendars.
 //	@description				Each calendar answers a simple question: **when can we meet?** Participants indicate their availability, and time slots reaching a defined threshold become events accessible via an **iCalendar subscription URL** — automatic synchronization in Google Calendar, Apple Calendar, Outlook, etc.
 //	@description

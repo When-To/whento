@@ -40,9 +40,27 @@ line per release rather than listed individually.
 
 ## [Unreleased]
 
+Nothing yet.
+
+---
+
+## [v2.0.0] — 2026-08-18
+
+_Range: `v1.6.3..v2.0.0`._
+
 The work since `v1.6.3` is largely a technical audit and its remediation: coverage
 went from 29% to a CI-enforced floor, the workflows were hardened and pinned, and
 several defects the new tests surfaced were fixed.
+
+It is a major version for one reason: self-hosting no longer caps calendars, so the
+whole licensing apparatus is gone — `LICENSE_KEY` with it. **Read `### Removed` and
+the upgrade notes in the release body before upgrading**; there is one destructive
+migration and one change that signs every user out once.
+
+A caveat this file exists to record: the licensing removal shipped inside the squash
+commit titled `refactor(frontend): rebuild the calendar views on one shared, tested
+model (#58)`, so `git log v1.6.3..HEAD` does not show it. It is written out below
+because the history cannot be read for it.
 
 ### Added
 
@@ -51,6 +69,16 @@ several defects the new tests surfaced were fixed.
 - Prometheus metrics on a listener of their own, off unless `METRICS_ENABLED` says
   otherwise, labelled by method, chi route pattern and status — never by path,
   token or identity.
+- Refresh token rotation keeps a 30-second grace window, so two tabs waking at once
+  no longer sign each other out; a token replayed after the window is treated as
+  theft — every session for that user is revoked and the event logged at Warn
+  (#105).
+- The client refreshes its access token a minute before expiry, and on
+  `visibilitychange` and `online`, instead of waiting for a 401 (#106).
+- Being signed out mid-session carries `?redirect=<where you were>`, so signing back
+  in returns to the page you lost (#106).
+- Configuration is validated at startup (`internal/config/validate.go`): an invalid
+  value stops the process instead of silently falling back to a default.
 - A database test harness (`internal/testutil/dbtest`) and browser tests that drive
   the write paths against a real backend (#65, #72).
 - Operator documentation under `docs/`: backup and restore, Postgres/Redis
@@ -59,9 +87,31 @@ several defects the new tests surfaced were fixed.
 
 ### Changed
 
+- `GET /api/ready` reports a `checks` object per dependency and answers 503 while
+  PostgreSQL is unreachable, instead of an unconditional 200.
 - The first day of the week is resolved from the calendar's timezone rather than
   from the viewer's locale (#77).
 - The calendar views were rebuilt on one shared, tested week model (#58).
+- `expires_in` is read from the JWT manager rather than the hardcoded 900, so an
+  instance that sets `JWT_ACCESS_EXPIRY` gets a number describing the token it was
+  issued (#106).
+- "Who is available on this date" is expanded once, in SQL, and every summary,
+  participant list and threshold count derives from that single result (#112).
+- The notification threshold measures overlapping availability, matching what the
+  interface and the ICS feed already meant; `min_duration_hours` bounds which
+  overlaps count rather than whether the day is described at all (#112, #113).
+- A notification batch closes with one log line saying what became of it — sent,
+  suppressed or failed — and per-channel suppression is logged at Info rather than
+  Debug (#114).
+- The participant-email rate limit goes from 5 to 10 requests per quarter hour, and
+  `/auth/refresh` from 5 to 30 per minute per IP (#95, #107).
+- `EmailVerificationHandler` folded into `AuthHandler`, so the binary no longer
+  carries two copies of the verification template and its locale file (#111).
+- A failed migration stops the container instead of starting the application on a
+  half-applied schema (`scripts/docker-entrypoint.sh`).
+- `docker-compose.yml`: a named `whento_keys` volume on `/app/keys`, Redis running
+  as `user: redis` with its password in a `0600` file, `no-new-privileges`,
+  `cap_drop: ALL`, `pids_limit`, and CPU/memory limits on all three services.
 - `cmd/` was split into `wire.go` (dependency injection), `router.go` and one
   `routes_<domain>.go` per business domain; `main.go` now holds only `main()`,
   `run()` and the Swagger annotations.
@@ -76,9 +126,52 @@ several defects the new tests surfaced were fixed.
   `concurrency` groups.
 - Toolchains aligned: Go 1.26 everywhere, Node 24, `goimports` v0.48.0,
   `golangci-lint` v2.12.2 (#51, #52).
+- `GO_VERSION` floats on `1.26` again with `check-latest` on all twelve `setup-go`
+  steps, so a patch release is picked up because it exists rather than because
+  somebody edited four files (#96, #109).
+- The licence and subscription tiers that no longer exist in the code were removed
+  from `LICENSE-COMMERCIAL`, the README and the published Swagger description
+  (#99, #100).
+- Dependency updates (#90–#93, #118–#121).
+
+### Removed
+
+- Self-hosted licensing, in full: the `LICENSE_KEY` variable, the
+  `GET`/`DELETE /api/v1/license`, `/api/v1/license/info`, `/activate` and `/reload`
+  endpoints, the `/admin/license` page, the `cmd/licensegen` generator, and the
+  `licenses` table (`migrations/selfhosted/013`). Self-hosting no longer caps
+  calendars, so there is nothing left to license. The down migration recreates the
+  table but not its contents.
+- The cloud `ecommerce`, `shop`, `subscription`, `vat` and `pricing` domains, the
+  `STRIPE_*` and `LICENSE_PRIVATE_KEY_BASE64` variables, and the frontend views that
+  went with them (`migrations/cloud/013`). No effect on a self-hosted instance.
+- `upgrade_url` from `GET /api/v1/quota/limits`, and `service` from
+  `GET /api/health`.
 
 ### Fixed
 
+- Every rate limit rule gets its own bucket. All eight IP-keyed routes counted into
+  one bucket per address, so opening a calendar page spent four of the five requests
+  a participant's email address was allowed, and the next attempt got an undeserved
+  429 (#107).
+- A participant available only through a recurrence was counted towards the
+  threshold but never notified, and was missing from the participant list in the
+  email; when everyone available was available that way, participant notifications
+  were skipped entirely (#108).
+- A date several people had answered for could report "0 participant(s)": the day's
+  duration was measured as the window shared by *everyone*, which is zero as soon as
+  two answers do not overlap (#113).
+- `/swagger` was a blank page in production — the upstream index builds the UI from
+  an inline script that `script-src 'self'` refuses (#110).
+- The ownership check on a refresh token ran after the delete, so a token belonging
+  to another user was destroyed on its way to being rejected (#105).
+- French subject lines went out as raw UTF-8 and rendered as mojibake in a fair
+  share of mail clients; headers are now RFC 2047 encoded (#98).
+- `Register` generated and stored a refresh token but never set the cookie, so a new
+  account had nothing to restore from (#95).
+- Inter is bundled via `@fontsource-variable/inter` instead of loaded from
+  `fonts.googleapis.com`, so first paint no longer depends on reaching an external
+  host — 18 seconds on a network that cannot (#94).
 - The access token is refreshed at most once at a time, instead of once per
   concurrent 401 (#73).
 - An unmatched `/api` path answers 404 JSON instead of serving the SPA with a
@@ -92,6 +185,22 @@ several defects the new tests surfaced were fixed.
 
 ### Security
 
+- Mail headers are assembled through `net/mail` with an explicit CRLF guard, closing
+  a critical CodeQL `go/email-injection` finding: a newline in a subject or recipient
+  would have ended the header block early and turned the rest into headers of its
+  own, a `Bcc` among them. Recipients must now be bare mailbox addresses
+  (#98, #104).
+- Mail bodies render through `html/template` rather than `text/template`, so
+  contextual escaping is enforced rather than held by convention (#98).
+- The access token is no longer written to localStorage (CodeQL
+  `js/clear-text-storage-of-sensitive-data`), and the `refresh_token` field is
+  dropped from the reset-password JSON response (#95).
+- Signing out broadcasts to the other tabs, which clear and navigate to `/login`;
+  previously only a failed refresh did, so a deliberate sign-out left up to fifteen
+  minutes of readable session in the tab next door (#102).
+- `fonts.googleapis.com` and `fonts.gstatic.com` removed from `style-src` and
+  `font-src`: the CSP now allows no external origin for code, styles or fonts, with
+  a test that fails on either host by name (#94, #103).
 - `govulncheck` (both build tags, both modules), CodeQL, `dependency-review` and
   Trivy image scanning before push; SBOM and signed build provenance on release
   artefacts.
@@ -417,7 +526,8 @@ community templates landed with it.
 
 _Note: this tag is not an ancestor of `main` — see the caveats at the top._
 
-[unreleased]: https://github.com/When-To/whento/compare/v1.6.3...HEAD
+[unreleased]: https://github.com/When-To/whento/compare/v2.0.0...HEAD
+[v2.0.0]: https://github.com/When-To/whento/releases/tag/v2.0.0
 [v1.6.3]: https://github.com/When-To/whento/releases/tag/v1.6.3
 [v1.6.2]: https://github.com/When-To/whento/releases/tag/v1.6.2
 [v1.6.1]: https://github.com/When-To/whento/releases/tag/v1.6.1

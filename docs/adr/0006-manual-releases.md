@@ -188,3 +188,19 @@ The CI title check adopted here is the precondition for that migration, not an
 alternative to it: `release-please` is only as good as the commit subjects it
 parses. Adopting it later will be a small step *because* of this decision, not in
 spite of it.
+
+### Occurrences of the second trigger
+
+Recorded here so that "twice in a row" is countable rather than remembered. The
+"Bad" section above concedes that nothing enforces the changelog; a trigger nobody
+tallies is not a trigger.
+
+1. **v2.0.0 (2026-08-18).** `## [Unreleased]` had not been touched since the commit
+   that created this file, leaving it 29 commits behind at release time, and it was
+   missing a `### Removed` section entirely — including the removal of self-hosted
+   licensing, `LICENSE_KEY` and four endpoints. The aggravating factor is one this
+   record already names: that removal shipped inside a squash commit titled
+   `refactor(frontend): rebuild the calendar views on one shared, tested model
+   (#58)`, so the drafting command in CONTRIBUTING does not surface it. Enforcing
+   the commit convention was necessary but is not sufficient — a correct subject can
+   still describe only part of its own squash.
