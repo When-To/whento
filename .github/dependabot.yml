@@ -96,6 +96,13 @@ updates:
     commit-message:
       prefix: 'chore(deps)'
     labels: ['dependencies', 'docker']
+    # One pull request across all four directories, not one per directory. The
+    # three Dockerfiles pin the same images and cmd/dockerfiles_test.go fails
+    # when they disagree, so an ungrouped bump lands in one file and reds the
+    # build until the other two are updated by hand.
+    groups:
+      docker:
+        patterns: ['*']
     ignore:
       # Node 26 is Current, not LTS. Stay on 24.
       - dependency-name: node
