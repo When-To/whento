@@ -5,9 +5,11 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
@@ -869,5 +871,47 @@ func TestSendEmailNotificationPropagatesFailure(t *testing.T) {
 	err := service.sendEmailNotification("a@example.test", "body", "en", false)
 	if err == nil {
 		t.Fatal("expected the SMTP failure to propagate")
+	}
+}
+
+// TestASuppressedBatchSaysSo is about what an operator can see, which is the difference
+// between a working system and one that looks broken.
+//
+// The anti-spam ledger holds a notice for an hour, so a second crossing within it is
+// suppressed by design. Every outcome after the "SENDING NOTIFICATIONS" line was logged
+// at Debug, so at Info the log announced a transition, announced three recipients, and
+// then said nothing at all — indistinguishable from a crash. That cost a real evening of
+// hunting a bug that was not there.
+func TestASuppressedBatchSaysSo(t *testing.T) {
+	var buf bytes.Buffer
+	f := newNotifyFixture(t, emailConfig())
+	f.log.sentRecently = map[string]bool{
+		f.owner.ID.String() + "/email":       true,
+		f.participant.ID.String() + "/email": true,
+	}
+
+	service := NewNotifyService(
+		f.calendars, f.people, f.slots, f.users, f.log,
+		f.mailer, f.external, f.detector,
+		"https://whento.test",
+		slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})),
+	)
+
+	if err := service.CheckThresholdAndNotify(context.Background(), f.calendar.ID, f.date, 1); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(f.mailer.messages()) != 0 {
+		t.Fatalf("sent %d mails despite the ledger", len(f.mailer.messages()))
+	}
+
+	logged := buf.String()
+	if !strings.Contains(logged, "suppressed_as_already_sent") {
+		t.Errorf("nothing at Info says the batch was suppressed:\n%s", logged)
+	}
+	// And it has to say the send count too, or "suppressed" alone reads as a partial
+	// failure rather than the whole story.
+	if !strings.Contains(logged, `"sent":0`) {
+		t.Errorf("the summary does not report how many were sent:\n%s", logged)
 	}
 }
