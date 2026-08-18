@@ -158,14 +158,14 @@ func (p ParticipantAvailabilitySummary) Window() TimeWindow {
 	return TimeWindow{Start: p.StartTime, End: p.EndTime}
 }
 
-// MaxSimultaneous returns the largest number of the given windows that are open at the
-// same moment. A nil start or end means all day, so a calendar answered entirely in whole
+// MaxSimultaneousFor returns the largest number of the given windows that are open
+// together for at least minMinutes. A nil start or end means all day, so a calendar answered entirely in whole
 // days gives the same number as simply counting the answers.
 //
 // It lives here rather than in the availability service because the notification threshold
 // needs it too, and the dependency runs availability -> notify: the detector cannot reach
 // back into the service without a cycle. Both packages already import this one.
-func MaxSimultaneous(windows []TimeWindow) int {
+func MaxSimultaneousFor(windows []TimeWindow, minMinutes int) int {
 	if len(windows) == 0 {
 		return 0
 	}
@@ -240,28 +240,40 @@ func MaxSimultaneous(windows []TimeWindow) int {
 	}
 	sortInts(boundaries)
 
-	// Calculate the maximum number of participants for each segment
+	// The largest group covering any window long enough to be worth meeting in.
+	//
+	// Every candidate window runs from one boundary to a later one, rather than only
+	// between consecutive ones: a group has to cover the whole of a window at least
+	// minMinutes long, and that window generally spans several elementary segments. With
+	// minMinutes zero the longer candidates can only ever have fewer coverers than the
+	// segments they contain, so the answer is the same one this always gave.
 	maxCount := 0
 
 	for i := 0; i < len(boundaries)-1; i++ {
-		segStart := boundaries[i]
-		segEnd := boundaries[i+1]
+		for j := i + 1; j < len(boundaries); j++ {
+			if boundaries[j]-boundaries[i] < minMinutes {
+				continue
+			}
 
-		// Count participants available for this entire segment
-		count := 0
-		for _, p := range normalized {
-			if p.valid {
-				// Participant is available if their range completely covers the segment
-				if p.startMinutes <= segStart && p.endMinutes >= segEnd {
+			count := 0
+			for _, p := range normalized {
+				// Available if their range completely covers the candidate window.
+				if p.valid && p.startMinutes <= boundaries[i] && p.endMinutes >= boundaries[j] {
 					count++
 				}
 			}
-		}
 
-		if count > maxCount {
-			maxCount = count
+			if count > maxCount {
+				maxCount = count
+			}
 		}
 	}
 
 	return maxCount
+}
+
+// MaxSimultaneous is MaxSimultaneousFor with no minimum: the largest number of windows
+// open at the same moment, however briefly.
+func MaxSimultaneous(windows []TimeWindow) int {
+	return MaxSimultaneousFor(windows, 0)
 }

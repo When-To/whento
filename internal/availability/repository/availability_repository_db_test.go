@@ -718,6 +718,41 @@ func TestCountMeasuresOverlapNotAnswers(t *testing.T) {
 	}
 }
 
+// TestCountHonoursTheCalendarMinimum keeps the number the notification threshold reads
+// and the number the page shows as one number. They were briefly two: the summary
+// endpoints started counting only overlaps long enough to hold the event while this still
+// counted any overlap, so a notification could announce a gathering the interface was
+// already saying could not happen.
+func TestCountHonoursTheCalendarMinimum(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewAvailabilityRepository(pool)
+	ctx := dbtest.Context(t)
+
+	f := seed(t, pool)
+	monday := day(0)
+
+	// Half an hour together, on a calendar that wants two.
+	if err := repo.Create(ctx, availability(f.participant.ID, monday, ptr("10:00"), ptr("13:30"))); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := repo.Create(ctx, availability(f.other.ID, monday, ptr("13:00"), ptr("18:00"))); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE calendars SET min_duration_hours = 2 WHERE id = $1`, f.calendar.ID); err != nil {
+		t.Fatalf("set the minimum: %v", err)
+	}
+
+	count, err := repo.GetParticipantCountForDate(ctx, f.calendar.ID, monday)
+	if err != nil {
+		t.Fatalf("GetParticipantCountForDate: %v", err)
+	}
+	// Each is free long enough alone; the pair is not.
+	if count != 1 {
+		t.Errorf("count = %d, want 1: half an hour together cannot hold a two-hour event", count)
+	}
+}
+
 // TestCountIsUnchangedForWholeDayAnswers bounds the change above: a calendar answered in
 // whole days — the common case — counts exactly as it always did.
 func TestCountIsUnchangedForWholeDayAnswers(t *testing.T) {

@@ -494,10 +494,23 @@ func (r *AvailabilityRepository) GetParticipantCountForDate(
 		return 0, err
 	}
 
+	// How long a meeting has to last is the calendar's policy, not the caller's, so it
+	// is read here rather than threaded through every caller. Without it this counted
+	// any overlap however brief, while the page for the same date counted only overlaps
+	// long enough to hold the event — so a notification could announce a gathering the
+	// interface was already saying could not happen.
+	var minDurationHours int
+	if err := r.pool.QueryRow(ctx,
+		`SELECT COALESCE(min_duration_hours, 0) FROM calendars WHERE id = $1`,
+		calendarID,
+	).Scan(&minDurationHours); err != nil {
+		return 0, fmt.Errorf("failed to read the calendar's minimum duration: %w", err)
+	}
+
 	windows := make([]models.TimeWindow, 0, len(occurrences))
 	for _, occurrence := range occurrences {
 		windows = append(windows, occurrence.Window())
 	}
 
-	return models.MaxSimultaneous(windows), nil
+	return models.MaxSimultaneousFor(windows, minDurationHours*60), nil
 }

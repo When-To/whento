@@ -268,43 +268,92 @@ func TestGetDateSummaryMasksUntimedOccurrences(t *testing.T) {
 // The old code accumulated into a nil slice, so a date nobody answered came back with
 // `"participants": null` and any client mapping over it threw.
 func TestGetDateSummaryEmptySerialisesAsArray(t *testing.T) {
+	fixture := newSummaryFixture(t, nil)
+
+	got, err := fixture.service.GetDateSummary(context.Background(), "token", "2026-03-05", "")
+	if err != nil {
+		t.Fatalf("GetDateSummary: %v", err)
+	}
+	if got.TotalCount != 0 {
+		t.Errorf("TotalCount = %d, want 0", got.TotalCount)
+	}
+
+	encoded, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"participants":[]`) {
+		t.Errorf("participants = %s, want an empty array rather than null", encoded)
+	}
+}
+
+// TestGetDateSummaryKeepsParticipantsBelowTheMinimum is the reported defect. A day where
+// nobody can meet for long enough used to come back with no participants at all — the
+// count said 0 and the list was empty, so the page showed "0 participant(s)" for a date
+// several people had answered for, with nothing to say why.
+//
+// The minimum bounds which overlaps count, not whether the day is worth describing.
+func TestGetDateSummaryKeepsParticipantsBelowTheMinimum(t *testing.T) {
+	fixture := newSummaryFixture(t, func(c *repository.Calendar) { c.MinDurationHours = 2 })
+	date := mustDate(t, "2026-03-05")
+	fixture.availRepo.occurrences = []models.Occurrence{
+		available(fixture.alice, date, ptr("10:00"), ptr("13:00")),
+		available(fixture.bob, date, ptr("14:00"), ptr("18:00")),
+	}
+
+	got, err := fixture.service.GetDateSummary(context.Background(), "token", "2026-03-05", "")
+	if err != nil {
+		t.Fatalf("GetDateSummary: %v", err)
+	}
+
+	// Neither can meet the other, but each is free long enough on their own.
+	if got.TotalCount != 1 {
+		t.Errorf("TotalCount = %d, want 1", got.TotalCount)
+	}
+	if len(got.Participants) != 2 {
+		t.Fatalf("listed %d participants, want 2: the day is answerable even when the event is not",
+			len(got.Participants))
+	}
+	// With their hours, which is what makes the count legible.
+	for _, p := range got.Participants {
+		if p.StartTime == nil || p.EndTime == nil {
+			t.Errorf("%s came back without hours", p.ParticipantName)
+		}
+	}
+}
+
+// TestGetDateSummaryCountsOnlyOverlapsLongEnough is the other half: an overlap shorter
+// than the event cannot hold it, so it does not count towards the group.
+func TestGetDateSummaryCountsOnlyOverlapsLongEnough(t *testing.T) {
+	date := mustDate(t, "2026-03-05")
+
 	tests := []struct {
-		name string
-		// minDuration over zero exercises the short-overlap early return; zero
-		// exercises the ordinary empty-day path.
-		minDuration int
-		wantCount   int
+		name      string
+		alice     [2]string
+		bob       [2]string
+		wantCount int
 	}{
-		{name: "nobody answered", minDuration: 0, wantCount: 0},
-		{name: "the overlap is below the minimum", minDuration: 12, wantCount: 0},
+		{name: "they overlap for the full minimum", alice: [2]string{"10:00", "15:00"}, bob: [2]string{"13:00", "18:00"}, wantCount: 2},
+		{name: "they overlap, but only briefly", alice: [2]string{"10:00", "13:30"}, bob: [2]string{"13:00", "18:00"}, wantCount: 1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fixture := newSummaryFixture(t, func(c *repository.Calendar) {
-				c.MinDurationHours = tt.minDuration
-			})
-			if tt.minDuration > 0 {
-				fixture.availRepo.occurrences = []models.Occurrence{
-					available(fixture.alice, mustDate(t, "2026-03-05"), ptr("09:00"), ptr("10:00")),
-				}
+			fixture := newSummaryFixture(t, func(c *repository.Calendar) { c.MinDurationHours = 2 })
+			fixture.availRepo.occurrences = []models.Occurrence{
+				available(fixture.alice, date, ptr(tt.alice[0]), ptr(tt.alice[1])),
+				available(fixture.bob, date, ptr(tt.bob[0]), ptr(tt.bob[1])),
 			}
 
 			got, err := fixture.service.GetDateSummary(context.Background(), "token", "2026-03-05", "")
 			if err != nil {
 				t.Fatalf("GetDateSummary: %v", err)
 			}
-
 			if got.TotalCount != tt.wantCount {
 				t.Errorf("TotalCount = %d, want %d", got.TotalCount, tt.wantCount)
 			}
-
-			encoded, err := json.Marshal(got)
-			if err != nil {
-				t.Fatalf("marshal response: %v", err)
-			}
-			if !strings.Contains(string(encoded), `"participants":[]`) {
-				t.Errorf("participants = %s, want an empty array rather than null", encoded)
+			if len(got.Participants) != 2 {
+				t.Errorf("listed %d participants, want 2", len(got.Participants))
 			}
 		})
 	}

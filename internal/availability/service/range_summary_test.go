@@ -329,6 +329,10 @@ func TestGetRangeSummaryGroupsOccurrencesByDate(t *testing.T) {
 
 // TestGetRangeSummaryMinDuration covers the filter that hides dates too short to be
 // worth meeting on. It runs on the *overlap*, not on any one participant's span.
+// TestGetRangeSummaryMinDuration covers what the minimum now decides: how many people
+// count as able to meet, not whether the date appears at all. A date used to be dropped
+// from the range entirely when the overlap fell short, so the grid showed nothing for a
+// day several people had answered for.
 func TestGetRangeSummaryMinDuration(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -337,31 +341,40 @@ func TestGetRangeSummaryMinDuration(t *testing.T) {
 		aliceEnd    string
 		bobStart    string
 		bobEnd      string
-		wantKept    bool
+		wantCount   int
 	}{
 		{
 			name: "the overlap clears the minimum", minDuration: 2,
 			aliceStart: "09:00", aliceEnd: "17:00",
 			bobStart: "10:00", bobEnd: "14:00",
-			wantKept: true,
+			wantCount: 2,
 		},
 		{
+			// Alice is free for eight hours, so she can hold the event alone; Bob's two
+			// hours with her are not enough for the pair.
 			name: "the overlap is too short", minDuration: 4,
 			aliceStart: "09:00", aliceEnd: "17:00",
 			bobStart: "10:00", bobEnd: "12:00",
-			wantKept: false,
+			wantCount: 1,
 		},
 		{
-			name: "no minimum keeps everything", minDuration: 0,
+			name: "no minimum counts any overlap", minDuration: 0,
 			aliceStart: "09:00", aliceEnd: "17:00",
 			bobStart: "10:00", bobEnd: "10:30",
-			wantKept: true,
+			wantCount: 2,
 		},
 		{
-			name: "an exact match is kept", minDuration: 2,
+			name: "an exact match counts", minDuration: 2,
 			aliceStart: "09:00", aliceEnd: "17:00",
 			bobStart: "10:00", bobEnd: "12:00",
-			wantKept: true,
+			wantCount: 2,
+		},
+		{
+			// The reported defect, at the range grain.
+			name: "nobody overlaps at all", minDuration: 2,
+			aliceStart: "10:00", aliceEnd: "13:00",
+			bobStart: "14:00", bobEnd: "18:00",
+			wantCount: 1,
 		},
 	}
 
@@ -383,39 +396,17 @@ func TestGetRangeSummaryMinDuration(t *testing.T) {
 				t.Fatalf("GetRangeSummary: %v", err)
 			}
 
-			_, kept := byDate(got)["2026-03-05"]
-			if kept != tt.wantKept {
-				t.Errorf("date kept = %v, want %v", kept, tt.wantKept)
+			// The date is always described, whatever the count comes to.
+			if len(got) != 1 {
+				t.Fatalf("got %d dates, want 1: the date is dropped from the grid", len(got))
+			}
+			if got[0].TotalCount != tt.wantCount {
+				t.Errorf("TotalCount = %d, want %d", got[0].TotalCount, tt.wantCount)
+			}
+			if len(got[0].Participants) != 2 {
+				t.Errorf("listed %d participants, want 2", len(got[0].Participants))
 			}
 		})
-	}
-}
-
-// TestGetRangeSummaryCountsSimultaneous guards the difference between "how many people
-// answered" and "how many can actually meet", which is what the threshold gauge shows.
-func TestGetRangeSummaryCountsSimultaneous(t *testing.T) {
-	fixture := newSummaryFixture(t, nil)
-
-	// Two people on the same date who never overlap: two answers, but never two at
-	// once, so the count must be one.
-	fixture.availRepo.occurrences = []models.Occurrence{
-		available(fixture.alice, mustDate(t, "2026-03-05"), ptr("09:00"), ptr("10:00")),
-		available(fixture.bob, mustDate(t, "2026-03-05"), ptr("14:00"), ptr("16:00")),
-	}
-
-	got, err := fixture.service.GetRangeSummary(
-		context.Background(), "token", "2026-03-05", "2026-03-05", "",
-	)
-	if err != nil {
-		t.Fatalf("GetRangeSummary: %v", err)
-	}
-
-	summary := byDate(got)["2026-03-05"]
-	if len(summary.Participants) != 2 {
-		t.Errorf("got %d participants, want 2", len(summary.Participants))
-	}
-	if summary.TotalCount != 1 {
-		t.Errorf("TotalCount = %d, want 1: they never overlap", summary.TotalCount)
 	}
 }
 

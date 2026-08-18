@@ -696,69 +696,6 @@ func TestCreateAvailabilityMapsTheRepositorySentinel(t *testing.T) {
 	}
 }
 
-func TestCalculateDurationForDate(t *testing.T) {
-	tests := []struct {
-		name         string
-		participants []models.ParticipantAvailabilitySummary
-		want         float64
-	}{
-		// No participants means no times, which the "all day" branch reads as a
-		// 24-hour event. Pinned as documentation: GetDateSummary only reaches this
-		// with a non-empty list, so the value is never observed, but a future caller
-		// that does pass an empty list would get 24 rather than 0.
-		{name: "nobody at all is reported as a full day", participants: nil, want: 24},
-		{
-			name: "everyone is available all day",
-			participants: []models.ParticipantAvailabilitySummary{
-				{ParticipantID: uuid.New()},
-				{ParticipantID: uuid.New()},
-			},
-			want: 24,
-		},
-		{
-			// One untimed participant is enough to leave the window undetermined
-			// on that side, which also collapses to a full day.
-			name: "a mix of timed and untimed",
-			participants: []models.ParticipantAvailabilitySummary{
-				{ParticipantID: uuid.New(), StartTime: ptr("09:00")},
-				{ParticipantID: uuid.New()},
-			},
-			want: 24,
-		},
-		{
-			name: "a single timed availability",
-			participants: []models.ParticipantAvailabilitySummary{
-				{ParticipantID: uuid.New(), StartTime: ptr("09:00"), EndTime: ptr("17:00")},
-			},
-			want: 8,
-		},
-		{
-			name: "two participants overlapping for two hours",
-			participants: []models.ParticipantAvailabilitySummary{
-				{ParticipantID: uuid.New(), StartTime: ptr("09:00"), EndTime: ptr("12:00")},
-				{ParticipantID: uuid.New(), StartTime: ptr("10:00"), EndTime: ptr("14:00")},
-			},
-			want: 2,
-		},
-		{
-			name: "two participants who never overlap",
-			participants: []models.ParticipantAvailabilitySummary{
-				{ParticipantID: uuid.New(), StartTime: ptr("09:00"), EndTime: ptr("10:00")},
-				{ParticipantID: uuid.New(), StartTime: ptr("14:00"), EndTime: ptr("16:00")},
-			},
-			want: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := calculateDurationForDate(tt.participants); got != tt.want {
-				t.Errorf("calculateDurationForDate = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func ptr(s string) *string { return &s }
 
 // TestWeekdayAndDatedWindowsAgree covers a divergence that used to exist.
