@@ -16,11 +16,11 @@
 # re-published upstream and silently change the runtime, which makes a build
 # non-reproducible. The tag stays in front of the digest so the version is still
 # readable, and Dependabot (package-ecosystem: docker) keeps both in step.
-# Digests resolved 2026-08-12 from registry-1.docker.io; they are the multi-arch
+# Digests resolved 2026-08-18 from registry-1.docker.io; they are the multi-arch
 # index digests, so multi-platform builds keep working.
 
 # Build stage
-FROM golang:1.26-alpine3.24@sha256:70b46548e42db77e0966aaf3619fd068734dc6c77584d526b91126504fd95816 AS builder
+FROM golang:1.26-alpine3.24@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS builder
 
 WORKDIR /build
 
