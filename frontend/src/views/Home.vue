@@ -214,9 +214,7 @@
             <p class="mb-4 text-gray-600 dark:text-gray-400">
               {{ t('home.notConvincedDescription') }}
             </p>
-            <!-- Cloud mode: internal link -->
             <router-link
-              v-if="isCloud"
               to="/why-whento"
               class="inline-flex items-center font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
             >
@@ -230,31 +228,13 @@
                 />
               </svg>
             </router-link>
-            <!-- Self-hosted mode: external link -->
-            <a
-              v-else
-              :href="`${PUBLIC_APP_URL}/why-whento`"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-            >
-              {{ t('home.notConvincedLink') }}
-              <svg class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </a>
           </div>
         </div>
       </div>
     </section>
 
     <!-- CTA Section -->
-    <section class="py-20" :class="isCloud ? '' : 'bg-gray-100 dark:bg-gray-900'">
+    <section class="py-20">
       <div class="container-app text-center">
         <h2 class="mb-4 font-display text-3xl font-bold text-gray-900 dark:text-white md:text-4xl">
           {{ t('home.ctaTitle') }}
@@ -272,9 +252,6 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { useBuildType } from '@/composables/useBuildType';
-import { PUBLIC_APP_URL } from '@/config/constants';
 
 const { t } = useI18n();
-const { isCloud } = useBuildType();
 </script>
