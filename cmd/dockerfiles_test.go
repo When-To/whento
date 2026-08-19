@@ -123,6 +123,40 @@ func TestDockerfilesAgreeOnTheirPins(t *testing.T) {
 		}
 	})
 
+	// The pins above are values; this is the code that uses them. Comparing only
+	// the ARGs let a truncated `go get` line ship in two of the three files: the
+	// versions still agreed, so every check passed, and the release image failed
+	// to build with "unterminated quoted string". The stage is meant to be
+	// identical everywhere, so compare it as text.
+	//
+	// Scoped to the migrate-builder stage rather than everything below the build
+	// stage, because the runtime stages genuinely differ: each copies the
+	// migrations its own variant built.
+	t.Run("the migrate-builder stage is identical", func(t *testing.T) {
+		const (
+			start = "# Build the migrate CLI."
+			end   = "# Runtime stage"
+		)
+
+		var first, firstFile string
+		for _, name := range dockerfiles {
+			section, ok := sectionBetween(sources[name], start, end)
+			if !ok {
+				t.Errorf("%s: no migrate-builder stage between %q and %q", name, start, end)
+
+				continue
+			}
+			if firstFile == "" {
+				first, firstFile = section, name
+
+				continue
+			}
+			if section != first {
+				t.Errorf("%s and %s do not build the migrate CLI the same way", name, firstFile)
+			}
+		}
+	})
+
 	// The comment above those ARGs says to keep them in step with the CI
 	// workflow and the devcontainer, because the CLI that validates the
 	// migrations has to be the one that applies them. That is checkable.
@@ -178,6 +212,21 @@ func argValue(source, name string) (string, bool) {
 	}
 
 	return "", false
+}
+
+// sectionBetween returns the text from start up to end, excluding end. Both
+// markers must appear, and end must follow start.
+func sectionBetween(source, start, end string) (string, bool) {
+	from := strings.Index(source, start)
+	if from < 0 {
+		return "", false
+	}
+	to := strings.Index(source[from:], end)
+	if to < 0 {
+		return "", false
+	}
+
+	return source[from : from+to], true
 }
 
 // goInstallVersion returns the version a `go install module@version` line pins,
