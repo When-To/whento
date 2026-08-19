@@ -41,7 +41,7 @@
             </li>
             <li>
               <a
-                href="https://github.com/When-To/whento/issues"
+                href="https://github.com/When-To/whento/tree/main/docs"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="text-gray-600 hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-400"
@@ -90,7 +90,7 @@
             </li>
             <li>
               <a
-                href="https://github.com/When-To/whento/blob/main/CONTRIBUTING.md"
+                href="https://github.com/When-To/whento/blob/main/.github/CONTRIBUTING.md"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="text-gray-600 hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-400"
@@ -139,10 +139,8 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
+import { useBuildType } from '@/composables/useBuildType';
 
 const { t } = useI18n();
-
-// Get build type from environment
-const buildType = import.meta.env.VITE_BUILD_TYPE || 'cloud';
-const isCloud = buildType === 'cloud';
+const { isCloud } = useBuildType();
 </script>
