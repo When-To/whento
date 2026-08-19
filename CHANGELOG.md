@@ -185,6 +185,19 @@ because the history cannot be read for it.
 
 ### Security
 
+- The bundled `golang-migrate` CLI is compiled from source on the pinned Go toolchain
+  instead of downloaded as an upstream release archive. The published binary for
+  v4.19.1 — the latest, and the only release in nine months — is built with Go 1.25.4
+  and links every database driver it supports, which scans as 45 advisories, four of
+  them critical, that no checksum in this repository could patch. Building it with
+  `-tags postgres` leaves exactly one dependency, `lib/pq`, and integrity now comes
+  from the Go module checksum database rather than two hand-maintained SHA-256 values.
+- The runtime image runs `apk upgrade` before installing its packages. A digest-pinned
+  base makes the build reproducible, but it also lets the package layer be served from
+  cache long after the packages in it were superseded — which is how a release image
+  came to carry `libpq` 18.4-r0 against an Alpine that had shipped 18.6-r0.
+- `golang.org/x/mod` bumped to v0.40.0 (CVE-2026-56864: a malicious GOSUMDB could
+  serve arbitrary module content).
 - Mail headers are assembled through `net/mail` with an explicit CRLF guard, closing
   a critical CodeQL `go/email-injection` finding: a newline in a subject or recipient
   would have ended the header block early and turned the rest into headers of its

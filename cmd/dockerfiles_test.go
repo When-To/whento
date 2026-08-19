@@ -49,10 +49,12 @@ var (
 
 // pinnedArgs are the build arguments whose value is a supply-chain decision, and
 // which therefore have to be the same in all three files.
+// MIGRATE_SHA256_AMD64 and MIGRATE_SHA256_ARM64 used to be here, back when the CLI was
+// a release archive fetched at build time. It is compiled from source now, so integrity
+// comes from the module checksum database and the only pin left to keep in step is the
+// version.
 var pinnedArgs = []string{
 	"MIGRATE_VERSION",
-	"MIGRATE_SHA256_AMD64",
-	"MIGRATE_SHA256_ARM64",
 }
 
 func TestDockerfilesAgreeOnTheirPins(t *testing.T) {
