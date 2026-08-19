@@ -84,7 +84,12 @@ ARG TARGETARCH
 ARG MIGRATE_VERSION=v4.19.1
 
 RUN go mod init migratebuild && \
-    go get "github.com/golang-migrate/migrate/v4/cmd/migrate
+    go get "github.com/golang-migrate/migrate/v4/cmd/migrate@${MIGRATE_VERSION}" && \
+    CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH}" go build \
+    -tags postgres \
+    -ldflags "-s -w -X main.Version=${MIGRATE_VERSION}" \
+    -o /usr/local/bin/migrate \
+    github.com/golang-migrate/migrate/v4/cmd/migrate
 
 # Runtime stage
 FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
