@@ -80,11 +80,8 @@
             <span class="font-display text-xl font-bold text-gray-900 dark:text-white">WhenTo</span>
           </router-link>
 
-          <!-- Public Navigation Links (not authenticated) - Cloud Mode -->
-          <div
-            v-if="!isAuthenticated && isCloud"
-            class="hidden md:flex md:items-center md:space-x-4"
-          >
+          <!-- Public Navigation Links (not authenticated) -->
+          <div v-if="!isAuthenticated" class="hidden md:flex md:items-center md:space-x-4">
             <router-link
               to="/"
               class="rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -99,28 +96,6 @@
             >
               {{ t('nav.whyWhento') }}
             </router-link>
-          </div>
-
-          <!-- Public Navigation Links (not authenticated) - Self-hosted Mode -->
-          <div
-            v-if="!isAuthenticated && isSelfHosted"
-            class="hidden md:flex md:items-center md:space-x-4"
-          >
-            <router-link
-              to="/"
-              class="rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-              :class="route.name === 'home' ? 'bg-gray-100 dark:bg-gray-800' : ''"
-            >
-              {{ t('nav.home') }}
-            </router-link>
-            <a
-              :href="`${PUBLIC_APP_URL}/why-whento`"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
-              {{ t('nav.whyWhento') }}
-            </a>
           </div>
 
           <!-- Authenticated Navigation Links -->
@@ -281,8 +256,8 @@
           v-if="mobileMenuOpen"
           class="md:hidden border-t border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 py-4"
         >
-          <!-- Navigation Links (not authenticated) - Cloud Mode -->
-          <div v-if="!isAuthenticated && isCloud" class="space-y-1 pb-3">
+          <!-- Navigation Links (not authenticated) -->
+          <div v-if="!isAuthenticated" class="space-y-1 pb-3">
             <router-link
               to="/"
               class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -299,27 +274,6 @@
             >
               {{ t('nav.whyWhento') }}
             </router-link>
-          </div>
-
-          <!-- Navigation Links (not authenticated) - Self-hosted Mode -->
-          <div v-if="!isAuthenticated && isSelfHosted" class="space-y-1 pb-3">
-            <router-link
-              to="/"
-              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-              :class="route.name === 'home' ? 'bg-gray-100 dark:bg-gray-800' : ''"
-              @click="closeMobileMenu"
-            >
-              {{ t('nav.home') }}
-            </router-link>
-            <a
-              :href="`${PUBLIC_APP_URL}/why-whento`"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-              @click="closeMobileMenu"
-            >
-              {{ t('nav.whyWhento') }}
-            </a>
           </div>
 
           <!-- Authenticated Navigation Links -->
@@ -473,9 +427,7 @@ import { SUPPORTED_LOCALES } from '@/i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useCalendarHistoryStore } from '@/stores/calendarHistory';
 import { useAppError } from '@/composables/useAppError';
-import { useBuildType } from '@/composables/useBuildType';
 import { applyTheme, resolveTheme, THEME_STORAGE_KEY, type Theme } from '@/utils/theme';
-import { PUBLIC_APP_URL } from '@/config/constants';
 import Footer from '@/components/Footer.vue';
 import CalendarSidebar from '@/components/CalendarSidebar.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -486,7 +438,6 @@ const router = useRouter();
 const { t, locale } = useI18n();
 const authStore = useAuthStore();
 const historyStore = useCalendarHistoryStore();
-const { isCloud, isSelfHosted } = useBuildType();
 const { failed, reference, reportFatalError, clearFatalError } = useAppError();
 
 // Resolved at setup, not on mount: the pre-paint snippet in index.html has already

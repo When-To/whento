@@ -101,17 +101,12 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/MagicLinkVerify.vue'),
     meta: { public: true },
   },
-  // Cloud only: marketing page
-  ...(isCloud
-    ? [
-        {
-          path: '/why-whento',
-          name: 'why-whento',
-          component: () => import('@/views/WhyWhento.vue'),
-          meta: { public: true },
-        },
-      ]
-    : []),
+  {
+    path: '/why-whento',
+    name: 'why-whento',
+    component: () => import('@/views/WhyWhento.vue'),
+    meta: { public: true },
+  },
   // Cloud only: Legal pages
   ...(isCloud
     ? [
