@@ -22,7 +22,7 @@
 # index digests, so multi-platform builds keep working.
 
 # Frontend build stage
-FROM node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS frontend-builder
+FROM node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81 AS frontend-builder
 
 WORKDIR /frontend
 
@@ -39,7 +39,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Go build stage
-FROM golang:1.27-alpine3.24@sha256:4c9fe60190a2a3350ddc51de80d0224b8a6698d12bdfc999fee45ea9d6c46dbc AS builder
+FROM golang:1.27-alpine3.24@sha256:cf6fca6641884b8433441b2b0652976f975e1d0fdd26d177eaaf8596087f3125 AS builder
 
 WORKDIR /build
 
@@ -86,7 +86,7 @@ RUN go build \
 
 # Build the migrate CLI. On BUILDPLATFORM, as before, but now because Go
 # cross-compiles natively rather than to dodge QEMU on a download.
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine3.24@sha256:4c9fe60190a2a3350ddc51de80d0224b8a6698d12bdfc999fee45ea9d6c46dbc AS migrate-builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine3.24@sha256:cf6fca6641884b8433441b2b0652976f975e1d0fdd26d177eaaf8596087f3125 AS migrate-builder
 
 ARG TARGETARCH
 
