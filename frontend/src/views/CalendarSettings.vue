@@ -522,6 +522,15 @@
             @save="handleSaveNotifications"
           />
 
+          <!-- Activity journal (owner only) -->
+          <CollapsibleSection :title="t('calendar.activity.title')" :default-open="false">
+            <ActivityLogSection
+              :entries="activityEntries"
+              :loading="activityLoading"
+              :error="activityError"
+            />
+          </CollapsibleSection>
+
           <!-- Danger Zone -->
           <CollapsibleSection
             :title="t('common.dangerZone')"
@@ -604,6 +613,7 @@ import CalendarInfoFields from '@/components/calendar/CalendarInfoFields.vue';
 import CalendarThresholdFields from '@/components/calendar/CalendarThresholdFields.vue';
 import CalendarScheduleFields from '@/components/calendar/CalendarScheduleFields.vue';
 import ParticipantAccessToggles from '@/components/calendar/ParticipantAccessToggles.vue';
+import ActivityLogSection from '@/components/calendar/ActivityLogSection.vue';
 import { translateErrorMessage } from '@/utils/errorTranslator';
 import { useSmtpProbe } from '@/utils/smtpProbe';
 import {
@@ -617,6 +627,9 @@ import {
   getDefaultNotifyConfig,
   type NotifyConfig,
 } from '@/api/notify';
+import { calendarsApi } from '@/api/calendars';
+import type { DateActivityEntry } from '@/types';
+import { addDaysISO, todayISO } from '@/utils/date/isoDate';
 
 const router = useRouter();
 const route = useRoute();
@@ -683,6 +696,34 @@ const notifyConfig = ref<NotifyConfig>(getDefaultNotifyConfig());
 // configured; the probe is tri-state so a failure is a retryable warning, never
 // a rewrite of the owner's saved email.enabled.
 const { state: smtpProbe, probe: probeSmtp } = useSmtpProbe();
+
+// Activity journal. The section is collapsed by default but CollapsibleSection keeps its
+// slot mounted (v-show), so there is no "opened" event to hang a lazy load on; this is
+// loaded with the calendar, like the notification config above it.
+const activityEntries = ref<DateActivityEntry[]>([]);
+const activityLoading = ref(false);
+const activityError = ref(false);
+
+/** How far ahead the journal looks. The backend refuses more than 92 days. */
+const ACTIVITY_RANGE_DAYS = 60;
+
+async function loadActivity(): Promise<void> {
+  activityLoading.value = true;
+  activityError.value = false;
+
+  try {
+    const start = todayISO(form.timezone || undefined);
+    const end = addDaysISO(start, ACTIVITY_RANGE_DAYS);
+
+    activityEntries.value = await calendarsApi.getActivity(calendarId, start, end);
+  } catch (_error) {
+    // A journal that will not load must not take the settings page with it: the rest of
+    // this view is what the owner actually came to edit.
+    activityError.value = true;
+  } finally {
+    activityLoading.value = false;
+  }
+}
 
 // Track if form has unsaved changes
 const hasUnsavedChanges = computed(() => {
@@ -799,6 +840,10 @@ async function loadCalendar() {
         // If notify config doesn't exist, use default
         notifyConfig.value = getDefaultNotifyConfig();
       }
+
+      // Not awaited: the journal is one collapsed section, and the page should not wait
+      // on it. It sets its own loading and error state.
+      void loadActivity();
     }
   } catch (error: any) {
     toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.fetchError' })));

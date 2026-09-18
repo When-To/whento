@@ -51,8 +51,19 @@ type Occurrence struct {
 // answer. Reading it any other way is what kept recurrence-only participants out of
 // their own threshold notifications.
 type AvailableParticipant struct {
-	ID   uuid.UUID
-	Name string
+	ID   uuid.UUID `json:"participant_id"`
+	Name string    `json:"name"`
+}
+
+// DateStats is what one date of a range looks like once the occurrences covering it
+// have been projected both ways: who is available, and how many of them are free at
+// once for long enough to hold the event.
+//
+// The two travel together because they are two readings of the same expansion, and
+// computing them apart is what made the range read cost a query per date per question.
+type DateStats struct {
+	Available []AvailableParticipant
+	Count     int
 }
 
 // CreateAvailabilityRequest represents a request to create availability

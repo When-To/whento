@@ -366,6 +366,7 @@ func TestGetDateSummaryErrors(t *testing.T) {
 			&mockCalendarInfoRepo{err: repository.ErrCalendarNotFound},
 			&mockParticipantsRepo{},
 			&mockRecurrenceRepo{},
+			&mockActivityLog{},
 			&mockNotifyService{},
 			cache.NewRedisCache(nil),
 		)
