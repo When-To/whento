@@ -369,7 +369,19 @@
     "contactOwnerToAddParticipants": "Contactez le propriétaire du calendrier pour ajouter des participants.",
     "updateParticipantError": "Échec de la mise à jour du participant",
     "sectionThreshold": "Seuil de participants et durée minimale",
-    "sectionSchedule": "Autoriser/bloquer des jours/heures"
+    "sectionSchedule": "Autoriser/bloquer des jours/heures",
+    "activity": {
+      "title": "Journal d'activité",
+      "description": "Pour chaque date à venir : qui s'est inscrit en dernier, qui est disponible actuellement, et qui s'est retiré alors que la date avait atteint son seuil.",
+      "empty": "Aucune activité sur les dates à venir.",
+      "loadError": "Le journal d'activité n'a pas pu être chargé.",
+      "lastJoined": "Dernier inscrit :",
+      "lastWithdrawn": "Retrait :",
+      "noEntry": "aucune entrée",
+      "available": "Disponibles :",
+      "noneAvailable": "personne",
+      "count": "{count}/{threshold} disponibles"
+    }
   },
   "weekdays": {
     "short": {

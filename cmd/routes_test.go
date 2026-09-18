@@ -161,6 +161,7 @@ var wantRoutes = []string{
 	"DELETE /api/v1/calendars/{id}/participants/{pid}",
 	"GET /api/v1/calendars/{id}/notify-config",
 	"PATCH /api/v1/calendars/{id}/notify-config",
+	"GET /api/v1/calendars/{id}/activity",
 	"GET /api/v1/calendars/admin/users/{id}/calendars",
 
 	// Availabilities
@@ -276,6 +277,7 @@ var wantRateLimited = []string{
 	"DELETE /api/v1/calendars/{id}/participants/{pid}",
 	"GET /api/v1/calendars/{id}/notify-config",
 	"PATCH /api/v1/calendars/{id}/notify-config",
+	"GET /api/v1/calendars/{id}/activity",
 	"GET /api/v1/calendars/admin/users/{id}/calendars",
 
 	// The availability stream, in a bucket of its own, and the participant API

@@ -6,7 +6,13 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { inTimezone } from '@/test/timezone';
-import { clearFormatterCache, formatDate, formatISODate, getFormatter } from './intlFormatters';
+import {
+  clearFormatterCache,
+  formatDate,
+  formatISODate,
+  formatRelativeTime,
+  getFormatter,
+} from './intlFormatters';
 
 beforeEach(() => {
   clearFormatterCache();
@@ -58,5 +64,33 @@ describe('formatISODate', () => {
       clearFormatterCache();
       expect(formatISODate('2026-04-05', 'en', 'weekdayLong')).toBe('Sunday');
     });
+  });
+});
+
+describe('formatRelativeTime', () => {
+  // A fixed "now", so these do not drift with the clock the suite runs on.
+  const now = new Date('2026-04-05T12:00:00Z');
+
+  const cases: ReadonlyArray<[string, string, string, string]> = [
+    ['minutes', '2026-04-05T11:30:00Z', 'en', '30 minutes ago'],
+    ['hours', '2026-04-05T09:00:00Z', 'en', '3 hours ago'],
+    ['days', '2026-04-02T12:00:00Z', 'en', '3 days ago'],
+    ['days, in French', '2026-04-02T12:00:00Z', 'fr', 'il y a 3 jours'],
+    // numeric: 'auto' is what turns -1 day into a word rather than "1 day ago".
+    ['yesterday reads as a word', '2026-04-04T12:00:00Z', 'en', 'yesterday'],
+    ['hier', '2026-04-04T12:00:00Z', 'fr', 'hier'],
+  ];
+
+  it.each(cases)('formats %s', (_name, iso, locale, expected) => {
+    expect(formatRelativeTime(new Date(iso), locale, now)).toBe(expected);
+  });
+
+  it('picks the largest unit that fits, not the first that does', () => {
+    // 90 minutes is an hour and a half: "an hour ago", never "90 minutes ago".
+    expect(formatRelativeTime(new Date('2026-04-05T10:30:00Z'), 'en', now)).toBe('1 hour ago');
+  });
+
+  it('handles an instant within the last minute', () => {
+    expect(formatRelativeTime(new Date('2026-04-05T11:59:40Z'), 'en', now)).toBe('20 seconds ago');
   });
 });

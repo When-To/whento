@@ -341,6 +341,40 @@ export type ParticipantEmailMessageResponse = AlwaysSent<
   'message'
 >;
 
+/*
+ * Per-date activity journal, `GET /calendars/{id}/activity` (owner only).
+ *
+ * `last_joined` and `last_withdrawn` are `null`, not absent, when the journal has no
+ * entry — the Go fields carry no `omitempty` — so the renderer branches on the value
+ * rather than on the key.
+ */
+export type ActivityParticipantRef = AlwaysSent<
+  Schemas['models.ParticipantRef'],
+  'participant_id' | 'name' | 'at'
+>;
+
+export type AvailableParticipant = AlwaysSent<
+  Schemas['models.AvailableParticipant'],
+  'participant_id' | 'name'
+>;
+
+export type DateActivityEntry = Refine<
+  AlwaysSent<
+    Schemas['models.DateActivityEntry'],
+    'date' | 'threshold' | 'count' | 'available' | 'last_joined' | 'last_withdrawn'
+  >,
+  {
+    available: AvailableParticipant[];
+    last_joined: ActivityParticipantRef | null;
+    last_withdrawn: ActivityParticipantRef | null;
+  }
+>;
+
+export type DateActivityResponse = Refine<
+  AlwaysSent<Schemas['models.DateActivityResponse'], 'activity'>,
+  { activity: DateActivityEntry[] }
+>;
+
 // Unified ICS Feed Types
 export type UnifiedFeedConfig = AlwaysSent<Schemas['service.UnifiedFeedConfig'], 'configured'>;
 

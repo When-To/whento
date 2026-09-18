@@ -68,6 +68,23 @@ func (f *fakeAvailabilityStore) GetAvailableParticipantsForDate(
 	return f.available, f.err
 }
 
+// fakeActivityLog is the per-date journal, answering with whatever the test seeded.
+// No database: the interface names only availability models, which is the point of
+// declaring it on the consuming side.
+type fakeActivityLog struct {
+	activity *availabilityModels.DateActivity
+	err      error
+}
+
+func (f *fakeActivityLog) GetForDate(
+	_ context.Context, _ uuid.UUID, _ time.Time,
+) (*availabilityModels.DateActivity, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.activity, nil
+}
+
 type fakeUserStore struct {
 	user *authModels.User
 	err  error
@@ -229,6 +246,7 @@ type notifyFixture struct {
 	calendars   *fakeCalendarStore
 	people      *fakeParticipantStore
 	slots       *fakeAvailabilityStore
+	journal     *fakeActivityLog
 	users       *fakeUserStore
 	log         *fakeNotificationLog
 	mailer      *fakeMailer
@@ -304,6 +322,7 @@ func newNotifyFixture(t *testing.T, config models.NotifyConfig) *notifyFixture {
 			verified: []calendarModels.Participant{participant, ownerParticipant},
 		},
 		slots:    &fakeAvailabilityStore{available: available},
+		journal:  &fakeActivityLog{},
 		users:    &fakeUserStore{user: owner},
 		log:      &fakeNotificationLog{sentRecently: map[string]bool{}},
 		mailer:   &fakeMailer{configured: true},
@@ -315,7 +334,7 @@ func newNotifyFixture(t *testing.T, config models.NotifyConfig) *notifyFixture {
 
 func (f *notifyFixture) service() *NotifyService {
 	return NewNotifyService(
-		f.calendars, f.people, f.slots, f.users, f.log,
+		f.calendars, f.people, f.slots, f.journal, f.users, f.log,
 		f.mailer, f.external, f.detector,
 		"https://whento.test", quietLogger(),
 	)
@@ -891,7 +910,7 @@ func TestASuppressedBatchSaysSo(t *testing.T) {
 	}
 
 	service := NewNotifyService(
-		f.calendars, f.people, f.slots, f.users, f.log,
+		f.calendars, f.people, f.slots, f.journal, f.users, f.log,
 		f.mailer, f.external, f.detector,
 		"https://whento.test",
 		slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})),

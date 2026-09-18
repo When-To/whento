@@ -514,3 +514,64 @@ func (r *AvailabilityRepository) GetParticipantCountForDate(
 
 	return models.MaxSimultaneousFor(windows, minDurationHours*60), nil
 }
+
+// GetDateStatsForRange answers, for every date of a range that anybody answered, both
+// questions the per-date projections above answer one date at a time: who is available,
+// and how many of them fit together.
+//
+// It exists for the owner-facing activity endpoint, which needs both for a whole month.
+// Asking GetAvailableParticipantsForDate and GetParticipantCountForDate per date would
+// have re-run the occurrence expansion twice for each of them, plus one SELECT of the
+// calendar's minimum duration each time — around ninety queries for a busy month, half
+// of them the same read repeated. This is one.
+//
+// minDurationHours is passed in rather than read here, because every caller already
+// holds the calendar: the activity endpoint has loaded it to check ownership before it
+// gets this far.
+func (r *AvailabilityRepository) GetDateStatsForRange(
+	ctx context.Context,
+	calendarID uuid.UUID,
+	startDate, endDate time.Time,
+	minDurationHours int,
+) (map[string]models.DateStats, error) {
+	occurrences, err := r.GetOccurrencesForRange(ctx, calendarID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	grouped := make(map[string][]models.Occurrence)
+	for _, occurrence := range occurrences {
+		key := occurrence.Date.Format("2006-01-02")
+		grouped[key] = append(grouped[key], occurrence)
+	}
+
+	stats := make(map[string]models.DateStats, len(grouped))
+	for key, dayOccurrences := range grouped {
+		seen := make(map[uuid.UUID]struct{}, len(dayOccurrences))
+		available := make([]models.AvailableParticipant, 0, len(dayOccurrences))
+		windows := make([]models.TimeWindow, 0, len(dayOccurrences))
+
+		for _, occurrence := range dayOccurrences {
+			windows = append(windows, occurrence.Window())
+
+			// Deduplicated exactly as GetAvailableParticipantsForDate does it: one
+			// participant answering twice on a day is one available person, but both
+			// of their windows still count towards the overlap.
+			if _, ok := seen[occurrence.ParticipantID]; ok {
+				continue
+			}
+			seen[occurrence.ParticipantID] = struct{}{}
+			available = append(available, models.AvailableParticipant{
+				ID:   occurrence.ParticipantID,
+				Name: occurrence.ParticipantName,
+			})
+		}
+
+		stats[key] = models.DateStats{
+			Available: available,
+			Count:     models.MaxSimultaneousFor(windows, minDurationHours*60),
+		}
+	}
+
+	return stats, nil
+}
