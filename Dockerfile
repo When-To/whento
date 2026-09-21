@@ -22,7 +22,7 @@
 # index digests, so multi-platform builds keep working.
 
 # Frontend build stage
-FROM node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81 AS frontend-builder
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS frontend-builder
 
 WORKDIR /frontend
 
@@ -119,7 +119,7 @@ RUN go mod init migratebuild && \
     github.com/golang-migrate/migrate/v4/cmd/migrate
 
 # Runtime stage
-FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 
 LABEL org.opencontainers.image.title="WhenTo" \
     org.opencontainers.image.description="Self-hosted scheduling and calendar application" \
