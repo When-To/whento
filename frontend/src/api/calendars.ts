@@ -14,6 +14,8 @@ import type {
   PublicCalendar,
   CreateParticipantRequest,
   UpdateParticipantRequest,
+  DateActivityEntry,
+  DateActivityResponse,
 } from '@/types';
 
 export const calendarsApi = {
@@ -68,6 +70,18 @@ export const calendarsApi = {
 
   async deleteParticipant(calendarId: string, participantId: string): Promise<void> {
     return apiClient.delete<void>(`/calendars/${calendarId}/participants/${participantId}`);
+  },
+
+  // Per-date activity journal (owner only, authenticated).
+  //
+  // Returns only the dates that have a journal entry or somebody available, already
+  // sorted, so the caller renders the array as it comes. The backend refuses a range
+  // longer than 92 days.
+  async getActivity(id: string, start: string, end: string): Promise<DateActivityEntry[]> {
+    const response = await apiClient.get<DateActivityResponse>(`/calendars/${id}/activity`, {
+      params: { start, end },
+    });
+    return response.activity;
   },
 
   // Anonymous participant registration (no auth required)

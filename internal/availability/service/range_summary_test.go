@@ -45,6 +45,10 @@ type mockAvailabilityRepo struct {
 	// minimum duration, overlap, and the shape of an empty answer.
 	occurrences    []models.Occurrence
 	occurrencesErr error
+
+	// The range-grained projection the activity journal reads.
+	dateStats    map[string]models.DateStats
+	dateStatsErr error
 }
 
 var _ AvailabilityRepository = (*mockAvailabilityRepo)(nil)
@@ -83,6 +87,12 @@ func (m *mockAvailabilityRepo) GetOccurrencesForRange(
 	context.Context, uuid.UUID, time.Time, time.Time,
 ) ([]models.Occurrence, error) {
 	return m.occurrences, m.occurrencesErr
+}
+
+func (m *mockAvailabilityRepo) GetDateStatsForRange(
+	context.Context, uuid.UUID, time.Time, time.Time, int,
+) (map[string]models.DateStats, error) {
+	return m.dateStats, m.dateStatsErr
 }
 
 func (m *mockAvailabilityRepo) Update(context.Context, *models.Availability) error { return nil }
@@ -179,6 +189,27 @@ func (m *mockRecurrenceRepo) GetExceptionsByRecurrenceIDs(
 
 func (m *mockRecurrenceRepo) DeleteException(context.Context, uuid.UUID, string) error { return nil }
 
+// mockActivityLog is the journal with nothing in it: the default for every test that
+// is not about the journal. The journal's own tests use activityRecorder, which records
+// what it was told — see activity_log_test.go.
+type mockActivityLog struct{}
+
+var _ ActivityLogRepository = (*mockActivityLog)(nil)
+
+func (m *mockActivityLog) RecordJoin(context.Context, uuid.UUID, time.Time, uuid.UUID, time.Time) error {
+	return nil
+}
+
+func (m *mockActivityLog) RecordWithdrawal(context.Context, uuid.UUID, time.Time, uuid.UUID, time.Time) error {
+	return nil
+}
+
+func (m *mockActivityLog) GetForRange(
+	context.Context, uuid.UUID, time.Time, time.Time,
+) (map[string]*models.DateActivity, error) {
+	return nil, nil
+}
+
 type mockNotifyService struct{}
 
 var _ NotifyService = (*mockNotifyService)(nil)
@@ -238,6 +269,7 @@ func newSummaryFixture(t *testing.T, configure func(*repository.Calendar)) *summ
 			&mockCalendarInfoRepo{calendar: calendar},
 			&mockParticipantsRepo{participants: []*repository.Participant{alice, bob}},
 			recurrenceRepo,
+			&mockActivityLog{},
 			&mockNotifyService{},
 			cache.NewRedisCache(nil),
 		),
@@ -448,6 +480,7 @@ func TestGetRangeSummaryErrors(t *testing.T) {
 			&mockCalendarInfoRepo{err: repository.ErrCalendarNotFound},
 			&mockParticipantsRepo{},
 			&mockRecurrenceRepo{},
+			&mockActivityLog{},
 			&mockNotifyService{},
 			cache.NewRedisCache(nil),
 		)

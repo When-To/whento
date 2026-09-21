@@ -74,6 +74,7 @@ func TestBuildHandlers(t *testing.T) {
 			{name: "availability", got: h.availability},
 			{name: "recurrence", got: h.recurrence},
 			{name: "events", got: h.events},
+			{name: "activity", got: h.activity},
 			{name: "ics", got: h.ics},
 			{name: "unifiedFeed", got: h.unifiedFeed},
 			{name: "seo", got: h.seo},

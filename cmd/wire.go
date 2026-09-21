@@ -107,6 +107,7 @@ type handlers struct {
 	availability *availabilityHandlers.AvailabilityHandler
 	recurrence   *availabilityHandlers.RecurrenceHandler
 	events       *availabilityHandlers.EventsHandler
+	activity     *availabilityHandlers.ActivityHandler
 
 	// ICS
 	ics         *icsHandlers.ICSHandler
@@ -177,6 +178,7 @@ func buildHandlers(d *deps) (*handlers, error) {
 	availCalendarRepo := availabilityRepo.NewCalendarRepository(d.pool)
 	availParticipantRepo := availabilityRepo.NewParticipantRepository(d.pool)
 	recurrenceRepository := availabilityRepo.NewRecurrenceRepository(d.pool)
+	activityLogRepository := availabilityRepo.NewActivityLogRepository(d.pool)
 
 	// ========== ICS MODULE ==========
 	icsCalendarRepo := icsRepo.NewCalendarRepository(d.pool)
@@ -197,6 +199,7 @@ func buildHandlers(d *deps) (*handlers, error) {
 		calendarRepository,
 		participantRepository,
 		availabilityRepository,
+		activityLogRepository,
 		userRepo,
 		notificationLogRepo,
 		d.mailer,
@@ -219,6 +222,7 @@ func buildHandlers(d *deps) (*handlers, error) {
 		availCalendarRepo,
 		availParticipantRepo,
 		recurrenceRepository,
+		activityLogRepository,
 		notifySvc,
 		d.cacheStore,
 	)
@@ -251,6 +255,10 @@ func buildHandlers(d *deps) (*handlers, error) {
 		availability: availabilityHandlers.NewAvailabilityHandler(availabilitySvc),
 		recurrence:   availabilityHandlers.NewRecurrenceHandler(availabilitySvc),
 		events:       availabilityHandlers.NewEventsHandler(availCalendarRepo, d.broker),
+
+		// The calendar repository is what the ownership check reads; the availability
+		// service is what builds the journal.
+		activity: availabilityHandlers.NewActivityHandler(calendarRepository, availabilitySvc),
 
 		ics:         icsHandlers.NewICSHandler(icsSvc),
 		unifiedFeed: icsHandlers.NewUnifiedFeedConfigHandler(unifiedFeedConfigSvc),

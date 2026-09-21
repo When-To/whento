@@ -369,7 +369,19 @@
     "contactOwnerToAddParticipants": "Contact the calendar owner to add participants.",
     "updateParticipantError": "Failed to update participant",
     "sectionThreshold": "Participant threshold and minimum duration",
-    "sectionSchedule": "Allow/block days/hours"
+    "sectionSchedule": "Allow/block days/hours",
+    "activity": {
+      "title": "Activity log",
+      "description": "For each upcoming date: who joined last, who is available now, and who withdrew after the date had reached its threshold.",
+      "empty": "No activity on the coming dates.",
+      "loadError": "The activity log could not be loaded.",
+      "lastJoined": "Last to join:",
+      "lastWithdrawn": "Withdrew:",
+      "noEntry": "no entry",
+      "available": "Available:",
+      "noneAvailable": "nobody",
+      "count": "{count}/{threshold} available"
+    }
   },
   "weekdays": {
     "short": {

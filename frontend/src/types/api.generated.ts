@@ -2542,6 +2542,98 @@ export interface paths {
     };
     trace?: never;
   };
+  '/api/v1/calendars/{id}/activity': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get the per-date activity journal
+     * @description Returns, for each date of the range with a journal entry or any availability, who is currently available, who joined last and who withdrew last while the date had reached its threshold (owner only). The range must not exceed 92 days.
+     */
+    get: {
+      parameters: {
+        query: {
+          /** @description Range end (YYYY-MM-DD) */
+          end: string;
+          /** @description Range start (YYYY-MM-DD) */
+          start: string;
+        };
+        header?: never;
+        path: {
+          /** @description Calendar ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['models.DateActivityResponse'];
+          };
+        };
+        /** @description Invalid calendar ID or date range */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Not authenticated */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Not the calendar owner */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Calendar not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Internal Server Error */
+        500: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/calendars/{id}/notify-config': {
     parameters: {
       query?: never;
@@ -4691,6 +4783,10 @@ export interface components {
       start_time?: string;
       updated_at?: string;
     };
+    'models.AvailableParticipant': {
+      name?: string;
+      participant_id?: string;
+    };
     'models.BackupCodesResponse': {
       backup_codes?: string[];
     };
@@ -4784,6 +4880,18 @@ export interface components {
       /** @description Format: "HH:MM" */
       start_time?: string;
     };
+    'models.DateActivityEntry': {
+      available?: components['schemas']['models.AvailableParticipant'][];
+      count?: number;
+      /** @description Date is "2006-01-02". */
+      date?: string;
+      last_joined?: components['schemas']['models.ParticipantRef'];
+      last_withdrawn?: components['schemas']['models.ParticipantRef'];
+      threshold?: number;
+    };
+    'models.DateActivityResponse': {
+      activity?: components['schemas']['models.DateActivityEntry'][];
+    };
     'models.DiscordChannelConfig': {
       enabled?: boolean;
       webhook_url?: string;
@@ -4863,6 +4971,11 @@ export interface components {
       email_verified?: boolean;
       id?: string;
       name?: string;
+    };
+    'models.ParticipantRef': {
+      at?: string;
+      name?: string;
+      participant_id?: string;
     };
     'models.PasskeyResponse': {
       created_at?: string;
