@@ -107,26 +107,76 @@ func (m *Manager) GenerateAccessToken(userID, email, role string) (string, error
 	return token.SignedString(m.privateKey)
 }
 
-// GenerateRefreshToken generates a new refresh token
+// refreshClaims is a refresh token plus the server-issued session family it belongs to.
+//
+// The family id is stable across rotation and new on every login. Clients use it — not a
+// locally allocated nonce — to tell "same cookie family" from "a different login that
+// happened to share an epoch".
+type refreshClaims struct {
+	jwt.RegisteredClaims
+	FamilyID string `json:"fid,omitempty"`
+}
+
+// GenerateRefreshToken generates a new refresh token in a fresh session family.
 func (m *Manager) GenerateRefreshToken(userID string) (string, time.Time, error) {
+	token, expiresAt, _, err := m.IssueRefreshToken(userID, "")
+	return token, expiresAt, err
+}
+
+// IssueRefreshToken generates a refresh token in familyID, creating a family when empty.
+//
+// Rotation must pass the presented token's family so the successor stays in it. A login
+// passes "" and receives a new family id back.
+func (m *Manager) IssueRefreshToken(userID, familyID string) (string, time.Time, string, error) {
 	if m.privateKey == nil {
-		return "", time.Time{}, errors.New("private key not loaded - cannot generate tokens")
+		return "", time.Time{}, "", errors.New("private key not loaded - cannot generate tokens")
+	}
+	if familyID == "" {
+		familyID = uuid.New().String()
 	}
 
 	now := time.Now()
 	expiresAt := now.Add(m.refreshExpiry)
-
-	claims := jwt.RegisteredClaims{
-		ID:        uuid.New().String(),
-		Subject:   userID,
-		Issuer:    m.issuer,
-		IssuedAt:  jwt.NewNumericDate(now),
-		ExpiresAt: jwt.NewNumericDate(expiresAt),
+	claims := refreshClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.New().String(),
+			Subject:   userID,
+			Issuer:    m.issuer,
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+		},
+		FamilyID: familyID,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	tokenString, err := token.SignedString(m.privateKey)
-	return tokenString, expiresAt, err
+	return tokenString, expiresAt, familyID, err
+}
+
+// RefreshIdentity validates a refresh token and returns its user id and session family.
+//
+// Family is empty for tokens issued before families existed; callers treat that as a
+// new family on the next rotation.
+func (m *Manager) RefreshIdentity(tokenString string) (string, string, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &refreshClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return m.publicKey, nil
+	})
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return "", "", ErrExpiredToken
+		}
+		return "", "", fmt.Errorf("%w: %v", ErrInvalidToken, err)
+	}
+
+	claims, ok := token.Claims.(*refreshClaims)
+	if !ok || !token.Valid {
+		return "", "", ErrInvalidToken
+	}
+
+	return claims.Subject, claims.FamilyID, nil
 }
 
 // ValidateAccessToken validates an access token and returns claims

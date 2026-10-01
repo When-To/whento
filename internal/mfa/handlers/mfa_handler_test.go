@@ -23,12 +23,16 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/middleware"
 	authModels "github.com/whento/whento/internal/auth/models"
+	authRepo "github.com/whento/whento/internal/auth/repository"
 	authService "github.com/whento/whento/internal/auth/service"
+	securecookie "github.com/whento/whento/internal/auth/sessioncookie"
 	"github.com/whento/whento/internal/config"
 	"github.com/whento/whento/internal/mfa/models"
 	mfaRepo "github.com/whento/whento/internal/mfa/repository"
@@ -91,7 +95,7 @@ func (f *fakeUserLookup) GetByID(context.Context, uuid.UUID) (*authModels.User, 
 
 type fakeTokenRepo struct{ err error }
 
-func (f *fakeTokenRepo) DeleteByUserID(context.Context, uuid.UUID) error { return f.err }
+func (f *fakeTokenRepo) DeleteByUserID(context.Context, uuid.UUID) (int64, error) { return 0, f.err }
 
 // countingCache records what the handler asks of it so the lockout can be observed
 // without a Redis instance.
@@ -193,6 +197,10 @@ type harness struct {
 	cache   *countingCache
 	manager *jwt.Manager
 	user    *authModels.User
+	// tokens and authUsers expose the authentication service's stubs so tests
+	// can drive the MFA finalization into each classified outcome.
+	tokens    *stubAuthTokenRepo
+	authUsers *stubAuthUserRepo
 }
 
 func newHarness(t *testing.T, store *fakeMFAStore, users *fakeUserLookup, appCache *countingCache) *harness {
@@ -205,28 +213,40 @@ func newHarness(t *testing.T, store *fakeMFAStore, users *fakeUserLookup, appCac
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	mfaSvc := service.NewMFAService(store, users, &fakeTokenRepo{}, cfg, discard)
+	tokensStub := &stubAuthTokenRepo{}
+	authUsersStub := &stubAuthUserRepo{user: users.user}
 	authSvc := authService.NewAuthService(
-		&stubAuthUserRepo{user: users.user}, &stubAuthTokenRepo{}, &stubAuthMFARepo{record: store.record},
+		authUsersStub, tokensStub, &stubAuthMFARepo{record: store.record},
 		manager, appCache, bcrypt.MinCost, true, []string{"*"},
 	)
 
 	return &harness{
-		handler: NewMFAHandler(mfaSvc, authSvc, manager, appCache, discard),
-		store:   store,
-		users:   users,
-		cache:   appCache,
-		manager: manager,
-		user:    users.user,
+		handler:   NewMFAHandler(mfaSvc, authSvc, manager, appCache, discard),
+		store:     store,
+		users:     users,
+		cache:     appCache,
+		manager:   manager,
+		user:      users.user,
+		tokens:    tokensStub,
+		authUsers: authUsersStub,
 	}
 }
 
 // The auth service needs a full repository; only the lookups matter here.
-type stubAuthUserRepo struct{ user *authModels.User }
+type stubAuthUserRepo struct {
+	user *authModels.User
+	// getByIDErr stands in for an infrastructure failure in the service's user
+	// lookup during MFA finalization, distinct from the missing-user answer.
+	getByIDErr error
+}
 
 func (s *stubAuthUserRepo) Create(context.Context, *authModels.User) error { return nil }
 func (s *stubAuthUserRepo) GetByID(context.Context, uuid.UUID) (*authModels.User, error) {
+	if s.getByIDErr != nil {
+		return nil, s.getByIDErr
+	}
 	if s.user == nil {
-		return nil, errors.New("not found")
+		return nil, authRepo.ErrUserNotFound
 	}
 
 	return s.user, nil
@@ -234,24 +254,48 @@ func (s *stubAuthUserRepo) GetByID(context.Context, uuid.UUID) (*authModels.User
 
 func (s *stubAuthUserRepo) GetByEmail(context.Context, string) (*authModels.User, error) {
 	if s.user == nil {
-		return nil, errors.New("not found")
+		return nil, authRepo.ErrUserNotFound
 	}
 
 	return s.user, nil
 }
+
+// FirstUserCreated reports whether the stub believes the instance has been
+// bootstrapped; the MFA flows that touch registration never exercise the
+// first-user path, but they must still satisfy the AuthService repository
+// interface.
+func (s *stubAuthUserRepo) FirstUserCreated(context.Context) (bool, error) {
+	return s.user != nil, nil
+}
 func (s *stubAuthUserRepo) Update(context.Context, *authModels.User) error { return nil }
-func (s *stubAuthUserRepo) Delete(context.Context, uuid.UUID) error        { return nil }
-func (s *stubAuthUserRepo) Count(context.Context) (int, error)             { return 1, nil }
-func (s *stubAuthUserRepo) DetermineRoleAtomically(context.Context) (string, error) {
-	return authModels.RoleUser, nil
+
+func (s *stubAuthUserRepo) UpdateProfile(
+	context.Context,
+	uuid.UUID,
+	*string,
+	*string,
+	*string,
+) (*authModels.User, error) {
+	return s.user, nil
+}
+func (s *stubAuthUserRepo) Delete(context.Context, uuid.UUID) error { return nil }
+func (s *stubAuthUserRepo) CreateFirstUser(context.Context, *authModels.User) error {
+	return nil
 }
 func (s *stubAuthUserRepo) List(context.Context) ([]*authModels.User, error)        { return nil, nil }
 func (s *stubAuthUserRepo) UpdateRole(context.Context, uuid.UUID, string) error     { return nil }
 func (s *stubAuthUserRepo) UpdatePassword(context.Context, uuid.UUID, string) error { return nil }
 
-type stubAuthTokenRepo struct{ created *authModels.RefreshToken }
+type stubAuthTokenRepo struct {
+	created *authModels.RefreshToken
 
-func (s *stubAuthTokenRepo) Create(_ context.Context, token *authModels.RefreshToken) error {
+	// finalizeWon and finalizeErr control CreatePendingMFASession so the
+	// consumed/stale/infrastructure handler classifications can be exercised.
+	finalizeWon *bool
+	finalizeErr error
+}
+
+func (s *stubAuthTokenRepo) Create(_ context.Context, token *authModels.RefreshToken, _ int64) error {
 	s.created = token
 
 	return nil
@@ -260,14 +304,29 @@ func (s *stubAuthTokenRepo) Create(_ context.Context, token *authModels.RefreshT
 func (s *stubAuthTokenRepo) GetByHash(context.Context, string) (*authModels.RefreshToken, error) {
 	return nil, errors.New("not found")
 }
-func (s *stubAuthTokenRepo) DeleteByHash(context.Context, string) error      { return nil }
-func (s *stubAuthTokenRepo) DeleteByUserID(context.Context, uuid.UUID) error { return nil }
+func (s *stubAuthTokenRepo) DeleteByHash(context.Context, string) error { return nil }
+
+func (s *stubAuthTokenRepo) DeleteByUserID(context.Context, uuid.UUID) (int64, error) {
+	return 0, nil
+}
 
 func (s *stubAuthTokenRepo) Consume(context.Context, string) (bool, error) { return true, nil }
 
-func (s *stubAuthTokenRepo) DeleteConsumedBefore(context.Context, uuid.UUID, time.Time) error {
+func (s *stubAuthTokenRepo) CreatePendingMFASession(context.Context, string, time.Time, *authModels.RefreshToken, int64) (bool, error) {
+	if s.finalizeErr != nil {
+		return false, s.finalizeErr
+	}
+	if s.finalizeWon != nil {
+		return *s.finalizeWon, nil
+	}
+	return true, nil
+}
+
+func (s *stubAuthTokenRepo) CommitRotation(context.Context, string, *authModels.RefreshToken, time.Duration) error {
 	return nil
 }
+
+func (s *stubAuthTokenRepo) RevokePresentedFamily(context.Context, string) error { return nil }
 
 type stubAuthMFARepo struct{ record *models.UserMFA }
 
@@ -761,6 +820,65 @@ func TestTheLimitIsSkippedWithoutACache(t *testing.T) {
 	}
 }
 
+// TestVerifyLoginSetsTheRefreshCookie is the success half of the MFA login: the
+// handler must hand the new session over with the same httpOnly cookie every
+// other full-login path uses, expiring with the refresh token itself.
+func TestVerifyLoginSetsTheRefreshCookie(t *testing.T) {
+	user := testUser()
+	const secret = "JBSWY3DPEHPK3PXP"
+	h := newHarness(t,
+		&fakeMFAStore{record: &models.UserMFA{UserID: user.ID, Secret: secret, Enabled: true}},
+		&fakeUserLookup{user: user}, newCountingCache(true))
+
+	token := tempToken(t, h.manager, map[string]interface{}{
+		"user_id": user.ID.String(), "mfa_pending": true,
+		// The pending token must carry the generation captured at password
+		// acceptance; finalization presents it back to the session fence.
+		"sec_gen": user.SecurityGeneration,
+		"exp":     time.Now().Add(5 * time.Minute).Unix(),
+	})
+	code, err := totp.GenerateCode(secret, time.Now())
+	if err != nil {
+		t.Fatalf("generate totp code: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify",
+		strings.NewReader(`{"temp_token":"`+token+`","code":"`+code+`"}`))
+	req.Header.Set("X-Forwarded-Proto", "https")
+
+	h.handler.VerifyLogin(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%q)", rec.Code, rec.Body.String())
+	}
+
+	var cookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == securecookie.Name {
+			cookie = c
+		}
+	}
+	if cookie == nil {
+		t.Fatal("no refresh_token cookie was set after a successful MFA login")
+	}
+	if cookie.Value == "" {
+		t.Fatal("the refresh_token cookie is empty")
+	}
+	if !cookie.HttpOnly || cookie.SameSite != http.SameSiteStrictMode || cookie.Path != "/" {
+		t.Errorf("cookie properties: HttpOnly=%v SameSite=%v Path=%q", cookie.HttpOnly, cookie.SameSite, cookie.Path)
+	}
+	if !cookie.Secure {
+		t.Error("cookie is not Secure on an https request")
+	}
+	if !cookie.Expires.After(time.Now()) {
+		t.Errorf("Expires = %v, want a future expiry matching the token", cookie.Expires)
+	}
+	if strings.Contains(rec.Body.String(), cookie.Value) {
+		t.Errorf("the refresh token leaked into the response body:\n%s", rec.Body.String())
+	}
+}
+
 // TestMFANotEnabledIsABadRequest separates "wrong code" from "this account has no second
 // factor". Answering 401 to the latter would tell an attacker their guess was merely
 // wrong, when in fact the account cannot be reached this way at all.
@@ -780,5 +898,130 @@ func TestMFANotEnabledIsABadRequest(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+const testTOTPSecret = "JBSWY3DPEHPK3PXP"
+
+// mfaVerifyRequest builds a valid VerifyLogin request: a pending-MFA temp token
+// carrying the captured security generation plus a current TOTP code.
+func mfaVerifyRequest(t *testing.T, h *harness, user *authModels.User) *http.Request {
+	t.Helper()
+	token := tempToken(t, h.manager, map[string]interface{}{
+		"user_id": user.ID.String(), "mfa_pending": true,
+		"sec_gen": user.SecurityGeneration,
+		"exp":     time.Now().Add(5 * time.Minute).Unix(),
+	})
+	code, err := totp.GenerateCode(testTOTPSecret, time.Now())
+	if err != nil {
+		t.Fatalf("generate totp code: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify",
+		strings.NewReader(`{"temp_token":"`+token+`","code":"`+code+`"}`))
+	req.Header.Set("X-Forwarded-Proto", "https")
+	return req
+}
+
+// TestVerifyLoginClassifiesConsumedPendingTokenAsUnauthorized is the F2
+// regression: once the durable nonce has been claimed (replay, or a concurrent
+// finalization that already won), VerifyMFAAndLogin returns ErrInvalidToken.
+// That is an invalid-credential outcome — the documented 401 — not a server
+// fault, so the handler must not answer 500.
+func TestVerifyLoginClassifiesConsumedPendingTokenAsUnauthorized(t *testing.T) {
+	user := testUser()
+	h := newHarness(t,
+		&fakeMFAStore{record: &models.UserMFA{UserID: user.ID, Secret: testTOTPSecret, Enabled: true}},
+		&fakeUserLookup{user: user}, newCountingCache(true))
+	won := false
+	h.tokens.finalizeWon = &won
+
+	rec := httptest.NewRecorder()
+	h.handler.VerifyLogin(rec, mfaVerifyRequest(t, h, user))
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 (the pending token was already consumed)", rec.Code)
+	}
+	var body map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("response is not JSON: %v (%q)", err, rec.Body.String())
+	}
+	if code, _ := body["error"].(map[string]interface{})["code"].(string); code != httputil.ErrCodeUnauthorized {
+		t.Errorf("error code = %q, want %q", code, httputil.ErrCodeUnauthorized)
+	}
+}
+
+// TestVerifyLoginClassifiesStaleGenerationPendingTokenAsUnauthorized covers the
+// other expected rejection: the account moved past the generation captured when
+// the password was accepted (a password change or MFA transition already
+// returned), so finalization is refused. The endpoint contract says expired temp
+// tokens are 401, and this is the same class of outcome.
+func TestVerifyLoginClassifiesStaleGenerationPendingTokenAsUnauthorized(t *testing.T) {
+	user := testUser()
+	h := newHarness(t,
+		&fakeMFAStore{record: &models.UserMFA{UserID: user.ID, Secret: testTOTPSecret, Enabled: true}},
+		&fakeUserLookup{user: user}, newCountingCache(true))
+	h.tokens.finalizeErr = authRepo.ErrStaleSecurityGeneration
+
+	rec := httptest.NewRecorder()
+	h.handler.VerifyLogin(rec, mfaVerifyRequest(t, h, user))
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 (the security generation moved)", rec.Code)
+	}
+}
+
+// TestVerifyLoginClassifiesMissingUserAsUnauthorized covers the user vanishing
+// between the password check and MFA finalization (deleted, or a stale token
+// pointing at a removed account). The service maps that to ErrUserNotFound,
+// which the endpoint documents as a 401, not a server fault.
+func TestVerifyLoginClassifiesMissingUserAsUnauthorized(t *testing.T) {
+	user := testUser()
+	h := newHarness(t,
+		&fakeMFAStore{record: &models.UserMFA{UserID: user.ID, Secret: testTOTPSecret, Enabled: true}},
+		&fakeUserLookup{user: user}, newCountingCache(true))
+	h.authUsers.user = nil
+
+	rec := httptest.NewRecorder()
+	h.handler.VerifyLogin(rec, mfaVerifyRequest(t, h, user))
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 (the user no longer exists)", rec.Code)
+	}
+}
+
+// TestVerifyLoginKeeps500ForInfrastructureFailure distinguishes the expected
+// rejections above from a real repository/signing failure, which must stay a 500.
+func TestVerifyLoginKeeps500ForInfrastructureFailure(t *testing.T) {
+	user := testUser()
+	h := newHarness(t,
+		&fakeMFAStore{record: &models.UserMFA{UserID: user.ID, Secret: testTOTPSecret, Enabled: true}},
+		&fakeUserLookup{user: user}, newCountingCache(true))
+	h.tokens.finalizeErr = errors.New("database unreachable")
+
+	rec := httptest.NewRecorder()
+	h.handler.VerifyLogin(rec, mfaVerifyRequest(t, h, user))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500 (the session write genuinely failed)", rec.Code)
+	}
+}
+
+// TestVerifyLoginKeeps500ForUserLookupFailure drives the lookup-fault path through
+// the real auth service mapping: the service must not collapse a dropped
+// connection into ErrUserNotFound (which would make the endpoint answer 401 and
+// push the client to restart a perfectly valid login). The wrapped infrastructure
+// error reaches the handler's default branch and is logged as a 500.
+func TestVerifyLoginKeeps500ForUserLookupFailure(t *testing.T) {
+	user := testUser()
+	h := newHarness(t,
+		&fakeMFAStore{record: &models.UserMFA{UserID: user.ID, Secret: testTOTPSecret, Enabled: true}},
+		&fakeUserLookup{user: user}, newCountingCache(true))
+	h.authUsers.getByIDErr = errors.New("database connection lost during user lookup")
+
+	rec := httptest.NewRecorder()
+	h.handler.VerifyLogin(rec, mfaVerifyRequest(t, h, user))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500 (the user lookup genuinely failed)", rec.Code)
 	}
 }

@@ -29,8 +29,10 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// SQLSTATE codes for the integrity-constraint violations this schema can raise.
-// Class 23 — Integrity Constraint Violation, see
+// SQLSTATE codes this schema can raise. Class 23 — Integrity Constraint
+// Violation — covers the invariant guards, and class 42 — Syntax Error or
+// Access Rule Violation — covers the query-time "object does not exist" case
+// that a pre-migration schema produces. See
 // https://www.postgresql.org/docs/current/errcodes-appendix.html
 const (
 	// CodeUniqueViolation is raised by a UNIQUE constraint or unique index, and is
@@ -42,6 +44,9 @@ const (
 	// CodeCheckViolation is raised by a CHECK constraint, such as the
 	// `day_of_week BETWEEN 0 AND 6` and `source IN ('manual', 'recurrence')` guards.
 	CodeCheckViolation = "23514"
+	// CodeUndefinedTable is raised when a query names a table the schema does not
+	// have yet, e.g. reading app_state on a database older than migration 017.
+	CodeUndefinedTable = "42P01"
 )
 
 // PgError extracts the *pgconn.PgError from anywhere in err's chain. It reports false

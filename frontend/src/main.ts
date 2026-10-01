@@ -18,6 +18,10 @@ import router from './router';
 import { i18n } from './i18n';
 import { useAuthStore } from './stores/auth';
 import { useToastStore } from './stores/toast';
+import {
+  registerRemoteSignoutListener,
+  registerRemoteSessionListener,
+} from './stores/remoteSignout';
 import { reportFatalError } from './composables/useAppError';
 import './style.css';
 import './styles/calendar.css';
@@ -28,6 +32,13 @@ const pinia = createPinia();
 app.use(pinia);
 app.use(router);
 app.use(i18n);
+
+// A sign-out raised by another tab must reset this tab's account state even on a
+// public route (e.g. a participant link), where the client does not navigate away.
+registerRemoteSignoutListener();
+// A fresh login raised by another tab must hydrate this tab's account stores, or the
+// UI-visible identity and the HTTP client's token drift apart.
+registerRemoteSessionListener();
 
 /**
  * Last-resort handler for anything the `onErrorCaptured` boundary in App.vue does

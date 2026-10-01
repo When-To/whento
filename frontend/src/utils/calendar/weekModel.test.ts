@@ -28,6 +28,7 @@ const fmt: CalendarFormatters = {
 function holidayIndex(dates: Record<string, string> = {}): HolidayIndex {
   return {
     countryCode: 'FR',
+    supported: true,
     isHoliday: date => date in dates,
     isHolidayEve: () => false,
     getName: date => dates[date] ?? null,

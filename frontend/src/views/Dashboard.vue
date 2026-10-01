@@ -76,6 +76,15 @@
             </button>
           </div>
 
+          <!-- The store surfaces the translated failure here; it must not be lost. -->
+          <p
+            v-if="unifiedFeedStore.error"
+            role="alert"
+            class="mt-2 text-sm font-medium text-danger-600 dark:text-danger-400"
+          >
+            {{ unifiedFeedStore.error }}
+          </p>
+
           <!-- Feed URL + Actions (if configured) -->
           <div v-if="unifiedFeedConfig?.configured" class="mt-3">
             <div class="flex items-center space-x-2">
@@ -105,6 +114,7 @@
               <button
                 class="btn btn-ghost btn-sm text-danger-600 dark:text-danger-400"
                 :title="t('unifiedFeed.regenerateToken')"
+                :disabled="unifiedFeedLoading"
                 @click="regenerateUnifiedFeedToken"
               >
                 <svg class="mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -126,6 +136,83 @@
             </p>
           </div>
         </div>
+      </div>
+
+      <!-- Sort + view toolbar -->
+      <div
+        v-if="!loading && calendars.length > 0"
+        class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-gray-200 pb-3 dark:border-gray-700"
+      >
+        <label
+          for="dashboard-sort"
+          class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
+        >
+          {{ t('dashboard.sortBy') }}
+          <select id="dashboard-sort" v-model="sortKey" class="input w-44 py-1.5">
+            <option value="name-asc">{{ t('dashboard.sortNameAsc') }}</option>
+            <option value="name-desc">{{ t('dashboard.sortNameDesc') }}</option>
+            <option value="custom">{{ t('dashboard.sortCustom') }}</option>
+          </select>
+        </label>
+
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-gray-700 dark:text-gray-300">
+            {{ t('dashboard.viewAs') }}
+          </span>
+          <div class="flex items-center gap-1" role="group" :aria-label="t('dashboard.viewAs')">
+            <button
+              v-for="mode in viewModes"
+              :key="mode"
+              type="button"
+              class="card-action"
+              :class="{ 'card-action-on': viewMode === mode }"
+              :aria-label="t(viewModeAriaLabel(mode))"
+              :aria-pressed="viewMode === mode"
+              @click="setViewMode(mode)"
+            >
+              <svg
+                class="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  v-if="mode === 'card'"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                />
+                <path
+                  v-else-if="mode === 'list'"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 6h16M4 10h16M4 14h16M4 18h16"
+                />
+                <path
+                  v-else-if="mode === 'expanded'"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 6h16M4 10h10M4 14h16M4 18h10"
+                />
+                <path
+                  v-else
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 6h16M4 12h16M4 18h8"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <p v-if="sortKey === 'custom'" class="w-full text-xs text-gray-500 dark:text-gray-400">
+          {{ t('dashboard.reorderHint') }}
+        </p>
       </div>
 
       <!-- Loading State -->
@@ -218,148 +305,115 @@
         </router-link>
       </div>
 
-      <!-- Calendar Grid -->
-      <div v-else class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <div
-          v-for="calendar in calendars"
-          :key="calendar.id"
-          class="card card-hover group cursor-pointer"
-          role="button"
-          tabindex="0"
-          @click="openCalendar(calendar.public_token)"
-          @keydown="handleCardKeydown($event, calendar.public_token)"
-        >
-          <!-- Calendar Header -->
-          <div class="mb-4 flex items-start justify-between">
-            <div class="flex-1">
-              <h3
-                class="mb-1 font-display text-xl font-semibold text-gray-900 group-hover:text-primary-600 dark:text-white dark:group-hover:text-primary-400"
-              >
-                {{ calendar.name }}
-              </h3>
-              <p
-                v-if="calendar.description"
-                class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap"
-              >
-                {{ calendar.description }}
-              </p>
-            </div>
-            <div
-              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-600 dark:bg-primary-900 dark:text-primary-400"
-            >
-              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-            </div>
-          </div>
-
-          <!-- Calendar Stats -->
-          <div class="mb-4 flex items-center space-x-4 text-sm">
-            <div class="flex items-center text-gray-600 dark:text-gray-400">
-              <svg class="mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                />
-              </svg>
-              <span
-                >{{ calendar.participants?.length || 0 }} {{ t('calendar.participantCount') }}</span
-              >
-            </div>
-          </div>
-
-          <!-- Unified Feed Checkbox -->
-          <div v-if="unifiedFeedConfig?.configured" class="mb-2 flex items-center" @click.stop>
-            <label :for="`unified-feed-${calendar.id}`" class="flex items-center">
-              <input
-                :id="`unified-feed-${calendar.id}`"
-                type="checkbox"
-                :checked="unifiedFeedStore.isCalendarIncluded(calendar.id)"
-                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
-                @change="unifiedFeedStore.toggleCalendar(calendar.id)"
-              />
-              <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                {{ t('unifiedFeed.includeInFeed') }}
-              </span>
-            </label>
-          </div>
-
-          <!-- Quick Actions -->
-          <div class="flex items-center space-x-2">
-            <button
-              class="btn btn-ghost btn-sm flex-1"
-              :title="t('calendar.copyLink')"
-              @click.stop="copyPublicLink(calendar.public_token)"
-            >
-              <svg class="mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                />
-              </svg>
-              {{ t('common.copy') }}
-            </button>
-            <button
-              class="btn btn-ghost btn-sm"
-              :title="t('common.settings')"
-              @click.stop="router.push(`/calendars/${calendar.id}/settings`)"
-            >
-              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-            </button>
+      <!-- Calendar list (pinned first, then the rest) -->
+      <template v-else>
+        <div v-if="pinnedCalendars.length > 0" class="mb-6">
+          <h2
+            class="mb-3 font-display text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+          >
+            {{ t('dashboard.pinned') }}
+          </h2>
+          <div :class="gridClass">
+            <CalendarCard
+              v-for="calendar in pinnedCalendars"
+              :key="calendar.id"
+              :calendar="calendar"
+              :view="viewMode"
+              :pinned="true"
+              :draggable="isCustomOrder"
+              :can-move-up="canMoveUp(calendar.id)"
+              :can-move-down="canMoveDown(calendar.id)"
+              :unified-feed-configured="feedConfigured"
+              :feed-included="unifiedFeedStore.isCalendarIncluded(calendar.id)"
+              @open="openCalendar(calendar.public_token)"
+              @settings="router.push(`/calendars/${calendar.id}/settings`)"
+              @copy-link="copyPublicLink(calendar.public_token)"
+              @toggle-feed="toggleFeed(calendar.id)"
+              @toggle-pin="dashboardStore.togglePin(calendar.id)"
+              @move-up="moveCalendar(calendar.id, 'up')"
+              @move-down="moveCalendar(calendar.id, 'down')"
+              @start-drag="onDragStart"
+              @end-drag="onDragEnd"
+              @drop-on="onDropOn"
+            />
           </div>
         </div>
-      </div>
+
+        <div v-if="unpinnedCalendars.length > 0">
+          <h2
+            v-if="pinnedCalendars.length > 0"
+            class="mb-3 font-display text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+          >
+            {{ t('dashboard.others') }}
+          </h2>
+          <div :class="gridClass">
+            <CalendarCard
+              v-for="calendar in unpinnedCalendars"
+              :key="calendar.id"
+              :calendar="calendar"
+              :view="viewMode"
+              :pinned="false"
+              :draggable="isCustomOrder"
+              :can-move-up="canMoveUp(calendar.id)"
+              :can-move-down="canMoveDown(calendar.id)"
+              :unified-feed-configured="feedConfigured"
+              :feed-included="unifiedFeedStore.isCalendarIncluded(calendar.id)"
+              @open="openCalendar(calendar.public_token)"
+              @settings="router.push(`/calendars/${calendar.id}/settings`)"
+              @copy-link="copyPublicLink(calendar.public_token)"
+              @toggle-feed="toggleFeed(calendar.id)"
+              @toggle-pin="dashboardStore.togglePin(calendar.id)"
+              @move-up="moveCalendar(calendar.id, 'up')"
+              @move-down="moveCalendar(calendar.id, 'down')"
+              @start-drag="onDragStart"
+              @end-drag="onDragEnd"
+              @drop-on="onDropOn"
+            />
+          </div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useCalendarStore } from '@/stores/calendar';
+import { useDashboardStore } from '@/stores/dashboard';
 import { useUnifiedFeedStore } from '@/stores/unifiedFeed';
 import { useToastStore } from '@/stores/toast';
+import { orderCalendars, orderedIds } from '@/utils/dashboardOrdering';
+import type { DashboardViewMode } from '@/stores/dashboard';
+import type { CalendarWithParticipants } from '@/types';
 import QuotaUsage from '@/components/QuotaUsage.vue';
+import CalendarCard from '@/components/dashboard/CalendarCard.vue';
 import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const router = useRouter();
 const { t } = useI18n();
 const authStore = useAuthStore();
 const calendarStore = useCalendarStore();
+const dashboardStore = useDashboardStore();
 const unifiedFeedStore = useUnifiedFeedStore();
 const toastStore = useToastStore();
 
 const user = computed(() => authStore.user);
 const calendars = computed(() => {
   const cals = calendarStore.calendars;
-  return Array.isArray(cals) ? cals.filter(c => c != null) : [];
+  return Array.isArray(cals) ? cals.filter((c): c is CalendarWithParticipants => c != null) : [];
 });
 const loading = computed(() => calendarStore.loading);
 const fetchError = ref<string | null>(null);
+
+const viewModes: DashboardViewMode[] = ['card', 'list', 'expanded', 'compact'];
+
+const viewMode = computed(() => dashboardStore.viewMode);
+const isCustomOrder = computed(() => dashboardStore.sortMode === 'custom');
+
+const feedConfigured = computed(() => unifiedFeedStore.config?.configured === true);
 
 const unifiedFeedConfig = computed(() => unifiedFeedStore.config);
 const unifiedFeedLoading = computed(() => unifiedFeedStore.loading);
@@ -368,18 +422,210 @@ const unifiedFeedUrl = computed(() => {
   return `${window.location.origin}/api/v1/ics/unified/${unifiedFeedConfig.value.ics_token}.ics`;
 });
 
-function openCalendar(publicToken: string) {
-  router.push(`/c/${publicToken}`);
+// --- Sorting ------------------------------------------------------------------
+
+const sortKey = computed({
+  get() {
+    if (dashboardStore.sortMode === 'custom') return 'custom';
+    return dashboardStore.sortDirection === 'asc' ? 'name-asc' : 'name-desc';
+  },
+  set(value: string) {
+    if (value === 'custom') {
+      // First activation of custom order: freeze the currently visible order into the
+      // manual sequence, so the list does not jump to whatever order the API returned.
+      // The snapshot honours the active direction and pins — exactly what is on screen.
+      if (dashboardStore.customOrder.length === 0) {
+        dashboardStore.setCustomOrder(
+          orderedIds(calendars.value, {
+            sortMode: 'alphabetical',
+            sortDirection: dashboardStore.sortDirection,
+            pinnedIds: dashboardStore.pinnedIds,
+            customOrder: [],
+          })
+        );
+      }
+      // Calendars created since the manual order was last touched join its tail, so a
+      // real persisted sequence is preserved and only extended.
+      dashboardStore.appendToCustomOrder(calendars.value.map(c => c.id));
+      dashboardStore.setSortMode('custom');
+    } else {
+      dashboardStore.setSortMode('alphabetical');
+      dashboardStore.setSortDirection(value === 'name-asc' ? 'asc' : 'desc');
+    }
+  },
+});
+
+const orderedCalendars = computed(() =>
+  orderCalendars(calendars.value, {
+    sortMode: dashboardStore.sortMode,
+    sortDirection: dashboardStore.sortDirection,
+    pinnedIds: dashboardStore.pinnedIds,
+    customOrder: dashboardStore.customOrder,
+  })
+);
+
+const pinnedCalendars = computed(() =>
+  orderedCalendars.value.filter(c => dashboardStore.pinnedIds.includes(c.id))
+);
+const unpinnedCalendars = computed(() =>
+  orderedCalendars.value.filter(c => !dashboardStore.pinnedIds.includes(c.id))
+);
+
+// Keep the manual order and pins consistent with the actual calendar set: a calendar
+// created after the order was set gets appended, a deleted one is pruned. The manual
+// sequence is only maintained while custom order is active — seeding it during
+// alphabetical sorting is what made the first switch to "custom order" snap to the API
+// order instead of the visible one. Pins are maintained either way.
+//
+// Pruning only ever runs against an *authoritative* list for the current user. A
+// logout or a failed fetch empties the list *and* clears the calendarsForUser marker;
+// treating that as a deletion set would erase the user's saved pins and custom order
+// on a transient error. Preferences are also stored per account (see stores/dashboard
+// .ts), so loading another account prunes that account's own stored ids, never A's.
+watch(
+  () => calendars.value.map(c => c.id),
+  ids => {
+    const currentUserId = authStore.user?.id ?? null;
+    if (calendarStore.calendarsForUser === null) return;
+    if (calendarStore.calendarsForUser !== currentUserId) return;
+    if (dashboardStore.sortMode === 'custom') {
+      dashboardStore.appendToCustomOrder(ids);
+      dashboardStore.pruneCustomOrder(ids);
+    }
+    dashboardStore.prunePinned(ids);
+  }
+);
+
+// --- View switching -------------------------------------------------------------
+
+function setViewMode(mode: DashboardViewMode) {
+  dashboardStore.setViewMode(mode);
 }
 
-// The card is a static element turned into a button, so it has to handle keyboard activation
-// itself. Events coming from the controls inside the card (checkbox, quick actions) are ignored,
-// otherwise activating one of them would also open the calendar.
-function handleCardKeydown(event: KeyboardEvent, publicToken: string) {
-  if (event.target !== event.currentTarget) return;
-  if (event.key !== 'Enter' && event.key !== ' ') return;
-  event.preventDefault();
-  openCalendar(publicToken);
+function viewModeAriaLabel(mode: DashboardViewMode): string {
+  switch (mode) {
+    case 'card':
+      return 'dashboard.viewCards';
+    case 'list':
+      return 'dashboard.viewList';
+    case 'expanded':
+      return 'dashboard.viewExpanded';
+    case 'compact':
+      return 'dashboard.viewCompact';
+  }
+}
+
+/** Grid/stack class for the current view. */
+const gridClass = computed(() => {
+  if (viewMode.value === 'card') {
+    return 'grid gap-6 sm:grid-cols-2 lg:grid-cols-3';
+  }
+  return 'space-y-2';
+});
+
+// --- Drag and drop reordering ---------------------------------------------------
+
+const draggingId = ref<string | null>(null);
+
+function onDragStart(id: string) {
+  draggingId.value = id;
+}
+
+function onDragEnd() {
+  draggingId.value = null;
+}
+
+function onDropOn(targetId: string) {
+  const sourceId = draggingId.value;
+  draggingId.value = null;
+  if (!sourceId || sourceId === targetId) return;
+
+  // The pinned/unpinned boundary is not traversable. Pinned calendars are always
+  // regrouped above the rest, so dropping across the boundary would change the
+  // persisted `customOrder` without producing any on-screen move — and would leave
+  // the sequence scrambled after a later pin toggle. Reject it before mutating.
+  const sourcePinned = dashboardStore.pinnedIds.includes(sourceId);
+  const targetPinned = dashboardStore.pinnedIds.includes(targetId);
+  if (sourcePinned !== targetPinned) return;
+
+  // Reorder within the calendar's own group, keeping the other group's relative
+  // order, exactly like the move buttons below.
+  const group = groupOrderIds(sourceId);
+  const from = group.indexOf(sourceId);
+  const to = group.indexOf(targetId);
+  if (from === -1 || to === -1) return;
+
+  const nextGroup = [...group];
+  const [moved] = nextGroup.splice(from, 1);
+  const targetIndex = nextGroup.indexOf(targetId);
+  nextGroup.splice(targetIndex, 0, moved);
+
+  const other = orderedCalendars.value
+    .filter(c => dashboardStore.pinnedIds.includes(c.id) !== sourcePinned)
+    .map(c => c.id);
+  const next = sourcePinned ? [...nextGroup, ...other] : [...other, ...nextGroup];
+  dashboardStore.setCustomOrder(next);
+}
+
+/**
+ * The ids of one display group (pinned or unpinned) in their on-screen order.
+ *
+ * The move buttons and the drag-and-drop both reorder within the calendar's own
+ * group; the pinned/unpinned boundary is not traversable by either, because pinned
+ * calendars are always regrouped above the rest.
+ */
+function groupOrderIds(id: string): string[] {
+  const pinned = dashboardStore.pinnedIds.includes(id);
+  return orderedCalendars.value
+    .filter(c => dashboardStore.pinnedIds.includes(c.id) === pinned)
+    .map(c => c.id);
+}
+
+/**
+ * Keyboard/touch reorder within the calendar's own pinned/unpinned group, one slot at
+ * a time. The first item of a group cannot move up and the last cannot move down — a
+ * move across the pinned boundary would not be visible (pinned calendars are always
+ * regrouped at the top), so boundary moves leave the sequence untouched. The buttons
+ * are disabled at those edges too, so the user is told before clicking.
+ */
+function moveCalendar(id: string, direction: 'up' | 'down') {
+  const pinned = dashboardStore.pinnedIds.includes(id);
+  const group = groupOrderIds(id);
+  const from = group.indexOf(id);
+  if (from === -1) return;
+  const to = direction === 'up' ? from - 1 : from + 1;
+  // Boundary: nothing within this group to swap with.
+  if (to < 0 || to >= group.length) return;
+
+  const nextGroup = [...group];
+  const [moved] = nextGroup.splice(from, 1);
+  nextGroup.splice(to, 0, moved);
+
+  // Rebuild the global sequence with this group's segment replaced in place; the
+  // other group keeps its relative order.
+  const other = orderedCalendars.value
+    .filter(c => dashboardStore.pinnedIds.includes(c.id) !== pinned)
+    .map(c => c.id);
+  const next = pinned ? [...nextGroup, ...other] : [...other, ...nextGroup];
+  dashboardStore.setCustomOrder(next);
+}
+
+/** Whether `id` has a same-group calendar above it to swap with. */
+function canMoveUp(id: string): boolean {
+  return groupOrderIds(id).indexOf(id) > 0;
+}
+
+/** Whether `id` has a same-group calendar below it to swap with. */
+function canMoveDown(id: string): boolean {
+  const group = groupOrderIds(id);
+  const index = group.indexOf(id);
+  return index !== -1 && index < group.length - 1;
+}
+
+// --- Calendar actions -------------------------------------------------------------
+
+function openCalendar(publicToken: string) {
+  router.push(`/c/${publicToken}`);
 }
 
 function copyPublicLink(token: string) {
@@ -396,8 +642,10 @@ function copyUnifiedFeedUrl() {
 async function enableUnifiedFeed() {
   try {
     await unifiedFeedStore.createFeed();
-  } catch (error: any) {
-    console.error('Error enabling unified feed:', error);
+  } catch {
+    // The store remembers the translated failure (rendered above); spell it out too,
+    // because the enable button only appears when there is no feed to show.
+    toastStore.error(unifiedFeedStore.error ?? t('errors.unexpected'));
   }
 }
 
@@ -406,8 +654,19 @@ async function regenerateUnifiedFeedToken() {
   try {
     await unifiedFeedStore.regenerateToken();
     toastStore.success(t('unifiedFeed.tokenRegenerated'));
-  } catch (error: any) {
-    console.error('Error regenerating token:', error);
+  } catch {
+    toastStore.error(unifiedFeedStore.error ?? t('errors.unexpected'));
+  }
+}
+
+/** Toggle a calendar's feed membership, surfacing a failure instead of dropping it. */
+async function toggleFeed(calendarId: string) {
+  try {
+    await unifiedFeedStore.toggleCalendar(calendarId);
+  } catch {
+    // The inline error above shows the translated message; this catches what would
+    // otherwise be an unhandled rejection from the fire-and-forget checkbox.
+    toastStore.error(unifiedFeedStore.error ?? t('errors.unexpected'));
   }
 }
 
@@ -415,14 +674,17 @@ async function loadCalendars() {
   fetchError.value = null;
   try {
     await calendarStore.fetchCalendars();
-  } catch (error: any) {
-    fetchError.value = t(translateErrorMessage(error, { fallback: 'calendar.fetchError' }));
-    console.error('Error loading calendars:', error);
+  } catch (err) {
+    fetchError.value = t(translateErrorMessage(err, { fallback: 'calendar.fetchError' }));
   }
 }
 
 onMounted(() => {
   loadCalendars();
-  unifiedFeedStore.fetchConfig();
+  // The mount-time config read feeds the inline error; it must not also end up as an
+  // unhandled rejection in the global handler.
+  unifiedFeedStore.fetchConfig().catch(() => {
+    toastStore.error(unifiedFeedStore.error ?? t('errors.unexpected'));
+  });
 });
 </script>

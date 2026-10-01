@@ -87,12 +87,29 @@ func Pool(t *testing.T) *pgxpool.Pool {
 // table another package might be using.
 func Cleanup(t *testing.T, pool *pgxpool.Pool, sql string, args ...any) {
 	t.Helper()
+	CleanupContext(context.Background(), t, pool, sql, args...)
+}
+
+// CleanupContext is Cleanup with an explicit cleanup context, for helpers (and
+// subtest fixtures) that already hold a request-scoped context.
+//
+// The cleanup must run even when the operation under test gives up: a test that
+// hits its deadline, cancels the context, or fails before its cleanup phase is
+// exactly the one whose fixtures most need removing. Deriving the cleanup
+// timeout from the raw request context would reverse that guarantee (a cancelled
+// parent cancels the cleanup with it, so one failing test would contaminate the
+// shared database for every later test and package). context.WithoutCancel
+// detaches the parent's cancellation and deadline while still inheriting from
+// it, so the relationship stays explicit for contextcheck and the timeout below
+// is the only thing that can bound the cleanup.
+func CleanupContext(ctx context.Context, t *testing.T, pool *pgxpool.Pool, sql string, args ...any) {
+	t.Helper()
 
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
 
-		if _, err := pool.Exec(ctx, sql, args...); err != nil {
+		if _, err := pool.Exec(cctx, sql, args...); err != nil {
 			t.Logf("cleanup failed (%s): %v", sql, err)
 		}
 	})
@@ -107,4 +124,79 @@ func Context(t *testing.T) context.Context {
 	t.Cleanup(cancel)
 
 	return ctx
+}
+
+// singletonAccountsLockKey is the advisory-lock key for the instance-wide account
+// state (the users table and app_state). It deliberately avoids the keys production
+// code uses (CreateFirstUser takes the transaction lock 1, the admin snapshot takes
+// the transaction lock 2) and the key the quota tests use (-918273645).
+const singletonAccountsLockKey int64 = 910111213
+
+// singletonConn tracks whether this process already holds the singleton lock, and
+// on which pooled connection. Tests within one binary run sequentially (none of the
+// database-backed tests use t.Parallel), so a single slot is enough: a second
+// request from the same test — a fixture helper called after the test itself took
+// the lock — must be a no-op, because re-locking the same key on a *different*
+// session would deadlock against itself.
+var (
+	singletonMu   sync.Mutex
+	singletonConn *pgxpool.Conn
+)
+
+// LockSingletonAccounts gives the calling test exclusive ownership of the
+// instance-wide account state — the users table and the app_state singleton — for
+// the rest of the test's lifetime. The first-user tests need this because "is this
+// instance bootstrapped" is decided from a global count and a shared flag, and `go
+// test ./...` runs package binaries concurrently: a count snapshotted before the
+// assertion can be invalidated by another package inserting and cleaning up its own
+// user row (reproduced as "CreateFirstUser on a populated instance = <nil>, want
+// ErrFirstUserExists"). Every user-creating fixture in every package takes this
+// same session-level advisory lock on a dedicated connection, so a first-user test
+// cannot start while another package's fixture is alive, and no fixture can be
+// created while a first-user test runs. Row ownership stays per test; this only
+// serialises the singleton.
+//
+// The lock is released in test cleanup (after the fixture cleanups, which run
+// LIFO-before it, so rows are gone before the ownership ends). Calling it from a
+// helper that a test already covered is a no-op.
+func LockSingletonAccounts(ctx context.Context, t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+
+	singletonMu.Lock()
+	held := singletonConn
+	if held != nil {
+		singletonMu.Unlock()
+		return
+	}
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		singletonMu.Unlock()
+		t.Fatalf("acquire a connection for the singleton account lock: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, singletonAccountsLockKey); err != nil {
+		conn.Release()
+		singletonMu.Unlock()
+		t.Fatalf("take the singleton account lock: %v", err)
+	}
+	singletonConn = conn
+	singletonMu.Unlock()
+
+	t.Cleanup(func() {
+		singletonMu.Lock()
+		conn := singletonConn
+		singletonConn = nil
+		singletonMu.Unlock()
+		if conn == nil {
+			return
+		}
+		// The deadline is detached from the test's context (which may already be
+		// done after a failure) so the lock is not left behind on a pooled
+		// connection for the rest of the run.
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		if _, err := conn.Exec(cctx, `SELECT pg_advisory_unlock($1)`, singletonAccountsLockKey); err != nil {
+			t.Logf("release the singleton account lock: %v", err)
+		}
+		conn.Release()
+	})
 }

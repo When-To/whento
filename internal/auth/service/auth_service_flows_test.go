@@ -13,6 +13,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -43,18 +44,27 @@ type fakeUserRepo struct {
 	byEmail map[string]*models.User
 	byID    map[uuid.UUID]*models.User
 
-	role       string
-	roleErr    error
-	createErr  error
+	createErr error
+	// getByIDErr makes a user lookup fail for infrastructure reasons (a dropped
+	// connection, timeout, ...), distinct from the genuine ErrUserNotFound answer.
+	getByIDErr error
 	updateErr  error
-	listErr    error
-	deleteErr  error
-	roleSetErr error
+	// concurrentDisplayName is applied inside UpdateProfile after the request's own
+	// fields, standing in for a write that committed between this request's read and
+	// its UPDATE ... RETURNING.
+	concurrentDisplayName string
+	listErr               error
+	deleteErr             error
+	roleSetErr            error
 
 	created         *models.User
 	passwordUpdated string
 	roleUpdated     string
 	deleted         uuid.UUID
+
+	// firstUserCreatedCalls counts FirstUserCreated invocations so a test can
+	// prove a cached status read does not reach the store.
+	firstUserCreatedCalls int
 }
 
 var _ UserRepository = (*fakeUserRepo)(nil)
@@ -63,7 +73,6 @@ func newFakeUserRepo() *fakeUserRepo {
 	return &fakeUserRepo{
 		byEmail: map[string]*models.User{},
 		byID:    map[uuid.UUID]*models.User{},
-		role:    models.RoleUser,
 	}
 }
 
@@ -84,7 +93,25 @@ func (f *fakeUserRepo) Create(_ context.Context, user *models.User) error {
 	return nil
 }
 
+// CreateFirstUser mirrors the SQL's atomic slot: the count check and the insert
+// are one decision, so a racing bootstrap cannot both pass it.
+func (f *fakeUserRepo) CreateFirstUser(_ context.Context, user *models.User) error {
+	if len(f.byID) > 0 {
+		return repository.ErrFirstUserExists
+	}
+	if f.createErr != nil {
+		return f.createErr
+	}
+	f.created = user
+	f.add(user)
+
+	return nil
+}
+
 func (f *fakeUserRepo) GetByID(_ context.Context, id uuid.UUID) (*models.User, error) {
+	if f.getByIDErr != nil {
+		return nil, f.getByIDErr
+	}
 	if user, ok := f.byID[id]; ok {
 		return user, nil
 	}
@@ -102,16 +129,44 @@ func (f *fakeUserRepo) GetByEmail(_ context.Context, email string) (*models.User
 
 func (f *fakeUserRepo) Update(context.Context, *models.User) error { return f.updateErr }
 
+func (f *fakeUserRepo) UpdateProfile(
+	_ context.Context,
+	userID uuid.UUID,
+	displayName *string,
+	locale *string,
+	timezone *string,
+) (*models.User, error) {
+	user, ok := f.byID[userID]
+	if !ok {
+		return nil, repository.ErrUserNotFound
+	}
+	if displayName != nil {
+		user.DisplayName = *displayName
+	}
+	if locale != nil {
+		user.Locale = *locale
+	}
+	if timezone != nil {
+		user.Timezone = *timezone
+	}
+	if f.concurrentDisplayName != "" {
+		user.DisplayName = f.concurrentDisplayName
+	}
+	if f.updateErr != nil {
+		return nil, f.updateErr
+	}
+	return user, nil
+}
+
 func (f *fakeUserRepo) Delete(_ context.Context, id uuid.UUID) error {
 	f.deleted = id
 
 	return f.deleteErr
 }
 
-func (f *fakeUserRepo) Count(context.Context) (int, error) { return len(f.byID), nil }
-
-func (f *fakeUserRepo) DetermineRoleAtomically(context.Context) (string, error) {
-	return f.role, f.roleErr
+func (f *fakeUserRepo) FirstUserCreated(context.Context) (bool, error) {
+	f.firstUserCreatedCalls++
+	return len(f.byID) > 0, nil
 }
 
 func (f *fakeUserRepo) List(context.Context) ([]*models.User, error) {
@@ -144,15 +199,59 @@ type fakeTokenRepo struct {
 	createErr        error
 	deletedByHash    []string
 	deletedByUserIDs []uuid.UUID
+
+	// consumedOneTime mirrors the mfa_pending_nonce ledger: the same digest can
+	// only be consumed once. The mutex makes service-level concurrent finalization
+	// tests racy-free, standing in for the database INSERT's atomicity.
+	oneTimeMu       sync.Mutex
+	consumedOneTime map[string]bool
 }
 
 var _ TokenRepository = (*fakeTokenRepo)(nil)
 
 func newFakeTokenRepo() *fakeTokenRepo {
-	return &fakeTokenRepo{stored: map[string]*models.RefreshToken{}}
+	return &fakeTokenRepo{
+		stored:          map[string]*models.RefreshToken{},
+		consumedOneTime: map[string]bool{},
+	}
 }
 
-func (f *fakeTokenRepo) Create(_ context.Context, token *models.RefreshToken) error {
+// claimOneTimeNonce atomically claims a pending-MFA JTI nonce. It reports
+// whether this call is the first to claim it.
+func (f *fakeTokenRepo) claimOneTimeNonce(digest string) (bool, error) {
+	f.oneTimeMu.Lock()
+	defer f.oneTimeMu.Unlock()
+	if f.consumedOneTime[digest] {
+		return false, nil
+	}
+	f.consumedOneTime[digest] = true
+	return true, nil
+}
+
+// releaseOneTimeNonce rolls a nonce claim back, mirroring the database
+// transaction's rollback when the session insert fails.
+func (f *fakeTokenRepo) releaseOneTimeNonce(digest string) {
+	f.oneTimeMu.Lock()
+	defer f.oneTimeMu.Unlock()
+	delete(f.consumedOneTime, digest)
+}
+
+// CreatePendingMFASession mirrors the database contract: claiming the nonce and
+// inserting the session are one atomic unit. When the session insert (Create)
+// fails, the nonce claim is rolled back, so the same digest can be retried —
+// the pending token is never permanently burned by a transient failure.
+func (f *fakeTokenRepo) CreatePendingMFASession(ctx context.Context, digest string, _ time.Time, token *models.RefreshToken, generation int64) (bool, error) {
+	if ok, _ := f.claimOneTimeNonce(digest); !ok {
+		return false, nil
+	}
+	if err := f.Create(ctx, token, generation); err != nil {
+		f.releaseOneTimeNonce(digest)
+		return false, err
+	}
+	return true, nil
+}
+
+func (f *fakeTokenRepo) Create(_ context.Context, token *models.RefreshToken, _ int64) error {
 	if f.createErr != nil {
 		return f.createErr
 	}
@@ -176,10 +275,10 @@ func (f *fakeTokenRepo) DeleteByHash(_ context.Context, hash string) error {
 	return nil
 }
 
-func (f *fakeTokenRepo) DeleteByUserID(_ context.Context, userID uuid.UUID) error {
+func (f *fakeTokenRepo) DeleteByUserID(_ context.Context, userID uuid.UUID) (int64, error) {
 	f.deletedByUserIDs = append(f.deletedByUserIDs, userID)
 
-	return nil
+	return 0, nil
 }
 
 // Consume mirrors the SQL: the UPDATE carries `consumed_at IS NULL`, so only the first
@@ -196,13 +295,45 @@ func (f *fakeTokenRepo) Consume(_ context.Context, hash string) (bool, error) {
 	return true, nil
 }
 
-func (f *fakeTokenRepo) DeleteConsumedBefore(_ context.Context, userID uuid.UUID, cutoff time.Time) error {
-	for hash, token := range f.stored {
-		if token.UserID == userID && token.ConsumedAt != nil && token.ConsumedAt.Before(cutoff) {
-			delete(f.stored, hash)
+func (f *fakeTokenRepo) RevokePresentedFamily(_ context.Context, hash string) error {
+	token, ok := f.stored[hash]
+	if !ok {
+		return nil
+	}
+	for storedHash, stored := range f.stored {
+		sameFamily := token.FamilyID != "" && stored.FamilyID == token.FamilyID && stored.UserID == token.UserID
+		if storedHash == hash || sameFamily {
+			delete(f.stored, storedHash)
 		}
 	}
+	return nil
+}
 
+func (f *fakeTokenRepo) CommitRotation(
+	ctx context.Context,
+	presentedHash string,
+	successor *models.RefreshToken,
+	grace time.Duration,
+) error {
+	token, ok := f.stored[presentedHash]
+	if !ok || token.UserID != successor.UserID {
+		return repository.ErrTokenNotFound
+	}
+	if token.ConsumedAt != nil && time.Since(*token.ConsumedAt) > grace {
+		_, _ = f.DeleteByUserID(ctx, token.UserID)
+		return repository.ErrTokenReuse
+	}
+	if token.ConsumedAt == nil {
+		now := time.Now()
+		token.ConsumedAt = &now
+	}
+	if token.FamilyID == "" && successor.FamilyID != "" {
+		token.FamilyID = successor.FamilyID
+	}
+	if token.FamilyID != successor.FamilyID {
+		return repository.ErrFamilyMismatch
+	}
+	f.stored[successor.TokenHash] = successor
 	return nil
 }
 
@@ -350,7 +481,6 @@ type fixture struct {
 type options struct {
 	allowRegistration bool
 	allowedEmails     []string
-	nextRole          string
 	mfa               *mfaModels.UserMFA
 }
 
@@ -360,13 +490,12 @@ func newFixture(t *testing.T, configure func(*options)) *fixture {
 	// ALLOWED_EMAILS defaults to ["*"] in config.Load, so that is the honest default
 	// here. An empty list is not a "no restriction" value — EmailMatches fails closed
 	// on it, which TestRegisterEmptyAllowListDeniesEveryone covers.
-	opts := options{allowRegistration: true, nextRole: models.RoleUser, allowedEmails: []string{"*"}}
+	opts := options{allowRegistration: true, allowedEmails: []string{"*"}}
 	if configure != nil {
 		configure(&opts)
 	}
 
 	users := newFakeUserRepo()
-	users.role = opts.nextRole
 	tokens := newFakeTokenRepo()
 	mfa := &fakeMFARepo{mfa: opts.mfa}
 	appCache := newCountingCache()
@@ -407,9 +536,10 @@ func (f *fixture) withUser(t *testing.T, email, password, role string) *models.U
 // --- registration ---------------------------------------------------------------
 
 func TestRegisterFirstUserBecomesAdmin(t *testing.T) {
-	// The role is decided by DetermineRoleAtomically rather than by a count-then-create,
-	// so that concurrent first registrations cannot all award themselves admin.
-	fixture := newFixture(t, func(o *options) { o.nextRole = models.RoleAdmin })
+	// The role is decided by CreateFirstUser (count + insert under one advisory
+	// lock), so that concurrent first registrations cannot all award themselves
+	// admin.
+	fixture := newFixture(t, nil)
 
 	response, err := fixture.service.Register(context.Background(), &models.RegisterRequest{
 		Email: "first@example.com", Password: "Str0ng!Passw0rd", DisplayName: "First",
@@ -426,12 +556,35 @@ func TestRegisterFirstUserBecomesAdmin(t *testing.T) {
 	}
 }
 
-func TestRegisterRestrictionsDoNotApplyToTheFirstUser(t *testing.T) {
-	// An operator standing up a closed instance must still be able to create their own
-	// account, so the very first registration bypasses both gates.
+func TestRegisterIsBlockedForEveryoneWhenDisabled(t *testing.T) {
+	// Registration off is a boundary, not a convenience: the very first account
+	// is refused too, because a closed instance bootstraps through /bootstrap
+	// (with its boot key) instead of through the registration gate. This is the
+	// test that keeps ALLOWED_REGISTER=false from becoming a cosmetic setting
+	// that an unconfigured, registration-locked instance satisfies by registering.
 	fixture := newFixture(t, func(o *options) {
-		o.nextRole = models.RoleAdmin
 		o.allowRegistration = false
+		o.allowedEmails = []string{"owner@example.com"}
+	})
+
+	_, err := fixture.service.Register(context.Background(), &models.RegisterRequest{
+		Email: "owner@example.com", Password: "Str0ng!Passw0rd", DisplayName: "Owner",
+	})
+	if !errors.Is(err, ErrRegistrationDisabled) {
+		t.Fatalf("first registration when disabled = %v, want ErrRegistrationDisabled", err)
+	}
+	if fixture.users.created != nil {
+		t.Fatal("a user was created while registration is disabled")
+	}
+}
+
+func TestRegisterFirstUserSucceedsWhenRegistrationIsOpen(t *testing.T) {
+	// The other documented bootstrap path: with ALLOWED_REGISTER=true (the
+	// default) the first registered user is the administrator. Open registration
+	// and the boot-key flow are both valid ways to stand up an instance, and
+	// whichever the operator picks must not lock them out.
+	fixture := newFixture(t, func(o *options) {
+		o.allowRegistration = true
 		o.allowedEmails = []string{"nobody@example.com"}
 	})
 
@@ -439,6 +592,9 @@ func TestRegisterRestrictionsDoNotApplyToTheFirstUser(t *testing.T) {
 		Email: "owner@example.com", Password: "Str0ng!Passw0rd", DisplayName: "Owner",
 	}); err != nil {
 		t.Fatalf("the first registration was refused: %v", err)
+	}
+	if got := fixture.users.created.Role; got != models.RoleAdmin {
+		t.Errorf("role = %q, want admin", got)
 	}
 }
 
@@ -470,21 +626,27 @@ func TestRegisterRespectsRestrictionsForEveryoneElse(t *testing.T) {
 			allow: true, allowedEmails: []string{"someone@example.com"}, email: "someone@example.com",
 		},
 		{
-			// Registration is refused before the address is considered, so a listed
-			// address is still turned away.
+			// The allow-list can never admit anyone while registration is off:
+			// the flag is checked first, so a listed address is still turned away.
 			name:  "disabled outranks a matching allow-list",
-			allow: false, allowedEmails: []string{"*"}, email: "someone@example.com",
+			allow: false, allowedEmails: []string{"someone@example.com"}, email: "someone@example.com",
 			wantErr: ErrRegistrationDisabled,
 		},
 	}
 
+	fixture := newFixture(t, nil)
+	// Restrictions only ever apply once the instance has a first user. Seed one
+	// so every case below exercises the "everyone else" path rather than the
+	// first-user-admin exemption.
+	fixture.withUser(t, "existing@example.com", "Str0ng!Passw0rd", models.RoleAdmin)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fixture := newFixture(t, func(o *options) {
-				o.nextRole = models.RoleUser
 				o.allowRegistration = tt.allow
 				o.allowedEmails = tt.allowedEmails
 			})
+			fixture.withUser(t, "existing@example.com", "Str0ng!Passw0rd", models.RoleAdmin)
 
 			_, err := fixture.service.Register(context.Background(), &models.RegisterRequest{
 				Email: tt.email, Password: "Str0ng!Passw0rd", DisplayName: "Someone",
@@ -879,6 +1041,104 @@ func TestRefreshTokenRejects(t *testing.T) {
 	}
 }
 
+func TestUpdateProfileResponseIsTheWrittenRow(t *testing.T) {
+	fixture := newFixture(t, nil)
+	user := fixture.withUser(t, "user@example.com", "Str0ng!Passw0rd", models.RoleUser)
+	fixture.users.concurrentDisplayName = "from-other-request"
+	locale := "fr"
+
+	updated, err := fixture.service.UpdateProfile(context.Background(), user.ID.String(), &models.UpdateProfileRequest{
+		Locale: &locale,
+	})
+	if err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if updated.Locale != "fr" {
+		t.Errorf("locale = %q, want fr", updated.Locale)
+	}
+	if updated.DisplayName != "from-other-request" {
+		t.Errorf("display name = %q, want the row returned by the write, not the pre-update snapshot", updated.DisplayName)
+	}
+}
+
+func TestRefreshKeepsTheServerSessionFamily(t *testing.T) {
+	fixture := newFixture(t, nil)
+	user := fixture.withUser(t, "user@example.com", "Str0ng!Passw0rd", models.RoleUser)
+	first, err := fixture.service.Login(context.Background(), &models.LoginRequest{
+		Email: user.Email, Password: "Str0ng!Passw0rd",
+	})
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if first.SessionID == "" {
+		t.Fatal("login did not issue a session id")
+	}
+	second, err := fixture.service.RefreshToken(context.Background(), first.RefreshToken)
+	if err != nil {
+		t.Fatalf("RefreshToken: %v", err)
+	}
+	if second.SessionID != first.SessionID {
+		t.Errorf("session id = %q, want %q", second.SessionID, first.SessionID)
+	}
+}
+
+func TestLegacyRotationLogoutRevokesTheSuccessor(t *testing.T) {
+	fixture := newFixture(t, nil)
+	user := fixture.withUser(t, "user@example.com", "Str0ng!Passw0rd", models.RoleUser)
+	legacyHash := repository.HashToken("legacy-cookie")
+	legacy := &models.RefreshToken{
+		UserID: user.ID, TokenHash: legacyHash, ExpiresAt: time.Now().Add(time.Hour), FamilyID: "",
+	}
+	legacy.ID = uuid.New()
+	fixture.tokens.stored[legacyHash] = legacy
+
+	successor := &models.RefreshToken{
+		UserID: user.ID, TokenHash: repository.HashToken("successor"),
+		ExpiresAt: time.Now().Add(time.Hour), FamilyID: "family-after-upgrade",
+	}
+	successor.ID = uuid.New()
+	if err := fixture.tokens.CommitRotation(context.Background(), legacyHash, successor, time.Minute); err != nil {
+		t.Fatalf("rotate: %v", err)
+	}
+	if err := fixture.tokens.RevokePresentedFamily(context.Background(), legacyHash); err != nil {
+		t.Fatalf("logout: %v", err)
+	}
+	if _, ok := fixture.tokens.stored[successor.TokenHash]; ok {
+		t.Error("successor survived logout of the migrated ancestor")
+	}
+}
+
+func TestLogoutRevokesOnlyThePresentedFamily(t *testing.T) {
+	fixture := newFixture(t, nil)
+	user := fixture.withUser(t, "user@example.com", "Str0ng!Passw0rd", models.RoleUser)
+	first, err := fixture.service.Login(context.Background(), &models.LoginRequest{
+		Email: user.Email, Password: "Str0ng!Passw0rd",
+	})
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+
+	otherHash := repository.HashToken("other-device")
+	other := &models.RefreshToken{
+		UserID:    user.ID,
+		TokenHash: otherHash,
+		ExpiresAt: time.Now().Add(time.Hour),
+		FamilyID:  "family-other-device",
+	}
+	other.ID = uuid.New()
+	fixture.tokens.stored[otherHash] = other
+
+	if err := fixture.service.Logout(context.Background(), first.RefreshToken); err != nil {
+		t.Fatalf("Logout: %v", err)
+	}
+	if _, err := fixture.service.RefreshToken(context.Background(), first.RefreshToken); !errors.Is(err, ErrInvalidToken) {
+		t.Errorf("logged-out family still refreshed: %v", err)
+	}
+	if _, ok := fixture.tokens.stored[otherHash]; !ok {
+		t.Error("logout deleted a different device's refresh family")
+	}
+}
+
 func TestLogoutDeletesTheStoredToken(t *testing.T) {
 	fixture := newFixture(t, nil)
 	user := fixture.withUser(t, "user@example.com", "Str0ng!Passw0rd", models.RoleUser)
@@ -1039,6 +1299,31 @@ func TestUpdateUserRoleRejectsAnUnknownTarget(t *testing.T) {
 	}
 }
 
+// TestLastAdminActionsSurfaceTheInvariant covers the repository's ErrLastAdmin
+// travelling out of the service as the service-level sentinel, so the handler
+// can turn it into a 400 instead of a 500. The fake repository reports the
+// refusal the way the SQL guard would.
+func TestLastAdminActionsSurfaceTheInvariant(t *testing.T) {
+	fixture := newFixture(t, nil)
+	admin := fixture.withUser(t, "admin@example.com", "Str0ng!Passw0rd", models.RoleAdmin)
+	target := fixture.withUser(t, "target@example.com", "Str0ng!Passw0rd", models.RoleUser)
+
+	fixture.users.roleSetErr = repository.ErrLastAdmin
+	if err := fixture.service.UpdateUserRole(
+		context.Background(), admin.ID.String(), target.ID.String(), models.RoleUser,
+	); !errors.Is(err, ErrLastAdmin) {
+		t.Errorf("demotion gave %v, want ErrLastAdmin", err)
+	}
+	fixture.users.roleSetErr = nil
+
+	fixture.users.deleteErr = repository.ErrLastAdmin
+	if err := fixture.service.DeleteUser(
+		context.Background(), admin.ID.String(), target.ID.String(),
+	); !errors.Is(err, ErrLastAdmin) {
+		t.Errorf("deletion gave %v, want ErrLastAdmin", err)
+	}
+}
+
 func TestListUsers(t *testing.T) {
 	fixture := newFixture(t, nil)
 	fixture.withUser(t, "a@example.com", "Str0ng!Passw0rd", models.RoleAdmin)
@@ -1085,9 +1370,11 @@ func TestPasskeyLoginIssuesAFullSession(t *testing.T) {
 // which is arguably the right reading of "allow these addresses: none".
 func TestRegisterEmptyAllowListDeniesEveryone(t *testing.T) {
 	fixture := newFixture(t, func(o *options) {
-		o.nextRole = models.RoleUser
 		o.allowedEmails = nil
 	})
+	// The "everyone else" path only exists once the instance has a first user;
+	// the first account is the admin and always welcome.
+	fixture.withUser(t, "existing@example.com", "Str0ng!Passw0rd", models.RoleAdmin)
 
 	_, err := fixture.service.Register(context.Background(), &models.RegisterRequest{
 		Email: "someone@example.com", Password: "Str0ng!Passw0rd", DisplayName: "Someone",

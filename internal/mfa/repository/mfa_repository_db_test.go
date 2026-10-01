@@ -28,6 +28,10 @@ import (
 func newUser(t *testing.T, pool *pgxpool.Pool) *authModels.User {
 	t.Helper()
 
+	// A user row is instance-wide state as far as the first-user tests are
+	// concerned; serialize with them for the test's lifetime.
+	dbtest.LockSingletonAccounts(dbtest.Context(t), t, pool)
+
 	id := uuid.New()
 	user := &authModels.User{
 		Email:        fmt.Sprintf("mfa-%s@example.test", id),

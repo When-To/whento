@@ -75,9 +75,9 @@
           </button>
         </div>
 
-        <!-- Email Notification Section (if notifications enabled for participants) -->
+        <!-- Email Notification Section (if the calendar allows participant mail AND this instance can send email) -->
         <ParticipantEmailPanel
-          v-if="notificationsEnabled"
+          v-if="emailPanelVisible"
           :token="token"
           :participant-id="participantId"
           :email="participant.email"
@@ -231,6 +231,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useCalendarHistoryStore } from '@/stores/calendarHistory';
 import { useToastStore } from '@/stores/toast';
 import { availabilitiesApi } from '@/api/availabilities';
+import { authApi } from '@/api/auth';
 import CalendarMonthView from '@/components/calendar/CalendarMonthView.vue';
 import ParticipantDetailsPopup from '@/components/ParticipantDetailsPopup.vue';
 import CalendarListView from '@/components/calendar/CalendarListView.vue';
@@ -274,6 +275,17 @@ const token = computed(() => route.params.token as string);
 const participantId = computed(() => route.params.participantId as string);
 
 const loading = ref(false);
+/**
+ * Incremented every time a route change starts a new calendar load. Every
+ * continuation of `loadCalendar` — success, missing-participant early return and catch —
+ * is bound to the version it started under, so a deferred old-token response can never
+ * touch history, toasts, the loading flag or the router against the newer route.
+ */
+let loadVersion = 0;
+/** Latest recurrence fetch; an older snapshot must not land after a newer one. */
+let recurrenceSeq = 0;
+/** Latest visible-range fetch; month/week changes share a route version. */
+let rangeSeq = 0;
 const recurrences = ref<RecurrenceWithExceptions[]>([]);
 // Both are replaced wholesale on every reload and only ever read, so they use
 // shallowRef: a deep ref would proxy every participant object of every date in the
@@ -308,6 +320,12 @@ const participant = computed(() => {
 });
 
 const notificationsEnabled = computed(() => calendar.value?.notify_participants === true);
+
+// Whether the instance has SMTP configured. The participant-email gate is the
+// calendar's policy *and* this capability: without mail the panel would offer a
+// form whose sends could never leave the server (and the backend now refuses).
+const smtpAvailable = ref(false);
+const emailPanelVisible = computed(() => notificationsEnabled.value && smtpAvailable.value);
 
 // How the calendar is drawn, and the persistence of that choice. Only the two settings
 // that move the visible date range refetch; the week's hours and slot size do not.
@@ -561,11 +579,18 @@ const selectedParticipantsCommonDates = computed(() => {
  * `loadOwnedCalendars()`. This used to compare `calendar.owner_id`, which is
  * `undefined` on this route: the link never appeared for the owner of a calendar,
  * only for admins.
+ *
+ * Like `CalendarPublic.isOwner`, the owner list is only trusted when it belongs to the
+ * current user (`calendarsForUser`). A stale list from a previous account on this
+ * browser must not light the link up for the next account (the backend still enforces
+ * ownership, but the link should not be shown at all).
  */
 const canManageCalendar = computed(() => {
   const current = calendar.value;
   if (!current || !authStore.user) return false;
+  // Admins manage every calendar server-side; their link is not cache-derived.
   if (authStore.user.role === 'admin') return true;
+  if (calendarStore.calendarsForUser !== authStore.user.id) return false;
   return calendarStore.calendars.some(owned => owned.id === current.id);
 });
 
@@ -630,7 +655,13 @@ function saveParticipantSelection() {
  * effort: failing to answer that question must not break the participant view.
  */
 async function loadOwnedCalendars() {
-  if (!authStore.isAuthenticated || calendarStore.calendars.length > 0) return;
+  if (!authStore.isAuthenticated) return;
+  // Only trust a list fetched for the current user: on a shared browser a stale list
+  // from a previous account would otherwise light up the "edit calendar" link for a
+  // calendar the current account does not own. (The backend still enforces ownership,
+  // so this only affects link visibility, but it is the same rule as CalendarPublic.)
+  const userId = authStore.user?.id;
+  if (userId != null && calendarStore.calendarsForUser === userId) return;
 
   try {
     await calendarStore.fetchCalendars();
@@ -640,26 +671,39 @@ async function loadOwnedCalendars() {
 }
 
 async function loadCalendar() {
+  // Bind every continuation below to this invocation. A route change (history-sidebar
+  // navigation to another calendar/participant on this same component) bumps the
+  // version, so a deferred old-token success or failure must not inspect the *new*
+  // route parameters, decide the participant is missing, drop the new calendar from
+  // history or redirect away from the page on screen.
+  const version = ++loadVersion;
+  const currentToken = token.value;
+  const currentParticipantId = participantId.value;
   loading.value = true;
 
   try {
-    await calendarStore.fetchPublicCalendar(token.value, participantId.value);
+    await calendarStore.fetchPublicCalendar(currentToken, currentParticipantId);
+    if (version !== loadVersion) return;
     void loadOwnedCalendars();
 
     if (!participant.value) {
+      // The calendar loaded, but the saved participant id no longer matches anything
+      // on it. Only the backend can validate a masked/stale id — the calendar itself
+      // is still valid, so keep it in the history sidebar (name + display settings)
+      // and just drop the dead participant capability, returning to the calendar page.
+      // `removeCalendar` is reserved for a calendar that genuinely failed to load.
       toastStore.error(t('errors.notFound'));
-      // Remove invalid calendar from history and redirect
-      historyStore.removeCalendar(token.value);
-      router.push('/');
+      historyStore.updateParticipantId(currentToken, undefined);
+      router.replace(`/c/${currentToken}`);
       return;
     }
 
     // Add calendar to history with participant ID
     if (calendar.value) {
-      historyStore.addCalendar(token.value, calendar.value.name, participantId.value);
+      historyStore.addCalendar(currentToken, calendar.value.name, currentParticipantId);
 
       // Restore display settings from history if available
-      restore(historyStore.getDisplaySettings(token.value));
+      restore(historyStore.getDisplaySettings(currentToken));
     }
 
     // Save participant selection
@@ -677,27 +721,48 @@ async function loadCalendar() {
 
     // Load recurrences and participant counts (which includes all participants' availabilities)
     await reloadRecurrencesAndCounts();
+    if (version !== loadVersion) return;
   } catch (err: any) {
+    if (version !== loadVersion) return;
     toastStore.error(t(translateErrorMessage(err, { fallback: 'calendar.fetchError' })));
     // Remove invalid calendar from history and redirect to home
-    historyStore.removeCalendar(token.value);
+    historyStore.removeCalendar(currentToken);
     router.push('/');
   } finally {
-    loading.value = false;
+    if (version === loadVersion) {
+      loading.value = false;
+    }
   }
 }
 
-async function loadRecurrences() {
+async function loadRecurrences(tokenArg: string, participantIdArg: string, version: number) {
+  const seq = ++recurrenceSeq;
   try {
-    const result = await availabilitiesApi.getRecurrences(token.value, participantId.value);
+    const result = await availabilitiesApi.getRecurrences(tokenArg, participantIdArg);
+    if (
+      seq !== recurrenceSeq ||
+      version !== loadVersion ||
+      tokenArg !== token.value ||
+      participantIdArg !== participantId.value
+    ) {
+      return;
+    }
     recurrences.value = result || [];
   } catch (err: any) {
+    if (seq !== recurrenceSeq || version !== loadVersion) return;
     console.error('Failed to load recurrences:', err);
     recurrences.value = [];
   }
 }
 
-async function loadParticipantCounts(year?: number, month?: number) {
+async function loadParticipantCounts(
+  tokenArg: string,
+  participantIdArg: string,
+  version: number,
+  year?: number,
+  month?: number
+) {
+  const seq = ++rangeSeq;
   try {
     let startDate: Date;
     let endDate: Date;
@@ -721,12 +786,23 @@ async function loadParticipantCounts(year?: number, month?: number) {
     const endStr = formatDateISO(endDate);
 
     const [summaries, own] = await Promise.all([
-      availabilitiesApi.getRangeSummary(token.value, startStr, endStr),
+      availabilitiesApi.getRangeSummary(tokenArg, startStr, endStr),
       // The participant's *explicit* answers. The range summary cannot stand in for
       // them: the backend expands recurrences into it, so a day covered only by a rule
       // is indistinguishable there from one the participant actually clicked.
-      availabilitiesApi.getByParticipant(token.value, participantId.value, startStr, endStr),
+      availabilitiesApi.getByParticipant(tokenArg, participantIdArg, startStr, endStr),
     ]);
+    // A response for a route the visitor left (navigated to calendar B while this was
+    // on the wire) must not replace B's displayed data, and its failure must not wipe
+    // B's either.
+    if (
+      seq !== rangeSeq ||
+      version !== loadVersion ||
+      tokenArg !== token.value ||
+      participantIdArg !== participantId.value
+    ) {
+      return;
+    }
     ownAvailabilities.value = own?.availabilities ?? [];
 
     // The backend returns [] for an empty range now; this stays as cheap insurance
@@ -743,6 +819,7 @@ async function loadParticipantCounts(year?: number, month?: number) {
     }
     participantCounts.value = counts;
   } catch (err: any) {
+    if (seq !== rangeSeq || version !== loadVersion) return;
     console.error('Failed to load participant counts:', err);
     participantCounts.value = {};
     ownAvailabilities.value = [];
@@ -751,7 +828,13 @@ async function loadParticipantCounts(year?: number, month?: number) {
 
 /** Refetch the visible range for the month currently tracked. */
 function reloadCounts(): Promise<void> {
-  return loadParticipantCounts(displayedYear.value, displayedMonth.value);
+  return loadParticipantCounts(
+    token.value,
+    participantId.value,
+    loadVersion,
+    displayedYear.value,
+    displayedMonth.value
+  );
 }
 
 /**
@@ -761,7 +844,10 @@ function reloadCounts(): Promise<void> {
  * rule expands to in the range summary.
  */
 async function reloadRecurrencesAndCounts(): Promise<void> {
-  await Promise.all([loadRecurrences(), reloadCounts()]);
+  await Promise.all([
+    loadRecurrences(token.value, participantId.value, loadVersion),
+    reloadCounts(),
+  ]);
 }
 
 /**
@@ -964,7 +1050,7 @@ async function handleMonthChange(year: number, month: number) {
   displayedMonth.value = month;
 
   // Reload participant counts for the new month
-  await loadParticipantCounts(year, month);
+  await loadParticipantCounts(token.value, participantId.value, loadVersion, year, month);
 }
 
 async function handleWeekChange(weekStartDate: Date) {
@@ -978,7 +1064,7 @@ async function handleWeekChange(weekStartDate: Date) {
   displayedMonth.value = month;
 
   // Reload participant counts
-  await loadParticipantCounts(year, month);
+  await loadParticipantCounts(token.value, participantId.value, loadVersion, year, month);
 }
 
 async function handleBatchOperations(operations: AvailabilityOperation[]) {
@@ -1127,5 +1213,15 @@ onMounted(async () => {
   // Calling loadCalendar() here as well fetched the calendar, its recurrences and the
   // whole range summary a second time on every mount.
   await handleCancelFromEmail();
+
+  // Email capability (read-only, so failures just hide the panel).
+  authApi
+    .checkMagicLinkAvailable()
+    .then(result => {
+      smtpAvailable.value = result.available;
+    })
+    .catch(() => {
+      smtpAvailable.value = false;
+    });
 });
 </script>

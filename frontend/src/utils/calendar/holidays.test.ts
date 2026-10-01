@@ -4,40 +4,125 @@
  * SPDX-License-Identifier: BSL-1.1
  */
 
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { inTimezone, SAMPLE_TIMEZONES } from '@/test/timezone';
-import { clearHolidayCache, getHolidayIndex, preloadHolidays, resolveCountry } from './holidays';
+import {
+  clearHolidayCache,
+  getHolidayIndex,
+  holidaysReady,
+  holidaysVersion,
+  resolveCountry,
+} from './holidays';
+import { holidaysApi } from '@/api/holidays';
 
-// `date-holidays` is imported dynamically so it lands in its own chunk instead of the
-// entry bundle. Every assertion below is about a *loaded* engine, so the file waits for
-// it once, up front — pulling 1.4 MB through the transform pipeline is well outside the
-// default 5 s per-hook budget on a loaded machine.
-beforeAll(async () => {
-  await preloadHolidays();
-}, 60_000);
+/*
+ * The holiday dataset lives on the backend now (pkg/datevalidation's offline
+ * table, served from GET /api/v1/holidays), so this file exercises the module
+ * against a mocked copy of that API. The fixtures mirror the 2026 dates the
+ * backend tests use: Bastille Day (14 July) is French and not American,
+ * Christmas is shared, and 24 December is the eve of it in both.
+ *
+ * Fetching is on demand and asynchronous: the module starts a fetch from
+ * `getHolidayIndex` and answers "no holidays" until it lands, so each test
+ * settles the microtask queue before asserting.
+ */
+
+const fr2026 = [
+  { date: '2026-01-01', name: 'Nouvel an' },
+  { date: '2026-04-06', name: 'Lundi de Pâques' },
+  { date: '2026-05-01', name: 'Fête du Travail' },
+  { date: '2026-05-08', name: 'Fête de la Victoire' },
+  { date: '2026-05-14', name: 'Ascension' },
+  { date: '2026-05-25', name: 'Lundi de Pentecôte' },
+  { date: '2026-07-14', name: 'Fête Nationale' },
+  { date: '2026-08-15', name: 'Assomption' },
+  { date: '2026-11-01', name: 'Toussaint' },
+  { date: '2026-11-11', name: 'Armistice de 1918' },
+  { date: '2026-12-25', name: 'Noël' },
+];
+
+const us2026 = [
+  { date: '2026-01-01', name: "New Year's Day" },
+  { date: '2026-01-19', name: 'Martin Luther King Jr. Day' },
+  { date: '2026-02-16', name: "Presidents' Day" },
+  { date: '2026-05-25', name: 'Memorial Day' },
+  { date: '2026-06-19', name: 'Juneteenth' },
+  { date: '2026-07-04', name: 'Independence Day' },
+  { date: '2026-09-07', name: 'Labor Day' },
+  { date: '2026-10-12', name: 'Columbus Day' },
+  { date: '2026-11-11', name: 'Veterans Day' },
+  { date: '2026-11-26', name: 'Thanksgiving Day' },
+  { date: '2026-12-25', name: 'Christmas Day' },
+];
+
+// A country with a genuinely multi-day holiday: the backend serves every day of
+// the span, and the frontend must index each one, not just the first.
+const ru2026 = [
+  { date: '2026-01-01', name: 'New Year Holiday' },
+  { date: '2026-01-02', name: 'New Year Holiday' },
+  { date: '2026-01-03', name: 'New Year Holiday' },
+  { date: '2026-01-04', name: 'New Year Holiday' },
+  { date: '2026-01-05', name: 'New Year Holiday' },
+  { date: '2026-01-06', name: 'New Year Holiday' },
+];
+
+const byTimezone: Record<
+  string,
+  { country: string; supported: boolean; holidays: { date: string; name: string }[] }
+> = {
+  'Europe/Paris': { country: 'FR', supported: true, holidays: fr2026 },
+  'America/New_York': { country: 'US', supported: true, holidays: us2026 },
+  'Europe/Moscow': { country: 'RU', supported: true, holidays: ru2026 },
+};
+
+vi.mock('@/api/holidays', () => ({
+  holidaysApi: {
+    supported: vi.fn().mockResolvedValue({ countries: ['FR', 'US', 'RU'] }),
+    year: vi.fn((timezone: string, year: number) => {
+      const entry = byTimezone[timezone];
+      if (!entry || year !== 2026) {
+        return Promise.resolve({
+          country_code: entry?.country ?? null,
+          supported: entry?.supported ?? false,
+          holidays: [],
+        });
+      }
+      return Promise.resolve({
+        country_code: entry.country,
+        supported: true,
+        holidays: entry.holidays,
+      });
+    }),
+  },
+}));
+
+/** Let the on-demand fetch that a lookup kicked off resolve. */
+async function settle() {
+  await Promise.resolve();
+  await new Promise(resolve => setTimeout(resolve, 0));
+}
 
 beforeEach(() => {
   clearHolidayCache();
+  vi.clearAllMocks();
 });
 
 describe('resolveCountry', () => {
-  it.each([
-    ['Europe/Paris', 'FR'],
-    ['America/New_York', 'US'],
-    ['Asia/Tokyo', 'JP'],
-    ['Australia/Sydney', 'AU'],
-  ])('%s -> %s', (timeZone, expected) => {
-    expect(resolveCountry(timeZone)).toBe(expected);
-  });
+  it('serves the timezone once the backend has answered', async () => {
+    // Nothing has been fetched yet: the answer is "unknown", not a wrong guess.
+    expect(resolveCountry('Europe/Paris')).toBeNull();
 
-  it.each(['UTC', 'Etc/GMT+5', 'Not/AZone', ''])('returns null for %s', timeZone => {
-    expect(resolveCountry(timeZone)).toBeNull();
+    getHolidayIndex('Europe/Paris', 'fr').isHoliday('2026-01-01'); // kicks the fetch
+    await settle();
+
+    expect(resolveCountry('Europe/Paris')).toBe('FR');
   });
 });
 
 describe('isHoliday', () => {
-  it('knows French public holidays', () => {
+  it('knows French public holidays', async () => {
     const fr = getHolidayIndex('Europe/Paris', 'fr');
+    await settle();
     expect(fr.isHoliday('2026-01-01')).toBe(true);
     expect(fr.isHoliday('2026-05-01')).toBe(true);
     expect(fr.isHoliday('2026-07-14')).toBe(true);
@@ -45,133 +130,105 @@ describe('isHoliday', () => {
     expect(fr.isHoliday('2026-04-07')).toBe(false);
   });
 
-  it('is country-specific', () => {
+  it('is country-specific', async () => {
     const fr = getHolidayIndex('Europe/Paris', 'en');
     const us = getHolidayIndex('America/New_York', 'en');
+    await settle();
     // Labour Day is a French public holiday; the US observes it in September.
     expect(fr.isHoliday('2026-05-01')).toBe(true);
     expect(us.isHoliday('2026-05-01')).toBe(false);
-    // Independence Day is not a French holiday.
-    expect(us.isHoliday('2026-07-03')).toBe(true);
+    // Independence Day is on the 4th of July, not a French holiday.
+    expect(us.isHoliday('2026-07-04')).toBe(true);
     expect(fr.isHoliday('2026-07-04')).toBe(false);
   });
 
-  it('answers "no holidays" while the engine is still loading', async () => {
-    // The lazy import means the first render happens before date-holidays exists.
-    // A fresh module registry is the only way back to that state once the engine has
-    // been pulled in. The index must be usable then — not undefined, not throwing —
-    // so the grid renders straight away and simply carries no holiday shading yet.
-    vi.resetModules();
-    const fresh = await import('./holidays');
-
-    const index = fresh.getHolidayIndex('Europe/Paris', 'fr');
-    expect(fresh.holidaysReady.value).toBe(false);
-    expect(index.countryCode).toBe('FR');
+  it('answers "no holidays" while the data is still loading', async () => {
+    const index = getHolidayIndex('Europe/Paris', 'fr');
+    expect(holidaysReady.value).toBe(false);
     expect(index.isHoliday('2026-01-01')).toBe(false);
-    expect(index.isHolidayEve('2025-12-31')).toBe(false);
     expect(index.getName('2026-01-01')).toBeNull();
 
-    // Merely asking is enough to start the fetch; once it lands the same call yields
-    // a *different* index object, which is what makes dependent computeds re-run.
-    await fresh.preloadHolidays();
-    expect(fresh.holidaysReady.value).toBe(true);
-
-    const loaded = fresh.getHolidayIndex('Europe/Paris', 'fr');
-    expect(loaded).not.toBe(index);
-    expect(loaded.isHoliday('2026-01-01')).toBe(true);
+    // Once the fetch lands, the version ticks and lookups come from the cache.
+    await settle();
+    expect(holidaysVersion.value).toBeGreaterThan(0);
+    expect(index.isHoliday('2026-01-01')).toBe(true);
   });
 
-  it('reports nothing for an unsupported timezone instead of throwing', () => {
+  it('reports nothing for an unsupported timezone instead of throwing', async () => {
     const utc = getHolidayIndex('UTC', 'en');
-    expect(utc.countryCode).toBeNull();
+    await settle();
     expect(utc.isHoliday('2026-01-01')).toBe(false);
     expect(utc.isHolidayEve('2025-12-31')).toBe(false);
     expect(utc.getName('2026-01-01')).toBeNull();
   });
 
-  it('answers by the country calendar date, not the viewer clock', () => {
-    // The previous implementation compared instants, so a viewer in Tokyo saw a
-    // French 1 January holiday land on 2 January. The answer must not depend on
-    // where the browser is.
-    for (const timeZone of SAMPLE_TIMEZONES) {
-      inTimezone(timeZone, () => {
+  it('answers by the country calendar date, not the viewer clock', async () => {
+    // The country comes from the timezone the caller passes; the browser's own
+    // clock and timezone must not shift the answer.
+    for (const viewerTimeZone of SAMPLE_TIMEZONES) {
+      inTimezone(viewerTimeZone, async () => {
         clearHolidayCache();
         const fr = getHolidayIndex('Europe/Paris', 'fr');
+        await settle();
         expect(fr.isHoliday('2026-01-01')).toBe(true);
         expect(fr.isHoliday('2026-01-02')).toBe(false);
       });
     }
+    await settle();
   });
 });
 
 describe('multi-day holidays', () => {
-  // A handful of countries have genuine multi-day public holidays. `isHoliday(date)`
-  // matched any instant inside [start, end), so indexing by the first day alone
-  // would silently unblock the rest of the span.
-  it('covers every day of the Russian New Year week', () => {
+  it('covers every day the backend serves for the Russian New Year week', async () => {
     const ru = getHolidayIndex('Europe/Moscow', 'en');
+    await settle();
     for (const day of ['02', '03', '04', '05', '06']) {
       expect(ru.isHoliday(`2026-01-${day}`)).toBe(true);
     }
     expect(ru.isHoliday('2026-01-15')).toBe(false);
   });
 
-  it('covers every day of the Turkish Eid holidays', () => {
-    const tr = getHolidayIndex('Europe/Istanbul', 'en');
-    for (const day of ['20', '21', '22', '23']) {
-      expect(tr.isHoliday(`2026-03-${day}`)).toBe(true);
-    }
-    expect(tr.isHoliday('2026-03-24')).toBe(false);
-  });
-
-  it('names every day of the span, not just the first', () => {
-    // toBeTruthy() would also pass on a stray "0" or on the wrong holiday's name; the
-    // point of the expansion is that day five carries the *same* name as day one, and
-    // that the name is the real one.
+  it('names every day of the span, not just the first', async () => {
     const ru = getHolidayIndex('Europe/Moscow', 'en');
+    await settle();
     const name = ru.getName('2026-01-02');
-
     expect(name).toBe('New Year Holiday');
     expect(ru.getName('2026-01-05')).toBe(name);
     expect(ru.getName('2026-01-03')).toBe(name);
-    // And a day outside the span carries no name at all.
+    // A day outside the span carries no name at all.
     expect(ru.getName('2026-01-15')).toBeNull();
-  });
-
-  it('treats the day before a multi-day holiday as an eve', () => {
-    const tr = getHolidayIndex('Europe/Istanbul', 'en');
-    expect(tr.isHolidayEve('2026-03-19')).toBe(true);
-    // Inside the span the next day is also a holiday, so it is an eve too.
-    expect(tr.isHolidayEve('2026-03-22')).toBe(true);
-    expect(tr.isHolidayEve('2026-03-23')).toBe(false);
   });
 });
 
 describe('isHolidayEve', () => {
-  it('detects the day before a holiday', () => {
+  it('detects the day before a holiday', async () => {
     const fr = getHolidayIndex('Europe/Paris', 'fr');
+    await settle();
     expect(fr.isHolidayEve('2026-12-24')).toBe(true);
     expect(fr.isHolidayEve('2026-12-23')).toBe(false);
   });
 
-  it('crosses the year boundary, loading the next year on demand', () => {
-    // 31 December 2025 is the eve of 1 January 2026: the lookup has to reach into a
-    // year map that has not been loaded yet.
+  it('crosses the year boundary, loading the next year on demand', async () => {
+    // 31 December 2025 is the eve of 1 January 2026: the lookup has to reach into
+    // a year map that has not been loaded yet.
     const fr = getHolidayIndex('Europe/Paris', 'fr');
+    await settle();
     expect(fr.isHolidayEve('2025-12-31')).toBe(true);
   });
 });
 
 describe('getName', () => {
-  it('localizes names to the requested language', () => {
-    // The previous getHolidayName defaulted to French and every caller omitted the
-    // argument, so English users saw French holiday names.
-    expect(getHolidayIndex('Europe/Paris', 'fr').getName('2026-01-01')).toBe('Nouvel An');
-    expect(getHolidayIndex('Europe/Paris', 'en').getName('2026-01-01')).toBe("New Year's Day");
+  it('serves the name the backend dataset attaches', async () => {
+    const fr = getHolidayIndex('Europe/Paris', 'fr');
+    await settle();
+    expect(fr.getName('2026-01-01')).toBe('Nouvel an');
+    expect(getHolidayIndex('Europe/Paris', 'en').getName('2026-01-01')).toBe('Nouvel an');
   });
 
-  it('returns null for ordinary days', () => {
-    expect(getHolidayIndex('Europe/Paris', 'fr').getName('2026-04-07')).toBeNull();
+  it('returns null for ordinary days', async () => {
+    const fr = getHolidayIndex('Europe/Paris', 'fr');
+    await settle();
+    expect(fr.getName('2026-04-07')).toBeNull();
   });
 });
 
@@ -182,46 +239,18 @@ describe('caching', () => {
   });
 
   it('loads each year exactly once, however many lookups are made', async () => {
-    // This is the whole point of the module: the week grid used to issue ~2700
-    // per-date lookups per render at ~1.2 ms each.
-    const holidays = await import('date-holidays');
-    const spy = vi.spyOn(holidays.default.prototype, 'getHolidays');
-    clearHolidayCache();
-
     const fr = getHolidayIndex('Europe/Paris', 'fr');
     for (let day = 1; day <= 28; day++) {
       for (let month = 1; month <= 12; month++) {
         fr.isHoliday(`2026-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
       }
     }
-    expect(spy).toHaveBeenCalledTimes(1);
+    await settle();
+    expect(holidaysApi.year).toHaveBeenCalledTimes(1);
 
     // A date in another year adds exactly one more load.
     fr.isHoliday('2027-01-01');
-    expect(spy).toHaveBeenCalledTimes(2);
-
-    spy.mockRestore();
-  });
-
-  it('constructs one Holidays instance per country and language', async () => {
-    // `init` is what the constructor calls, so counting it counts instantiations.
-    // The previous getHolidayName built a fresh instance on *every* call, once per
-    // day cell, explicitly bypassing the cache to get a localized name.
-    const holidays = await import('date-holidays');
-    const spy = vi.spyOn(holidays.default.prototype, 'init');
-    clearHolidayCache();
-
-    for (let i = 0; i < 20; i++) {
-      const fr = getHolidayIndex('Europe/Paris', 'fr');
-      fr.isHoliday('2026-01-01');
-      fr.getName('2026-05-01');
-    }
-    expect(spy).toHaveBeenCalledTimes(1);
-
-    // A different language is a different instance, and only one more.
-    getHolidayIndex('Europe/Paris', 'en').getName('2026-01-01');
-    expect(spy).toHaveBeenCalledTimes(2);
-
-    spy.mockRestore();
+    await settle();
+    expect(holidaysApi.year).toHaveBeenCalledTimes(2);
   });
 });

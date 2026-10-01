@@ -175,7 +175,7 @@
               <router-link to="/login" class="btn btn-ghost">
                 {{ t('auth.login') }}
               </router-link>
-              <router-link to="/register" class="btn btn-primary">
+              <router-link v-if="registrationEnabled" to="/register" class="btn btn-primary">
                 {{ t('auth.register') }}
               </router-link>
             </div>
@@ -368,6 +368,7 @@
                 {{ t('auth.login') }}
               </router-link>
               <router-link
+                v-if="registrationEnabled"
                 to="/register"
                 class="block w-full btn btn-primary text-center"
                 @click="closeMobileMenu"
@@ -479,6 +480,8 @@ function goHome() {
 const isAuthenticated = computed(() => authStore.isAuthenticated);
 const isAdmin = computed(() => authStore.isAdmin);
 const user = computed(() => authStore.user);
+/** Whether the server currently accepts new registrations; hides the register CTA. */
+const registrationEnabled = computed(() => authStore.registrationEnabled);
 const hasCalendarHistory = computed(() => historyStore.calendars.length > 0);
 const calendarHistoryCount = computed(() => historyStore.calendars.length);
 

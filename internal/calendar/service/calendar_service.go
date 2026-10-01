@@ -37,6 +37,8 @@ type CalendarRepository interface {
 	GetByOwnerID(ctx context.Context, ownerID uuid.UUID) ([]*models.Calendar, error)
 	GetByPublicToken(ctx context.Context, token string) (*models.Calendar, error)
 	Update(ctx context.Context, calendar *models.Calendar) error
+	Patch(ctx context.Context, id uuid.UUID, patch repository.CalendarPatch) (*models.Calendar, error)
+	UpdateThreshold(ctx context.Context, id uuid.UUID, threshold int) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	RegenerateToken(ctx context.Context, id uuid.UUID, tokenType, newToken string) error
 }
@@ -302,17 +304,27 @@ func buildPublicCalendarResponse(calendar *models.Calendar, participants []model
 		return nil, fmt.Errorf("failed to parse allowed_hours: %w", err)
 	}
 
-	// Check if participant notifications are enabled
+	// Check if participant notifications are enabled. `notify_participants` in
+	// the public response is what the participant-email UI gates on, so it has to
+	// mean "the backend will actually send participant email" — which also
+	// requires the email channel. The SMTP capability of the instance is not
+	// decided here (that is the frontend's /auth/magic-link/available check), but
+	// the owner's declared channel preference is.
 	notifyParticipants := false
 	if calendar.NotifyConfig != nil && *calendar.NotifyConfig != "" {
-		// We need to import the notify models package to parse the config
-		// For now, use a simple JSON parsing approach
 		var notifyConfig struct {
 			Enabled            bool `json:"enabled"`
 			NotifyParticipants bool `json:"notify_participants"`
+			Channels           struct {
+				Email struct {
+					Enabled bool `json:"enabled"`
+				} `json:"email"`
+			} `json:"channels"`
 		}
 		if err := json.Unmarshal([]byte(*calendar.NotifyConfig), &notifyConfig); err == nil {
-			notifyParticipants = notifyConfig.Enabled && notifyConfig.NotifyParticipants
+			notifyParticipants = notifyConfig.Enabled &&
+				notifyConfig.NotifyParticipants &&
+				notifyConfig.Channels.Email.Enabled
 		}
 	}
 
@@ -560,67 +572,80 @@ func (s *CalendarService) UpdateCalendar(ctx context.Context, userID, userRole, 
 		return nil, fmt.Errorf("end_date must be after start_date")
 	}
 
-	// Update allowed_hours if any time-related fields are provided
+	var hoursPatch *repository.AllowedHoursPatch
+	// Update allowed_hours only for the subpaths the request actually set. The
+	// repository merges the provided paths with the stored document atomically, so
+	// touching one allowed-hour field never rewrites the others — a concurrent
+	// request editing a disjoint subfield (say holiday max while this one sets
+	// holiday min) cannot be lost to a stale read-merge-write of the whole column.
+	// Single bounds are normalized against the persisted counterpart inside the
+	// repository's merge, so an inverted range can never be stored.
 	if len(req.WeekdayTimes) > 0 || req.HolidayMinTime != nil || req.HolidayMaxTime != nil || req.HolidayEveMinTime != nil || req.HolidayEveMaxTime != nil {
-		// Parse current allowed_hours first to keep unchanged values
-		existingWeekdayTimes, existingHolidayMinTime, existingHolidayMaxTime, existingHolidayEveMinTime, existingHolidayEveMaxTime, err := models.ParseAllowedHoursJSON(calendar.AllowedHours)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse existing allowed_hours: %w", err)
+		hoursPatch = &repository.AllowedHoursPatch{}
+
+		// Normalize weekday times (swap if min > max) and hand the resulting
+		// weekdays object to the repository as one atomic {weekdays} set. The
+		// request's map replaces the stored weekdays map wholesale, which is how
+		// the settings form removes days; absent requests leave the key alone.
+		if len(req.WeekdayTimes) > 0 {
+			normalizedWeekdayTimes := models.NormalizeWeekdayTimes(req.WeekdayTimes)
+			weekdaysJSON, err := models.WeekdayTimesJSON(normalizedWeekdayTimes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to build weekday times: %w", err)
+			}
+			hoursPatch.WeekdayTimes = &weekdaysJSON
 		}
 
-		// Use new values if provided, otherwise keep existing
-		weekdayTimes := req.WeekdayTimes
-		if len(weekdayTimes) == 0 {
-			weekdayTimes = existingWeekdayTimes
-		}
-
-		holidayMinTime := existingHolidayMinTime
 		if req.HolidayMinTime != nil {
-			holidayMinTime = *req.HolidayMinTime
+			minTime := *req.HolidayMinTime
+			hoursPatch.HolidayMinTime = &minTime
 		}
-
-		holidayMaxTime := existingHolidayMaxTime
 		if req.HolidayMaxTime != nil {
-			holidayMaxTime = *req.HolidayMaxTime
+			maxTime := *req.HolidayMaxTime
+			hoursPatch.HolidayMaxTime = &maxTime
 		}
-
-		holidayEveMinTime := existingHolidayEveMinTime
 		if req.HolidayEveMinTime != nil {
-			holidayEveMinTime = *req.HolidayEveMinTime
+			minTime := *req.HolidayEveMinTime
+			hoursPatch.HolidayEveMinTime = &minTime
 		}
-
-		holidayEveMaxTime := existingHolidayEveMaxTime
 		if req.HolidayEveMaxTime != nil {
-			holidayEveMaxTime = *req.HolidayEveMaxTime
+			maxTime := *req.HolidayEveMaxTime
+			hoursPatch.HolidayEveMaxTime = &maxTime
 		}
-
-		// Normalize weekday times (swap if min > max)
-		normalizedWeekdayTimes := models.NormalizeWeekdayTimes(weekdayTimes)
-
-		// Normalize holiday times
-		normalizedHolidayMinTime, normalizedHolidayMaxTime := models.NormalizeHolidayTimes(holidayMinTime, holidayMaxTime)
-
-		// Normalize holiday eve times
-		normalizedHolidayEveMinTime, normalizedHolidayEveMaxTime := models.NormalizeHolidayTimes(holidayEveMinTime, holidayEveMaxTime)
-
-		// Build new allowed_hours JSONB from normalized values
-		allowedHoursJSON, err := models.BuildAllowedHoursJSON(
-			normalizedWeekdayTimes,
-			normalizedHolidayMinTime,
-			normalizedHolidayMaxTime,
-			normalizedHolidayEveMinTime,
-			normalizedHolidayEveMaxTime,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to build allowed_hours: %w", err)
-		}
-
-		calendar.AllowedHours = allowedHoursJSON
 	}
 
-	if err := s.calendarRepo.Update(ctx, calendar); err != nil {
+	patch := repository.CalendarPatch{
+		Name:                       req.Name,
+		Description:                req.Description,
+		Threshold:                  req.Threshold,
+		AllowedWeekdays:            req.AllowedWeekdays,
+		MinDurationHours:           req.MinDurationHours,
+		Timezone:                   req.Timezone,
+		HolidaysPolicy:             req.HolidaysPolicy,
+		AllowHolidayEves:           req.AllowHolidayEves,
+		NotifyOnThreshold:          req.NotifyOnThreshold,
+		LockParticipants:           req.LockParticipants,
+		AllowAnonymousParticipants: req.AllowAnonymousParticipants,
+		ClearStartDate:             req.StartDate != nil && *req.StartDate == "",
+		ClearEndDate:               req.EndDate != nil && *req.EndDate == "",
+		AllowedHours:               hoursPatch,
+	}
+	if req.StartDate != nil && *req.StartDate != "" {
+		patch.StartDate = calendar.StartDate
+	}
+	if req.EndDate != nil && *req.EndDate != "" {
+		patch.EndDate = calendar.EndDate
+	}
+
+	// One repository call applies the regular fields and the allowed-hours merge in
+	// a single transaction/statement: the cache is only invalidated after that
+	// atomic commit, so a partial update (name written but a holiday bound failing)
+	// can never leave the cached row ahead of the database.
+	updated, err := s.calendarRepo.Patch(ctx, calendar.ID, patch)
+	if err != nil {
 		return nil, err
 	}
+	calendar = updated
 
 	// Invalidate the public calendar cache
 	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
@@ -905,7 +930,7 @@ func (s *CalendarService) RemoveParticipant(ctx context.Context, userID, userRol
 	remainingCount := len(remainingParticipants)
 	if calendar.Threshold > remainingCount && remainingCount > 0 {
 		calendar.Threshold = remainingCount
-		if err := s.calendarRepo.Update(ctx, calendar); err != nil {
+		if err := s.calendarRepo.UpdateThreshold(ctx, calendar.ID, remainingCount); err != nil {
 			return fmt.Errorf("failed to update calendar threshold: %w", err)
 		}
 	}

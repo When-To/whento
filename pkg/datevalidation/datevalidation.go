@@ -9,8 +9,20 @@ import (
 	"time"
 
 	"github.com/go-playground/tz"
-	holidays "github.com/omidnikrah/go-holidays"
 )
+
+// isHolidayErr is the error-aware holiday check: it distinguishes "this date is
+// not a public holiday" (false, nil) from "no holiday data exists for this
+// country" (false, err). It is backed by the offline table in
+// offline_holidays.go — there is no network in this package, so the only error
+// an unknown country can produce is a missing dataset. Callers decide what a
+// missing region means for their policy; the lookup itself never lies.
+func isHolidayErr(date time.Time, countryCode string) (bool, error) {
+	if countryCode == "" {
+		return false, nil
+	}
+	return offlineIsHoliday(date, countryCode)
+}
 
 // IsDateAllowed checks if a date is allowed for availability based on calendar settings
 // It considers:
@@ -21,41 +33,56 @@ import (
 //   - "block": Holidays are explicitly blocked (return false)
 //
 // 3. Holiday eves (if allow_holiday_eves is true)
+//
+// The holiday lookup is error-aware for the "block" policy: if a country's
+// holiday data is unavailable, a date that *might* be a holiday is refused
+// rather than admitted. Fail-closed is the whole point of a block policy — a
+// missing dataset must take the date out of the calendar, never put a holiday
+// into it. The "allow" and "ignore" policies are unaffected: an unavailable
+// dataset just means no date is ever treated as a holiday, which adds nothing
+// for "allow" and changes nothing for "ignore".
 func IsDateAllowed(date time.Time, timezone string, allowedWeekdays []int, holidaysPolicy string, allowHolidayEves bool) bool {
-	// Get country code from timezone for holiday checking
-	countryCode := getCountryFromTimezone(timezone)
+	// Get country code from timezone for holiday checking.
+	countryCode := GetCountryFromTimezone(timezone)
+	isHolidayDate, holidayErr := isHolidayErr(date, countryCode)
 
-	// Check if it's a holiday (if we have country information)
-	isHolidayDate := false
-	if countryCode != "" {
-		isHolidayDate = isHoliday(date, countryCode)
-	}
-
-	// Apply holidays_policy
+	// Apply holidays_policy.
 	switch holidaysPolicy {
 	case "block":
-		// If it's a holiday and policy is block, reject immediately
+		// A known holiday is refused outright.
 		if isHolidayDate {
 			return false
 		}
+		// An *unknown* day is refused too: a calendar configured to block
+		// holidays must not silently admit one because the data source was
+		// unavailable. A timezone with no country has no holiday data at all
+		// and is left to the weekday check, as it always was.
+		if countryCode != "" && holidayErr != nil {
+			return false
+		}
 	case "allow":
-		// If it's a holiday and policy is allow, accept immediately
+		// If it's a known holiday and policy is allow, accept immediately.
 		if isHolidayDate {
 			return true
 		}
 	case "ignore":
-		// Fall through - treat as normal day (check weekday)
+		// Fall through - treat as normal day (check weekday).
 	}
 
-	// Check if the weekday is in the allowed list
+	// Check if the weekday is in the allowed list.
 	weekday := int(date.Weekday())
 	if isWeekdayAllowed(weekday, allowedWeekdays) {
 		return true
 	}
 
-	// If weekday is not allowed, check holiday eve exception
-	if countryCode != "" && allowHolidayEves && isHolidayEve(date, countryCode) {
-		return true
+	// If weekday is not allowed, check holiday eve exception. An eve is only
+	// ever an *addition*, so a failed eve lookup is safe to treat as "not an
+	// eve": it can cost a day, never admit a blocked one.
+	if countryCode != "" && allowHolidayEves {
+		nextDay := date.AddDate(0, 0, 1)
+		if isEve, err := isHolidayErr(nextDay, countryCode); err == nil && isEve {
+			return true
+		}
 	}
 
 	return false
@@ -93,21 +120,15 @@ func GetCountryFromTimezone(timezone string) string {
 	return ""
 }
 
-// getCountryFromTimezone is a private alias for backward compatibility
-func getCountryFromTimezone(timezone string) string {
-	return GetCountryFromTimezone(timezone)
-}
-
-// IsHoliday checks if a given date is a public holiday in the specified country
+// IsHoliday checks if a given date is a public holiday in the specified country.
+//
+// This is a bool convenience kept for callers who only need "yes or no" (the
+// availability time-window helpers). It deliberately swallows lookup errors —
+// a country without offline data reads as "not a holiday" here. Do not use it for
+// the "block" policy; IsDateAllowed handles that one fail-closed.
 func IsHoliday(date time.Time, countryCode string) bool {
-	// Check if the date is a holiday using go-holidays library
-	isHoliday := holidays.IsHoliday(countryCode, date)
-	return isHoliday
-}
-
-// isHoliday is a private alias for backward compatibility
-func isHoliday(date time.Time, countryCode string) bool {
-	return IsHoliday(date, countryCode)
+	isHolidayDate, _ := isHolidayErr(date, countryCode)
+	return isHolidayDate
 }
 
 // IsHolidayEve checks if a given date is the day before a public holiday
@@ -115,9 +136,4 @@ func IsHolidayEve(date time.Time, countryCode string) bool {
 	// Check if the next day is a holiday
 	nextDay := date.AddDate(0, 0, 1)
 	return IsHoliday(nextDay, countryCode)
-}
-
-// isHolidayEve is a private alias for backward compatibility
-func isHolidayEve(date time.Time, countryCode string) bool {
-	return IsHolidayEve(date, countryCode)
 }

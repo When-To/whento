@@ -19,6 +19,7 @@ import (
 	"github.com/whento/pkg/middleware"
 	"github.com/whento/pkg/validator"
 	authService "github.com/whento/whento/internal/auth/service"
+	"github.com/whento/whento/internal/auth/sessioncookie"
 	"github.com/whento/whento/internal/mfa/models"
 	"github.com/whento/whento/internal/mfa/service"
 )
@@ -389,25 +390,29 @@ func (h *MFAHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 
 	h.clearMFAAttempts(r, userID)
 
-	// Complete login by generating full auth tokens
+	// Complete login by generating full auth tokens.
 	authResponse, err := h.authService.VerifyMFAAndLogin(r.Context(), req.TempToken, req.Code)
 	if err != nil {
-		h.logger.Error("Failed to complete MFA login", "error", err, "user_id", userID)
-		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to complete login")
+		// Expected invalid-credential outcomes — an already-consumed pending token,
+		// a stale security generation, or a user who vanished mid-finalization —
+		// are 401s, not server faults. Returning 500 for them would tell the client
+		// a retryable outage occurred when the login genuinely needs to restart,
+		// and would log "error"-level noise for ordinary replay traffic.
+		switch {
+		case errors.Is(err, authService.ErrInvalidToken),
+			errors.Is(err, authService.ErrInvalidCredentials),
+			errors.Is(err, authService.ErrUserNotFound):
+			httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Invalid or expired temp token")
+		default:
+			h.logger.Error("Failed to complete MFA login", "error", err, "user_id", userID)
+			httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to complete login")
+		}
 		return
 	}
 
-	// Set refresh token as httpOnly cookie
+	// Set refresh token as httpOnly cookie, expiring with the token itself.
 	if authResponse.RefreshToken != "" {
-		http.SetCookie(w, &http.Cookie{
-			Name:     "refresh_token",
-			Value:    authResponse.RefreshToken,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
-			SameSite: http.SameSiteStrictMode,
-			MaxAge:   7 * 24 * 60 * 60, // 7 days
-		})
+		sessioncookie.SetRefreshToken(w, r, authResponse.RefreshToken, authResponse.RefreshExpiresAt)
 		authResponse.RefreshToken = ""
 	}
 

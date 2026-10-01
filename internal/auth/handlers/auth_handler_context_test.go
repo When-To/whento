@@ -32,7 +32,7 @@ type contextAwareTokenRepository struct {
 
 var _ service.TokenRepository = (*contextAwareTokenRepository)(nil)
 
-func (m *contextAwareTokenRepository) Create(ctx context.Context, token *models.RefreshToken) error {
+func (m *contextAwareTokenRepository) Create(ctx context.Context, token *models.RefreshToken, generation int64) error {
 	m.creates++
 	m.createCtx = ctx
 
@@ -40,7 +40,7 @@ func (m *contextAwareTokenRepository) Create(ctx context.Context, token *models.
 		return err
 	}
 
-	return m.mockTokenRepository.Create(ctx, token)
+	return m.mockTokenRepository.Create(ctx, token, generation)
 }
 
 // deadRequest returns a request whose context is already cancelled, which is what the

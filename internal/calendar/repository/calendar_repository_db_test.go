@@ -5,10 +5,13 @@
 package repository_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -25,6 +28,10 @@ import (
 
 func newOwner(t *testing.T, pool *pgxpool.Pool) *authModels.User {
 	t.Helper()
+	// A user row is instance-wide state as far as the first-user tests are
+	// concerned; serialize with them (and with the other packages' user-creating
+	// fixtures) for the test's lifetime.
+	dbtest.LockSingletonAccounts(dbtest.Context(t), t, pool)
 
 	id := uuid.New()
 	user := &authModels.User{
@@ -45,6 +52,8 @@ func newOwner(t *testing.T, pool *pgxpool.Pool) *authModels.User {
 
 	return user
 }
+
+func strPtr(s string) *string { return &s }
 
 func newCalendar(owner uuid.UUID, configure ...func(*models.Calendar)) *models.Calendar {
 	id := uuid.New()
@@ -224,6 +233,59 @@ func TestRegenerateToken(t *testing.T) {
 	// The ICS token is a separate credential and must be untouched.
 	if got.ICSToken != calendar.ICSToken {
 		t.Error("regenerating the public token also changed the ICS token")
+	}
+}
+
+func TestDisjointPatchesDoNotRestoreEachOther(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewCalendarRepository(pool)
+	ctx := dbtest.Context(t)
+	owner := newOwner(t, pool)
+	calendar := newCalendar(owner.ID)
+	notify := `{"enabled":false}`
+	calendar.NotifyConfig = &notify
+	if err := repo.Create(ctx, calendar); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	renamed := "Renamed concurrently"
+	if _, err := repo.Patch(ctx, calendar.ID, repository.CalendarPatch{Name: &renamed}); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	locked := true
+	if _, err := repo.Patch(ctx, calendar.ID, repository.CalendarPatch{LockParticipants: &locked}); err != nil {
+		t.Fatalf("access patch: %v", err)
+	}
+	updated, err := repo.GetByID(ctx, calendar.ID)
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if updated.Name != renamed {
+		t.Errorf("access patch restored the name %q", updated.Name)
+	}
+	if !updated.LockParticipants {
+		t.Error("access patch did not persist")
+	}
+	fresh := `{"enabled":true,"url":"https://example.test/hook"}`
+	if err := repo.UpdateNotifyConfig(ctx, calendar.ID, fresh, true); err != nil {
+		t.Fatalf("UpdateNotifyConfig: %v", err)
+	}
+	threshold := 9
+	if _, err := repo.Patch(ctx, calendar.ID, repository.CalendarPatch{Threshold: &threshold}); err != nil {
+		t.Fatalf("threshold patch: %v", err)
+	}
+	updated, err = repo.GetByID(ctx, calendar.ID)
+	if err != nil {
+		t.Fatalf("GetByID after notify: %v", err)
+	}
+	if updated.NotifyConfig == nil || !strings.Contains(*updated.NotifyConfig, "example.test") || !updated.NotifyOnThreshold {
+		got := "<nil>"
+		if updated.NotifyConfig != nil {
+			got = *updated.NotifyConfig
+		}
+		t.Errorf("generic patch restored notification state: %s enabled=%v", got, updated.NotifyOnThreshold)
+	}
+	if updated.Threshold != 9 || updated.Name != renamed {
+		t.Errorf("generic patch lost an earlier field: name=%q threshold=%d", updated.Name, updated.Threshold)
 	}
 }
 
@@ -423,5 +485,219 @@ func TestUpdateNotifyConfig(t *testing.T) {
 
 	if err := repo.UpdateNotifyConfig(ctx, uuid.New(), config, true); !errors.Is(err, repository.ErrCalendarNotFound) {
 		t.Errorf("updating an unknown calendar gave %v, want ErrCalendarNotFound", err)
+	}
+}
+
+// newSingleConnPool gives each concurrent goroutine its own connection (the
+// repository wraps a pool, so two goroutines on one pool would share its
+// connection queue rather than truly racing).
+func newSingleConnPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
+	t.Helper()
+	cfg, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	cfg.MaxConns = 1
+	p, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatalf("pgxpool.NewWithConfig: %v", err)
+	}
+	t.Cleanup(p.Close)
+	return p
+}
+
+// TestDisjointAllowedHoursUpdatesBothPersist is the F3 regression: allowed_hours
+// is one JSON column carrying several independently-optional fields. The old
+// read-merge-write of the whole column lost a disjoint concurrent change: two
+// requests each reading the same row, one editing the holiday min, the other the
+// holiday max, ended with one overwriting the other. The fix patches only the
+// requested JSON subpaths (jsonb_set), so two racing requests — each on its own
+// connection — both land.
+func TestDisjointAllowedHoursUpdatesBothPersist(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewCalendarRepository(pool)
+	ctx := dbtest.Context(t)
+
+	owner := newOwner(t, pool)
+	calendar := newCalendar(owner.ID)
+	if err := repo.Create(ctx, calendar); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	start := make(chan struct{})
+	type outcome struct {
+		err error
+	}
+	run := func(patch repository.CalendarPatch) func() outcome {
+		r := repository.NewCalendarRepository(newSingleConnPool(t, ctx))
+		return func() outcome {
+			<-start
+			_, err := r.Patch(ctx, calendar.ID, patch)
+			return outcome{err: err}
+		}
+	}
+
+	min := "09:00"
+	max := "17:00"
+	a := run(repository.CalendarPatch{AllowedHours: &repository.AllowedHoursPatch{HolidayMinTime: &min}})
+	b := run(repository.CalendarPatch{AllowedHours: &repository.AllowedHoursPatch{HolidayMaxTime: &max}})
+
+	results := make(chan outcome, 2)
+	go func() { results <- a() }()
+	go func() { results <- b() }()
+	close(start)
+
+	for i := 0; i < 2; i++ {
+		if o := <-results; o.err != nil {
+			t.Fatalf("disjoint patch failed: %v", o.err)
+		}
+	}
+
+	updated, err := repo.GetByID(ctx, calendar.ID)
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	var hours struct {
+		Holidays struct {
+			Start string `json:"start"`
+			End   string `json:"end"`
+		} `json:"holidays"`
+	}
+	if err := json.Unmarshal([]byte(*updated.AllowedHours), &hours); err != nil {
+		t.Fatalf("stored allowed_hours is not JSON: %v (%q)", err, *updated.AllowedHours)
+	}
+	if hours.Holidays.Start != "09:00" || hours.Holidays.End != "17:00" {
+		t.Errorf("holidays window = %s-%s, want 09:00-17:00 (one disjoint update was lost)",
+			hours.Holidays.Start, hours.Holidays.End)
+	}
+}
+
+// TestSingleBoundAllowedHoursUpdatesNormalizeAgainstPersisted is the F3
+// regression: a single-bound holiday/holiday-eve update is merged with its
+// persisted counterpart and the pair normalized, so the DB can never hold an
+// inverted range (start later than end) no matter which single bound arrives.
+func TestSingleBoundAllowedHoursUpdatesNormalizeAgainstPersisted(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewCalendarRepository(pool)
+	ctx := dbtest.Context(t)
+
+	owner := newOwner(t, pool)
+
+	// A stored 11:00-15:00 window for both holidays and holiday eves.
+	seeded := `{"weekdays":{},"holidays":{"start":"11:00","end":"15:00"},"holiday_eves":{"start":"11:00","end":"15:00"}}`
+
+	for _, tt := range []struct {
+		name     string
+		patch    repository.AllowedHoursPatch
+		wantKey  string
+		wantJSON string
+	}{
+		{
+			name: "holiday min later than persisted max swaps the pair",
+			patch: repository.AllowedHoursPatch{
+				HolidayMinTime: strPtr("16:00"),
+			},
+			wantKey:  "holidays",
+			wantJSON: `{"start":"15:00","end":"16:00"}`,
+		},
+		{
+			name: "holiday max earlier than persisted min swaps the pair",
+			patch: repository.AllowedHoursPatch{
+				HolidayMaxTime: strPtr("10:00"),
+			},
+			wantKey:  "holidays",
+			wantJSON: `{"start":"10:00","end":"11:00"}`,
+		},
+		{
+			name: "holiday_eve min later than persisted max swaps the pair",
+			patch: repository.AllowedHoursPatch{
+				HolidayEveMinTime: strPtr("16:00"),
+			},
+			wantKey:  "holiday_eves",
+			wantJSON: `{"start":"15:00","end":"16:00"}`,
+		},
+		{
+			name: "holiday_eve max earlier than persisted min swaps the pair",
+			patch: repository.AllowedHoursPatch{
+				HolidayEveMaxTime: strPtr("10:00"),
+			},
+			wantKey:  "holiday_eves",
+			wantJSON: `{"start":"10:00","end":"11:00"}`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			calendar := newCalendar(owner.ID)
+			calendar.AllowedHours = &seeded
+			if err := repo.Create(ctx, calendar); err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+
+			if _, err := repo.Patch(ctx, calendar.ID, repository.CalendarPatch{AllowedHours: &tt.patch}); err != nil {
+				t.Fatalf("Patch: %v", err)
+			}
+
+			stored, err := repo.GetByID(ctx, calendar.ID)
+			if err != nil {
+				t.Fatalf("GetByID: %v", err)
+			}
+			var doc struct {
+				Holidays    json.RawMessage `json:"holidays"`
+				HolidayEves json.RawMessage `json:"holiday_eves"`
+			}
+			if err := json.Unmarshal([]byte(*stored.AllowedHours), &doc); err != nil {
+				t.Fatalf("stored allowed_hours is not JSON: %v", err)
+			}
+			got := string(doc.Holidays)
+			if tt.wantKey == "holiday_eves" {
+				got = string(doc.HolidayEves)
+			}
+			// Normalize before comparing: jsonb key order is not guaranteed.
+			var gotObj, wantObj map[string]string
+			if err := json.Unmarshal([]byte(got), &gotObj); err != nil {
+				t.Fatalf("got window is not JSON: %v (%s)", err, got)
+			}
+			if err := json.Unmarshal([]byte(tt.wantJSON), &wantObj); err != nil {
+				t.Fatalf("want window is not JSON: %v", err)
+			}
+			if !reflect.DeepEqual(gotObj, wantObj) {
+				t.Errorf("%s window = %v, want %v", tt.wantKey, gotObj, wantObj)
+			}
+		})
+	}
+}
+
+// TestPatchRollsBackRegularFieldsWhenAllowedHoursMergeFails proves the F2
+// atomicity: the regular columns and the allowed-hours merge land in one
+// transaction, so a failure in the allowed-hours half leaves the regular fields
+// untouched instead of committing them ahead of the error.
+func TestPatchRollsBackRegularFieldsWhenAllowedHoursMergeFails(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewCalendarRepository(pool)
+	ctx := dbtest.Context(t)
+
+	owner := newOwner(t, pool)
+	calendar := newCalendar(owner.ID)
+	if err := repo.Create(ctx, calendar); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	newName := "new name"
+	badWeekdays := `{not valid json`
+	_, err := repo.Patch(ctx, calendar.ID, repository.CalendarPatch{
+		Name: &newName,
+		AllowedHours: &repository.AllowedHoursPatch{
+			WeekdayTimes: &badWeekdays,
+		},
+	})
+	if err == nil {
+		t.Fatal("Patch with an invalid allowed-hours payload succeeded, want failure")
+	}
+
+	stored, err := repo.GetByID(ctx, calendar.ID)
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if stored.Name == newName {
+		t.Error("the name was committed even though the allowed-hours merge failed")
 	}
 }

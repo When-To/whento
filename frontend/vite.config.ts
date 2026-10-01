@@ -74,22 +74,19 @@ export default defineConfig(({ mode: _mode }) => {
            *                         packages. All four load on every page, so Rolldown
            *                         would merge them whatever we called them; one
            *                         honestly named chunk beats four fictional ones.
-           *   vendor-date-holidays  the 1.4 MB holiday dataset and its dependency
-           *                         tree. Genuinely separate, because
-           *                         utils/calendar/holidays.ts imports it dynamically.
            *   vendor-date           the timezone tables.
            *
            * axios and @vueuse are deliberately absent: axios is always loaded and
            * folds into the entry, and @vueuse is only reachable from ParticipantView,
            * so it already travels with it. Declaring groups for them would just
            * recreate the dead branches this replaces.
+           *
+           * There is no holiday chunk any more: the 1.4 MB `date-holidays` dataset
+           * was dropped in favour of the backend's offline holidays endpoint, so
+           * holiday data is fetched per year instead of shipped in the bundle.
            */
           codeSplitting: {
             groups: [
-              {
-                name: 'vendor-date-holidays',
-                test: /node_modules[\\/](date-holidays|date-holidays-parser|astronomia|caldate|date-bengali-revised|date-chinese|date-easter|jalaali-js|moment|moment-timezone)[\\/]/,
-              },
               {
                 name: 'vendor-framework',
                 test: /node_modules[\\/](vue|@vue|vue-router|vue-i18n|@intlify|pinia)[\\/]/,

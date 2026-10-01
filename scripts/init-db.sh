@@ -3,7 +3,11 @@
 # init-db.sh - Initialize database for WhenTo (first time setup)
 # Usage: ./scripts/init-db.sh
 
-set -e
+set -euo pipefail
+
+# Locate the repository root from the script's own path.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
 
 # Colors for output
 RED='\033[0;31m'
@@ -12,9 +16,14 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Load environment variables from .env if it exists
+# Source a trusted local .env if present. `set -a` makes exported variables
+# visible to the tools below without the word-splitting footgun of
+# `export $(cat .env)` — values containing spaces, #, or $ survive.
 if [ -f .env ]; then
-    export $(cat .env | grep -v '^#' | xargs)
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
 fi
 
 # Default database connection parameters
@@ -69,13 +78,22 @@ fi
 
 # Run migrations
 echo -e "${GREEN}Running database migrations...${NC}"
-export DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable"
 
-if [ -x ./scripts/migrate.sh ]; then
-    ./scripts/migrate.sh reset
+# Prefer an explicitly provided DATABASE_URL (it may carry TLS options or
+# percent-encoded credentials). The fallback below reconstructs a URL from the
+# DB_* variables; credentials containing reserved characters must be
+# percent-encoded there.
+export DATABASE_URL="${DATABASE_URL:-postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable}"
+
+# The source tree keeps its migrations in per-build directories (common/,
+# selfhosted/, cloud/) that golang-migrate cannot address directly, so the
+# migrate.sh wrapper assembles the right set first. It is checked for -f rather
+# than -x so that a checkout where the exec bit was lost still works.
+if [ -f ./scripts/migrate.sh ]; then
+    bash ./scripts/migrate.sh reset
 else
-    echo -e "${YELLOW}migrate.sh not found or not executable, using migrate directly...${NC}"
-    migrate -path ./migrations -database "$DATABASE_URL" up
+    echo -e "${RED}Error: scripts/migrate.sh is missing${NC}" >&2
+    exit 1
 fi
 
 echo ""
@@ -91,5 +109,5 @@ echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "Next steps:"
 echo "  1. Generate JWT keys: ./scripts/generate-keys.sh"
-echo "  2. Start services: make dev-auth"
+echo "  2. Start services: make dev"
 echo ""

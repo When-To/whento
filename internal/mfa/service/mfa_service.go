@@ -37,7 +37,7 @@ var (
 
 // TokenRepository defines the interface for revoking refresh tokens when MFA is enabled
 type TokenRepository interface {
-	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
+	DeleteByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 }
 
 // MFAStore is the slice of the MFA repository this service needs.
@@ -227,8 +227,8 @@ func (s *MFAService) FinishSetup(ctx context.Context, userID uuid.UUID, code str
 
 	// Revoke all existing refresh tokens so pre-MFA sessions cannot bypass MFA
 	if s.tokenRepo != nil {
-		if err := s.tokenRepo.DeleteByUserID(ctx, userID); err != nil {
-			s.logger.Error("Failed to revoke refresh tokens after MFA enable", "user_id", userID, "error", err)
+		if _, err := s.tokenRepo.DeleteByUserID(ctx, userID); err != nil {
+			return fmt.Errorf("failed to revoke sessions after MFA enable: %w", err)
 		}
 	}
 

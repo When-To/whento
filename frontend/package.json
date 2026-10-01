@@ -33,7 +33,6 @@
     "countries-and-timezones": "^3.10.0",
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
-    "date-holidays": "^3.36.1",
     "pinia": "^4.0.3",
     "vue": "^3.5.43",
     "vue-i18n": "^11.4.12",

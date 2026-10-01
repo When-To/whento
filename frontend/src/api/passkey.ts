@@ -185,6 +185,7 @@ export const passkeyApi = {
   ): Promise<{
     access_token?: string;
     expires_in?: number;
+    session_id?: string;
     user: any;
     require_mfa?: boolean;
     temp_token?: string;

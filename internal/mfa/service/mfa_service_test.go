@@ -93,10 +93,10 @@ type fakeTokenRepo struct {
 
 var _ TokenRepository = (*fakeTokenRepo)(nil)
 
-func (f *fakeTokenRepo) DeleteByUserID(_ context.Context, userID uuid.UUID) error {
+func (f *fakeTokenRepo) DeleteByUserID(_ context.Context, userID uuid.UUID) (int64, error) {
 	f.revoked = append(f.revoked, userID)
 
-	return f.err
+	return 1, f.err
 }
 
 type fixture struct {
@@ -252,10 +252,10 @@ func TestFinishSetupRevokesExistingSessions(t *testing.T) {
 	}
 }
 
-func TestFinishSetupSurvivesARevocationFailure(t *testing.T) {
-	// Enabling MFA has already been written by this point. Failing the whole call
-	// because the revocation failed would leave the user unable to finish setup while
-	// MFA is on — worse than a stale session that is logged and expires on its own.
+func TestFinishSetupFailsWhenRevocationFails(t *testing.T) {
+	// MFA is already written, but returning success without the session fence
+	// would let a login that observed MFA disabled publish a full session
+	// afterwards. The caller can retry FinishSetup; the secret is already stored.
 	fixture := newFixture(t, nil)
 	fixture.tokens.err = errStore
 
@@ -266,8 +266,8 @@ func TestFinishSetupSurvivesARevocationFailure(t *testing.T) {
 
 	if err := fixture.service.FinishSetup(
 		context.Background(), fixture.userID, currentCode(t, setup.Secret),
-	); err != nil {
-		t.Errorf("FinishSetup failed because revocation did: %v", err)
+	); err == nil {
+		t.Fatal("FinishSetup succeeded without revoking pre-MFA sessions")
 	}
 }
 

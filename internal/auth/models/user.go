@@ -39,6 +39,9 @@ type User struct {
 	PasswordResetTokenExpiresAt *time.Time `json:"-"`
 	MagicLinkToken              *string    `json:"-"`
 	MagicLinkTokenExpiresAt     *time.Time `json:"-"`
+	// SecurityGeneration changes with password and MFA transitions. A session
+	// insert must present the generation observed when credentials were accepted.
+	SecurityGeneration int64 `json:"-"`
 }
 
 // RefreshToken represents a refresh token
@@ -46,6 +49,9 @@ type RefreshToken struct {
 	models.Entity
 	UserID    uuid.UUID `json:"user_id"`
 	TokenHash string    `json:"-"`
+	// FamilyID is the server session family. Logout deletes this family only;
+	// password changes and confirmed reuse still revoke every family for the user.
+	FamilyID  string    `json:"-"`
 	ExpiresAt time.Time `json:"expires_at"`
 	CreatedAt time.Time `json:"created_at"`
 	// ConsumedAt is nil while the token is live, and set at the moment rotation

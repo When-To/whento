@@ -1,4 +1,4 @@
-.PHONY: require-selfhosted-image dev dev-fullstack dev-backend dev-frontend dev-db dev-app test test-root test-pkg test-coverage build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-build-multiarch docker-test-build docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-clean types types-check docs-serve docs-validate keys help hooks format format-go format-frontend format-check format-check-go format-check-frontend lint lint-go
+.PHONY: require-selfhosted-image dev dev-fullstack dev-backend dev-frontend dev-db dev-app test test-root test-pkg test-coverage build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-build-multiarch docker-test-build docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-generate-if-missing swagger-contract-check swagger-clean types types-check docs-serve docs-validate keys help hooks format format-go format-frontend format-check format-check-go format-check-frontend lint lint-go
 
 # BUILD_TYPE can be 'cloud' or 'selfhosted' (default: selfhosted)
 BUILD_TYPE ?= selfhosted
@@ -116,7 +116,12 @@ dev-frontend:
 # go.work declares two modules, and `./...` only ever expands within the module it is
 # run from. Testing pkg/ therefore needs its own invocation from inside pkg/ — without
 # it, jwt, participanttoken, middleware, validator and httputil are never tested.
-test: test-root test-pkg
+#
+# The two prerequisites are what a clean checkout is missing: the root module embeds
+# web/dist (frontend placeholder suffices) and imports the generated docs/swagger, and
+# without either, `go test ./...` will not even compile. CI manufactures both as
+# uploaded artifacts; the local command has to make its own.
+test: ensure-dist-placeholder swagger-generate-if-missing test-root test-pkg
 
 test-root:
 	@echo "Running root module tests ($(BUILD_TYPE) mode)..."
@@ -229,27 +234,48 @@ sync:
 	@echo "  Ctrl+Shift+P → 'Go: Restart Language Server'"
 
 # Migrations (using golang-migrate directly)
+#
+# Every migrate-* target assembles the $(BUILD_TYPE) migration set into a fresh
+# temporary directory and removes it on exit — concurrent invocations do not
+# collide on a shared scratch path, and a failed command still cleans up.
 migrate-build:
 	@echo "Building $(BUILD_TYPE) migrations..."
-	@bash scripts/build-migrations.sh $(BUILD_TYPE) ./migrations-build
+	@tmp=$$(mktemp -d /tmp/whento-migrations.XXXXXX); \
+	trap 'rm -rf "$$tmp"' EXIT INT TERM; \
+	bash scripts/build-migrations.sh $(BUILD_TYPE) "$$tmp"
 
-migrate-up: migrate-build
-	migrate -path ./migrations-build -database "$$DATABASE_URL" up
-	@rm -rf ./migrations-build
+migrate-up:
+	@set -eu; \
+	tmp=$$(mktemp -d /tmp/whento-migrations.XXXXXX); \
+	trap 'rm -rf "$$tmp"' EXIT INT TERM; \
+	echo "Applying $(BUILD_TYPE) migrations..."; \
+	bash scripts/build-migrations.sh $(BUILD_TYPE) "$$tmp"; \
+	migrate -path "$$tmp" -database "$$DATABASE_URL" up
 
-migrate-down: migrate-build
-	migrate -path ./migrations-build -database "$$DATABASE_URL" down 1
-	@rm -rf ./migrations-build
+migrate-down:
+	@set -eu; \
+	tmp=$$(mktemp -d /tmp/whento-migrations.XXXXXX); \
+	trap 'rm -rf "$$tmp"' EXIT INT TERM; \
+	echo "Rolling back the last $(BUILD_TYPE) migration..."; \
+	bash scripts/build-migrations.sh $(BUILD_TYPE) "$$tmp"; \
+	migrate -path "$$tmp" -database "$$DATABASE_URL" down 1
 
-migrate-reset: migrate-build
-	migrate -path ./migrations-build -database "$$DATABASE_URL" down force
-	migrate -path ./migrations-build -database "$$DATABASE_URL" up force
-	@rm -rf ./migrations-build
+migrate-reset:
+	@set -eu; \
+	tmp=$$(mktemp -d /tmp/whento-migrations.XXXXXX); \
+	trap 'rm -rf "$$tmp"' EXIT INT TERM; \
+	echo "=== DESTRUCTIVE: rolling back all $(BUILD_TYPE) migrations, then reapplying ==="; \
+	bash scripts/build-migrations.sh $(BUILD_TYPE) "$$tmp"; \
+	migrate -path "$$tmp" -database "$$DATABASE_URL" down -all || true; \
+	migrate -path "$$tmp" -database "$$DATABASE_URL" up
 
-migrate-status: migrate-build
-	@echo "Checking migration status..."
-	@migrate -path ./migrations-build -database "$$DATABASE_URL" version || echo "No migrations applied yet"
-	@rm -rf ./migrations-build
+migrate-status:
+	@set -eu; \
+	tmp=$$(mktemp -d /tmp/whento-migrations.XXXXXX); \
+	trap 'rm -rf "$$tmp"' EXIT INT TERM; \
+	echo "Checking $(BUILD_TYPE) migration status..."; \
+	bash scripts/build-migrations.sh $(BUILD_TYPE) "$$tmp"; \
+	migrate -path "$$tmp" -database "$$DATABASE_URL" version || echo "No migrations applied yet"
 
 # Docker Production
 #
@@ -379,12 +405,44 @@ swagger-generate:
 	@echo "  - docs/swagger/swagger.yaml"
 	@echo "  - docs/swagger/docs.go"
 
+# docs/swagger is generated from the annotations and gitignored, so a fresh
+# checkout has none of it — yet cmd/main.go imports it and the root module will not
+# compile (and therefore not test) without it. CI uploads the generated directory as
+# an artifact; the local test target regenerates it only when it is absent, so a
+# module that is already present is left untouched instead of being rewritten on
+# every test run.
+swagger-generate-if-missing:
+	@if [ ! -f docs/swagger/docs.go ]; then \
+		$(MAKE) swagger-generate; \
+	else \
+		echo "✓ Swagger docs already present (docs/swagger/docs.go)"; \
+	fi
+
 swagger-clean:
 	@echo "Cleaning generated Swagger files..."
 	@rm -rf docs/swagger
 	@echo "✓ Swagger files cleaned"
 
-swagger: swagger-generate
+# Contract assertion for the 72-character password ceiling.
+#
+# The runtime validator enforces 72 *bytes* via the custom `maxbytes` rule; swag
+# does not understand that tag, so the Swagger `maxLength: 72` comes only from
+# the paired `max=72` annotation on the same field. A re-annotator that drops
+# the `max` tag would silently remove the documented ceiling, and the generated
+# TypeScript cannot catch it (lengths are not encoded in the types). This gate
+# regenerates swagger and fails if any of the four password fields lost its
+# maxLength, which is exactly the drift the fourth audit found.
+#
+# The check is a tiny Go program (cmd/swagger-contract-check, which owns the
+# model:property table) rather than a yq one-liner: CI's generate-swagger job
+# installs Go but not yq, so a yq-based gate would silently never run there. Any
+# tool a prerequisite needs is declared and installed by the job that uses it.
+swagger-contract-check: swagger-generate
+	@echo "Checking password maxLength survives swagger regeneration..."
+	@go run ./cmd/swagger-contract-check .
+	@echo "✓ All four password fields keep maxLength: 72"
+
+swagger: swagger-generate swagger-contract-check
 
 # Frontend API types
 #
@@ -415,5 +473,5 @@ docs-serve:
 	@echo ""
 	@echo "Or generate static docs with 'make swagger-generate'"
 
-docs-validate: swagger-generate
+docs-validate: swagger-contract-check
 	@echo "✓ Swagger documentation generated successfully (validation passed)"

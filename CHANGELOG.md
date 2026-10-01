@@ -29,7 +29,7 @@ replace:
 - **`v1.6.2` is not an ancestor of `main` either.** It was tagged on a branch whose
   commits were later replayed onto `main` under different hashes. The work it
   contains did ship, and is listed under `v1.6.2` below, but
-  `git log v1.6.2..v1.6.3` does not describe it — the range spans the divergence
+  `git log v1.6.2..v1.6.3` does not describe it - the range spans the divergence
   and returns most of the history. This is the kind of thing an automated changelog
   would have made visible on the day rather than eight months later.
 
@@ -44,7 +44,7 @@ Nothing yet.
 
 ---
 
-## [v2.0.0] — 2026-08-18
+## [v2.0.0] - 2026-08-18
 
 _Range: `v1.6.3..v2.0.0`._
 
@@ -53,7 +53,7 @@ went from 29% to a CI-enforced floor, the workflows were hardened and pinned, an
 several defects the new tests surfaced were fixed.
 
 It is a major version for one reason: self-hosting no longer caps calendars, so the
-whole licensing apparatus is gone — `LICENSE_KEY` with it. **Read `### Removed` and
+whole licensing apparatus is gone - `LICENSE_KEY` with it. **Read `### Removed` and
 the upgrade notes in the release body before upgrading**; there is one destructive
 migration and one change that signs every user out once.
 
@@ -67,11 +67,11 @@ because the history cannot be read for it.
 - Live availability updates over server-sent events, so a participant's grid
   refreshes when somebody else writes to the same calendar (#78).
 - Prometheus metrics on a listener of their own, off unless `METRICS_ENABLED` says
-  otherwise, labelled by method, chi route pattern and status — never by path,
+  otherwise, labelled by method, chi route pattern and status - never by path,
   token or identity.
 - Refresh token rotation keeps a 30-second grace window, so two tabs waking at once
   no longer sign each other out; a token replayed after the window is treated as
-  theft — every session for that user is revoked and the event logged at Warn
+  theft - every session for that user is revoked and the event logged at Warn
   (#105).
 - The client refreshes its access token a minute before expiry, and on
   `visibilitychange` and `online`, instead of waiting for a 401 (#106).
@@ -100,8 +100,8 @@ because the history cannot be read for it.
 - The notification threshold measures overlapping availability, matching what the
   interface and the ICS feed already meant; `min_duration_hours` bounds which
   overlaps count rather than whether the day is described at all (#112, #113).
-- A notification batch closes with one log line saying what became of it — sent,
-  suppressed or failed — and per-channel suppression is logged at Info rather than
+- A notification batch closes with one log line saying what became of it - sent,
+  suppressed or failed - and per-channel suppression is logged at Info rather than
   Debug (#114).
 - The participant-email rate limit goes from 5 to 10 requests per quarter hour, and
   `/auth/refresh` from 5 to 30 per minute per IP (#95, #107).
@@ -132,7 +132,7 @@ because the history cannot be read for it.
 - The licence and subscription tiers that no longer exist in the code were removed
   from `LICENSE-COMMERCIAL`, the README and the published Swagger description
   (#99, #100).
-- Dependency updates (#90–#93, #118–#121).
+- Dependency updates (#90-#93, #118-#121).
 
 ### Removed
 
@@ -161,7 +161,7 @@ because the history cannot be read for it.
 - A date several people had answered for could report "0 participant(s)": the day's
   duration was measured as the window shared by *everyone*, which is zero as soon as
   two answers do not overlap (#113).
-- `/swagger` was a blank page in production — the upstream index builds the UI from
+- `/swagger` was a blank page in production - the upstream index builds the UI from
   an inline script that `script-src 'self'` refuses (#110).
 - The ownership check on a refresh token ran after the delete, so a token belonging
   to another user was destroyed on its way to being rejected (#105).
@@ -171,7 +171,7 @@ because the history cannot be read for it.
   account had nothing to restore from (#95).
 - Inter is bundled via `@fontsource-variable/inter` instead of loaded from
   `fonts.googleapis.com`, so first paint no longer depends on reaching an external
-  host — 18 seconds on a network that cannot (#94).
+  host - 18 seconds on a network that cannot (#94).
 - The access token is refreshed at most once at a time, instead of once per
   concurrent 401 (#73).
 - An unmatched `/api` path answers 404 JSON instead of serving the SPA with a
@@ -187,14 +187,14 @@ because the history cannot be read for it.
 
 - The bundled `golang-migrate` CLI is compiled from source on the pinned Go toolchain
   instead of downloaded as an upstream release archive. The published binary for
-  v4.19.1 — the latest, and the only release in nine months — is built with Go 1.25.4
+  v4.19.1 - the latest, and the only release in nine months - is built with Go 1.25.4
   and links every database driver it supports, which scans as 45 advisories, four of
   them critical, that no checksum in this repository could patch. Building it with
   `-tags postgres` leaves exactly one dependency, `lib/pq`, and integrity now comes
   from the Go module checksum database rather than two hand-maintained SHA-256 values.
 - The runtime image runs `apk upgrade` before installing its packages. A digest-pinned
   base makes the build reproducible, but it also lets the package layer be served from
-  cache long after the packages in it were superseded — which is how a release image
+  cache long after the packages in it were superseded - which is how a release image
   came to carry `libpq` 18.4-r0 against an Alpine that had shipped 18.6-r0.
 - `golang.org/x/mod` bumped to v0.40.0 (CVE-2026-56864: a malicious GOSUMDB could
   serve arbitrary module content).
@@ -224,7 +224,7 @@ because the history cannot be read for it.
 
 ---
 
-## [v1.6.3] — 2026-06-18
+## [v1.6.3] - 2026-06-18
 
 _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 
@@ -239,7 +239,7 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
   visibly when vulnerabilities remain.
 - Dependency updates (#44).
 
-## [v1.6.2] — 2026-05-13
+## [v1.6.2] - 2026-05-13
 
 ### Added
 
@@ -263,7 +263,7 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 - The container waits for the database with `pg_isready` rather than a fixed
   sleep; base images bumped (#36).
 
-## [v1.6.1] — 2026-04-19
+## [v1.6.1] - 2026-04-19
 
 ### Added
 
@@ -275,7 +275,7 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 - Shared helpers extracted from the ICS feed handlers.
 - Dependency updates (#32).
 
-## [v1.6.0] — 2026-04-12
+## [v1.6.0] - 2026-04-12
 
 ### Added
 
@@ -287,12 +287,12 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 - Dependency update pull requests now verify that the project still builds (#30).
 - Dependency updates (#28, #31).
 
-## [v1.5.1] — 2026-04-09
+## [v1.5.1] - 2026-04-09
 
 ### Added
 
 - Licence sales included in accounting, with a paginated licence list view (#25).
-  _(Cloud-side; the licensing code has since been removed — see v1.6.2.)_
+  _(Cloud-side; the licensing code has since been removed - see v1.6.2.)_
 
 ### Fixed
 
@@ -303,7 +303,7 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 
 - Dependency updates (#27).
 
-## [v1.5.0] — 2026-04-09
+## [v1.5.0] - 2026-04-09
 
 ### Changed
 
@@ -317,7 +317,7 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 
 - Security audit remediations (#22).
 
-## [v1.4.2] — 2026-03-12
+## [v1.4.2] - 2026-03-12
 
 ### Fixed
 
@@ -328,16 +328,16 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 
 - Dependency updates (#19).
 
-## [v1.4.1] — 2026-03-04
+## [v1.4.1] - 2026-03-04
 
 ### Added
 
 - Anonymous participant registration can be enabled from the calendar creation
   form (#18).
 - The event threshold may exceed the participant count when anonymous
-  registration is enabled — the point being that more people may yet join (#17).
+  registration is enabled - the point being that more people may yet join (#17).
 
-## [v1.4.0] — 2026-03-02
+## [v1.4.0] - 2026-03-02
 
 ### Added
 
@@ -348,7 +348,7 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 
 - README documents the SMTP and email environment variables.
 
-## [v1.3.9] — 2026-03-02
+## [v1.3.9] - 2026-03-02
 
 ### Fixed
 
@@ -361,7 +361,7 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 
 - Dependency updates (#11).
 
-## [v1.3.8] — 2026-02-28
+## [v1.3.8] - 2026-02-28
 
 ### Fixed
 
@@ -372,7 +372,7 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 
 - Dependency updates (#9).
 
-## [v1.3.7] — 2026-02-24
+## [v1.3.7] - 2026-02-24
 
 ### Changed
 
@@ -380,13 +380,13 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
   own, so its commits stop being attributed to a person.
 - Dependency updates (#8).
 
-## [v1.3.6] — 2026-02-09
+## [v1.3.6] - 2026-02-09
 
 ### Fixed
 
 - The privacy page described usage data collection that does not happen.
 
-## [v1.3.5] — 2026-02-09
+## [v1.3.5] - 2026-02-09
 
 ### Fixed
 
@@ -396,13 +396,13 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 
 - Dependency updates (#7).
 
-## [v1.3.4] — 2026-01-16
+## [v1.3.4] - 2026-01-16
 
 ### Changed
 
 - Dependency updates (#6).
 
-## [v1.3.3] — 2026-01-14
+## [v1.3.3] - 2026-01-14
 
 ### Added
 
@@ -417,13 +417,13 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 
 - Frontend dependencies cleaned up. Dependency updates (#5).
 
-## [v1.3.2] — 2026-01-07
+## [v1.3.2] - 2026-01-07
 
 ### Fixed
 
 - The SMTP `From` address is read from the environment (#2).
 
-## [v1.3.1] — 2026-01-06
+## [v1.3.1] - 2026-01-06
 
 ### Added
 
@@ -434,7 +434,7 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 
 - Duplicate API calls on the initial load of the participant view.
 
-## [v1.3.0] — 2026-01-05
+## [v1.3.0] - 2026-01-05
 
 ### Fixed
 
@@ -447,49 +447,49 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 - The Go build cache moved to a Docker volume instead of a bind mount.
 - Prettier formatting applied across the frontend.
 
-## [v1.2.1] — 2025-12-17
+## [v1.2.1] - 2025-12-17
 
 ### Fixed
 
 - A `v-memo` ESLint error in the calendar grid.
 
-## [v1.2.0] — 2025-12-17
+## [v1.2.0] - 2025-12-17
 
 ### Added
 
 - A compact/classic view-mode toggle for the calendar grids.
 
-## [v1.1.6] — 2025-12-15
+## [v1.1.6] - 2025-12-15
 
 ### Fixed
 
 - Time controls stayed out of sync across several weekly grids on one page.
 
-## [v1.1.5] — 2025-12-15
+## [v1.1.5] - 2025-12-15
 
 ### Changed
 
 - Mobile UX work across the calendar views and controls.
 
-## [v1.1.4] — 2025-12-15
+## [v1.1.4] - 2025-12-15
 
 ### Changed
 
 - Prettier introduced; API calls in the participant view reduced.
 
-## [v1.1.3] — 2025-12-13
+## [v1.1.3] - 2025-12-13
 
 ### Added
 
 - A responsive hamburger menu for mobile navigation.
 
-## [v1.1.2] — 2025-12-12
+## [v1.1.2] - 2025-12-12
 
 ### Fixed
 
 - vue-i18n failed to compile email placeholders containing `@`.
 
-## [v1.1.1] — 2025-12-12
+## [v1.1.1] - 2025-12-12
 
 ### Added
 
@@ -500,7 +500,7 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 - Swagger documentation is generated once per CI run and shared between jobs as
   an artifact.
 
-## [v1.1.0] — 2025-12-12
+## [v1.1.0] - 2025-12-12
 
 ### Added
 
@@ -512,14 +512,14 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 - Swagger annotations on the notification endpoints.
 - TypeScript type inference for participant availabilities.
 
-## [v1.0.2] — 2025-12-09
+## [v1.0.2] - 2025-12-09
 
 ### Added
 
 - `.env` file support for binary deployments, so the binary is configured the
   same way the container is.
 
-## [v1.0.1] — 2025-12-09
+## [v1.0.1] - 2025-12-09
 
 ### Added
 
@@ -530,14 +530,14 @@ _Range: `v1.6.1..v1.6.3` minus what shipped as v1.6.2._
 
 - `robots.txt` rules for the login and register pages.
 
-## [v1.0.0] — 2025-12-08
+## [v1.0.0] - 2025-12-08
 
 Initial release: collaborative scheduling calendars with participant
 availability, threshold-based event validation and iCalendar subscription feeds,
 shipped as a single binary with the frontend embedded. GitHub workflows and
 community templates landed with it.
 
-_Note: this tag is not an ancestor of `main` — see the caveats at the top._
+_Note: this tag is not an ancestor of `main` - see the caveats at the top._
 
 [unreleased]: https://github.com/When-To/whento/compare/v2.0.0...HEAD
 [v2.0.0]: https://github.com/When-To/whento/releases/tag/v2.0.0

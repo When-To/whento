@@ -95,11 +95,11 @@ const participantCounts: Record<string, number> = {
   [iso(30)]: 2,
 };
 
-// date-holidays is fetched on demand, so the first render has no holidays and a
-// later one does. useParticipantCalendar reads holidaysReady for exactly this
-// reason; without the same read here the preview computes once, before the module
-// lands, and never recomputes — which is what made the holiday e2e test flip to
-// null after the import became dynamic.
+// Holidays now come from the backend rather than a bundled dataset, fetched per
+// year on demand. useParticipantCalendar reads holidaysReady for exactly this
+// reason; without the same read here the preview computes once, before the first
+// fetch lands, and never recomputes — which is what made the holiday e2e test
+// flip to null after the dataset moved server-side.
 void preloadHolidays();
 
 const deps = computed<ModelDeps>(() => {

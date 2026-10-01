@@ -3,9 +3,9 @@
 # Hardening applied here, and the reasoning behind it, is documented in
 # docs/hardening-docker.md. Two things are worth reading before the first
 # `docker compose up`:
-#   - docs/backup-restore.md  — `docker compose down -v` DELETES postgres_data,
+#   - docs/backup-restore.md  - `docker compose down -v` DELETES postgres_data,
 #     redis_data and whento_keys. There is no undo.
-#   - docs/upgrade-postgres-redis.md — a Postgres major upgrade cannot read the
+#   - docs/upgrade-postgres-redis.md - a Postgres major upgrade cannot read the
 #     existing data volume; it needs a dump and a restore.
 
 services:
@@ -52,12 +52,26 @@ services:
       - EMAIL_VERIFICATION_ENABLED=${EMAIL_VERIFICATION_ENABLED:-true}
       - ALLOWED_REGISTER=${ALLOWED_REGISTER:-true}
       - ALLOWED_EMAILS=${ALLOWED_EMAILS:-*}
+
+      # First-user bootstrap. Leave unset and the server generates a one-time
+      # boot key and prints it to the logs at startup (create the first admin at
+      # /bootstrap). Pin it here for deterministic automation (Ansible) or when
+      # running more than one replica behind the same load balancer, so every
+      # replica accepts the same key.
+      #
+      # The _FILE form reads the key from a file inside the container (Docker
+      # secrets / K8s mount). Setting it in the Compose `.env` is *not* enough:
+      # the file has to exist in the container too, so mount it, e.g. with a
+      # bind mount `- ./secrets/bootstrap_key:/run/secrets/bootstrap_key:ro`
+      # and `BOOTSTRAP_KEY_FILE=/run/secrets/bootstrap_key`.
+      - BOOTSTRAP_KEY=${BOOTSTRAP_KEY:-}
+      - BOOTSTRAP_KEY_FILE=${BOOTSTRAP_KEY_FILE:-}
     volumes:
       # The JWT signing keys are generated on first start by the entrypoint. Without
       # this volume they live in the container's writable layer, so every `docker
       # compose up` that recreates the container (image update, changed env var)
       # mints a new key pair and invalidates every issued token: all users are
-      # logged out. Participant links are unaffected — they authorise by the link
+      # logged out. Participant links are unaffected - they authorise by the link
       # itself, not by a signed token.
       - whento_keys:/app/keys
     depends_on:
@@ -83,13 +97,16 @@ services:
       - ALL
     pids_limit: 256
     # Compose v2 applies these on a plain `docker compose up`; they are not
-    # swarm-only. Sized for a small self-hosted instance — raise them rather
+    # swarm-only. Sized for a small self-hosted instance - raise them rather
     # than remove them if the container gets OOM-killed under real load.
     deploy:
       resources:
         limits:
           cpus: "1.0"
           memory: 512M
+          # pids echoed from pids_limit above: Compose 2.20+ refuses a distinct value
+          # in both places. This is the deploy-resources spelling of the same cap.
+          pids: 256
     # A read-only root filesystem is *not* enabled by default: it has not been
     # verified against a running container here. The application itself writes
     # nothing outside /app/keys (which is the named volume above), and the
@@ -145,6 +162,8 @@ services:
           # limit: it is a hard ceiling, and the server sizes nothing from it.
           # Raise this together with shared_buffers if the instance grows.
           memory: 1G
+          # pids echoed from pids_limit above; see the app service.
+          pids: 512
 
   redis:
     image: redis:7-alpine
@@ -198,6 +217,8 @@ services:
           # fragmentation. A limit equal to maxmemory gets the process
           # OOM-killed instead of evicting keys.
           memory: 512M
+          # pids echoed from pids_limit above; see the app service.
+          pids: 128
 
 volumes:
   postgres_data:

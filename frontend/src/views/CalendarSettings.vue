@@ -591,7 +591,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useCalendarStore } from '@/stores/calendar';
@@ -615,6 +615,7 @@ import {
   getDefaultNotifyConfig,
   type NotifyConfig,
 } from '@/api/notify';
+import { authApi } from '@/api/auth';
 
 const router = useRouter();
 const route = useRoute();
@@ -622,7 +623,17 @@ const { t } = useI18n();
 const calendarStore = useCalendarStore();
 const toastStore = useToastStore();
 
-const calendarId = route.params.id as string;
+/** The calendar being edited, as a *computed* of the route id. */
+const calendarId = computed(() => route.params.id as string);
+/** Invocation counter so a stale id's load cannot clobber a newer one. */
+let loadVersion = 0;
+/** Per-action sequences so one save cannot strand another's busy flag. */
+let saveSeq = 0;
+let participantSeq = 0;
+/** Serialises the two access toggles so rapid opposite clicks cannot finish out of order. */
+let accessToggleChain: Promise<unknown> = Promise.resolve();
+/** The id the form was last populated for, or null; a change resets id-scoped state. */
+let loadedForId: string | null = null;
 
 const loading = ref(true);
 const updating = ref(false);
@@ -677,7 +688,9 @@ const originalForm = reactive({
 
 // Notification config state
 const notifyConfig = ref<NotifyConfig>(getDefaultNotifyConfig());
-const smtpConfigured = ref(true); // TODO: Fetch from backend config
+// Email notification options depend on the instance actually having SMTP
+// configured; default to hidden until the backend confirms otherwise.
+const smtpConfigured = ref(false);
 
 // Track if form has unsaved changes
 const hasUnsavedChanges = computed(() => {
@@ -707,6 +720,54 @@ const errors = reactive({
   threshold: '',
 });
 
+/** Reset every id-scoped setting (form, original snapshot, notify config, edits). */
+function resetIdScopedState() {
+  Object.assign(form, {
+    name: '',
+    description: '',
+    threshold: 1,
+    allowed_weekdays: [0, 1, 2, 3, 4, 5, 6],
+    min_duration_hours: 0,
+    timezone: 'Europe/Paris',
+    holidays_policy: 'ignore',
+    allow_holiday_eves: false,
+    lock_participants: false,
+    allow_anonymous_participants: false,
+    weekday_times: createEmptyWeekdayTimes(),
+    holiday_min_time: '',
+    holiday_max_time: '',
+    holiday_eve_min_time: '',
+    holiday_eve_max_time: '',
+    start_date: '',
+    end_date: '',
+  });
+  Object.assign(originalForm, {
+    name: '',
+    description: '',
+    threshold: 1,
+    allowed_weekdays: [0, 1, 2, 3, 4, 5, 6],
+    min_duration_hours: 0,
+    timezone: 'Europe/Paris',
+    holidays_policy: 'ignore',
+    allow_holiday_eves: false,
+    lock_participants: false,
+    allow_anonymous_participants: false,
+    weekday_times: createEmptyWeekdayTimes(),
+    holiday_min_time: '',
+    holiday_max_time: '',
+    holiday_eve_min_time: '',
+    holiday_eve_max_time: '',
+    start_date: '',
+    end_date: '',
+  });
+  notifyConfig.value = getDefaultNotifyConfig();
+  newParticipantName.value = '';
+  editingParticipantId.value = null;
+  editingParticipantName.value = '';
+  errors.name = '';
+  errors.threshold = '';
+}
+
 const calendar = computed(() => calendarStore.currentCalendar);
 
 const publicUrl = computed(() => {
@@ -720,10 +781,20 @@ const icsUrl = computed(() => {
 });
 
 async function loadCalendar() {
+  // Bind every continuation to the id and version this load started under: a slow
+  // response for calendar A must not populate the form, notification config or
+  // navigation for calendar B after a same-component route change.
+  const version = ++loadVersion;
+  const id = calendarId.value;
+  if (loadedForId !== id) {
+    loadedForId = id;
+    resetIdScopedState();
+  }
   loading.value = true;
 
   try {
-    await calendarStore.fetchCalendar(calendarId);
+    await calendarStore.fetchCalendar(id);
+    if (version !== loadVersion) return;
 
     if (calendar.value) {
       form.name = calendar.value.name;
@@ -789,19 +860,31 @@ async function loadCalendar() {
 
       // Load notification config
       try {
-        notifyConfig.value = await getNotifyConfig(calendarId);
+        const notify = await getNotifyConfig(id);
+        if (version !== loadVersion) return;
+        notifyConfig.value = notify;
       } catch (_error) {
         // If notify config doesn't exist, use default
+        if (version !== loadVersion) return;
         notifyConfig.value = getDefaultNotifyConfig();
       }
     }
   } catch (error: any) {
+    // A superseded id's failure must not redirect the newer route or toast about it.
+    if (version !== loadVersion) return;
     toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.fetchError' })));
     // Redirect to dashboard on error
     router.push('/dashboard');
   } finally {
-    loading.value = false;
+    if (version === loadVersion) {
+      loading.value = false;
+    }
   }
+}
+
+/** True while this calendar and load are still the ones on screen. */
+function routeStill(id: string, version: number): boolean {
+  return calendarId.value === id && loadVersion === version;
 }
 
 function validateForm(): boolean {
@@ -843,6 +926,9 @@ async function handleUpdate() {
   }
 
   updating.value = true;
+  const id = calendarId.value;
+  const version = loadVersion;
+  const op = ++saveSeq;
 
   try {
     // Normalize 00:00 times to empty (not meaningful as restrictions)
@@ -850,12 +936,16 @@ async function handleUpdate() {
     const normalizedHolidayMaxTime = normalizeTime(form.holiday_max_time);
     const normalizedHolidayEveMinTime = normalizeTime(form.holiday_eve_min_time);
     const normalizedHolidayEveMaxTime = normalizeTime(form.holiday_eve_max_time);
+    const rawHolidayMin = form.holiday_min_time;
+    const rawHolidayMax = form.holiday_max_time;
+    const rawHolidayEveMin = form.holiday_eve_min_time;
+    const rawHolidayEveMax = form.holiday_eve_max_time;
 
-    await calendarStore.updateCalendar(calendarId, {
+    const submitted = {
       name: form.name.trim(),
-      description: form.description.trim() || undefined,
+      description: form.description.trim(),
       threshold: form.threshold,
-      allowed_weekdays: form.allowed_weekdays,
+      allowed_weekdays: [...form.allowed_weekdays],
       min_duration_hours: form.min_duration_hours,
       timezone: form.timezone,
       holidays_policy: form.holidays_policy,
@@ -863,48 +953,71 @@ async function handleUpdate() {
       lock_participants: form.lock_participants,
       allow_anonymous_participants: form.allow_anonymous_participants,
       weekday_times: prepareWeekdayTimes(form.weekday_times),
-      // Send empty string (not undefined) so backend knows to clear the value
       holiday_min_time: normalizedHolidayMinTime,
       holiday_max_time: normalizedHolidayMaxTime,
       holiday_eve_min_time: normalizedHolidayEveMinTime,
       holiday_eve_max_time: normalizedHolidayEveMaxTime,
-      start_date: form.start_date || undefined,
-      end_date: form.end_date || undefined,
+      start_date: form.start_date,
+      end_date: form.end_date,
+    };
+    await calendarStore.updateCalendar(id, {
+      ...submitted,
+      description: submitted.description || undefined,
+      weekday_times: submitted.weekday_times,
+      holiday_min_time: submitted.holiday_min_time,
+      holiday_max_time: submitted.holiday_max_time,
+      holiday_eve_min_time: submitted.holiday_eve_min_time,
+      holiday_eve_max_time: submitted.holiday_eve_max_time,
+      start_date: submitted.start_date || undefined,
+      end_date: submitted.end_date || undefined,
     } as any);
 
-    // Update original values to reflect saved state
-    originalForm.name = form.name.trim();
-    originalForm.description = form.description.trim();
-    originalForm.threshold = form.threshold;
-    originalForm.allowed_weekdays = [...form.allowed_weekdays];
-    originalForm.min_duration_hours = form.min_duration_hours;
-    originalForm.timezone = form.timezone;
-    originalForm.holidays_policy = form.holidays_policy;
-    originalForm.allow_holiday_eves = form.allow_holiday_eves;
-    originalForm.lock_participants = form.lock_participants;
-    originalForm.allow_anonymous_participants = form.allow_anonymous_participants;
-    originalForm.weekday_times = JSON.parse(JSON.stringify(form.weekday_times));
-    originalForm.holiday_min_time = form.holiday_min_time;
-    originalForm.holiday_max_time = form.holiday_max_time;
-    originalForm.holiday_eve_min_time = form.holiday_eve_min_time;
-    originalForm.holiday_eve_max_time = form.holiday_eve_max_time;
-    originalForm.start_date = form.start_date;
-    originalForm.end_date = form.end_date;
-
-    // Reload calendar to get updated data
-    await loadCalendar();
+    // Advance only the snapshot that was sent. Edits made while the request was in
+    // flight stay in the live form and remain unsaved. A completion for a calendar
+    // the visitor left must not touch the form now on screen.
+    if (!routeStill(id, version)) return;
+    originalForm.name = submitted.name;
+    originalForm.description = submitted.description;
+    originalForm.threshold = submitted.threshold;
+    originalForm.allowed_weekdays = submitted.allowed_weekdays;
+    originalForm.min_duration_hours = submitted.min_duration_hours;
+    originalForm.timezone = submitted.timezone;
+    originalForm.holidays_policy = submitted.holidays_policy;
+    originalForm.allow_holiday_eves = submitted.allow_holiday_eves;
+    originalForm.lock_participants = submitted.lock_participants;
+    originalForm.allow_anonymous_participants = submitted.allow_anonymous_participants;
+    originalForm.weekday_times = JSON.parse(JSON.stringify(submitted.weekday_times));
+    originalForm.holiday_min_time = rawHolidayMin;
+    originalForm.holiday_max_time = rawHolidayMax;
+    originalForm.holiday_eve_min_time = rawHolidayEveMin;
+    originalForm.holiday_eve_max_time = rawHolidayEveMax;
+    originalForm.start_date = submitted.start_date;
+    originalForm.end_date = submitted.end_date;
   } catch (error: any) {
+    if (!routeStill(id, version)) return;
     toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.updateError' })));
   } finally {
-    updating.value = false;
+    if (saveSeq === op) {
+      updating.value = false;
+    }
   }
 }
 
 async function handleSaveNotifications(config: NotifyConfig) {
+  const id = calendarId.value;
+  const version = loadVersion;
   try {
-    await updateNotifyConfig(calendarId, config);
+    // An instance without SMTP cannot ever deliver the email channel; persist
+    // that truthfully instead of saving an "enabled" flag that says it can.
+    const saved = { ...config };
+    if (!smtpConfigured.value) {
+      saved.channels = { ...saved.channels, email: { ...saved.channels.email, enabled: false } };
+    }
+    await updateNotifyConfig(id, saved);
+    if (!routeStill(id, version)) return;
     toastStore.success(t('calendar.settingsSaved'));
   } catch (error: any) {
+    if (!routeStill(id, version)) return;
     toastStore.error(t(translateErrorMessage(error, { fallback: 'notifications.saveError' })));
   }
 }
@@ -915,18 +1028,23 @@ async function handleAddParticipant() {
   }
 
   addingParticipant.value = true;
+  const id = calendarId.value;
+  const version = loadVersion;
+  const op = ++participantSeq;
+  const name = newParticipantName.value.trim();
 
   try {
-    await calendarStore.addParticipant(calendarId, {
-      name: newParticipantName.value.trim(),
-    });
-
+    await calendarStore.addParticipant(id, { name });
+    if (!routeStill(id, version)) return;
     newParticipantName.value = '';
     // No need to reload - the store updates currentCalendar automatically
   } catch (error: any) {
+    if (!routeStill(id, version)) return;
     toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.addParticipantError' })));
   } finally {
-    addingParticipant.value = false;
+    if (participantSeq === op) {
+      addingParticipant.value = false;
+    }
   }
 }
 
@@ -945,27 +1063,34 @@ async function handleSaveParticipant(participantId: string) {
     return;
   }
 
+  const id = calendarId.value;
+  const version = loadVersion;
+  const name = editingParticipantName.value.trim();
   try {
-    await calendarStore.updateParticipant(calendarId, participantId, {
-      name: editingParticipantName.value.trim(),
-    });
-
+    await calendarStore.updateParticipant(id, participantId, { name });
+    if (!routeStill(id, version)) return;
     cancelEditParticipant();
     // No need to reload - the store updates currentCalendar automatically
   } catch (error: any) {
+    if (!routeStill(id, version)) return;
     toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.updateError' })));
   }
 }
 
 async function handleDeleteParticipant(participantId: string, participantName: string) {
+  // Capture the target before the (awaiting) confirmation dialog.
+  const id = calendarId.value;
+  const version = loadVersion;
   if (
     !(await confirm({ message: t('calendar.confirmDeleteParticipant', { name: participantName }) }))
   ) {
     return;
   }
+  if (!routeStill(id, version)) return;
 
   try {
-    await calendarStore.deleteParticipant(calendarId, participantId);
+    await calendarStore.deleteParticipant(id, participantId);
+    if (!routeStill(id, version)) return;
 
     // Automatically adjust threshold if necessary
     if (calendar.value?.participants) {
@@ -976,6 +1101,7 @@ async function handleDeleteParticipant(participantId: string, participantName: s
     }
     // No need to reload - the store updates currentCalendar automatically
   } catch (error: any) {
+    if (!routeStill(id, version)) return;
     toastStore.error(
       t(translateErrorMessage(error, { fallback: 'calendar.deleteParticipantError' }))
     );
@@ -988,23 +1114,32 @@ async function handleRegenerateToken(tokenType: 'public' | 'ics') {
       ? t('calendar.confirmRegeneratePublic')
       : t('calendar.confirmRegenerateICS');
 
+  // Capture the target before the (awaiting) confirmation dialog.
+  const id = calendarId.value;
+  const version = loadVersion;
   if (!(await confirm({ message: confirmMessage }))) {
     return;
   }
+  if (!routeStill(id, version)) return;
 
   try {
     if (tokenType === 'public') {
-      await calendarStore.regeneratePublicToken(calendarId);
+      await calendarStore.regeneratePublicToken(id);
     } else {
-      await calendarStore.regenerateICSToken(calendarId);
+      await calendarStore.regenerateICSToken(id);
     }
+    if (!routeStill(id, version)) return;
     // No need to reload - the store updates currentCalendar automatically
   } catch (error: any) {
+    if (!routeStill(id, version)) return;
     toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.regenerateError' })));
   }
 }
 
 async function handleDelete() {
+  // Capture the target before the (awaiting) confirmation dialog.
+  const id = calendarId.value;
+  const version = loadVersion;
   const confirmed = await confirm({
     title: t('calendar.deleteCalendar'),
     message: t('calendar.confirmDelete'),
@@ -1014,16 +1149,55 @@ async function handleDelete() {
   if (!confirmed) {
     return;
   }
+  // The dialog outlives this view. Confirming it after navigating away must not
+  // delete the calendar the dialog was opened for.
+  if (!routeStill(id, version)) return;
 
   deleting.value = true;
 
   try {
-    await calendarStore.deleteCalendar(calendarId);
+    await calendarStore.deleteCalendar(id);
+    // A delete that finishes after the visitor left this calendar must not yank
+    // them off whatever route they are on now.
+    if (calendarId.value !== id || loadVersion !== version) return;
     router.push('/dashboard');
   } catch (error: any) {
+    if (calendarId.value !== id || loadVersion !== version) return;
     toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.deleteError' })));
   } finally {
-    deleting.value = false;
+    if (calendarId.value === id && loadVersion === version) {
+      deleting.value = false;
+    }
+  }
+}
+
+let toggleIntent = 0;
+
+async function persistAccessToggles(submitted: {
+  lock_participants: boolean;
+  allow_anonymous_participants: boolean;
+}) {
+  const id = calendarId.value;
+  const version = loadVersion;
+  const intent = ++toggleIntent;
+  const write = accessToggleChain.then(() => calendarStore.updateCalendar(id, submitted as any));
+  accessToggleChain = write.catch(() => {});
+  try {
+    await write;
+    if (!routeStill(id, version)) return;
+    originalForm.lock_participants = submitted.lock_participants;
+    originalForm.allow_anonymous_participants = submitted.allow_anonymous_participants;
+    // An older success must not clobber a newer optimistic intent. Only the latest
+    // intent reconciles the live controls (an older failure may have wiped them).
+    if (intent !== toggleIntent) return;
+    form.lock_participants = submitted.lock_participants;
+    form.allow_anonymous_participants = submitted.allow_anonymous_participants;
+    toastStore.success(t('calendar.calendarUpdated'));
+  } catch (error: any) {
+    if (!routeStill(id, version) || intent !== toggleIntent) return;
+    form.lock_participants = originalForm.lock_participants;
+    form.allow_anonymous_participants = originalForm.allow_anonymous_participants;
+    toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.updateError' })));
   }
 }
 
@@ -1032,24 +1206,10 @@ async function handleLockParticipantsChange() {
   if (form.lock_participants) {
     form.allow_anonymous_participants = false;
   }
-
-  try {
-    await calendarStore.updateCalendar(calendarId, {
-      lock_participants: form.lock_participants,
-      allow_anonymous_participants: form.allow_anonymous_participants,
-    } as any);
-
-    // Update original values to reflect saved state
-    originalForm.lock_participants = form.lock_participants;
-    originalForm.allow_anonymous_participants = form.allow_anonymous_participants;
-
-    toastStore.success(t('calendar.calendarUpdated'));
-  } catch (error: any) {
-    // Revert on error
-    form.lock_participants = originalForm.lock_participants;
-    form.allow_anonymous_participants = originalForm.allow_anonymous_participants;
-    toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.updateError' })));
-  }
+  await persistAccessToggles({
+    lock_participants: form.lock_participants,
+    allow_anonymous_participants: form.allow_anonymous_participants,
+  });
 }
 
 async function handleAllowAnonymousParticipantsChange() {
@@ -1057,24 +1217,10 @@ async function handleAllowAnonymousParticipantsChange() {
   if (form.allow_anonymous_participants) {
     form.lock_participants = false;
   }
-
-  try {
-    await calendarStore.updateCalendar(calendarId, {
-      allow_anonymous_participants: form.allow_anonymous_participants,
-      lock_participants: form.lock_participants,
-    } as any);
-
-    // Update original values to reflect saved state
-    originalForm.allow_anonymous_participants = form.allow_anonymous_participants;
-    originalForm.lock_participants = form.lock_participants;
-
-    toastStore.success(t('calendar.calendarUpdated'));
-  } catch (error: any) {
-    // Revert on error
-    form.allow_anonymous_participants = originalForm.allow_anonymous_participants;
-    form.lock_participants = originalForm.lock_participants;
-    toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.updateError' })));
-  }
+  await persistAccessToggles({
+    lock_participants: form.lock_participants,
+    allow_anonymous_participants: form.allow_anonymous_participants,
+  });
 }
 
 function copyParticipantLink(participantId: string) {
@@ -1108,8 +1254,29 @@ onBeforeRouteLeave(async (_to, _from, next) => {
   }
 });
 
+// Reload whenever the route's calendar id changes (including the initial mount): Vue
+// Router reuses this component when only `:id` changes, so a one-time onMounted load
+// would leave the view editing calendar A while the URL says B. Each load is fenced by
+// `loadVersion`, so a slower A response can never overwrite B.
+watch(
+  () => calendarId.value,
+  () => loadCalendar(),
+  { immediate: true }
+);
+
 onMounted(() => {
-  loadCalendar();
+  // Email options follow the instance's actual SMTP configuration.
+  // /auth/magic-link/available is the existing endpoint for exactly this answer.
+  authApi
+    .checkMagicLinkAvailable()
+    .then(result => {
+      smtpConfigured.value = result.available;
+    })
+    .catch(() => {
+      // Best-effort: on failure the safe answer is "no SMTP", so email options
+      // stay hidden instead of being offered for mails that could never leave.
+      smtpConfigured.value = false;
+    });
   // Add beforeunload listener
   window.addEventListener('beforeunload', handleBeforeUnload);
 });

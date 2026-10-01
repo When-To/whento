@@ -48,7 +48,7 @@ type contextTokenRepo struct {
 
 var _ TokenRepository = (*contextTokenRepo)(nil)
 
-func (r *contextTokenRepo) Create(ctx context.Context, token *models.RefreshToken) error {
+func (r *contextTokenRepo) Create(ctx context.Context, token *models.RefreshToken, generation int64) error {
 	r.creates++
 	r.createCtx = ctx
 
@@ -56,7 +56,7 @@ func (r *contextTokenRepo) Create(ctx context.Context, token *models.RefreshToke
 		return err
 	}
 
-	if err := r.fakeTokenRepo.Create(ctx, token); err != nil {
+	if err := r.fakeTokenRepo.Create(ctx, token, generation); err != nil {
 		return err
 	}
 	r.persisted++
@@ -66,12 +66,48 @@ func (r *contextTokenRepo) Create(ctx context.Context, token *models.RefreshToke
 
 // Consume refuses on a dead context, as the pgx-backed Exec would. Without this the
 // fake would rotate a token for a request that no longer exists.
+func (r *contextTokenRepo) CommitRotation(
+	ctx context.Context,
+	presentedHash string,
+	successor *models.RefreshToken,
+	grace time.Duration,
+) error {
+	r.creates++
+	r.createCtx = ctx
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := r.fakeTokenRepo.CommitRotation(ctx, presentedHash, successor, grace); err != nil {
+		return err
+	}
+	r.persisted++
+	return nil
+}
+
 func (r *contextTokenRepo) Consume(ctx context.Context, hash string) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
 
 	return r.fakeTokenRepo.Consume(ctx, hash)
+}
+
+func (r *contextTokenRepo) CreatePendingMFASession(ctx context.Context, digest string, expiresAt time.Time, token *models.RefreshToken, generation int64) (bool, error) {
+	r.creates++
+	r.createCtx = ctx
+
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+
+	won, err := r.fakeTokenRepo.CreatePendingMFASession(ctx, digest, expiresAt, token, generation)
+	if err != nil {
+		return false, err
+	}
+	if won {
+		r.persisted++
+	}
+	return won, nil
 }
 
 type contextFixture struct {
@@ -193,7 +229,7 @@ func authEntryPoints() []authEntryPoint {
 				user := f.seedUser(t, "mfa@example.test", contextTestPassword)
 				f.mfa.mfa = &mfaModels.UserMFA{Enabled: true}
 
-				tempToken, err := f.service.generateTempToken(user.ID)
+				tempToken, err := f.service.generateTempToken(user.ID, user.SecurityGeneration)
 				if err != nil {
 					t.Fatalf("generate temp token: %v", err)
 				}

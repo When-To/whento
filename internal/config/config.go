@@ -81,6 +81,12 @@ type Config struct {
 	AllowedRegister bool
 	AllowedEmails   []string
 
+	// BootstrapKey is the operator-provided one-time key that authorises
+	// creating the first (administrator) account through POST /api/v1/auth/bootstrap.
+	// Empty means the process generates a random key at startup and prints it to
+	// the logs, so an operator — or an Ansible run — can read it from there.
+	BootstrapKey string
+
 	// Email Verification
 	Email EmailConfig
 
@@ -180,6 +186,12 @@ func Load() *Config {
 		// Registration Control
 		AllowedRegister: l.boolean("ALLOWED_REGISTER", true),
 		AllowedEmails:   getEmailList("ALLOWED_EMAILS", []string{"*"}),
+
+		// Bootstrap (first-user creation). If an operator pins the key here,
+		// automation can hand it to POST /api/v1/auth/bootstrap directly instead
+		// of scraping it out of the logs; _FILE indirection works like every
+		// other secret.
+		BootstrapKey: l.secret("BOOTSTRAP_KEY", ""),
 
 		// Email Verification
 		Email: EmailConfig{

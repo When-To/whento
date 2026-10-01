@@ -551,7 +551,7 @@
         <p class="mb-8 text-lg text-gray-600 dark:text-gray-400">
           {{ t('why.ctaDescription') }}
         </p>
-        <router-link to="/register" class="btn btn-primary btn-lg">
+        <router-link v-if="registrationEnabled" to="/register" class="btn btn-primary btn-lg">
           {{ t('why.ctaButton') }}
         </router-link>
       </div>
@@ -566,7 +566,11 @@
  * SPDX-License-Identifier: BSL-1.1
  */
 
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '@/stores/auth';
 
 const { t } = useI18n();
+const authStore = useAuthStore();
+const registrationEnabled = computed(() => authStore.registrationEnabled);
 </script>

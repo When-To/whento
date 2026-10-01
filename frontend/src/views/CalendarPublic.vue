@@ -78,10 +78,7 @@
         <!-- Participant Selection -->
         <div class="card">
           <!-- No participants -->
-          <div
-            v-if="!calendar.participants || calendar.participants.length === 0"
-            class="text-center"
-          >
+          <div v-if="displayParticipants.length === 0" class="text-center">
             <div
               class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 dark:border-gray-700 dark:bg-gray-800"
             >
@@ -101,7 +98,7 @@
               <h3 class="mt-4 text-lg font-medium text-gray-900 dark:text-white">
                 {{ t('calendar.noParticipants') }}
               </h3>
-              <template v-if="calendar.allow_anonymous_participants">
+              <template v-if="canJoin">
                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
                   {{ t('calendar.joinAsParticipant') }}
                 </p>
@@ -126,6 +123,11 @@
                   </button>
                 </form>
               </template>
+              <template v-else-if="isOwner">
+                <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                  {{ t('calendar.ownerNoParticipants') }}
+                </p>
+              </template>
               <template v-else>
                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
                   {{ t('calendar.noParticipantsDescription') }}
@@ -145,7 +147,7 @@
 
             <!-- Locked participants message -->
             <div
-              v-if="calendar.lock_participants"
+              v-if="effectiveLock"
               class="mb-6 rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20"
             >
               <div class="flex">
@@ -168,6 +170,10 @@
               </div>
             </div>
 
+            <p v-else-if="isOwner" class="mb-6 text-sm text-gray-600 dark:text-gray-400">
+              {{ t('calendar.ownerPreviewHint') }}
+            </p>
+
             <p v-else class="mb-6 text-sm text-gray-600 dark:text-gray-400">
               {{ t('participant.selectYourName') }}
             </p>
@@ -176,7 +182,7 @@
             <div class="space-y-2">
               <!-- Anonymous registration form -->
               <div
-                v-if="calendar.allow_anonymous_participants && !calendar.lock_participants"
+                v-if="canJoin"
                 class="mb-6 rounded-lg border border-primary-200 bg-primary-50 p-4 dark:border-primary-800 dark:bg-primary-900/20"
               >
                 <p class="mb-3 text-sm font-medium text-primary-800 dark:text-primary-200">
@@ -222,10 +228,10 @@
               </div>
 
               <!-- Locked: show as non-clickable -->
-              <template v-if="calendar.lock_participants">
+              <template v-if="effectiveLock">
                 <div
-                  v-for="participant in calendar.participants"
-                  :key="participant.id"
+                  v-for="participant in displayParticipants"
+                  :key="participant.id ?? participant.name"
                   class="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-100 px-4 py-3 opacity-60 cursor-not-allowed dark:border-gray-700 dark:bg-gray-800"
                 >
                   <div
@@ -264,10 +270,10 @@
                 </div>
               </template>
 
-              <!-- Unlocked: show as clickable links -->
+              <!-- Unlocked / owned: show as clickable links -->
               <template v-else>
                 <router-link
-                  v-for="participant in calendar.participants"
+                  v-for="participant in clickableParticipants"
                   :key="participant.id"
                   :to="`/c/${token}/p/${participant.id}`"
                   class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 transition-all hover:border-primary-500 hover:bg-primary-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-primary-500 dark:hover:bg-primary-900/20"
@@ -314,10 +320,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useCalendarStore } from '@/stores/calendar';
+import { useAuthStore } from '@/stores/auth';
 import { useCalendarHistoryStore } from '@/stores/calendarHistory';
 import { useToastStore } from '@/stores/toast';
 import { translateErrorMessage } from '@/utils/errorTranslator';
@@ -326,73 +333,252 @@ const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const calendarStore = useCalendarStore();
+const authStore = useAuthStore();
 const historyStore = useCalendarHistoryStore();
 const toastStore = useToastStore();
 
-const token = route.params.token as string;
+// Computed, not a snapshot: the router reuses this component instance when the visitor
+// moves between /c/<token-a> and /c/<token-b>, and the page must follow the URL.
+const token = computed(() => route.params.token as string);
 const loading = ref(false);
 const newParticipantName = ref('');
 const joiningAsParticipant = ref(false);
+/** How many loads have been started; a superseded (older-token) load aborts. */
+let loadVersion = 0;
+/**
+ * How many join operations have been started. Each join captures the current id; the
+ * busy flag is cleared only when the completing operation is still the latest, so a
+ * stale A-join's `finally` can never re-enable B's form (or a newer A submission).
+ */
+let joinOperationId = 0;
 
 const calendar = computed(() => calendarStore.currentPublicCalendar);
 
+/**
+ * Whether the signed-in reader owns the calendar on screen.
+ *
+ * The public payload deliberately says nothing about ownership
+ * (`PublicCalendarResponse` has no `owner_id`), so this is answered from the reader's
+ * own calendars, exactly as `ParticipantView` does for its edit link. Only owners get
+ * the lock lifted — a generic admin cannot, because the public route masks participant
+ * ids and an admin has no owner-side list to recover them from.
+ *
+ * The owner-list cache is only consulted as evidence when it belongs to the *current*
+ * user (`calendarStore.calendarsForUser`): a stale list loaded for a previous account
+ * on this browser must never unlock the view for the next account, neither before nor
+ * while a refresh is in flight.
+ */
+const isOwner = computed(() => {
+  const current = calendar.value;
+  if (!current || !authStore.isAuthenticated) return false;
+  const userId = authStore.user?.id;
+  if (userId == null) return false;
+  // The owner list is only trustworthy as ownership evidence for the account it was
+  // fetched for. A stale list loaded for a previous account on this browser must
+  // never unlock the view for the next account — before *or* while a refresh runs.
+  if (calendarStore.calendarsForUser !== userId) return false;
+  return calendarStore.calendars.some(owned => owned?.id === current.id);
+});
+
+/**
+ * The lock as the reader actually experiences it. For the owner the lock is lifted: they
+ * are already authenticated, and forcing them to follow their own participant link to
+ * reach their own calendar is the whole point of the report this fixes.
+ */
+const effectiveLock = computed(() => {
+  return calendar.value?.lock_participants === true && !isOwner.value;
+});
+
+/**
+ * Whether the roster currently on screen authoritatively lists every participant.
+ *
+ * - An unlocked calendar's public payload carries every real id, so it is authoritative
+ *   even when the list is empty.
+ * - A locked calendar masks ids for everyone but its owner; the owner's freshly fetched
+ *   list is authoritative *only* when it was fetched for the current user and actually
+ *   contains this calendar — including when that list is empty.
+ * - Anything else (masked, non-owner, or a failed/unavailable owner lookup) cannot
+ *   prove a saved participant is gone.
+ */
+const rosterAuthoritative = computed(() => {
+  const current = calendar.value;
+  if (!current) return false;
+  if (current.lock_participants !== true) return true;
+
+  const userId = authStore.user?.id ?? null;
+  if (userId == null) return false;
+  if (calendarStore.calendarsForUser !== userId) return false;
+  return calendarStore.calendars.some(owned => owned?.id === current.id);
+});
+
+/** A participant as this template renders it: a name, plus an id when it may link. */
+type DisplayParticipant = { id?: string; name: string };
+
+/**
+ * The participants to show.
+ *
+ * The freshly fetched public payload is the authoritative participant roster, and it
+ * is used whenever it carries ids (an unlocked calendar). The owner-side list is only
+ * consulted where the public payload masks ids (a locked calendar) — and `loadOwnedCalendars`
+ * now refetches the owner list on every visit, so that fallback is not a stale copy
+ * from a dashboard load.
+ */
+const displayParticipants = computed<DisplayParticipant[]>(() => {
+  const current = calendar.value;
+  if (!current) return [];
+
+  const publicHasIds = (current.participants ?? []).some(p => p.id != null);
+  const source =
+    isOwner.value && !publicHasIds
+      ? (calendarStore.calendars.find(owned => owned?.id === current.id)?.participants ?? [])
+      : (current.participants ?? []);
+
+  return source.map(p => ({ id: p.id, name: p.name }));
+});
+
+/** The subset that can actually link somewhere; drive the clickable list. */
+const clickableParticipants = computed(() =>
+  displayParticipants.value.filter((p): p is { id: string; name: string } => p.id !== undefined)
+);
+
+/** The public "join as a new participant" form is an anonymous-flow affordance only. */
+const canJoin = computed(() => {
+  const current = calendar.value;
+  if (!current || isOwner.value) return false;
+  return current.allow_anonymous_participants === true && current.lock_participants !== true;
+});
+
+/**
+ * Makes the signed-in reader's own calendars available for ownership decisions.
+ *
+ * The `calendarStore.calendars` list is only trusted when it was actually fetched for
+ * the current user (`calendarsForUser`): on a shared browser a list loaded by a previous
+ * account must not be reused as ownership evidence, and a cold load must not be served a
+ * half-populated cache. A failure degrades gracefully — ownership simply resolves to
+ * "not the owner", which never lifts a lock it should not.
+ *
+ * The owner list is refetched on every visit rather than reusing the cached list:
+ * `calendarsForUser` proves which account a cache belongs to, not how fresh it is. A
+ * participant can join after the dashboard's earlier load, and the owner-side roster
+ * (used as the fallback for a masked public payload) has to reflect that.
+ */
+async function loadOwnedCalendars() {
+  if (!authStore.isAuthenticated) return;
+
+  try {
+    await calendarStore.fetchCalendars();
+  } catch {
+    // Ignored on purpose: ownership detection degrades to "not the owner".
+  }
+}
+
 async function loadCalendar() {
+  const version = ++loadVersion;
+  const currentToken = token.value;
   loading.value = true;
 
   try {
-    await calendarStore.fetchPublicCalendar(token);
+    await calendarStore.fetchPublicCalendar(currentToken);
+    if (version !== loadVersion) return;
+    // Resolve ownership *before* any decision that depends on it (the lock, the
+    // participant picker, the saved-participant check below). Fire-and-forget would
+    // validate the saved participant against an empty or stale list and delete it.
+    await loadOwnedCalendars();
+    if (version !== loadVersion) return;
 
     // Add calendar to history
     if (calendar.value) {
-      historyStore.addCalendar(token, calendar.value.name);
+      historyStore.addCalendar(currentToken, calendar.value.name);
     }
 
-    // Check if there's a saved participant for this calendar
-    const savedParticipantId = historyStore.getParticipantId(token);
-    if (savedParticipantId && calendar.value && calendar.value.participants) {
-      // Verify the participant still exists
-      const participantExists = calendar.value.participants.some(p => p.id === savedParticipantId);
-      if (participantExists) {
-        // Redirect to the saved participant
-        router.replace(`/c/${token}/p/${savedParticipantId}`);
+    // Check if there's a saved participant for this calendar.
+    const savedParticipantId = historyStore.getParticipantId(currentToken);
+
+    if (savedParticipantId) {
+      const savedStillListed = displayParticipants.value.some(p => p.id === savedParticipantId);
+
+      if (savedStillListed) {
+        // Resume the saved participant exactly as before.
+        router.replace(`/c/${currentToken}/p/${savedParticipantId}`);
         return;
-      } else {
-        // Remove invalid saved participant
-        historyStore.updateParticipantId(token, undefined);
       }
+
+      if (!rosterAuthoritative.value) {
+        // The roster is masked or the owner lookup is unavailable, so it cannot prove
+        // the saved capability is stale. Navigate to the participant route and let the
+        // backend validate it: a genuinely invalid participant is removed from history
+        // there, but a valid direct-link capability must not be erased just because the
+        // page cannot see its id.
+        router.replace(`/c/${currentToken}/p/${savedParticipantId}`);
+        return;
+      }
+
+      // The roster is authoritative and the participant is genuinely gone: drop the
+      // stale capability instead of stranding the visitor on a dead link.
+      historyStore.updateParticipantId(currentToken, undefined);
     }
   } catch (err: any) {
+    // A slow failure for a superseded token must not show an error, drop history or
+    // eject the visitor from the newer route it has already navigated to.
+    if (version !== loadVersion) return;
     toastStore.error(t(translateErrorMessage(err, { fallback: 'calendar.fetchError' })));
     // Remove invalid calendar from history and redirect to home
-    historyStore.removeCalendar(token);
+    historyStore.removeCalendar(currentToken);
     router.push('/');
   } finally {
-    loading.value = false;
+    if (version === loadVersion) {
+      loading.value = false;
+    }
   }
 }
 
 async function handleJoinAsParticipant() {
   if (!newParticipantName.value.trim()) return;
 
+  // Bind this join to the token, load generation and operation id it started under: a
+  // join that settles after the visitor navigated to another public calendar (or began
+  // a newer join) must not save its participant id under the *new* calendar's history
+  // entry, route to it, or — in `finally` — clear the newer calendar's busy flag.
+  const joinToken = token.value;
+  const joinVersion = loadVersion;
+  const op = ++joinOperationId;
   joiningAsParticipant.value = true;
   try {
-    const participant = await calendarStore.addAnonymousParticipant(token, {
+    const participant = await calendarStore.addAnonymousParticipant(joinToken, {
       name: newParticipantName.value.trim(),
     });
+    if (token.value !== joinToken || loadVersion !== joinVersion) return;
     if (participant && participant.id) {
-      historyStore.updateParticipantId(token, participant.id);
-      router.push(`/c/${token}/p/${participant.id}`);
+      historyStore.updateParticipantId(joinToken, participant.id);
+      router.push(`/c/${joinToken}/p/${participant.id}`);
     }
   } catch (err: any) {
-    toastStore.error(
-      t(translateErrorMessage(err, { fallback: 'calendar.participantNameAlreadyTaken' }))
-    );
+    if (token.value === joinToken && loadVersion === joinVersion) {
+      toastStore.error(
+        t(translateErrorMessage(err, { fallback: 'calendar.participantNameAlreadyTaken' }))
+      );
+    }
   } finally {
-    joiningAsParticipant.value = false;
+    // Only the current operation for the current route may re-enable the form. A stale
+    // A-join settling after B started its own join must not flip B's flag to idle.
+    if (op === joinOperationId && token.value === joinToken && loadVersion === joinVersion) {
+      joiningAsParticipant.value = false;
+    }
   }
 }
 
-onMounted(() => {
-  loadCalendar();
-});
+// Reload whenever the route's calendar token changes (including the initial mount),
+// so a navigation from /c/token-a to /c/token-b re-renders *that* calendar and never
+// submits a join to the previous one. Per-calendar input is reset for the new token,
+// and an in-flight join is un-stuck so it cannot keep the new page's form disabled
+// (its deferred continuation is already fenced by the token/version capture above).
+watch(
+  token,
+  () => {
+    newParticipantName.value = '';
+    joiningAsParticipant.value = false;
+    loadCalendar();
+  },
+  { immediate: true }
+);
 </script>

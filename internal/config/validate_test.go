@@ -193,6 +193,21 @@ func TestValidateAcceptsAndRefuses(t *testing.T) {
 		{name: "connections that never expire", mutate: func(c *Config) { c.DBMaxConnLifetime = 0 }, wantError: "DB_MAX_CONN_LIFETIME"},
 		{name: "idle connections that never expire", mutate: func(c *Config) { c.DBMaxConnIdleTime = 0 }, wantError: "DB_MAX_CONN_IDLE_TIME"},
 
+		// Bootstrap key. These must mirror the request validator for
+		// POST /api/v1/auth/bootstrap (16–256), or a key that passes startup is
+		// refused at the only place it is ever used.
+		{name: "a generated-length boot key", mutate: func(c *Config) { c.BootstrapKey = strings.Repeat("a", 64) }},
+		{name: "a boot key at the floor", mutate: func(c *Config) { c.BootstrapKey = strings.Repeat("a", 16) }},
+		{name: "a boot key at the ceiling", mutate: func(c *Config) { c.BootstrapKey = strings.Repeat("a", 256) }},
+		{name: "a boot key below the floor", mutate: func(c *Config) { c.BootstrapKey = strings.Repeat("a", 15) }, wantError: "BOOTSTRAP_KEY"},
+		{name: "a boot key above the ceiling", mutate: func(c *Config) { c.BootstrapKey = strings.Repeat("a", 257) }, wantError: "BOOTSTRAP_KEY"},
+		// The key check must count characters (runes) the way the request
+		// validator does, not bytes: 16 CJK characters occupy 48 bytes and are a
+		// valid key everywhere, while 8 CJK characters (24 bytes) are still below
+		// the floor.
+		{name: "a multibyte boot key at the floor", mutate: func(c *Config) { c.BootstrapKey = strings.Repeat("密", 16) }},
+		{name: "a multibyte boot key below the floor", mutate: func(c *Config) { c.BootstrapKey = strings.Repeat("密", 15) }, wantError: "BOOTSTRAP_KEY"},
+
 		// Production coherence. Only the rules that are wrong in every reading.
 		{
 			name:   "a development instance may use a cheap hash",

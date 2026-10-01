@@ -42,6 +42,10 @@ type mockCalendarRepo struct {
 		tokenType string
 		newToken  string
 	}
+	// concurrentPatchName, when set, is applied to the row returned by Patch
+	// (and PatchAllowedHours) after the service's own changes, standing in for
+	// a disjoint write committed between this request's read and its patch.
+	concurrentPatchName *string
 }
 
 var _ CalendarRepository = (*mockCalendarRepo)(nil)
@@ -88,6 +92,65 @@ func (m *mockCalendarRepo) Update(_ context.Context, calendar *models.Calendar) 
 	m.updated = calendar
 
 	return m.updateErr
+}
+
+func (m *mockCalendarRepo) Patch(_ context.Context, _ uuid.UUID, patch repository.CalendarPatch) (*models.Calendar, error) {
+	if m.updateErr != nil {
+		return nil, m.updateErr
+	}
+	updated := *m.calendar
+	if patch.Name != nil {
+		updated.Name = *patch.Name
+	}
+	if patch.Threshold != nil {
+		updated.Threshold = *patch.Threshold
+	}
+	if patch.LockParticipants != nil {
+		updated.LockParticipants = *patch.LockParticipants
+	}
+	if patch.AllowHolidayEves != nil {
+		updated.AllowHolidayEves = *patch.AllowHolidayEves
+	}
+	if len(patch.AllowedWeekdays) > 0 {
+		updated.AllowedWeekdays = patch.AllowedWeekdays
+	}
+	if patch.HolidaysPolicy != nil {
+		updated.HolidaysPolicy = *patch.HolidaysPolicy
+	}
+	if patch.Timezone != nil {
+		updated.Timezone = *patch.Timezone
+	}
+	if patch.AllowAnonymousParticipants != nil {
+		updated.AllowAnonymousParticipants = *patch.AllowAnonymousParticipants
+	}
+	if patch.StartDate != nil {
+		updated.StartDate = patch.StartDate
+	}
+	if patch.EndDate != nil {
+		updated.EndDate = patch.EndDate
+	}
+	if m.concurrentPatchName != nil {
+		updated.Name = *m.concurrentPatchName
+	}
+	if patch.AllowedHours != nil {
+		merged, err := repository.MergeAllowedHours(updated.AllowedHours, *patch.AllowedHours)
+		if err != nil {
+			return nil, err
+		}
+		updated.AllowedHours = merged
+	}
+	m.updated = &updated
+	return &updated, nil
+}
+
+func (m *mockCalendarRepo) UpdateThreshold(_ context.Context, _ uuid.UUID, threshold int) error {
+	if m.updateErr != nil {
+		return m.updateErr
+	}
+	updated := *m.calendar
+	updated.Threshold = threshold
+	m.updated = &updated
+	return nil
 }
 
 func (m *mockCalendarRepo) Delete(context.Context, uuid.UUID) error { return m.deleteErr }
@@ -751,6 +814,8 @@ func TestRegenerateToken(t *testing.T) {
 
 // TestBuildPublicCalendarResponseNotifyConfig covers the inline JSON parsing of
 // notify_config, which decides whether participants are told a threshold was met.
+// Participant notification now also requires the email channel to be enabled,
+// matching what the backend actually enforces on the participant-email endpoints.
 func TestBuildPublicCalendarResponseNotifyConfig(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -759,9 +824,11 @@ func TestBuildPublicCalendarResponseNotifyConfig(t *testing.T) {
 	}{
 		{name: "absent", config: nil},
 		{name: "empty", config: ptr("")},
-		{name: "enabled and notifying", config: ptr(`{"enabled":true,"notify_participants":true}`), want: true},
+		{name: "enabled and notifying with the email channel on", config: ptr(`{"enabled":true,"notify_participants":true,"channels":{"email":{"enabled":true}}}`), want: true},
+		{name: "enabled and notifying", config: ptr(`{"enabled":true,"notify_participants":true}`)},
 		{name: "enabled but not notifying", config: ptr(`{"enabled":true,"notify_participants":false}`)},
 		{name: "notifying but disabled", config: ptr(`{"enabled":false,"notify_participants":true}`)},
+		{name: "notifying but the email channel is off", config: ptr(`{"enabled":true,"notify_participants":true,"channels":{"email":{"enabled":false}}}`)},
 		{name: "malformed json is treated as off", config: ptr(`{not json`)},
 		{name: "unrelated keys", config: ptr(`{"something":"else"}`)},
 	}
@@ -1156,6 +1223,44 @@ func TestUpdateCalendarMergesAllowedHours(t *testing.T) {
 			t.Error("allowed_hours was rewritten by an update that named no time field")
 		}
 	})
+}
+
+// TestUpdateCalendarAnswerReflectsARowCommittedAfterTheRead is the regression for
+// the stale pre-write snapshot. Previously the service built the PATCH response
+// from the calendar object it loaded before the write, decorating it with the
+// returned timestamp, so a disjoint commit that landed between the read and this
+// request's UPDATE (a rename, for example) was retained in the database but
+// missing from the response — the frontend then replaced the list entry with it,
+// visually reverting the other person's change until reload. The repository now
+// returns the complete post-write row and the service must answer from it.
+func TestUpdateCalendarAnswerReflectsARowCommittedAfterTheRead(t *testing.T) {
+	owner := uuid.New()
+	calendar := &models.Calendar{
+		OwnerID:   owner,
+		Name:      "Old name",
+		Threshold: 2,
+	}
+	calendar.ID = uuid.New()
+
+	renamed := "Concurrent name"
+	calendars := &mockCalendarRepo{calendar: calendar, concurrentPatchName: &renamed}
+	service := newService(calendars, &mockParticipantRepo{})
+
+	threshold := 9
+	got, err := service.UpdateCalendar(
+		context.Background(), owner.String(), "user", calendar.ID.String(),
+		&models.UpdateCalendarRequest{Threshold: &threshold},
+	)
+	if err != nil {
+		t.Fatalf("UpdateCalendar: %v", err)
+	}
+
+	if got.Name != renamed {
+		t.Errorf("Name = %q, want the concurrently committed %q (the pre-write snapshot leaked)", got.Name, renamed)
+	}
+	if got.Threshold != threshold {
+		t.Errorf("Threshold = %d, want this request's %d", got.Threshold, threshold)
+	}
 }
 
 // TestGetPublicCalendar covers the anonymous entry point, where the privacy filter and

@@ -274,6 +274,7 @@ import {
   prepareWeekdayTimes,
 } from '@/utils/calendar/weekdayTimes';
 import { getDefaultNotifyConfig, updateNotifyConfig, type NotifyConfig } from '@/api/notify';
+import { authApi } from '@/api/auth';
 import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const router = useRouter();
@@ -304,13 +305,29 @@ const form = reactive({
 
 // Notification config state
 const notifyConfig = ref<NotifyConfig>(getDefaultNotifyConfig());
-const smtpConfigured = ref(true); // TODO: Fetch from backend config
+// Email notification options depend on the instance actually having SMTP
+// configured; default to hidden until the backend confirms otherwise.
+const smtpConfigured = ref(false);
 
 const participants = ref<string[]>([]);
 
 // Automatically add the connected user as a default participant
 // and initialize timezone with the user's timezone
 onMounted(() => {
+  // Email notification options depend on the instance actually having SMTP
+  // configured. /auth/magic-link/available is the existing endpoint for exactly
+  // this answer (`emailService.IsConfigured()`), so it is reused rather than
+  // inventing a new one.
+  authApi
+    .checkMagicLinkAvailable()
+    .then(result => {
+      smtpConfigured.value = result.available;
+    })
+    .catch(() => {
+      // Best-effort: on failure the safe answer is "no SMTP", so email options
+      // stay hidden instead of being offered for mails that could never leave.
+      smtpConfigured.value = false;
+    });
   if (authStore.user?.display_name) {
     participants.value.push(authStore.user.display_name);
   }
@@ -423,6 +440,11 @@ async function handleSubmit() {
       participants: participants.value.filter(name => name.trim() !== ''),
     });
 
+    // A create that settles after the account changed returns null: the store did
+    // not commit it (it must not inject into the next account's list) and this view
+    // must not continue its success navigation either.
+    if (!calendar) return;
+
     // The creation endpoint deliberately ignores a notification configuration:
     // the backend only accepts one through PATCH /notify-config, which validates
     // the webhook URLs. This used to post a `notify_config` JSON string that the
@@ -430,7 +452,16 @@ async function handleSubmit() {
     // freshly created calendar.
     if (notifyConfig.value.enabled) {
       try {
-        await updateNotifyConfig(calendar.id, notifyConfig.value);
+        // An instance without SMTP cannot ever deliver the email channel; persist
+        // that truthfully instead of saving an "enabled" flag that says it can.
+        const config = { ...notifyConfig.value };
+        if (!smtpConfigured.value) {
+          config.channels = {
+            ...config.channels,
+            email: { ...config.channels.email, enabled: false },
+          };
+        }
+        await updateNotifyConfig(calendar.id, config);
       } catch {
         // The calendar itself exists; only its notification settings did not take.
         // Say so, and still send the user to the settings page to retry there,

@@ -243,7 +243,7 @@ The gaps this page used to list — email addresses in application logs, the
 calendar token in the SSE handler's log lines, personal data in Redis key names,
 the calendar token as a pub/sub channel name, and the two key families that still
 spelled out a user UUID — are closed. What follows is what is left, including the
-two exceptions that were kept on purpose.
+three exceptions that were kept on purpose.
 
 ### Deliberate exceptions in the logs
 
@@ -254,12 +254,23 @@ two exceptions that were kept on purpose.
   for an operator to complete a reset. The line no longer carries the address or
   the display name, only `user_id`. Configure SMTP and this branch is never
   reached.
+- **The generated bootstrap key, until the first account exists.**
+  `internal/auth/service/bootstrap_service.go` prints the one-time boot key at
+  `warn` when no `BOOTSTRAP_KEY` was pinned: on a fresh instance the log *is*
+  the delivery channel, exactly as with the reset link, and there is no operator
+  to hand it to through a UI yet. It is deliberately part of the message rather
+  than a structured field, so it cannot leak into field-based redaction logic,
+  and it is regenerated on every restart until the first user consumes it — which
+  is also why a pinned key must match across replicas. Set `BOOTSTRAP_KEY` and
+  this branch is never reached.
 - **`webhook_url` for Discord and Slack**, truncated to its first twenty
   characters. That is the scheme and host and none of the secret path.
 
-Both are exempted by name in
+The two *field names* are exempted by name in
 [`pkg/logger/logfields_test.go`](../pkg/logger/logfields_test.go); adding a third
-means editing that list, which is the point.
+to that list means editing it, which is the point. The bootstrap key never
+enters that list because it is deliberately part of the *message* rather than a
+field — see above — so the field-name guard has nothing to catch it under.
 
 ### Still open, and where
 

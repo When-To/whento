@@ -33,6 +33,7 @@ import (
 type fakeCalendarStore struct {
 	calendar *calendarModels.Calendar
 	err      error
+	list     []*calendarModels.Calendar
 }
 
 func (f *fakeCalendarStore) GetByID(_ context.Context, _ uuid.UUID) (*calendarModels.Calendar, error) {
@@ -40,6 +41,13 @@ func (f *fakeCalendarStore) GetByID(_ context.Context, _ uuid.UUID) (*calendarMo
 		return nil, f.err
 	}
 	return f.calendar, nil
+}
+
+func (f *fakeCalendarStore) ListWithNotifyConfig(_ context.Context) ([]*calendarModels.Calendar, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.list, nil
 }
 
 type fakeParticipantStore struct {
@@ -59,13 +67,30 @@ func (f *fakeParticipantStore) GetVerifiedParticipantsByCalendar(_ context.Conte
 
 type fakeAvailabilityStore struct {
 	available []availabilityModels.AvailableParticipant
-	err       error
+	count     int
+	// counts, when set, answers per-date participant counts keyed by ISO date;
+	// any date absent from it counts as zero. The reminder scheduler scans a
+	// window of dates, so an event has to be placeable on exactly one of them.
+	counts map[string]int
+	err    error
 }
 
 func (f *fakeAvailabilityStore) GetAvailableParticipantsForDate(
 	_ context.Context, _ uuid.UUID, _ time.Time,
 ) ([]availabilityModels.AvailableParticipant, error) {
 	return f.available, f.err
+}
+
+func (f *fakeAvailabilityStore) GetParticipantCountForDate(
+	_ context.Context, _ uuid.UUID, date time.Time,
+) (int, error) {
+	if f.err != nil {
+		return 0, f.err
+	}
+	if f.counts != nil {
+		return f.counts[date.Format("2006-01-02")], nil
+	}
+	return f.count, nil
 }
 
 type fakeUserStore struct {

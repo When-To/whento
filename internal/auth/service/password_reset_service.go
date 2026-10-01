@@ -20,7 +20,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/whento/pkg/email"
-	"github.com/whento/pkg/jwt"
 
 	// Aliased: the constructor below takes a *slog.Logger named `logger`, which
 	// would otherwise shadow the package.
@@ -37,16 +36,49 @@ var passwordResetTemplate string
 var passwordResetTranslationsJSON string
 
 const (
-	passwordResetTokenExpiry = 1 * time.Hour
-	resetTokenLength         = 32 // bytes (64 hex chars)
+	resetTokenLength = 32 // bytes (64 hex chars)
 )
+
+// The seams below are what the password-reset flow needs of its collaborators.
+// Declared here rather than taking concrete repositories so the service can be
+// exercised without a database or an SMTP server. The repository types satisfy
+// them structurally, so no call site changes.
+
+// PasswordResetUserStore is the slice of the user repository this service uses.
+type PasswordResetUserStore interface {
+	GetByEmail(ctx context.Context, email string) (*models.User, error)
+	GetByPasswordResetToken(ctx context.Context, token string) (*models.User, error)
+	SetPasswordResetToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) error
+	ClearPasswordResetToken(ctx context.Context, userID uuid.UUID) error
+	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error
+}
+
+// PasswordResetTokenStore revokes the user's other sessions on a reset, and
+// stores the fresh auto-login pair.
+type PasswordResetTokenStore interface {
+	Create(ctx context.Context, token *models.RefreshToken, securityGeneration int64) error
+	DeleteByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
+}
+
+// PasswordResetMailer sends the reset email and reports whether one can be sent.
+type PasswordResetMailer interface {
+	IsConfigured() bool
+	Send(msg email.Email) error
+}
+
+// PasswordResetTokenIssuer mints the auto-login token pair after a reset.
+type PasswordResetTokenIssuer interface {
+	GenerateAccessToken(userID, email, role string) (string, error)
+	GenerateRefreshToken(userID string) (string, time.Time, error)
+	IssueRefreshToken(userID, familyID string) (string, time.Time, string, error)
+}
 
 // PasswordResetService handles password reset business logic
 type PasswordResetService struct {
-	userRepo          *repository.UserRepository
-	tokenRepo         *repository.TokenRepository
-	emailService      *email.Service
-	jwtManager        *jwt.Manager
+	userRepo          PasswordResetUserStore
+	tokenRepo         PasswordResetTokenStore
+	emailService      PasswordResetMailer
+	jwtManager        PasswordResetTokenIssuer
 	cfg               *config.Config
 	logger            *slog.Logger
 	bcryptCost        int
@@ -56,10 +88,10 @@ type PasswordResetService struct {
 
 // NewPasswordResetService creates a new password reset service
 func NewPasswordResetService(
-	userRepo *repository.UserRepository,
-	tokenRepo *repository.TokenRepository,
-	emailService *email.Service,
-	jwtManager *jwt.Manager,
+	userRepo PasswordResetUserStore,
+	tokenRepo PasswordResetTokenStore,
+	emailService PasswordResetMailer,
+	jwtManager PasswordResetTokenIssuer,
 	cfg *config.Config,
 	logger *slog.Logger,
 	bcryptCost int,
@@ -132,8 +164,10 @@ func (s *PasswordResetService) processPasswordReset(email string) {
 		return
 	}
 
-	// Store token with expiry
-	expiresAt := time.Now().Add(passwordResetTokenExpiry)
+	// Store token with expiry, configured via PASSWORD_RESET_EXPIRY. The expiry
+	// has to be *the* expiry in both places that mention it: stored here for the
+	// validity check, and in the email text the user reads.
+	expiresAt := time.Now().Add(s.cfg.Email.PasswordResetExpiry)
 	if err := s.userRepo.SetPasswordResetToken(ctx, user.ID, token, expiresAt); err != nil {
 		s.logger.Error("failed to store reset token",
 			"user_id", user.ID,
@@ -197,13 +231,14 @@ func (s *PasswordResetService) ResetPassword(ctx context.Context, req *models.Re
 		// Non-fatal - continue with auto-login
 	}
 
-	// Invalidate all existing refresh tokens (force re-login on other devices)
-	if err := s.tokenRepo.DeleteByUserID(ctx, user.ID); err != nil {
-		s.logger.Error("failed to revoke existing tokens after password reset",
-			"user_id", user.ID,
-			"error", err.Error())
-		// Non-fatal - continue
+	// Invalidate every other session and advance the security generation before
+	// this reset publishes its own. A login that already accepted the old
+	// password presents the previous generation and is refused.
+	generation, err := s.tokenRepo.DeleteByUserID(ctx, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to revoke sessions after password reset: %w", err)
 	}
+	user.SecurityGeneration = generation
 
 	// Generate new tokens for auto-login
 	accessToken, err := s.jwtManager.GenerateAccessToken(user.ID.String(), user.Email, user.Role)
@@ -211,7 +246,7 @@ func (s *PasswordResetService) ResetPassword(ctx context.Context, req *models.Re
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	refreshToken, expiresAt, err := s.jwtManager.GenerateRefreshToken(user.ID.String())
+	refreshToken, expiresAt, familyID, err := s.jwtManager.IssueRefreshToken(user.ID.String(), "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
@@ -221,10 +256,11 @@ func (s *PasswordResetService) ResetPassword(ctx context.Context, req *models.Re
 		UserID:    user.ID,
 		TokenHash: repository.HashToken(refreshToken),
 		ExpiresAt: expiresAt,
+		FamilyID:  familyID,
 	}
 	storedToken.ID = uuid.New()
 
-	if err := s.tokenRepo.Create(ctx, storedToken); err != nil {
+	if err := s.tokenRepo.Create(ctx, storedToken, user.SecurityGeneration); err != nil {
 		return nil, fmt.Errorf("failed to store refresh token: %w", err)
 	}
 
@@ -232,10 +268,12 @@ func (s *PasswordResetService) ResetPassword(ctx context.Context, req *models.Re
 		"user_id", user.ID)
 
 	return &models.ResetPasswordResponse{
-		Message:      "Password reset successful",
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		User:         toUserResponse(user),
+		Message:          "Password reset successful",
+		AccessToken:      accessToken,
+		RefreshToken:     refreshToken,
+		RefreshExpiresAt: expiresAt,
+		SessionID:        familyID,
+		User:             toUserResponse(user),
 	}, nil
 }
 
@@ -257,7 +295,7 @@ func (s *PasswordResetService) sendPasswordResetEmail(user *models.User, resetUR
 	}
 
 	// Prepare template data
-	expiryDuration := passwordResetTokenExpiry.String()
+	expiryDuration := s.cfg.Email.PasswordResetExpiry.String()
 	data := map[string]any{
 		"Subject":        trans["subject"],
 		"Greeting":       email.ReplaceVar(trans["greeting"], "DisplayName", user.DisplayName),

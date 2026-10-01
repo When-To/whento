@@ -23,6 +23,7 @@
           </p>
           <div class="mt-10 flex flex-col justify-center gap-4 sm:flex-row">
             <router-link
+              v-if="registrationEnabled"
               to="/register"
               class="btn bg-white text-primary-600 hover:bg-gray-100 focus:ring-white"
             >
@@ -242,7 +243,7 @@
         <p class="mb-8 text-lg text-gray-600 dark:text-gray-400">
           {{ t('home.ctaDescription') }}
         </p>
-        <router-link to="/register" class="btn btn-primary btn-lg">
+        <router-link v-if="registrationEnabled" to="/register" class="btn btn-primary btn-lg">
           {{ t('home.ctaButton') }}
         </router-link>
       </div>
@@ -251,7 +252,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '@/stores/auth';
 
 const { t } = useI18n();
+const authStore = useAuthStore();
+const registrationEnabled = computed(() => authStore.registrationEnabled);
 </script>

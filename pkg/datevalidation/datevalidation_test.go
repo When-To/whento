@@ -9,8 +9,12 @@ import (
 	"time"
 )
 
-// Fixtures, verified against the holiday library rather than assumed. Weekdays follow
-// Go's numbering (Sunday = 0), which is what IsDateAllowed compares against.
+// Fixtures, verified against the offline holiday library rather than assumed.
+// Weekdays follow Go's numbering (Sunday = 0), which is what IsDateAllowed
+// compares against. The 2026 dates were checked against the rickar/cal
+// dataset the package now ships: Bastille Day (14 July) is a French holiday
+// and an ordinary US day, Christmas is shared, and both countries' eve of
+// Christmas is 24 December.
 //
 //	2026-03-17  Tuesday    ordinary day in FR and US
 //	2026-07-14  Tuesday    Bastille Day: a holiday in FR, an ordinary day in US
@@ -328,6 +332,44 @@ func TestIsDateAllowed(t *testing.T) {
 	}
 }
 
+// TestBlockFailsClosedWithoutHolidayData pins the availability-defect behaviour
+// this module used to have: a calendar set to "block" admitted every holiday
+// whenever the source was unreachable, because the lookup collapsed its error
+// into "not a holiday". Under the block policy an unknown day must be refused,
+// not admitted. With the offline source there is no network failure, but a
+// country the bundled dataset does not cover is the same problem in another
+// costume: Asia/Tokyo maps to Japan, which ships region-only definitions, so it
+// is absent from the national table and every date must fail closed.
+func TestBlockFailsClosedWithoutHolidayData(t *testing.T) {
+	tests := []struct {
+		name     string
+		timezone string
+	}{
+		{"a country with no national data in the offline table", "Asia/Tokyo"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// everyDay means the weekday check alone would admit it: only the
+			// missing holiday data can refuse it.
+			if got := IsDateAllowed(date(t, "2026-06-01"), tc.timezone, everyDay, "block", false); got {
+				t.Errorf("IsDateAllowed(2026-06-01, %s, everyDay, block) = true, want false: "+
+					"a block calendar must fail closed when the holiday data is unavailable", tc.timezone)
+			}
+		})
+	}
+}
+
+// TestTheSameDateIsAllowedWithData is the control for the test above: a country
+// whose national dataset the offline table covers is a known ordinary day, and
+// the block policy leaves it to the weekday check — so the fail-closed path only
+// ever triggers on genuinely missing data, never on a normal working day.
+func TestTheSameDateIsAllowedWithData(t *testing.T) {
+	if got := IsDateAllowed(date(t, "2026-06-01"), "Europe/Paris", everyDay, "block", false); !got {
+		t.Error("IsDateAllowed(2026-06-01, Europe/Paris, everyDay, block) = false, want true")
+	}
+}
+
 // TestHolidayPolicyIsIndependentOfTimeOfDay guards the boundary that bit the frontend:
 // a timestamp carries a clock, and the holiday lookup must key on the calendar date the
 // caller means, not on whatever UTC instant the value happens to sit at.
@@ -446,4 +488,79 @@ func TestIsHolidayEveLooksExactlyOneDayAhead(t *testing.T) {
 	if IsHolidayEve(christmas, "FR") {
 		t.Error("Christmas itself was reported as an eve")
 	}
+}
+
+// TestListHolidaysServesTheBackendDataset pins what the endpoint the frontend
+// consumes will return: the same offline dataset the block/allow policy runs on,
+// in date order, with the library's local-language name.
+func TestListHolidaysServesTheBackendDataset(t *testing.T) {
+	holidays, err := ListHolidays("FR", 2026)
+	if err != nil {
+		t.Fatalf("ListHolidays(FR, 2026): %v", err)
+	}
+	if len(holidays) == 0 {
+		t.Fatal("ListHolidays returned nothing for a covered country")
+	}
+
+	// Bastille Day and Christmas must be in the year's list, matching the
+	// fixtures the availability tests use.
+	var sawBastille, sawChristmas bool
+	var last time.Time
+	for _, h := range holidays {
+		iso := h.Date.Format("2006-01-02")
+		if iso == frenchHoliday {
+			sawBastille = true
+		}
+		if iso == sharedHoliday {
+			sawChristmas = true
+		}
+		if h.Name == "" {
+			t.Errorf("holiday on %s has no name", iso)
+		}
+		if last.After(h.Date) {
+			t.Errorf("holidays are not sorted: %s after %s", h.Date.Format("2006-01-02"), last.Format("2006-01-02"))
+		}
+		last = h.Date
+	}
+	if !sawBastille || !sawChristmas {
+		t.Errorf("year list misses fixtures: Bastille=%v Christmas=%v", sawBastille, sawChristmas)
+	}
+}
+
+// TestListHolidaysRejectsUncoveredCountries: a country without a national
+// dataset is an error, not an empty list — the caller can distinguish "no
+// holidays that year" from "no data".
+func TestListHolidaysRejectsUncoveredCountries(t *testing.T) {
+	if _, err := ListHolidays("XX", 2026); err == nil {
+		t.Error("ListHolidays for an unknown country did not fail")
+	}
+	// AU ships region-only definitions, so it has no national set either.
+	if _, err := ListHolidays("AU", 2026); err == nil {
+		t.Error("ListHolidays for a region-only country did not fail")
+	}
+}
+
+// TestSupportedCountries lists exactly the offline table's keys, sorted.
+func TestSupportedCountries(t *testing.T) {
+	countries := SupportedCountries()
+	if len(countries) == 0 {
+		t.Fatal("SupportedCountries returned nothing")
+	}
+	if !contains(countries, "FR") || !contains(countries, "US") {
+		t.Errorf("SupportedCountries missing FR/US: %v", countries)
+	}
+	for i := 1; i < len(countries); i++ {
+		if countries[i-1] >= countries[i] {
+			t.Errorf("countries are not sorted at %q", countries[i])
+		}
+	}
+}
+
+func contains(list []string, want string) bool {
+	for _, v := range list {
+		if v == want {
+			return true
+		}
+	}
+	return false
 }

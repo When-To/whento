@@ -5,6 +5,7 @@
 package validator
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -163,6 +164,39 @@ func TestValidationErrors_Error(t *testing.T) {
 
 	if errStr != expected {
 		t.Errorf("ValidationErrors.Error() = %v, want %v", errStr, expected)
+	}
+}
+
+func TestValidateMaxBytes(t *testing.T) {
+	// The unit is *bytes*, because that is the unit bcrypt enforces (72 bytes).
+	// 24 ASCII characters fit; 24 CJK characters are 72 bytes and must be
+	// refused at the 73rd byte, even though go-playground's `max` (which counts
+	// runes) would have accepted both. strings.Repeat keeps the counts exact; a
+	// hand-typed row of y's invites an off-by-one that proves nothing.
+	ascii72 := strings.Repeat("y", 72)
+	ascii73 := strings.Repeat("y", 73)
+	cjk24 := strings.Repeat("密", 24) // 3 bytes/char = 72 bytes
+	cjk25 := strings.Repeat("密", 25) // 75 bytes
+
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{"ascii within limit", strings.Repeat("y", 24), false},
+		{"ascii at the byte limit", ascii72, false},
+		{"ascii over the byte limit", ascii73, true},
+		{"cjk at the byte limit", cjk24, false},
+		{"cjk over the byte limit", cjk25, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateVar(tt.value, "maxbytes=72")
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateVar() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }
 

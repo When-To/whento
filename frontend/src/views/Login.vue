@@ -15,7 +15,7 @@
           <h1 class="font-display text-3xl font-bold text-gray-900 dark:text-white">
             {{ t('auth.login') }}
           </h1>
-          <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          <p v-if="registrationEnabled" class="mt-2 text-sm text-gray-600 dark:text-gray-400">
             {{ t('auth.noAccount') }}
             <router-link
               to="/register"
@@ -23,6 +23,9 @@
             >
               {{ t('auth.registerButton') }}
             </router-link>
+          </p>
+          <p v-else class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            {{ t('auth.registrationDisabled') }}
           </p>
         </div>
 
@@ -249,6 +252,8 @@ const route = useRoute();
 const { t } = useI18n();
 const authStore = useAuthStore();
 
+const registrationEnabled = computed(() => authStore.registrationEnabled);
+
 // Check if WebAuthn is supported in the browser
 const isWebAuthnSupported = computed(() => {
   return typeof window !== 'undefined' && window.PublicKeyCredential !== undefined;
@@ -410,7 +415,7 @@ async function loginWithDiscoverablePasskey() {
 
     // Store tokens in auth store
     if (response.access_token) {
-      authStore.setTokens(response.access_token, response.expires_in);
+      authStore.setTokens(response.access_token, response.expires_in, response.session_id);
       authStore.user = response.user;
     }
 

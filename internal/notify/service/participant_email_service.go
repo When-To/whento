@@ -84,6 +84,13 @@ func NewParticipantEmailService(
 	}
 }
 
+// IsConfigured reports whether the mailer this service sends through has any
+// SMTP configuration. The participant-email endpoints gate on it: without it a
+// verification link is offered for an email that could never be delivered.
+func (s *ParticipantEmailService) IsConfigured() bool {
+	return s.emailService.IsConfigured()
+}
+
 // AddEmail adds email to participant and sends verification
 func (s *ParticipantEmailService) AddEmail(
 	ctx context.Context,

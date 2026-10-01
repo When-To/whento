@@ -11,6 +11,7 @@ import (
 	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/auth/service"
+	"github.com/whento/whento/internal/auth/sessioncookie"
 )
 
 // PasswordResetHandler handles password reset HTTP requests
@@ -95,16 +96,11 @@ func (h *PasswordResetHandler) ResetPassword(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Set refresh token cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    resp.RefreshToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   7 * 24 * 60 * 60, // 7 days
-	})
+	// Set refresh token cookie, with the same lifetime as the JWT it carries.
+	if resp.RefreshToken != "" {
+		sessioncookie.SetRefreshToken(w, r, resp.RefreshToken, resp.RefreshExpiresAt)
+		resp.RefreshToken = ""
+	}
 
 	httputil.JSON(w, http.StatusOK, resp)
 }

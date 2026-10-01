@@ -142,6 +142,202 @@ describe('locale files', () => {
   });
 });
 
+describe('no duplicate keys in the locale files', () => {
+  // JSON.parse silently keeps the last value for a duplicated key, so the ratchet
+  // the blocks above rely on (every locale parses to the same shape) can pass while
+  // one of the files literally contains the same key twice at the same level. The
+  // duplicate that bit us (`errors.passwordTooLong` in fr.json) rendered identically
+  // either way, so no runtime-visible test could see it either — only the raw text
+  // can. duplicateKeys (below) walks the file with a real recursive-descent parser
+  // that records every key under its full path and flags a repeat within one object.
+  it('has no repeated key at any depth', () => {
+    const offenders: string[] = [];
+    for (const locale of LOCALES) {
+      const text = fs.readFileSync(path.join(SRC, 'locales', `${locale}.json`), 'utf8');
+      offenders.push(...duplicateKeys(text).map(path => `${locale}.json: ${path}`));
+    }
+    expect(offenders, 'duplicate keys anywhere in a locale file').toEqual([]);
+  });
+
+  describe('duplicateKeys', () => {
+    it('finds a duplicate that follows a string value containing a comma', () => {
+      // The comma inside "x,y" is part of the value, not a member separator.
+      expect(duplicateKeys('{"a":"x,y","b":1,"b":2}')).toEqual(['b']);
+    });
+
+    it('finds a duplicate whose earlier spelling was escaped', () => {
+      // \u0062 and b are the same JSON key after decoding.
+      expect(duplicateKeys('{"a\\u0062c":1,"abc":2}')).toEqual(['abc']);
+    });
+
+    it('finds a duplicate inside a nested object', () => {
+      expect(duplicateKeys('{"a":{"b":1,"b":2}}')).toEqual(['a.b']);
+    });
+
+    it('does not flag two objects with the same member names in one array', () => {
+      expect(duplicateKeys('[{"a":1},{"a":2}]')).toEqual([]);
+    });
+
+    it('does not flag strings or scalars as keys', () => {
+      expect(duplicateKeys('{"a":"x,y","b":true,"c":null,"d":3.14}')).toEqual([]);
+    });
+  });
+});
+
+/**
+ * Key paths (dot-joined) whose key occurs more than once inside the *same*
+ * object of a valid JSON document.
+ *
+ * JSON.parse silently keeps the last value for a duplicated key, so the ratchet
+ * the blocks above rely on (every locale parses to the same shape) can pass
+ * while one of the files literally contains the same key twice at the same
+ * level. The duplicate that bit us (`errors.passwordTooLong` in fr.json)
+ * rendered identically either way, so no runtime-visible test could see it
+ * either — only the raw text can, and a duplicate is a property of the source,
+ * so the walk below must be a real recursive-descent scan:
+ *
+ *  - quoted strings, whether keys or values, are consumed whole by `readString`,
+ *    so a comma or brace inside a translation cannot be mistaken for structure;
+ *  - escape sequences are decoded, so `"a\u0062c"` and `"abc"` are the same key;
+ *  - each object gets its own member set, so an array of two objects with the
+ *    same member names is not a false positive — a key is a duplicate only when
+ *    it repeats within one object.
+ */
+function duplicateKeys(text: string): string[] {
+  let i = 0;
+  const dupes: string[] = [];
+
+  const ws = (): void => {
+    while (i < text.length && ' \t\n\r'.includes(text[i])) i += 1;
+  };
+
+  // Consumes one quoted string, decoding the JSON escapes, so a key written as
+  // `\u0061` compares equal to one written as `a`.
+  const readString = (): string => {
+    let out = '';
+    i += 1; // opening quote
+    while (text[i] !== '"') {
+      if (text[i] === '\\') {
+        const esc = text[i + 1];
+        switch (esc) {
+          case 'u': {
+            out += String.fromCharCode(parseInt(text.slice(i + 2, i + 6), 16));
+            i += 6; // backslash, u, and four hex digits
+            break;
+          }
+          case 'n':
+            out += '\n';
+            i += 2;
+            break;
+          case 't':
+            out += '\t';
+            i += 2;
+            break;
+          case 'r':
+            out += '\r';
+            i += 2;
+            break;
+          case 'b':
+            out += '\b';
+            i += 2;
+            break;
+          case 'f':
+            out += '\f';
+            i += 2;
+            break;
+          case '"':
+            out += '"';
+            i += 2;
+            break;
+          case '\\':
+            out += '\\';
+            i += 2;
+            break;
+          case '/':
+            out += '/';
+            i += 2;
+            break;
+          default:
+            out += esc;
+            i += 2;
+        }
+      } else {
+        out += text[i];
+        i += 1;
+      }
+    }
+    i += 1; // closing quote
+    return out;
+  };
+
+  // Consumes a value that is not an object or array: a string or a bare JSON
+  // scalar (number, true, false, null).
+  const scalar = (): void => {
+    if (text[i] === '"') {
+      readString();
+      return;
+    }
+    while (i < text.length && !',}]'.includes(text[i])) i += 1;
+  };
+
+  // Walks one JSON value at `path` (the dot-joined object chain leading to it).
+  const value = (path: string): void => {
+    ws();
+    const c = text[i];
+    if (c === '{') {
+      i += 1; // '{'
+      const members = new Set<string>();
+      ws();
+      if (text[i] === '}') {
+        i += 1;
+        return;
+      }
+      for (;;) {
+        ws();
+        const key = readString();
+        ws();
+        i += 1; // ':' — a key always precedes ':' in a valid document
+        const keyPath = path ? `${path}.${key}` : key;
+        if (members.has(key)) {
+          dupes.push(keyPath);
+        } else {
+          members.add(key);
+        }
+        value(keyPath);
+        ws();
+        if (text[i] === ',') {
+          i += 1;
+          continue;
+        }
+        break;
+      }
+      i += 1; // '}'
+      return;
+    }
+    if (c === '[') {
+      i += 1; // '['
+      ws();
+      while (text[i] !== ']') {
+        // Array elements share the parent path and each element has its own
+        // object scope, so two objects `{ "a": … }` in one array are fine.
+        value(path);
+        ws();
+        if (text[i] === ',') {
+          i += 1;
+          continue;
+        }
+        break;
+      }
+      i += 1; // ']'
+      return;
+    }
+    scalar();
+  };
+
+  value('');
+  return dupes;
+}
+
 describe('translation keys used by the app', () => {
   /** `t('a.b')` and `$t('a.b')`, but not `foo.t('a.b')` or `somethingt('a.b')`. */
   const CALL = /(?<![A-Za-z0-9_$.])\$?t\(\s*'([a-zA-Z][\w.]*)'/g;

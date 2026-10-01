@@ -90,6 +90,11 @@ func TestCode(t *testing.T) {
 		},
 		{name: "check violation", err: pgErr(CodeCheckViolation, "recurrences_day_of_week_check"), want: "23514"},
 		{
+			name: "undefined table, wrapped",
+			err:  fmt.Errorf("query: %w", pgErr(CodeUndefinedTable, "")),
+			want: "42P01",
+		},
+		{
 			name: "message merely contains the code",
 			err:  impostor{msg: "could not connect to host 23505.db.example.com"},
 			want: "",
@@ -117,6 +122,12 @@ func TestHasCode(t *testing.T) {
 			name: "matching code",
 			err:  pgErr(CodeUniqueViolation, "users_email_key"),
 			code: CodeUniqueViolation,
+			want: true,
+		},
+		{
+			name: "undefined table matches its own code",
+			err:  pgErr(CodeUndefinedTable, ""),
+			code: CodeUndefinedTable,
 			want: true,
 		},
 		{

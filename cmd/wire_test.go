@@ -62,6 +62,8 @@ func TestBuildHandlers(t *testing.T) {
 		}{
 			{name: "health", got: h.health},
 			{name: "auth", got: h.auth},
+			{name: "bootstrap", got: h.bootstrap},
+			{name: "bootstrapService", got: h.bootstrapService},
 			{name: "passwordReset", got: h.passwordReset},
 			{name: "magicLink", got: h.magicLink},
 			{name: "adminMFA", got: h.adminMFA},

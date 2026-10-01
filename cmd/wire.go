@@ -16,6 +16,9 @@ import (
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/whento/internal/config"
 
+	// Holidays module
+	holidayHandlers "github.com/whento/whento/internal/holidays"
+
 	// Auth module
 	authHandlers "github.com/whento/whento/internal/auth/handlers"
 	authRepo "github.com/whento/whento/internal/auth/repository"
@@ -71,6 +74,11 @@ type deps struct {
 	limiter    *routeLimiter
 	quota      *Services
 
+	// instanceID identifies this process to the reminder-job queue: it is the
+	// value written into reminder_jobs.locked_by so a crash can be distinguished
+	// from a slow delivery and jobs reclaimed after the lock TTL.
+	instanceID string
+
 	// cacheProbe is nil when no Redis client was created — see run(), where the
 	// distinction between "no cache configured" and "cache down" is made.
 	cacheProbe authHandlers.Probe
@@ -87,9 +95,15 @@ type handlers struct {
 	// Auth
 	health        *authHandlers.HealthHandler
 	auth          *authHandlers.AuthHandler
+	bootstrap     *authHandlers.BootstrapHandler
 	passwordReset *authHandlers.PasswordResetHandler
 	magicLink     *authHandlers.MagicLinkHandler
 	adminMFA      *authHandlers.AdminMFAHandler
+
+	// Lifecycle services. Like `reminders` below, these are sources the HTTP
+	// handlers route to but are not HTTP handlers themselves; run() drives their
+	// startup side (the boot key) directly instead of through a handler.
+	bootstrapService *authService.BootstrapService
 
 	// Passkey and MFA
 	passkey *passkeyHandlers.PasskeyHandler
@@ -103,6 +117,13 @@ type handlers struct {
 	notifyConfig     *notifyHandlers.NotifyConfigHandler
 	participantEmail *notifyHandlers.ParticipantEmailHandler
 
+	// Reminders
+	reminders *notifyService.ReminderScheduler
+
+	// Expired refresh-token sweep. Independent of a successful rotation, which
+	// is the only other place those rows are deleted.
+	refreshTokens *authRepo.TokenRepository
+
 	// Availability
 	availability *availabilityHandlers.AvailabilityHandler
 	recurrence   *availabilityHandlers.RecurrenceHandler
@@ -114,6 +135,9 @@ type handlers struct {
 
 	// SEO
 	seo *seo.Handler
+
+	// Holidays
+	holidays *holidayHandlers.Handler
 }
 
 // buildHandlers is the whole of the manual dependency injection: repositories,
@@ -165,6 +189,14 @@ func buildHandlers(d *deps) (*handlers, error) {
 	// ========== AUTH HANDLERS (need the passkey and MFA repositories) ==========
 	authHandler := authHandlers.NewAuthHandler(authSvc, userRepo, d.mailer, d.cfg, d.log, mfaRepository, passkeyRepository)
 
+	// The bootstrap flow owns the one-time first-user slot: the boot key, the
+	// "no users yet" state and the atomic first insert. It issues the session
+	// for the account it creates through authSvc. The service is kept alongside
+	// its handler because run() drives its startup side (materialise and log the
+	// boot key) without going through HTTP.
+	bootstrapService := authService.NewBootstrapService(userRepo, authSvc, d.cfg.BcryptCost, d.cfg, d.log)
+	bootstrapHandler := authHandlers.NewBootstrapHandler(bootstrapService, d.log)
+
 	// ========== CALENDAR MODULE ==========
 	calendarRepository := calendarRepo.NewCalendarRepository(d.pool)
 	participantRepository := calendarRepo.NewParticipantRepository(d.pool)
@@ -213,6 +245,26 @@ func buildHandlers(d *deps) (*handlers, error) {
 		d.log,
 	)
 
+	reminderJobRepo := notifyRepo.NewReminderJobRepository(d.pool)
+
+	// The reminder scheduler is a background job issuer/deliverer, not an
+	// endpoint: it reads the notify_config stored by the handler above and keeps
+	// the reminder promise. The persisted job queue is what makes it reliable;
+	// instanceID marks which process holds which jobs through ClaimDue.
+	reminderScheduler := notifyService.NewReminderScheduler(
+		calendarRepository,
+		availabilityRepository,
+		participantRepository,
+		userRepo,
+		notificationLogRepo,
+		d.mailer,
+		externalNotifier,
+		reminderJobRepo,
+		d.cfg.AppURL,
+		d.instanceID,
+		d.log,
+	)
+
 	// ========== AVAILABILITY SERVICE (depends on the notification service) ==========
 	availabilitySvc := availabilityService.NewAvailabilityService(
 		availabilityRepository,
@@ -226,9 +278,12 @@ func buildHandlers(d *deps) (*handlers, error) {
 	return &handlers{
 		health:        authHandlers.NewHealthHandler(d.pool, d.cacheProbe),
 		auth:          authHandler,
+		bootstrap:     bootstrapHandler,
 		passwordReset: authHandlers.NewPasswordResetHandler(passwordResetSvc),
 		magicLink:     authHandlers.NewMagicLinkHandler(magicLinkSvc, d.mailer, d.log),
 		adminMFA:      authHandlers.NewAdminMFAHandler(mfaSvc, d.log),
+		// Startup side of the flow, kept alongside the handler it belongs with.
+		bootstrapService: bootstrapService,
 
 		passkey: passkeyHandler,
 		mfa:     mfaHandler,
@@ -247,6 +302,8 @@ func buildHandlers(d *deps) (*handlers, error) {
 			calendarRepository,
 			d.log,
 		),
+		reminders:     reminderScheduler,
+		refreshTokens: tokenRepo,
 
 		availability: availabilityHandlers.NewAvailabilityHandler(availabilitySvc),
 		recurrence:   availabilityHandlers.NewRecurrenceHandler(availabilitySvc),
@@ -255,6 +312,7 @@ func buildHandlers(d *deps) (*handlers, error) {
 		ics:         icsHandlers.NewICSHandler(icsSvc),
 		unifiedFeed: icsHandlers.NewUnifiedFeedConfigHandler(unifiedFeedConfigSvc),
 
-		seo: seo.NewHandler(d.cfg.AppURL, d.cfg.DisableRobots, buildType),
+		seo:      seo.NewHandler(d.cfg.AppURL, d.cfg.DisableRobots, buildType),
+		holidays: holidayHandlers.NewHandler(),
 	}, nil
 }

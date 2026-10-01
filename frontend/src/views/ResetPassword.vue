@@ -32,14 +32,17 @@
                 v-model="newPassword"
                 type="password"
                 required
-                minlength="8"
                 autocomplete="new-password"
                 class="input"
-                :class="{ 'input-error': error }"
+                :class="{ 'input-error': passwordError }"
                 :disabled="loading"
+                @blur="passwordTouched = true"
               />
             </label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p v-if="passwordError" class="mt-1 text-sm text-danger-600 dark:text-danger-400">
+              {{ passwordError }}
+            </p>
+            <p v-else class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{ t('auth.resetPassword.passwordRequirement') }}
             </p>
           </div>
@@ -55,13 +58,15 @@
                 v-model="confirmPassword"
                 type="password"
                 required
-                minlength="8"
                 autocomplete="new-password"
                 class="input"
-                :class="{ 'input-error': error }"
+                :class="{ 'input-error': confirmMismatch }"
                 :disabled="loading"
               />
             </label>
+            <p v-if="confirmMismatch" class="mt-1 text-sm text-danger-600 dark:text-danger-400">
+              {{ t('auth.resetPassword.passwordMismatch') }}
+            </p>
           </div>
 
           <!-- Error Message -->
@@ -145,12 +150,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useToastStore } from '@/stores/toast';
 import { translateErrorMessage } from '@/utils/errorTranslator';
+import { validatePassword } from '@/utils/password';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -165,12 +171,27 @@ const loading = ref(false);
 const error = ref('');
 const success = ref(false);
 
+// The same rule the server enforces (validatePassword mirrors the backend's
+// strongpassword + maxbytes), so a weak password is refused before the round
+// trip instead of after. The translated failure key is shown under the field.
+//
+// The message is only rendered once the field has been touched: an empty (still
+// pristine) form is not an error state, and showing "too short" on first paint
+// made it look like the page had already failed. The validity check that gates
+// the submit button uses the untamed result, so a pristine form stays disabled.
+const passwordValidationError = computed(() => {
+  const failure = validatePassword(newPassword.value);
+  return failure ? t(failure) : '';
+});
+const passwordTouched = ref(false);
+const passwordError = computed(() => (passwordTouched.value ? passwordValidationError.value : ''));
+
+const confirmMismatch = computed(
+  () => confirmPassword.value.length > 0 && newPassword.value !== confirmPassword.value
+);
+
 const isPasswordValid = computed(() => {
-  return (
-    newPassword.value.length >= 8 &&
-    confirmPassword.value.length >= 8 &&
-    newPassword.value === confirmPassword.value
-  );
+  return passwordValidationError.value === '' && newPassword.value === confirmPassword.value;
 });
 
 onMounted(() => {
@@ -192,6 +213,7 @@ const handleSubmit = async () => {
   try {
     await authStore.resetPassword(token.value, newPassword.value);
     success.value = true;
+    passwordTouched.value = false;
     toastStore.success(t('auth.resetPassword.successToast'));
 
     // Auto-redirect to dashboard after 2 seconds

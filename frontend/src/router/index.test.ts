@@ -13,6 +13,8 @@ import type { User } from '@/types';
 
 const authApi = {
   register: vi.fn(),
+  bootstrap: vi.fn(),
+  bootstrapStatus: vi.fn(async () => ({ needs_bootstrap: false, registration_enabled: true })),
   login: vi.fn(),
   logout: vi.fn(),
   getMe: vi.fn(),
@@ -53,11 +55,11 @@ function deferred<T>() {
 }
 
 /**
- * The guard only ever reads `meta` and `fullPath`, so a route stub is enough and
- * keeps the test about the guard rather than about vue-router's matcher.
+ * The guard only ever reads `meta`, `fullPath` and `name`, so a route stub is
+ * enough and keeps the test about the guard rather than about vue-router's matcher.
  */
-function target(meta: RouteLocationNormalized['meta'], fullPath = '/somewhere') {
-  return { meta, fullPath } as RouteLocationNormalized;
+function target(meta: RouteLocationNormalized['meta'], fullPath = '/somewhere', name?: string) {
+  return { meta, fullPath, name } as RouteLocationNormalized;
 }
 
 const from = target({}, '/');
@@ -277,6 +279,83 @@ describe('authGuard', () => {
       await navigate(target({ public: true }, '/c/token'));
 
       expect(authApi.getMe).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('registration and bootstrap gating', () => {
+    it('routes /register to /login when registration is closed', async () => {
+      authApi.bootstrapStatus.mockResolvedValue({
+        needs_bootstrap: false,
+        registration_enabled: false,
+      });
+      authApi.getMe.mockRejectedValue({ code: 'UNAUTHORIZED' });
+
+      const next = await navigate(
+        target({ public: true, hideForAuth: true }, '/register', 'register')
+      );
+
+      expect(next).toHaveBeenCalledWith({ name: 'login' });
+    });
+
+    it('routes /register to /bootstrap when the instance still needs its first user', async () => {
+      authApi.bootstrapStatus.mockResolvedValue({
+        needs_bootstrap: true,
+        registration_enabled: false,
+      });
+      authApi.getMe.mockRejectedValue({ code: 'UNAUTHORIZED' });
+      const next = await navigate(
+        target({ public: true, hideForAuth: true }, '/register', 'register')
+      );
+
+      expect(next).toHaveBeenCalledWith({ name: 'bootstrap' });
+    });
+
+    it('leaves /bootstrap reachable while the instance needs a first user', async () => {
+      authApi.bootstrapStatus.mockResolvedValue({
+        needs_bootstrap: true,
+        registration_enabled: false,
+      });
+      authApi.getMe.mockRejectedValue({ code: 'UNAUTHORIZED' });
+
+      const next = await navigate(target({ public: true }, '/bootstrap', 'bootstrap'));
+
+      expect(next).toHaveBeenCalledWith();
+    });
+
+    it('sends a signed-in visitor away from /bootstrap', async () => {
+      authApi.bootstrapStatus.mockResolvedValue({
+        needs_bootstrap: true,
+        registration_enabled: false,
+      });
+      apiClient.hasSession.mockReturnValue(true);
+      authApi.getMe.mockResolvedValue(USER);
+
+      const next = await navigate(target({ public: true }, '/bootstrap', 'bootstrap'));
+
+      expect(next).toHaveBeenCalledWith({ name: 'dashboard' });
+    });
+
+    it('sends an anonymous visitor from /bootstrap to /login once configured', async () => {
+      authApi.bootstrapStatus.mockResolvedValue({
+        needs_bootstrap: false,
+        registration_enabled: true,
+      });
+      authApi.getMe.mockRejectedValue({ code: 'UNAUTHORIZED' });
+
+      const next = await navigate(target({ public: true }, '/bootstrap', 'bootstrap'));
+
+      expect(next).toHaveBeenCalledWith({ name: 'login' });
+    });
+
+    it('keeps /bootstrap reachable when the status call fails', async () => {
+      // The only route a fresh closed instance admits must not be closed by a
+      // failed capability read masquerading as "configured".
+      authApi.bootstrapStatus.mockRejectedValue(new Error('offline'));
+      authApi.getMe.mockRejectedValue({ code: 'UNAUTHORIZED' });
+
+      const next = await navigate(target({ public: true }, '/bootstrap', 'bootstrap'));
+
+      expect(next).toHaveBeenCalledWith();
     });
   });
 

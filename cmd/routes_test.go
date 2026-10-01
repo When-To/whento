@@ -100,9 +100,15 @@ var wantRoutes = []string{
 	"GET /api/health",
 	"GET /api/ready",
 
+	// Public holidays (offline dataset served to the frontend)
+	"GET /api/v1/holidays",
+	"GET /api/v1/holidays/supported",
+
 	// Auth, public
 	"POST /api/v1/auth/login",
 	"POST /api/v1/auth/register",
+	"POST /api/v1/auth/bootstrap",
+	"GET /api/v1/auth/status",
 	"POST /api/v1/auth/refresh",
 	"POST /api/v1/auth/logout",
 	"POST /api/v1/auth/forgot-password",
@@ -240,6 +246,7 @@ var wantRateLimited = []string{
 	// Per-route buckets
 	"POST /api/v1/auth/login",
 	"POST /api/v1/auth/register",
+	"POST /api/v1/auth/bootstrap",
 	"POST /api/v1/auth/refresh",
 	"POST /api/v1/auth/forgot-password",
 	"POST /api/v1/auth/reset-password",

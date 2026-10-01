@@ -132,6 +132,47 @@
     @apply transition-all duration-200 hover:shadow-lg hover:border-primary-300 dark:hover:border-primary-700;
   }
 
+  /* Small square icon buttons used inside calendar cards and the dashboard toolbar */
+  .card-action {
+    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300;
+  }
+
+  .card-action-on {
+    @apply text-primary-600 dark:text-primary-400;
+  }
+
+  /* A card action that is dead: at the edge of its reorder group, no point hovering. */
+  .card-action:disabled {
+    @apply cursor-default opacity-40 hover:bg-transparent;
+  }
+
+  /* The drag handle that starts a calendar reorder */
+  .drag-grip {
+    @apply inline-flex h-8 w-8 shrink-0 cursor-grab items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 active:cursor-grabbing dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300;
+  }
+
+  /*
+   * The calendar card's stretched open control (see CalendarCard.vue): the calendar
+   * name is the one genuine link, and its `::after` pseudo-element stretches across
+   * the whole card so any part of the surface opens the calendar. The link is un-
+   * positioned, so its pseudo-element sizes against the card (the nearest positioned
+   * ancestor). The inner action controls are lifted above the stretch so they keep
+   * their own handlers.
+   */
+  .calendar-card {
+    @apply relative;
+  }
+
+  .calendar-card .card-open-area::after {
+    content: '';
+    @apply absolute inset-0 rounded-xl;
+  }
+
+  .calendar-card :is(button, input, label) {
+    @apply relative;
+    z-index: 1;
+  }
+
   /* Badge Styles */
   .badge {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;

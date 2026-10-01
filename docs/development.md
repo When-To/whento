@@ -161,11 +161,12 @@ migrations/{common,cloud,selfhosted}/NNN_snake_case_name.{up,down}.sql
 - The numbering space is **shared across all three directories**. A number may be
   reused between `cloud/` and `selfhosted/` only, since one build gets one of
   them (`005` and `013` are both reused that way).
-- Highest common migration today is `014`; **the next one is `015`**.
+- Highest common migration today is `015`; **the next one is `016`** (`014` and
+  `015` are common; `013` is taken by the two per-variant drop migrations).
 - Always write both `.up.sql` and `.down.sql`.
 - Never run `migrate` against `migrations/` directly — `scripts/build-migrations.sh`
-  merges the directories into a temporary `migrations-build/` that the `migrate-*`
-  targets delete afterwards.
+  merges the directories into a temporary directory that the `migrate-*` targets
+  build, run against, and delete afterwards.
 
 ### Adding user-facing text
 

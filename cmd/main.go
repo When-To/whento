@@ -71,6 +71,18 @@ import (
 	swaggerDocs "github.com/whento/whento/docs/swagger"
 )
 
+// instanceID returns a stable-enough identifier for this process, used as the
+// reminder-job owner mark. The hostname is unique among the few instances a
+// self-hosted deployment runs and is readable in the database when an operator
+// is tracing a stuck job.
+func instanceID() string {
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		return fmt.Sprintf("pid-%d", os.Getpid())
+	}
+	return host
+}
+
 // main does nothing but set the exit status.
 //
 // os.Exit skips every deferred call, so a single one of them anywhere inside
@@ -281,12 +293,22 @@ func run() error {
 		broker:     broker,
 		limiter:    newRouteLimiter(rateLimiter, cfg.RateLimitEnabled),
 		quota:      services,
+		instanceID: instanceID(),
 		cacheProbe: cacheProbe,
 	}
 
 	h, err := buildHandlers(d)
 	if err != nil {
 		return err
+	}
+
+	// If the instance has no users yet, make the one-time boot key available
+	// (or materialise the operator-pinned BOOTSTRAP_KEY) and log it, so the
+	// first administrator can be created at /bootstrap. The service does the
+	// generation and the "still unconfigured?" check; the key lands in the
+	// logs next to every other line an operator sees when standing up a server.
+	if _, err := h.bootstrapService.EnsureKey(ctx); err != nil {
+		return fmt.Errorf("materialize bootstrap state: %w", err)
 	}
 
 	// ========== FRONTEND (SPA) ==========
@@ -308,6 +330,17 @@ func run() error {
 	// entire shutdown budget. Cancelling this is how they are told to leave.
 	baseCtx, baseCancel := context.WithCancel(context.Background())
 	defer baseCancel()
+
+	// Start the reminder scheduler. The reminders a calendar configures are only
+	// ever sent by this loop, so the process that serves the calendars is also
+	// the one that keeps their promises. It runs on baseCtx and therefore stops
+	// with the rest of the process — see the shutdown path below.
+	if h.reminders != nil {
+		go h.reminders.Run(baseCtx)
+	}
+	if h.refreshTokens != nil {
+		go sweepExpiredRefreshTokens(baseCtx, h.refreshTokens, log)
+	}
 
 	// Create server
 	srv := &http.Server{
@@ -385,6 +418,39 @@ func run() error {
 // exposition path, and pkg/logger's log-field guard lifts that field name for
 // cmd/main.go by name. Moving this function moves it out from under the
 // exception and fails that test.
+// sweepExpiredRefreshTokens deletes refresh rows whose JWT has expired.
+// Rotation only cleans the user who just refreshed, so abandoned sessions
+// would otherwise remain forever. The interval is long enough that a sweep
+// is not a load, and short enough that the table cannot grow without bound
+// between process restarts.
+func sweepExpiredRefreshTokens(ctx context.Context, tokens interface {
+	DeleteExpired(context.Context) (int64, error)
+}, log *slog.Logger) {
+	const every = time.Hour
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	sweep := func() {
+		deleted, err := tokens.DeleteExpired(ctx)
+		if err != nil {
+			log.Error("refresh token expiry sweep failed", "error", err)
+			return
+		}
+		if deleted > 0 {
+			log.Info("refresh token expiry sweep", "deleted", deleted)
+		}
+	}
+	sweep()
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info("refresh token expiry sweep stopped")
+			return
+		case <-ticker.C:
+			sweep()
+		}
+	}
+}
+
 func startMetricsServer(cfg *config.Config, log *slog.Logger) func() {
 	if !cfg.MetricsEnabled {
 		return func() {}

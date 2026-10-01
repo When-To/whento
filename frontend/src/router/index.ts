@@ -36,6 +36,14 @@ export const routes: RouteRecordRaw[] = [
     meta: { public: true, hideForAuth: true },
   },
   {
+    path: '/bootstrap',
+    name: 'bootstrap',
+    component: () => import('@/views/Bootstrap.vue'),
+    // Not hideForAuth: an authenticated visitor is sent away by the guard, but the
+    // route itself must stay reachable while the instance has no users.
+    meta: { public: true },
+  },
+  {
     path: '/verify-mfa',
     name: 'verify-mfa',
     component: () => import('@/views/VerifyMFA.vue'),
@@ -185,6 +193,29 @@ export const authGuard: NavigationGuard = async (to, _from, next) => {
   // Redirect to dashboard if authenticated user tries to access login/register
   if (to.meta.hideForAuth && authStore.isAuthenticated) {
     return next({ name: 'dashboard' });
+  }
+
+  // A signed-in visitor has no business on the first-run page.
+  if (to.name === 'bootstrap' && authStore.isAuthenticated) {
+    return next({ name: 'dashboard' });
+  }
+
+  // The bootstrap page exists only while the instance still needs its first
+  // account; once configured there is nothing to set up there. Only act when
+  // the capability read has actually answered: on a failed/unknown status a
+  // stale "configured" default would hide the one route a fresh closed instance
+  // needs, and the bootstrap POST (409) remains the server's authority either way.
+  if (to.name === 'bootstrap' && authStore.bootstrapStatusKnown && !authStore.bootstrapRequired) {
+    return next({ name: 'login' });
+  }
+
+  // Registration is closed. The register page is dead weight then — the backend
+  // refuses it with 403 anyway ("Registration failed"), so steering the visitor
+  // to the one door that remains (sign-in) beats showing a form that cannot work.
+  // Left open for /bootstrap: on an unconfigured closed instance the boot page
+  // *is* the admission path. Same "only after a real status answer" rule applies.
+  if (to.name === 'register' && authStore.bootstrapStatusKnown && !authStore.registrationEnabled) {
+    return next({ name: authStore.bootstrapRequired ? 'bootstrap' : 'login' });
   }
 
   next();

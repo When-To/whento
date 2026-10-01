@@ -103,6 +103,34 @@ jobs:
       - name: Lint workflows
         run: actionlint -color
 
+  # The Compose files are the documented deployment, and until now nothing validated
+  # them: a syntax or schema error made every `docker compose up` fail at startup.
+  # Compose 2.20+ in particular rejects a `pids_limit` that disagrees with
+  # `deploy.resources.limits.pids`, which went unnoticed for exactly that reason.
+  # `docker compose config` parses and interpolates each file; `-q` keeps it quiet.
+  # Dependencies are provided so interpolation reaches the :? required variables,
+  # and a real `DB_PASSWORD` keyspace is used to keep `.dockerignore`-able values
+  # honest with what the actual `make docker-up` would be told. The devcontainer
+  # Compose file is checked too — it is how contributors start the stack.
+  validate-compose:
+    name: Validate Compose Files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check the Compose files parse
+        env:
+          DB_PASSWORD: ci-only
+          REDIS_PASSWORD: ci-only
+        run: |
+          set -euo pipefail
+          for file in docker-compose.yml docker-compose.dev.yml .devcontainer/docker-compose.yml; do
+            echo "Validating $file..."
+            docker compose -f "$file" config -q
+          done
+          echo "✓ All Compose files are valid"
+
   # `make format-check` existed but was never called anywhere: Go formatting was enforced
   # only by the opt-in .githooks/pre-commit, which `git commit --no-verify` walks past.
   format-check:
@@ -227,6 +255,14 @@ jobs:
 
       - name: Generate Swagger docs
         run: swag init -g cmd/main.go -o docs/swagger --parseInternal --generatedTime=false
+
+      # The committed password ceiling (maxLength: 72 on all four password
+      # fields) must survive every regeneration; see swagger-contract-check in
+      # the Makefile. This job has everything it needs — Go and the generated
+      # docs — so the contract gate runs here rather than nowhere: the previous
+      # yq-based one declared a tool this job never installed and was skipped.
+      - name: Check password maxLength survives in Swagger docs
+        run: make swagger-contract-check
 
       - name: Upload Swagger docs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

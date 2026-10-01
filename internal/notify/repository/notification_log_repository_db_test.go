@@ -31,6 +31,9 @@ func newCalendar(t *testing.T, pool *pgxpool.Pool) *calendarModels.Calendar {
 	t.Helper()
 
 	ctx := dbtest.Context(t)
+	// A user row is instance-wide state as far as the first-user tests are
+	// concerned; serialize with them for the test's lifetime.
+	dbtest.LockSingletonAccounts(ctx, t, pool)
 	id := uuid.New()
 
 	owner := &authModels.User{

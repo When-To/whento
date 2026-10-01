@@ -136,7 +136,7 @@ func (s *MagicLinkService) VerifyMagicLink(ctx context.Context, token string) (*
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	refreshToken, refreshExpiresAt, err := s.jwtManager.GenerateRefreshToken(user.ID.String())
+	refreshToken, refreshExpiresAt, familyID, err := s.jwtManager.IssueRefreshToken(user.ID.String(), "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
@@ -146,19 +146,22 @@ func (s *MagicLinkService) VerifyMagicLink(ctx context.Context, token string) (*
 		UserID:    user.ID,
 		TokenHash: repository.HashToken(refreshToken),
 		ExpiresAt: refreshExpiresAt,
+		FamilyID:  familyID,
 	}
 	storedToken.ID = uuid.New()
 
-	if err := s.tokenRepo.Create(ctx, storedToken); err != nil {
+	if err := s.tokenRepo.Create(ctx, storedToken, user.SecurityGeneration); err != nil {
 		return nil, fmt.Errorf("failed to store refresh token: %w", err)
 	}
 
 	// Build auth response
 	return &models.AuthResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    int64(s.cfg.JWTAccessExpiry.Seconds()),
-		User:         user,
+		AccessToken:      accessToken,
+		RefreshToken:     refreshToken,
+		RefreshExpiresAt: refreshExpiresAt,
+		ExpiresIn:        int64(s.cfg.JWTAccessExpiry.Seconds()),
+		User:             user,
+		SessionID:        familyID,
 	}, nil
 }
 

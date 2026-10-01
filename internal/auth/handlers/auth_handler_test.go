@@ -25,6 +25,10 @@ type mockUserRepository struct {
 	// createErr is separate from err so a test can fail the insert without also
 	// failing the count that decides whether the account is the bootstrap admin.
 	createErr error
+	// roleErr is separate from err so a test can make the role change refuse
+	// (e.g. the last-admin invariant) without breaking the existence check that
+	// the handler performs first.
+	roleErr error
 }
 
 func (m *mockUserRepository) Create(ctx context.Context, user *models.User) error {
@@ -61,12 +65,21 @@ func (m *mockUserRepository) Update(ctx context.Context, user *models.User) erro
 	return m.err
 }
 
-func (m *mockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return m.err
+func (m *mockUserRepository) UpdateProfile(
+	ctx context.Context,
+	userID uuid.UUID,
+	displayName *string,
+	locale *string,
+	timezone *string,
+) (*models.User, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.user, nil
 }
 
-func (m *mockUserRepository) Count(ctx context.Context) (int, error) {
-	return m.count, m.err
+func (m *mockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	return m.err
 }
 
 func (m *mockUserRepository) List(ctx context.Context) ([]*models.User, error) {
@@ -77,6 +90,9 @@ func (m *mockUserRepository) List(ctx context.Context) ([]*models.User, error) {
 }
 
 func (m *mockUserRepository) UpdateRole(ctx context.Context, userID uuid.UUID, role string) error {
+	if m.roleErr != nil {
+		return m.roleErr
+	}
 	return m.err
 }
 
@@ -84,22 +100,31 @@ func (m *mockUserRepository) UpdatePassword(ctx context.Context, userID uuid.UUI
 	return m.err
 }
 
-func (m *mockUserRepository) DetermineRoleAtomically(ctx context.Context) (string, error) {
-	count, err := m.Count(ctx)
-	if err != nil {
-		return "", err
+func (m *mockUserRepository) CreateFirstUser(ctx context.Context, user *models.User) error {
+	// The mock's count decides whether the slot is free, mirroring the SQL's
+	// atomic emptiness check: an empty table admits the insert (as admin), any
+	// other table refuses it so the caller falls back onto the ordinary Create
+	// path (with its allow-list gate).
+	if m.count == 0 {
+		user.Role = models.RoleAdmin
+		m.user = user
+		return m.Create(ctx, user)
 	}
-	if count == 0 {
-		return "admin", nil
-	}
-	return "user", nil
+	return repository.ErrFirstUserExists
+}
+
+// FirstUserCreated reports whether the mock believes the instance has been
+// bootstrapped. Registration uses it to skip the first-user advisory lock in
+// the steady state (see Register); the mock's count is what decides.
+func (m *mockUserRepository) FirstUserCreated(context.Context) (bool, error) {
+	return m.count > 0, nil
 }
 
 type mockTokenRepository struct {
 	err error
 }
 
-func (m *mockTokenRepository) Create(ctx context.Context, token *models.RefreshToken) error {
+func (m *mockTokenRepository) Create(ctx context.Context, token *models.RefreshToken, _ int64) error {
 	return m.err
 }
 
@@ -118,15 +143,23 @@ func (m *mockTokenRepository) DeleteByHash(ctx context.Context, tokenHash string
 	return m.err
 }
 
-func (m *mockTokenRepository) DeleteByUserID(ctx context.Context, userID uuid.UUID) error {
-	return m.err
+func (m *mockTokenRepository) DeleteByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
+	return 0, m.err
 }
 
 func (m *mockTokenRepository) Consume(context.Context, string) (bool, error) {
 	return m.err == nil, m.err
 }
 
-func (m *mockTokenRepository) DeleteConsumedBefore(context.Context, uuid.UUID, time.Time) error {
+func (m *mockTokenRepository) CreatePendingMFASession(context.Context, string, time.Time, *models.RefreshToken, int64) (bool, error) {
+	return m.err == nil, m.err
+}
+
+func (m *mockTokenRepository) CommitRotation(context.Context, string, *models.RefreshToken, time.Duration) error {
+	return m.err
+}
+
+func (m *mockTokenRepository) RevokePresentedFamily(context.Context, string) error {
 	return m.err
 }
 

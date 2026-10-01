@@ -49,10 +49,12 @@ function calendar(overrides: Partial<CalendarWithParticipants> = {}): CalendarWi
 /** A promise with its resolvers exposed, so a test can control when it settles. */
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>(res => {
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
     resolve = res;
+    reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 type CalendarStore = ReturnType<typeof useCalendarStore>;
@@ -263,6 +265,26 @@ describe('calendar store', () => {
       expect(store.calendars[0].participants).toEqual([PARTICIPANT]);
     });
 
+    it('merges a partial response instead of replacing unrelated current state', async () => {
+      // The backend answers a PATCH with the complete post-write row, but the store
+      // must not depend on that: a partial body (or a body from a concurrent disjoint
+      // mutation) must not blank fields a stale snapshot did not carry. Merge, so a
+      // response naming only the renamed field keeps the rest of the entry intact.
+      calendarsApi.getAll.mockResolvedValue([
+        calendar({ participants: [PARTICIPANT], description: 'Standup', ics_token: 'ics-keep' }),
+      ]);
+      calendarsApi.update.mockResolvedValue({ id: 'c-1', name: 'Renamed' });
+      const store = freshStore();
+      await store.fetchCalendars();
+
+      await store.updateCalendar('c-1', { name: 'Renamed' });
+
+      expect(store.calendars[0].name).toBe('Renamed');
+      expect(store.calendars[0].description).toBe('Standup');
+      expect(store.calendars[0].ics_token).toBe('ics-keep');
+      expect(store.calendars[0].participants).toEqual([PARTICIPANT]);
+    });
+
     it('drops the deleted calendar, and clears it if it was current', async () => {
       calendarsApi.getById.mockResolvedValue(calendar());
       calendarsApi.getAll.mockResolvedValue([calendar()]);
@@ -346,6 +368,159 @@ describe('calendar store', () => {
 
       expect(store.currentCalendar).toBeNull();
       expect(store.currentPublicCalendar).toBeNull();
+    });
+  });
+
+  describe('account-scoped cache', () => {
+    it('discards an in-flight fetch when the account is cleared and another signs in', async () => {
+      const { useAuthStore } = await import('./auth');
+      const store = freshStore();
+      const authStore = useAuthStore();
+      authStore.user = { id: 'u-a', email: 'a@x.test', display_name: 'A', role: 'user' } as never;
+
+      // Account A starts a fetch; the response is still in flight.
+      const getAll = deferred<CalendarWithParticipants[]>();
+      calendarsApi.getAll.mockReturnValue(getAll.promise);
+      const pending = store.fetchCalendars();
+
+      // A logs out (clearing the store) and B signs in before it settles.
+      store.clearCalendars();
+      authStore.user = { id: 'u-b', email: 'b@x.test', display_name: 'B', role: 'user' } as never;
+
+      getAll.resolve([calendar()]);
+
+      await pending;
+
+      // A's response must not be committed — let alone labelled with B's id, which
+      // would let B lift A's participant lock from the public calendar view.
+      expect(store.calendars).toEqual([]);
+      expect(store.calendarsForUser).toBeNull();
+    });
+
+    it('discards an in-flight fetch even when the same account signs straight back in', async () => {
+      const { useAuthStore } = await import('./auth');
+      const store = freshStore();
+      const authStore = useAuthStore();
+      authStore.user = { id: 'u-a', email: 'a@x.test', display_name: 'A', role: 'user' } as never;
+
+      const getAll = deferred<CalendarWithParticipants[]>();
+      calendarsApi.getAll.mockReturnValue(getAll.promise);
+      const pending = store.fetchCalendars();
+
+      // A logs out and back in. The user id is unchanged, so only the load generation
+      // (bumped by clearCalendars) can tell the stale response apart from a fresh one.
+      store.clearCalendars();
+      authStore.user = { id: 'u-a', email: 'a@x.test', display_name: 'A', role: 'user' } as never;
+
+      getAll.resolve([calendar()]);
+      await pending;
+
+      expect(store.calendars).toEqual([]);
+      expect(store.calendarsForUser).toBeNull();
+    });
+
+    it('does not let a late owner-detail response resurrect the account after a clear', async () => {
+      const { useAuthStore } = await import('./auth');
+      const store = freshStore();
+      const authStore = useAuthStore();
+      authStore.user = { id: 'u-a', email: 'a@x.test', display_name: 'A', role: 'user' } as never;
+
+      // Account A requests its calendar settings — participant ids and the public/ICS
+      // capability tokens; the response is still in flight.
+      const getById = deferred<CalendarWithParticipants>();
+      calendarsApi.getById.mockReturnValue(getById.promise);
+      const pending = store.fetchCalendar('c-1');
+
+      // A signs out before it settles. The generation guard that protects the list
+      // load must protect owner details too: the response would otherwise rebuild
+      // A's full owner calendar inside the cleared store.
+      store.clearCalendars();
+      authStore.user = null;
+
+      getById.resolve(calendar());
+
+      await pending;
+
+      expect(store.currentCalendar).toBeNull();
+    });
+
+    it('commits only the latest of two overlapping list loads for the same account', async () => {
+      const { useAuthStore } = await import('./auth');
+      const store = freshStore();
+      const authStore = useAuthStore();
+      authStore.user = { id: 'u-a', email: 'a@x.test', display_name: 'A', role: 'user' } as never;
+
+      // A dashboard load stays in flight while a second load (e.g. the ownership-cache
+      // fill on a public route) starts. Both belong to the same account and generation;
+      // only the request sequence can tell them apart.
+      const first = deferred<CalendarWithParticipants[]>();
+      const second = deferred<CalendarWithParticipants[]>();
+      calendarsApi.getAll.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+      const older = store.fetchCalendars();
+      const newer = store.fetchCalendars();
+
+      second.resolve([calendar({ id: 'c-2', name: 'Newer' })]);
+      await newer;
+      expect(store.calendars.map(c => c.id)).toEqual(['c-2']);
+
+      // The first request settles *after* the second one: its older answer must not
+      // overwrite the fresher one.
+      first.resolve([calendar({ id: 'c-1', name: 'Older' })]);
+      await older;
+      expect(store.calendars.map(c => c.id)).toEqual(['c-2']);
+    });
+
+    it('an older failed list load cannot wipe a newer success', async () => {
+      const { useAuthStore } = await import('./auth');
+      const store = freshStore();
+      const authStore = useAuthStore();
+      authStore.user = { id: 'u-a', email: 'a@x.test', display_name: 'A', role: 'user' } as never;
+
+      const older = deferred<CalendarWithParticipants[]>();
+      const newer = deferred<CalendarWithParticipants[]>();
+      calendarsApi.getAll.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+
+      const olderLoad = store.fetchCalendars();
+      const newerLoad = store.fetchCalendars();
+
+      newer.resolve([calendar({ id: 'c-2', name: 'Newer' })]);
+      await newerLoad;
+      expect(store.calendars.map(c => c.id)).toEqual(['c-2']);
+
+      // The superseded request fails last. Its catch path must not wipe the newer
+      // success, and the failure must not surface as this account's error.
+      older.reject(new Error('offline'));
+      await expect(olderLoad).resolves.toBeUndefined();
+      expect(store.calendars.map(c => c.id)).toEqual(['c-2']);
+      expect(store.error).toBeNull();
+    });
+
+    it("does not inject a late create into another account's trusted list", async () => {
+      const { useAuthStore } = await import('./auth');
+      const store = freshStore();
+      const authStore = useAuthStore();
+      authStore.user = { id: 'u-a', email: 'a@x.test', display_name: 'A', role: 'user' } as never;
+
+      // Account A submits the create form; the response is still in flight.
+      const create = deferred<CalendarWithParticipants>();
+      calendarsApi.create.mockReturnValue(create.promise);
+      const pending = store.createCalendar({ name: 'A leak' } as never);
+
+      // A signs out, B signs in and loads its own trusted list.
+      store.clearCalendars();
+      authStore.user = { id: 'u-b', email: 'b@x.test', display_name: 'B', role: 'user' } as never;
+      calendarsApi.getAll.mockResolvedValue([calendar({ id: 'c-b', name: 'B owned' })]);
+      await store.fetchCalendars();
+      expect(store.calendarsForUser).toBe('u-b');
+
+      // A's late create lands. It carries public/ICS capability tokens, so it must
+      // neither appear in B's list nor let the old view continue its navigation.
+      create.resolve(calendar({ id: 'c-a', public_token: 'pub', ics_token: 'ics' }));
+      const result = await pending;
+      expect(result).toBeNull();
+      expect(store.calendars.map(c => c.id)).toEqual(['c-b']);
+      expect(store.calendarsForUser).toBe('u-b');
     });
   });
 });

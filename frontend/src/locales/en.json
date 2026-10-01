@@ -119,7 +119,7 @@
       "description": "Enter your new password below.",
       "newPassword": "New Password",
       "confirmPassword": "Confirm Password",
-      "passwordRequirement": "At least 8 characters required",
+      "passwordRequirement": "At least 12 characters, with uppercase, lowercase, number, and special character",
       "passwordMismatch": "Passwords do not match",
       "invalidToken": "Invalid or expired reset link",
       "submit": "Reset Password",
@@ -164,7 +164,18 @@
     "invalidPassword": "Invalid password",
     "logoutError": "Failed to log out",
     "fetchUserError": "Failed to load your account",
-    "updateProfileError": "Failed to update profile"
+    "updateProfileError": "Failed to update profile",
+    "registrationDisabled": "Registration is disabled on this instance.",
+    "bootstrap": {
+      "title": "Set up your instance",
+      "description": "Create the first account. This instance has no users yet, so this first account becomes the administrator.",
+      "bootKeyLabel": "Boot key",
+      "bootKeyHelp": "The one-time boot key was printed to the server logs at startup (or set via BOOTSTRAP_KEY).",
+      "createAccount": "Create administrator account",
+      "alreadyConfigured": "This instance already has an administrator.",
+      "invalidKey": "The boot key is invalid. Check the server logs — the key is printed once at startup.",
+      "needUser": "Create the first account"
+    }
   },
   "nav": {
     "home": "Home",
@@ -232,7 +243,26 @@
       "downloadCodes": "Download Codes"
     }
   },
-  "dashboard": {},
+  "dashboard": {
+    "sortBy": "Sort by",
+    "sortNameAsc": "Name (A-Z)",
+    "sortNameDesc": "Name (Z-A)",
+    "sortCustom": "Custom order",
+    "viewAs": "View as",
+    "viewCards": "Cards",
+    "viewList": "List",
+    "viewExpanded": "Expanded list",
+    "viewCompact": "Compact list",
+    "reorderHint": "Drag a calendar by its handle, or use its up/down buttons, to set your own order. Pinned calendars stay on top.",
+    "pinned": "Pinned",
+    "others": "Other calendars",
+    "dragHandle": "Drag to reorder",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "pinCalendar": "Pin to top",
+    "unpinCalendar": "Unpin",
+    "openCalendar": "Open calendar {name}"
+  },
   "calendar": {
     "calendar": "Calendar",
     "myCalendars": "My calendars",
@@ -259,6 +289,7 @@
     "participantName": "Participant name",
     "participantNamePlaceholder": "Enter participant name...",
     "noParticipants": "No participants yet. Add your first participant!",
+    "ownerNoParticipants": "This calendar has no participants yet. Add participants from the calendar settings.",
     "duplicateParticipant": "This participant already exists",
     "publicLink": "Public link",
     "icsLink": "iCal subscription link",
@@ -313,6 +344,7 @@
     "participantNameAlreadyTaken": "This name is already taken by another participant.",
     "participantLocked": "Direct link required",
     "participantLockedMessage": "This calendar requires a direct participant link. Contact the calendar owner to get your personal link.",
+    "ownerPreviewHint": "You own this calendar. Select a participant to preview how their personal link behaves.",
     "visitedCalendars": "My calendars",
     "showCalendars": "Show calendars",
     "clearHistory": "Clear history",
@@ -449,6 +481,7 @@
     "required": "This field is required",
     "invalidEmail": "Invalid email",
     "passwordTooShort": "Password must be at least 12 characters with uppercase, lowercase, number, and special character",
+    "passwordTooLong": "Password must not exceed 72 UTF-8 bytes",
     "availabilityConflict": "Cannot add availability on this day, there can only be one availability per day per participant",
     "deleteFailed": "Failed to delete",
     "badRequest": "The request could not be processed",
@@ -477,7 +510,7 @@
       "password": {
         "required": "Password is required",
         "min": "Password must be at least 12 characters with uppercase, lowercase, number, and special character",
-        "max": "Password must not exceed 72 characters"
+        "max": "Password must not exceed 72 UTF-8 bytes"
       },
       "display_name": {
         "required": "Display name is required",
@@ -490,7 +523,7 @@
       "new_password": {
         "required": "New password is required",
         "min": "New password must be at least 12 characters with uppercase, lowercase, number, and special character",
-        "max": "New password must not exceed 72 characters"
+        "max": "New password must not exceed 72 UTF-8 bytes"
       },
       "locale": {
         "oneof": "Language must be one of: French, English"

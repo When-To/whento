@@ -76,7 +76,6 @@ import { computed, ref, reactive, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useToastStore } from '@/stores/toast';
-import { apiClient } from '@/api/client';
 import { LOCALE_NAMES, SUPPORTED_LOCALES } from '@/i18n';
 import TimezoneSelector from '@/components/TimezoneSelector.vue';
 import { translateErrorMessage } from '@/utils/errorTranslator';
@@ -140,13 +139,14 @@ async function updateProfile() {
   savingProfile.value = true;
 
   try {
-    await apiClient.patch('/auth/me', {
-      display_name: form.displayName,
-    });
-
-    // Update auth store
-    if (authStore.user) {
-      authStore.user.display_name = form.displayName;
+    // Route through the store so the continuation is guarded: the response may land
+    // after a logout or an account switch, and must not write A's form values into
+    // whatever account is on screen by then.
+    const updated = await authStore.updateProfile({ display_name: form.displayName });
+    if (updated === null) {
+      // The session changed while the save was in flight: nothing was committed for
+      // the account that is no longer here, so don't claim success either.
+      return;
     }
 
     toast.success(t('settings.preferencesSaved'));
@@ -163,18 +163,17 @@ async function savePreferences() {
   savingPreferences.value = true;
 
   try {
-    await apiClient.patch('/auth/me', {
+    const updated = await authStore.updateProfile({
       locale: preferences.locale,
       timezone: preferences.timezone,
     });
-
-    // Update auth store
-    if (authStore.user) {
-      authStore.user.locale = preferences.locale;
-      authStore.user.timezone = preferences.timezone;
+    if (updated === null) {
+      // The account on screen changed while the save was in flight; do not switch the
+      // global locale to the old account's selection.
+      return;
     }
 
-    // Update locale immediately
+    // Update locale immediately — safe now that the same account is still signed in.
     if (preferences.locale !== locale.value) {
       locale.value = preferences.locale;
       localStorage.setItem('locale', preferences.locale);

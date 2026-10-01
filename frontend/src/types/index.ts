@@ -82,6 +82,19 @@ export type LoginRequest = Schemas['models.LoginRequest'];
 
 export type RegisterRequest = Schemas['models.RegisterRequest'];
 
+/** First-user creation: the boot key plus the administrator's credentials. */
+export type BootstrapRequest = Schemas['models.BootstrapRequest'];
+
+/**
+ * The public, pre-authentication capability read. What the whole registration /
+ * bootstrap UI is gated on: whether the instance still needs its first account
+ * (`needs_bootstrap`) and whether open registration is on (`registration_enabled`).
+ */
+export type BootstrapStatus = AlwaysSent<
+  Schemas['models.BootstrapStatusResponse'],
+  'needs_bootstrap' | 'registration_enabled'
+>;
+
 /**
  * `access_token` is optional on purpose: when the account has a second factor,
  * the backend answers with `require_mfa` + `temp_token` and no access token at

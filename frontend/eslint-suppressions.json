@@ -1,7 +1,7 @@
 {
   "src/api/client.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 8
+      "count": 6
     }
   },
   "src/api/mfa.ts": {
@@ -94,6 +94,11 @@
       "count": 2
     }
   },
+  "src/components/dashboard/CalendarCard.vue": {
+    "vuejs-accessibility/no-static-element-interactions": {
+      "count": 1
+    }
+  },
   "src/components/participant/AvailabilityList.vue": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
@@ -140,11 +145,6 @@
       "count": 1
     }
   },
-  "src/utils/calendar/holidays.ts": {
-    "no-console": {
-      "count": 1
-    }
-  },
   "src/views/Admin.vue": {
     "@typescript-eslint/no-explicit-any": {
       "count": 4
@@ -176,15 +176,7 @@
   },
   "src/views/CalendarSettings.vue": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 33
-    }
-  },
-  "src/views/Dashboard.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    },
-    "no-console": {
-      "count": 3
+      "count": 31
     }
   },
   "src/views/Login.vue": {

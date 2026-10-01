@@ -140,6 +140,7 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import type { RegisterRequest } from '@/types';
 import { translateValidationError, translateErrorMessage } from '@/utils/errorTranslator';
+import { validatePassword } from '@/utils/password';
 
 const router = useRouter();
 const { t, locale } = useI18n();
@@ -182,9 +183,12 @@ function validateForm(): boolean {
   if (!form.password) {
     errors.password = t('errors.required');
     isValid = false;
-  } else if (form.password.length < 8) {
-    errors.password = t('errors.passwordTooShort');
-    isValid = false;
+  } else {
+    const passwordError = validatePassword(form.password);
+    if (passwordError) {
+      errors.password = t(passwordError);
+      isValid = false;
+    }
   }
 
   return isValid;

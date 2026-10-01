@@ -14,42 +14,42 @@ Self-hosted web application for organizing recurring events with friends through
 
 ### Core Functionality
 
-- **Collaborative Calendars** — Create permanent calendars for recurring activities (RPGs, sports, meetups...)
-- **Flexible Availability** — One-time dates or recurring patterns ("every Friday evening")
-- **Configurable Threshold** — Define minimum participants required for an event to be confirmed
-- **iCalendar Subscription** — Sync URL for Google Calendar, Apple Calendar, Outlook, and more
-- **Smart Recurrence** — Set weekly availability once with exceptions for special weeks
-- **Live Updates** — Another participant's answer appears without reloading the page
-- **Multi-channel Notifications** — Get notified when threshold is reached/lost via Email, Discord, Slack, or Telegram
-- **Participant Email Verification** — Optional email verification for participants to receive notifications
-- **Multi-language** — Interface available in French and English (including emails)
-- **Timezone Support** — Each calendar can have its own timezone, which also decides the
+- **Collaborative Calendars** - Create permanent calendars for recurring activities (RPGs, sports, meetups...)
+- **Flexible Availability** - One-time dates or recurring patterns ("every Friday evening")
+- **Configurable Threshold** - Define minimum participants required for an event to be confirmed
+- **iCalendar Subscription** - Sync URL for Google Calendar, Apple Calendar, Outlook, and more
+- **Smart Recurrence** - Set weekly availability once with exceptions for special weeks
+- **Live Updates** - Another participant's answer appears without reloading the page
+- **Multi-channel Notifications** - Get notified when threshold is reached/lost via Email, Discord, Slack, or Telegram
+- **Participant Email Verification** - Optional email verification for participants to receive notifications
+- **Multi-language** - Interface available in French and English (including emails)
+- **Timezone Support** - Each calendar can have its own timezone, which also decides the
   first day of the week (Monday in Berlin, Sunday in New York, Saturday in Cairo) so every
   participant sees the same grid whatever their own language
-- **Holiday Policies** — Configure how public holidays are handled (ignore/allow/block)
-- **Participant Locking** — Masks participant ids in the public view, so a visitor cannot
+- **Holiday Policies** - Configure how public holidays are handled (ignore/allow/block)
+- **Participant Locking** - Masks participant ids in the public view, so a visitor cannot
   answer in somebody else's name
-- **Anonymous Participant Registration** — Allow anyone with the public link to
+- **Anonymous Participant Registration** - Allow anyone with the public link to
   self-register as a participant without authentication. The interface presents this and
   participant locking as mutually exclusive; the API does not enforce that, so a script
   setting both gets both
-- **Self-hosted** — Your data stays on your infrastructure
+- **Self-hosted** - Your data stays on your infrastructure
 
 ### Authentication & Security
 
-- **Email Verification** — Required before creating calendars
-- **JWT Authentication** — RS256 asymmetric keys with refresh tokens, held in httpOnly
+- **Email Verification** - Required before creating calendars
+- **JWT Authentication** - RS256 asymmetric keys with refresh tokens, held in httpOnly
   cookies rather than in the response body
-- **Passkeys (WebAuthn)** — Passwordless sign-in, including usernameless discoverable
+- **Passkeys (WebAuthn)** - Passwordless sign-in, including usernameless discoverable
   credentials
-- **Two-factor Authentication** — TOTP with single-use backup codes, and a per-user
+- **Two-factor Authentication** - TOTP with single-use backup codes, and a per-user
   attempt limit on verification
-- **Magic Links** — Sign in from an emailed link, when SMTP is configured
-- **Password Security** — Bcrypt hashing with strict password requirements
-- **Rate Limiting** — Protection on public endpoints and API routes, backed by Redis when
+- **Magic Links** - Sign in from an emailed link, when SMTP is configured
+- **Password Security** - Bcrypt hashing with strict password requirements
+- **Rate Limiting** - Protection on public endpoints and API routes, backed by Redis when
   available and by an in-process limiter when it is not
-- **Regenerable Tokens** — Public and ICS tokens can be regenerated if compromised
-- **Security Headers** — HSTS, CSP, X-Frame-Options protection
+- **Regenerable Tokens** - Public and ICS tokens can be regenerated if compromised
+- **Security Headers** - HSTS, CSP, X-Frame-Options protection
 
 ### Deployment Options
 
@@ -68,25 +68,25 @@ WhenTo supports **two distinct deployment modes**:
 
 Tools like Doodle or Framadate are great for finding a one-time date. But for recurring events:
 
-- **Disposable Polls** — Every week, you need to create a new poll and resend the link to everyone
-- **No Recurrence** — You can't say "I'm available every Tuesday evening" - you have to click on each date individually
-- **No Synchronization** — Once the date is chosen, you have to manually add it to your calendar
+- **Disposable Polls** - Every week, you need to create a new poll and resend the link to everyone
+- **No Recurrence** - You can't say "I'm available every Tuesday evening" - you have to click on each date individually
+- **No Synchronization** - Once the date is chosen, you have to manually add it to your calendar
 
 ### The WhenTo Solution
 
 WhenTo rethinks collaborative planning for groups that meet regularly:
 
-- **Permanent Calendars** — One shared calendar for all your sessions
-- **iCal Sync** — Validated events automatically appear in Google Calendar, Outlook, Apple Calendar
-- **Smart Recurrence** — Set your weekly availability once, with exceptions for special weeks
-- **Privacy Guaranteed** — Self-hosted, open source, no tracking or ads
+- **Permanent Calendars** - One shared calendar for all your sessions
+- **iCal Sync** - Validated events automatically appear in Google Calendar, Outlook, Apple Calendar
+- **Smart Recurrence** - Set your weekly availability once, with exceptions for special weeks
+- **Privacy Guaranteed** - Self-hosted, open source, no tracking or ads
 
 ### Use Cases
 
-- **RPGs & Board Games** — Organize weekly sessions without sending a new Doodle every week
-- **Amateur Sports** — Manage team availability for recurring practices and games
-- **Music Bands** — Schedule rehearsals when all members are available
-- **Team Meetings** — Automatically find the ideal slot for your weekly meetings
+- **RPGs & Board Games** - Organize weekly sessions without sending a new Doodle every week
+- **Amateur Sports** - Manage team availability for recurring practices and games
+- **Music Bands** - Schedule rehearsals when all members are available
+- **Team Meetings** - Automatically find the ideal slot for your weekly meetings
 
 ---
 
@@ -199,7 +199,7 @@ LOG_LEVEL=info                    # Default: info (debug, info, warn, error)
 
 # Database
 # - For the docker-compose.yml shipped with this repo: set the DB_* variables
-#   below (DB_NAME/DB_USER/DB_PASSWORD are REQUIRED — they are consumed by
+#   below (DB_NAME/DB_USER/DB_PASSWORD are REQUIRED - they are consumed by
 #   both the postgres service and the app service). DATABASE_URL is ignored
 #   in that mode.
 # - For standalone / binary deployments: set DATABASE_URL directly (preferred);
@@ -212,7 +212,7 @@ DB_PASSWORD=yourpassword
 # DB_SSLMODE=disable                # Standalone/binary only (compose hardcodes "disable")
 # DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=disable   # Standalone only
 
-# Redis — same logic as the database
+# Redis - same logic as the database
 # - docker-compose: REDIS_PASSWORD is REQUIRED (used by both the redis service
 #   and the app). REDIS_URL is ignored.
 # - Standalone / binary: set REDIS_URL directly (preferred); REDIS_* are
@@ -223,7 +223,7 @@ REDIS_PASSWORD=yourpassword
 # REDIS_DB=0                        # Standalone/binary only
 # REDIS_URL=redis://:password@host:6379                            # Standalone only
 
-# JWT — keys are auto-generated on first run if they do not exist
+# JWT - keys are auto-generated on first run if they do not exist
 JWT_PRIVATE_KEY_PATH=/app/keys/private.pem
 JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
 JWT_ACCESS_EXPIRY=15m             # Default: 15m
@@ -237,7 +237,7 @@ SMTP_USERNAME=user@example.com
 SMTP_PASSWORD=yourpassword
 SMTP_FROM=whento@example.com      # Default: contact@whento.be
 SMTP_FROM_NAME=WhenTo             # Default: Contact WhenTo
-# Note: TLS mode is determined automatically by the port — there is no
+# Note: TLS mode is determined automatically by the port - there is no
 #       separate TLS toggle variable.
 
 # Registration & email verification
@@ -248,6 +248,21 @@ EMAIL_VERIFICATION_ENABLED=true   # Default: false
 ALLOWED_REGISTER=true             # Default: true
 ALLOWED_EMAILS=*                  # Comma-separated patterns (e.g., *@company.com). Default: * (all)
 
+# First-user bootstrap. Leave unset to have the server generate a one-time boot
+# key and print it to the logs at startup; create the first (administrator)
+# account at /bootstrap with it. Pin it (16-256 chars) for deterministic
+# automation or for more than one instance behind a load balancer, so every
+# replica accepts the same key.
+# BOOTSTRAP_KEY=
+#
+# BOOTSTRAP_KEY_FILE reads the key from a file inside the container (Docker
+# secrets / K8s mounts). The compose file passes the variable through but cannot
+# create the file: with docker compose, set BOOTSTRAP_KEY_FILE in .env AND mount
+# the file into the container (bind mount or a real `secrets:` entry). Example:
+#   BOOTSTRAP_KEY_FILE=/run/secrets/bootstrap_key
+#   volumes: ["./secrets/bootstrap_key:/run/secrets/bootstrap_key:ro"]
+# BOOTSTRAP_KEY_FILE=
+
 # Rate Limiting
 RATE_LIMIT_ENABLED=true           # Default: true
 
@@ -257,7 +272,7 @@ CORS_ORIGINS=https://your-domain.com          # Comma-separated allowed CORS ori
 TRUSTED_PROXIES=                              # Comma-separated trusted reverse proxy IPs/CIDRs (e.g., 127.0.0.1,10.0.0.0/8)
 # DISABLE_ROBOTS=false                        # Disable robots.txt (default: false)
 
-# WebAuthn / Passkeys (optional — defaults are derived from APP_URL)
+# WebAuthn / Passkeys (optional - defaults are derived from APP_URL)
 # WEBAUTHN_RP_NAME=WhenTo
 # WEBAUTHN_RP_ID=your-domain.com
 # WEBAUTHN_RP_ORIGIN=https://your-domain.com
@@ -339,7 +354,7 @@ The repository ships a ready-to-use [`docker-compose.yml`](docker-compose.yml). 
 
 ```bash
 cp .env.example .env
-# Edit .env — at minimum set:
+# Edit .env - at minimum set:
 #   DB_PASSWORD, REDIS_PASSWORD, APP_URL, and SMTP_* if you want email
 docker compose up -d
 ```
@@ -347,11 +362,11 @@ docker compose up -d
 Minimum required variables in `.env` when using this compose file:
 
 ```bash
-# Database — consumed by both the postgres service and the app
+# Database - consumed by both the postgres service and the app
 DB_PASSWORD=your_secure_password
 # DB_NAME, DB_USER default to "whento" if unset
 
-# Redis — consumed by both the redis service and the app
+# Redis - consumed by both the redis service and the app
 REDIS_PASSWORD=your_redis_password
 
 # Application
@@ -365,12 +380,12 @@ SMTP_PASSWORD=yourpassword
 SMTP_FROM=whento@example.com
 ```
 
-> **Note:** with this compose file, `DATABASE_URL` and `REDIS_URL` are constructed automatically from `DB_*` / `REDIS_PASSWORD`. Setting them directly in `.env` has no effect here — they only apply to standalone / binary deployments.
+> **Note:** with this compose file, `DATABASE_URL` and `REDIS_URL` are constructed automatically from `DB_*` / `REDIS_PASSWORD`. Setting them directly in `.env` has no effect here - they only apply to standalone / binary deployments.
 
 > **⚠️ `docker compose down -v` deletes your data.** `postgres_data`, `redis_data` and
 > `whento_keys` are local named volumes; `-v` removes all three, with no prompt and no
 > undo. Stop the stack with `docker compose down`. Set up backups before the instance
-> holds anything you would miss — [docs/backup-restore.md](docs/backup-restore.md).
+> holds anything you would miss - [docs/backup-restore.md](docs/backup-restore.md).
 
 ### Operator documentation
 
@@ -390,7 +405,7 @@ The procedures that are too long for this file live in [`docs/`](docs/README.md)
 On first start the container generates an RSA-4096 key pair in `/app/keys` and signs
 every access and refresh token with it. **That directory has to survive container
 recreation.** If it does not, a new key pair is minted on the next start, every token
-already issued stops verifying, and every signed-in user is logged out — on an image
+already issued stops verifying, and every signed-in user is logged out - on an image
 update, on an `.env` change, on anything that makes Compose recreate the container.
 
 The shipped `docker-compose.yml` handles this with a named volume:
@@ -411,7 +426,7 @@ Consequences worth knowing:
 - **Back up `whento_keys` alongside the database.** Restoring the database without the
   keys works, but logs everyone out. Both are covered by
   [docs/backup-restore.md](docs/backup-restore.md).
-- **Deleting the volume is the way to rotate the keys** — a deliberate, global logout.
+- **Deleting the volume is the way to rotate the keys** - a deliberate, global logout.
 - **Calendar participant links are not affected.** They authorise by possession of the
   link itself, not by a signed token, so they keep working across a key rotation.
 - Running the binary outside Docker: point `JWT_PRIVATE_KEY_PATH` /
@@ -497,7 +512,7 @@ go test -tags selfhosted ./internal/auth/... -v
 ```
 
 **`./...` does not reach `pkg/`.** It is a separate module wired in through a `replace`,
-so it needs its own invocation — which is why `make test` runs both:
+so it needs its own invocation - which is why `make test` runs both:
 
 ```bash
 cd pkg && go test -tags selfhosted ./...
@@ -505,7 +520,7 @@ cd pkg && go test -tags selfhosted ./...
 
 Some repository tests need a real PostgreSQL. They read `DATABASE_URL` and **skip
 cleanly when it is unset**, so `make test` stays green on a machine without a database;
-CI supplies one. Point it at a throwaway database rather than your development one — the
+CI supplies one. Point it at a throwaway database rather than your development one - the
 tests create and delete their own rows, but they run against whatever you give them:
 
 ```bash
@@ -525,7 +540,7 @@ npm run test:e2e:backend          # drives a real server; see the note below
 
 `test:e2e:backend` expects `make dev-fullstack` running, and the **server must be started
 with `RATE_LIMIT_ENABLED=false`**. The limiter is per IP, and a suite driving a real
-calendar from one address is exactly the traffic it exists to refuse — leaving it on
+calendar from one address is exactly the traffic it exists to refuse - leaving it on
 turns every test into a 429.
 
 ### Migrations
@@ -543,7 +558,7 @@ make migrate-status
 
 These are development commands. In production the container entrypoint runs
 `migrate up` on every start; reverting one there is a different procedure, with
-different risks — [docs/migration-rollback.md](docs/migration-rollback.md).
+different risks - [docs/migration-rollback.md](docs/migration-rollback.md).
 
 ### Frontend Commands
 
@@ -565,7 +580,7 @@ make format        # Format Go (goimports) + frontend (prettier)
 make format-check  # Check formatting without modifying
 ```
 
-The `pre-commit` hook formats staged files automatically — see [CONTRIBUTING.md](.github/CONTRIBUTING.md).
+The `pre-commit` hook formats staged files automatically - see [CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 ---
 
@@ -573,117 +588,123 @@ The `pre-commit` hook formats staged files automatically — see [CONTRIBUTING.m
 
 ### Authentication Routes (`/api/v1/auth`)
 
-- `POST /register` — Register new user (email verification required)
-- `POST /login` — Login with credentials
-- `POST /refresh` — Refresh access token
-- `POST /logout` — Logout (invalidate refresh token)
-- `GET /me` — Get current user profile
-- `PATCH /me` — Update profile (display name, locale, timezone)
-- `PATCH /me/password` — Change password
-- `POST /forgot-password`, `POST /reset-password` — Password reset by email
-- `POST /send-verification`, `GET /verify-email/{token}` — Email verification
-- `POST /magic-link/request`, `GET /magic-link/verify/{token}` — Sign in from an emailed
+- `POST /register` - Register new user (email verification required)
+- `POST /login` - Login with credentials
+- `POST /bootstrap` - Create the first (administrator) account of an unconfigured
+  instance, guarded by the one-time boot key (BOOTSTRAP_KEY or printed in the logs);
+  closes forever once a user exists
+- `GET /status` - Public capability read: whether the instance still needs its
+  first account and whether open registration is enabled (drives the frontend's
+  register button and /bootstrap route; polled by automation)
+- `POST /refresh` - Refresh access token
+- `POST /logout` - Logout (invalidate refresh token)
+- `GET /me` - Get current user profile
+- `PATCH /me` - Update profile (display name, locale, timezone)
+- `PATCH /me/password` - Change password
+- `POST /forgot-password`, `POST /reset-password` - Password reset by email
+- `POST /send-verification`, `GET /verify-email/{token}` - Email verification
+- `POST /magic-link/request`, `GET /magic-link/verify/{token}` - Sign in from an emailed
   link. `GET /magic-link/available` reports whether SMTP is configured
-- `POST /mfa/verify` — Complete a login that requires a second factor
-- `POST /passkey/login/begin`, `POST /passkey/login/finish` — Passwordless sign-in
+- `POST /mfa/verify` - Complete a login that requires a second factor
+- `POST /passkey/login/begin`, `POST /passkey/login/finish` - Passwordless sign-in
 
 ### Two-Factor Authentication (`/api/v1/mfa`)
 
-- `POST /setup/begin`, `POST /setup/finish` — Enrol an authenticator app
-- `GET /status` — Whether 2FA is enabled
-- `POST /disable` — Turn 2FA off
-- `POST /backup-codes/regenerate` — Issue new single-use backup codes
+- `POST /setup/begin`, `POST /setup/finish` - Enrol an authenticator app
+- `GET /status` - Whether 2FA is enabled
+- `POST /disable` - Turn 2FA off
+- `POST /backup-codes/regenerate` - Issue new single-use backup codes
 
 ### Passkey Routes (`/api/v1/passkey`)
 
-- `POST /register/begin`, `POST /register/finish` — Register a passkey
-- `GET /list` — List this account's passkeys
-- `PATCH /{id}/name` — Rename a passkey
-- `DELETE /{id}` — Remove a passkey
+- `POST /register/begin`, `POST /register/finish` - Register a passkey
+- `GET /list` - List this account's passkeys
+- `PATCH /{id}/name` - Rename a passkey
+- `DELETE /{id}` - Remove a passkey
 
 ### Calendar Routes (`/api/v1/calendars`)
 
-- `POST /` — Create calendar (requires verified email)
-- `GET /` — List my calendars
-- `GET /{id}` — Get calendar details
-- `PATCH /{id}` — Update calendar
-- `DELETE /{id}` — Delete calendar
-- `GET /public/{token}` — Public calendar view
-- `POST /public/{token}/participants` — Self-register as a participant (anonymous, no auth required — only when `allow_anonymous_participants` is enabled)
-- `POST /{id}/participants` — Add participant
-- `PATCH /{id}/participants/{pid}` — Update participant
-- `DELETE /{id}/participants/{pid}` — Delete participant
-- `POST /{id}/regenerate-token` — Regenerate public/ICS token
+- `POST /` - Create calendar (requires verified email)
+- `GET /` - List my calendars
+- `GET /{id}` - Get calendar details
+- `PATCH /{id}` - Update calendar
+- `DELETE /{id}` - Delete calendar
+- `GET /public/{token}` - Public calendar view
+- `POST /public/{token}/participants` - Self-register as a participant (anonymous, no auth required - only when `allow_anonymous_participants` is enabled)
+- `POST /{id}/participants` - Add participant
+- `PATCH /{id}/participants/{pid}` - Update participant
+- `DELETE /{id}/participants/{pid}` - Delete participant
+- `POST /{id}/regenerate-token` - Regenerate public/ICS token
 
 ### Availability Routes (`/api/v1/availabilities`)
 
-- `GET/POST/PATCH/DELETE /calendar/{token}/participant/{pid}[/{date}]` — Manage availabilities
-- `POST/GET/PATCH/DELETE .../recurrence[/{rid}]` — Manage recurring patterns
-- `POST/DELETE .../recurrence/{rid}/exception[/{date}]` — Manage exceptions
-- `GET /calendar/{token}/dates/{date}` — Get summary for specific date
-- `GET /calendar/{token}/range` — Get summary for date range
-- `GET /calendar/{token}/events` — Server-sent events announcing that the calendar
+- `GET/POST/PATCH/DELETE /calendar/{token}/participant/{pid}[/{date}]` - Manage availabilities
+- `POST/GET/PATCH/DELETE .../recurrence[/{rid}]` - Manage recurring patterns
+- `POST/DELETE .../recurrence/{rid}/exception[/{date}]` - Manage exceptions
+- `GET /calendar/{token}/dates/{date}` - Get summary for specific date
+- `GET /calendar/{token}/range` - Get summary for date range
+- `GET /calendar/{token}/events` - Server-sent events announcing that the calendar
   changed. Each notice carries no payload: fetch the range summary again
 
 ### iCalendar Routes (`/api/v1/ics`)
 
-- `GET /feed/{token}` — iCalendar subscription feed for one calendar
-- `GET /unified/{token}` — One feed combining several of your calendars
-- `GET /unified-feed`, `POST /unified-feed` — Read or create the unified feed
-- `PATCH /unified-feed/calendars` — Choose which calendars it includes
-- `POST /unified-feed/regenerate-token` — Rotate its URL, revoking the previous one
+- `GET /feed/{token}` - iCalendar subscription feed for one calendar
+- `GET /unified/{token}` - One feed combining several of your calendars
+- `GET /unified-feed`, `POST /unified-feed` - Read or create the unified feed
+- `PATCH /unified-feed/calendars` - Choose which calendars it includes
+- `POST /unified-feed/regenerate-token` - Rotate its URL, revoking the previous one
 
 ### Notification Routes (`/api/v1/calendars`)
 
-- `GET /{id}/notify-config`, `PATCH /{id}/notify-config` — Notification settings, owner
+- `GET /{id}/notify-config`, `PATCH /{id}/notify-config` - Notification settings, owner
   only. Webhook URLs are validated against SSRF before they are stored
-- `POST /{token}/participants/{pid}/email` — Add an address to a participant
-- `GET /participants/verify-email/{token}` — Verify a participant's address
+- `POST /{token}/participants/{pid}/email` - Add an address to a participant
+- `GET /participants/verify-email/{token}` - Verify a participant's address
 
 ### Quota Routes - Both Modes (`/api/v1/quota`)
 
-- `GET /limits` — Calendar limits and current usage
+- `GET /limits` - Calendar limits and current usage
 
 ### Admin Routes (`/api/v1/admin`)
 
-- `GET /users` — List all users
-- `PATCH /users/{id}/role` — Update user role
-- `DELETE /users/{id}` — Delete user
-- `GET /users/{id}/calendars` — View user's calendars
-- `POST /users/{id}/disable-2fa` — Clear a locked-out user's second factor
+- `GET /users` - List all users
+- `PATCH /users/{id}/role` - Update user role
+- `DELETE /users/{id}` - Delete user
+- `GET /users/{id}/calendars` - View user's calendars
+- `POST /users/{id}/disable-2fa` - Clear a locked-out user's second factor
 
 ### Health
 
-- `GET /api/health` — Liveness. Note the path: there is no `/api/v1/health`
-- `GET /api/ready` — Readiness, including the database
+- `GET /api/health` - Liveness. Note the path: there is no `/api/v1/health`
+- `GET /api/ready` - Readiness, including the database
 
 ---
 
 ## 🔐 Security Features
 
-- **RS256 JWT** — Asymmetric keys (auto-generated at startup)
-- **Bcrypt Password Hashing** — Cost factor 12
-- **Email Verification** — Required before calendar creation
-- **Rate Limiting** — Redis-backed with graceful fallback
+- **RS256 JWT** - Asymmetric keys (auto-generated at startup)
+- **Bcrypt Password Hashing** - Cost factor 12
+- **Email Verification** - Required before calendar creation
+- **Rate Limiting** - Redis-backed with graceful fallback
   - Login: 5 req/min/IP
   - Register: 3 req/min/IP
   - Public endpoints: 60 req/min/IP
   - Anonymous participant registration: 10 req/min/IP
   - ICS feed: 30 req/min/IP
   - Authenticated: 100 req/min/user
-- **Token Regeneration** — Separate public and ICS tokens can be regenerated
-- **Trusted Proxies** — `X-Forwarded-For` and `X-Real-IP` are only believed when the
+- **Token Regeneration** - Separate public and ICS tokens can be regenerated
+- **Trusted Proxies** - `X-Forwarded-For` and `X-Real-IP` are only believed when the
   connection comes from an address listed in `TRUSTED_PROXIES`. Without that, anyone
   could pick their own rate-limit bucket by setting a header
-- **Webhook Validation** — Discord and Slack webhook URLs are checked before they are
+- **Webhook Validation** - Discord and Slack webhook URLs are checked before they are
   stored, so a notification cannot be pointed at a cloud metadata endpoint or an
   address inside your network
-- **CORS Protection** — Configurable allowed origins. A wildcard is treated as
+- **CORS Protection** - Configurable allowed origins. A wildcard is treated as
   same-origin only, since a wildcard combined with credentials would let any site make
   authenticated calls
-- **Security Headers** — HSTS, CSP, X-Frame-Options
-- **SQL Injection Protection** — Parameterized queries via pgx
-- **Logs that carry no credentials** — the access log records the chi route pattern
+- **Security Headers** - HSTS, CSP, X-Frame-Options
+- **SQL Injection Protection** - Parameterized queries via pgx
+- **Logs that carry no credentials** - the access log records the chi route pattern
   (`/calendar/{token}/participant/{pid}`), never the path, so calendar tokens and
   magic-link secrets never reach a log file. No IP address and no User-Agent are logged
   either, and rate-limit buckets are stored in Redis under a salted HMAC.
@@ -693,8 +714,8 @@ The `pre-commit` hook formats staged files automatically — see [CONTRIBUTING.m
 
 Participant access is **capability-based**: possession of the calendar's public link,
 plus a participant's id, is the authorisation. There is no per-participant secret, so
-anyone holding a link can answer as that participant. That is deliberate — it is what
-lets you invite people without asking them to create an account — but it means the link
+anyone holding a link can answer as that participant. That is deliberate - it is what
+lets you invite people without asking them to create an account - but it means the link
 should be shared the way you would share a door key.
 
 If a link gets out, regenerate the public token: the old URL stops working immediately.
@@ -728,10 +749,10 @@ the allowance. Only reachable on the hosted service.
 
 WhenTo is licensed under the [Business Source License 1.1](LICENSE):
 
-- ✅ **Free for self-hosted use** — Deploy internally for your organization
-- ✅ **Free to modify and redistribute** — Under the same BSL terms
-- ❌ **Commercial license required** — For offering as a hosted service (SaaS) to third parties
-- 🔄 **Converts to Apache 2.0** — On 2035-12-03 (10 years from first publication)
+- ✅ **Free for self-hosted use** - Deploy internally for your organization
+- ✅ **Free to modify and redistribute** - Under the same BSL terms
+- ❌ **Commercial license required** - For offering as a hosted service (SaaS) to third parties
+- 🔄 **Converts to Apache 2.0** - On 2035-12-03 (10 years from first publication)
 
 ### What this means:
 
@@ -770,18 +791,18 @@ Please ensure:
 
 ## 🙏 Acknowledgments
 
-- [projectdiscovery/notify](https://github.com/projectdiscovery/notify) — Multi-provider notifications
-- [arran4/golang-ical](https://github.com/arran4/golang-ical) — iCalendar generation
-- [go-chi/chi](https://github.com/go-chi/chi) — Lightweight HTTP router
-- [jackc/pgx](https://github.com/jackc/pgx) — PostgreSQL driver
+- [projectdiscovery/notify](https://github.com/projectdiscovery/notify) - Multi-provider notifications
+- [arran4/golang-ical](https://github.com/arran4/golang-ical) - iCalendar generation
+- [go-chi/chi](https://github.com/go-chi/chi) - Lightweight HTTP router
+- [jackc/pgx](https://github.com/jackc/pgx) - PostgreSQL driver
 
 ---
 
 ## 📞 Support
 
-- **Community Support** — GitHub Discussions
-- **Bug Reports** — GitHub Issues
-- **Commercial Support** — Included with a [commercial license](LICENSE-COMMERCIAL), which is
+- **Community Support** - GitHub Discussions
+- **Bug Reports** - GitHub Issues
+- **Commercial Support** - Included with a [commercial license](LICENSE-COMMERCIAL), which is
   only needed to offer WhenTo as a service to third parties. Running it, hosted or
   self-hosted, needs no licence and comes with community support.
 

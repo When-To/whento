@@ -119,7 +119,7 @@
       "description": "Entrez votre nouveau mot de passe ci-dessous.",
       "newPassword": "Nouveau mot de passe",
       "confirmPassword": "Confirmer le mot de passe",
-      "passwordRequirement": "Au moins 8 caractères requis",
+      "passwordRequirement": "Au moins 12 caractères, avec majuscule, minuscule, chiffre et caractère spécial",
       "passwordMismatch": "Les mots de passe ne correspondent pas",
       "invalidToken": "Lien de réinitialisation invalide ou expiré",
       "submit": "Réinitialiser le mot de passe",
@@ -164,7 +164,18 @@
     "invalidPassword": "Mot de passe incorrect",
     "logoutError": "Échec de la déconnexion",
     "fetchUserError": "Impossible de charger votre compte",
-    "updateProfileError": "Échec de la mise à jour du profil"
+    "updateProfileError": "Échec de la mise à jour du profil",
+    "registrationDisabled": "La création de compte est désactivée sur cette instance.",
+    "bootstrap": {
+      "title": "Configurer votre instance",
+      "description": "Créez le premier compte. Cette instance n'a encore aucun utilisateur, ce premier compte devient donc l'administrateur.",
+      "bootKeyLabel": "Clé d'initialisation",
+      "bootKeyHelp": "La clé d'initialisation à usage unique a été affichée dans les journaux du serveur au démarrage (ou définie via BOOTSTRAP_KEY).",
+      "createAccount": "Créer le compte administrateur",
+      "alreadyConfigured": "Cette instance a déjà un administrateur.",
+      "invalidKey": "La clé d'initialisation est invalide. Vérifiez les journaux du serveur — la clé est affichée une seule fois au démarrage.",
+      "needUser": "Créez le premier compte"
+    }
   },
   "nav": {
     "home": "Accueil",
@@ -232,7 +243,26 @@
       "downloadCodes": "Télécharger les codes"
     }
   },
-  "dashboard": {},
+  "dashboard": {
+    "sortBy": "Trier par",
+    "sortNameAsc": "Tri alphabétique (A-Z)",
+    "sortNameDesc": "Tri alphabétique (Z-A)",
+    "sortCustom": "Ordre personnalisé",
+    "viewAs": "Vue",
+    "viewCards": "Cartes",
+    "viewList": "Liste",
+    "viewExpanded": "Liste détaillée",
+    "viewCompact": "Liste compacte",
+    "reorderHint": "Faites glisser un calendrier par sa poignée, ou utilisez ses boutons haut/bas, pour définir votre propre ordre. Les calendriers épinglés restent en haut.",
+    "pinned": "Épinglés",
+    "others": "Autres calendriers",
+    "dragHandle": "Poignée de déplacement",
+    "moveUp": "Monter",
+    "moveDown": "Descendre",
+    "pinCalendar": "Épingler en haut",
+    "unpinCalendar": "Désépingler",
+    "openCalendar": "Ouvrir le calendrier {name}"
+  },
   "calendar": {
     "calendar": "Calendrier",
     "myCalendars": "Mes calendriers",
@@ -259,6 +289,7 @@
     "participantName": "Nom du participant",
     "participantNamePlaceholder": "Entrez le nom du participant...",
     "noParticipants": "Aucun participant pour le moment. Ajoutez votre premier participant !",
+    "ownerNoParticipants": "Ce calendrier n'a pas encore de participant. Ajoutez-en depuis les paramètres du calendrier.",
     "duplicateParticipant": "Ce participant existe déjà",
     "publicLink": "Lien public",
     "icsLink": "Lien d'abonnement iCal",
@@ -316,6 +347,7 @@
     "participantLinkCopied": "Lien du participant copié dans le presse-papiers",
     "participantLocked": "Lien direct requis",
     "participantLockedMessage": "Ce calendrier nécessite un lien direct de participant. Contactez le créateur du calendrier pour obtenir votre lien personnel.",
+    "ownerPreviewHint": "Vous êtes le créateur de ce calendrier. Sélectionnez un participant pour prévisualiser son lien personnel.",
     "visitedCalendars": "Mes calendriers",
     "showCalendars": "Afficher les calendriers",
     "clearHistory": "Effacer l'historique",
@@ -449,6 +481,7 @@
     "required": "Ce champ est requis",
     "invalidEmail": "Email invalide",
     "passwordTooShort": "Le mot de passe doit contenir au moins 12 caractères avec au moins une majuscule, une minuscule, un chiffre et un caractère spécial",
+    "passwordTooLong": "Le mot de passe ne doit pas dépasser 72 octets UTF-8",
     "availabilityConflict": "Impossible d'ajouter une disponibilité sur ce jour, il ne peut y avoir qu'une disponibilité par jour par participant",
     "deleteFailed": "La suppression a échoué",
     "badRequest": "La requête n'a pas pu être traitée",
@@ -477,7 +510,7 @@
       "password": {
         "required": "Le mot de passe est requis",
         "min": "Le mot de passe doit contenir au moins 12 caractères avec au moins une majuscule, une minuscule, un chiffre et un caractère spécial",
-        "max": "Le mot de passe ne peut pas dépasser 72 caractères"
+        "max": "Le mot de passe ne doit pas dépasser 72 octets UTF-8"
       },
       "display_name": {
         "required": "Le nom d'affichage est requis",
@@ -490,7 +523,7 @@
       "new_password": {
         "required": "Le nouveau mot de passe est requis",
         "min": "Le nouveau mot de passe doit contenir au moins 12 caractères avec au moins une majuscule, une minuscule, un chiffre et un caractère spécial",
-        "max": "Le nouveau mot de passe ne peut pas dépasser 72 caractères"
+        "max": "Le nouveau mot de passe ne doit pas dépasser 72 octets UTF-8"
       },
       "locale": {
         "oneof": "La langue doit être l'une des suivantes : français, anglais"

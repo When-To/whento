@@ -5,28 +5,46 @@
 package handlers
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"regexp"
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/whento/pkg/email"
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/auth/models"
-	"github.com/whento/whento/internal/auth/service"
+	"github.com/whento/whento/internal/auth/sessioncookie"
 )
 
+// MagicLinkService is what the handler needs of the magic-link domain: request a
+// login email and verify a token.
+//
+// Declared here rather than taking the concrete *service.MagicLinkService so the
+// handler can be exercised without a database or an SMTP server, both of which
+// that constructor touches. Go interfaces are structural, so the concrete
+// service satisfies it and no call site changes.
+type MagicLinkService interface {
+	RequestMagicLink(ctx context.Context, email string) error
+	VerifyMagicLink(ctx context.Context, token string) (*models.AuthResponse, error)
+}
+
+// MailAvailability answers only the one question the availability endpoint
+// asks: is any mail configuration present.
+type MailAvailability interface {
+	IsConfigured() bool
+}
+
 type MagicLinkHandler struct {
-	magicLinkService *service.MagicLinkService
-	emailService     *email.Service
+	magicLinkService MagicLinkService
+	emailService     MailAvailability
 	logger           *slog.Logger
 }
 
 func NewMagicLinkHandler(
-	magicLinkService *service.MagicLinkService,
-	emailService *email.Service,
+	magicLinkService MagicLinkService,
+	emailService MailAvailability,
 	logger *slog.Logger,
 ) *MagicLinkHandler {
 	return &MagicLinkHandler{
@@ -101,6 +119,17 @@ func (h *MagicLinkHandler) VerifyMagicLink(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid or expired magic link")
 		return
+	}
+
+	// Same as Login, Register, passkey, MFA and reset: the refresh token is
+	// generated and stored by the service but must never travel in the JSON body —
+	// it is a long-lived credential and the body is readable by any script on the
+	// page. Without the httpOnly cookie, a magic-link login could not refresh once
+	// the access token expired, which put the whole session at the mercy of the
+	// page reload.
+	if authResponse.RefreshToken != "" {
+		sessioncookie.SetRefreshToken(w, r, authResponse.RefreshToken, authResponse.RefreshExpiresAt)
+		authResponse.RefreshToken = ""
 	}
 
 	httputil.JSON(w, http.StatusOK, authResponse)

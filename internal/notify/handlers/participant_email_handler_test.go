@@ -33,15 +33,18 @@ type addEmailCall struct {
 }
 
 type stubEmailService struct {
-	addErr    error
-	verifyErr error
-	resendErr error
+	addErr     error
+	verifyErr  error
+	resendErr  error
+	configured bool
 
 	added     []addEmailCall
 	verified  []string
 	resent    []uuid.UUID
 	lastToken string
 }
+
+func (s *stubEmailService) IsConfigured() bool { return s.configured }
 
 func (s *stubEmailService) AddEmail(_ context.Context, participantID uuid.UUID, address, name, locale string) error {
 	if s.addErr != nil {
@@ -112,7 +115,13 @@ type emailFixture struct {
 }
 
 func newEmailFixture() *emailFixture {
-	calendar := &calendarModels.Calendar{Name: "Board game night", PublicToken: "public-token"}
+	configJSON := `{"enabled":true,"notify_owner":true,"notify_participants":true,"channels":{"email":{"enabled":true}},"reminders":{"enabled":false,"hours_before":24}}`
+	calendar := &calendarModels.Calendar{
+		Name:              "Board game night",
+		PublicToken:       "public-token",
+		NotifyConfig:      &configJSON,
+		NotifyOnThreshold: true,
+	}
 	calendar.ID = uuid.New()
 
 	participant := &calendarModels.Participant{CalendarID: calendar.ID, Name: "Ada", Locale: "en"}
@@ -121,7 +130,7 @@ func newEmailFixture() *emailFixture {
 	return &emailFixture{
 		calendar:    calendar,
 		participant: participant,
-		service:     &stubEmailService{},
+		service:     &stubEmailService{configured: true},
 		calendars:   &stubCalendarByToken{calendar: calendar},
 		people:      &stubParticipantByID{participant: participant},
 	}
@@ -185,6 +194,75 @@ func TestAddEmail(t *testing.T) {
 			wantStatus: http.StatusNotFound,
 		},
 		{
+			name: "the email channel is disabled in the notify config",
+			body: `{"email":"ada@example.test"}`,
+			arrange: func(f *emailFixture) {
+				closed := `{"enabled":true,"notify_owner":true,"notify_participants":true,"channels":{"email":{"enabled":false}}}`
+				f.calendar.NotifyConfig = &closed
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "the instance has no SMTP configured",
+			body: `{"email":"ada@example.test"}`,
+			arrange: func(f *emailFixture) {
+				f.service.configured = false
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "the participant email is disabled in the notify config",
+			body: `{"email":"ada@example.test"}`,
+			arrange: func(f *emailFixture) {
+				closed := `{"enabled":true,"notify_owner":true,"notify_participants":false}`
+				f.calendar.NotifyConfig = &closed
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "notifications are disabled entirely",
+			body: `{"email":"ada@example.test"}`,
+			arrange: func(f *emailFixture) {
+				closed := `{"enabled":false,"notify_participants":true}`
+				f.calendar.NotifyConfig = &closed
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "a calendar with no notify config accepts no participant email",
+			body: `{"email":"ada@example.test"}`,
+			arrange: func(f *emailFixture) {
+				f.calendar.NotifyConfig = nil
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "the email channel is disabled in the notify config",
+			body: `{"email":"ada@example.test"}`,
+			arrange: func(f *emailFixture) {
+				closed := `{"enabled":true,"notify_participants":true,"channels":{"email":{"enabled":false}}}`
+				f.calendar.NotifyConfig = &closed
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "the SMTP capability is absent",
+			body: `{"email":"ada@example.test"}`,
+			arrange: func(f *emailFixture) {
+				f.service.configured = false
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "a malformed stored config accepts no participant email",
+			body: `{"email":"ada@example.test"}`,
+			arrange: func(f *emailFixture) {
+				bad := `{not json`
+				f.calendar.NotifyConfig = &bad
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
 			name:       "the service refuses",
 			body:       `{"email":"ada@example.test"}`,
 			arrange:    func(f *emailFixture) { f.service.addErr = errors.New("address already in use") },
@@ -221,6 +299,9 @@ func TestAddEmail(t *testing.T) {
 				call := f.service.added[0]
 				if call.participantID != f.participant.ID || call.address != "ada@example.test" || call.name != "Ada" {
 					t.Errorf("service received %+v", call)
+				}
+				if call.locale != "en" {
+					t.Errorf("service locale = %q, want the participant's own locale", call.locale)
 				}
 				// The response is what the frontend types against.
 				body := w.Body.String()
@@ -304,6 +385,29 @@ func TestResendVerification(t *testing.T) {
 			name:       "the service refuses",
 			arrange:    func(f *emailFixture) { f.service.resendErr = errors.New("email already verified") },
 			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "the participant email switch was turned off since the link was sent",
+			arrange: func(f *emailFixture) {
+				closed := `{"enabled":true,"notify_owner":true,"notify_participants":false}`
+				f.calendar.NotifyConfig = &closed
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "the email channel was turned off since the link was sent",
+			arrange: func(f *emailFixture) {
+				closed := `{"enabled":true,"notify_participants":true,"channels":{"email":{"enabled":false}}}`
+				f.calendar.NotifyConfig = &closed
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "SMTP disappeared since the link was sent",
+			arrange: func(f *emailFixture) {
+				f.service.configured = false
+			},
+			wantStatus: http.StatusForbidden,
 		},
 	}
 

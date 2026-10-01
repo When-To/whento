@@ -71,6 +71,28 @@ func (m *mockCalendarRepository) Update(ctx context.Context, calendar *models.Ca
 	return m.err
 }
 
+func (m *mockCalendarRepository) Patch(ctx context.Context, id uuid.UUID, patch repository.CalendarPatch) (*models.Calendar, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	updated := *m.calendar
+	if patch.Name != nil {
+		updated.Name = *patch.Name
+	}
+	if patch.AllowedHours != nil {
+		merged, err := repository.MergeAllowedHours(updated.AllowedHours, *patch.AllowedHours)
+		if err != nil {
+			return nil, err
+		}
+		updated.AllowedHours = merged
+	}
+	return &updated, nil
+}
+
+func (m *mockCalendarRepository) UpdateThreshold(ctx context.Context, id uuid.UUID, threshold int) error {
+	return m.err
+}
+
 func (m *mockCalendarRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return m.err
 }

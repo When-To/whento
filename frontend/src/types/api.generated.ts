@@ -264,7 +264,7 @@ export interface paths {
     head?: never;
     /**
      * Update user role
-     * @description Updates a user's role (admin or user). Admin only. Cannot change own role.
+     * @description Updates a user's role (admin or user). Admin only. Cannot change own role. The last administrator cannot be demoted.
      */
     patch: {
       parameters: {
@@ -294,7 +294,7 @@ export interface paths {
             };
           };
         };
-        /** @description Cannot change own role or invalid request */
+        /** @description Cannot change own role, cannot demote the last administrator, or invalid request */
         400: {
           headers: {
             [name: string]: unknown;
@@ -332,6 +332,86 @@ export interface paths {
         };
       };
     };
+    trace?: never;
+  };
+  '/api/v1/auth/bootstrap': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Bootstrap the first user
+     * @description Creates the first (administrator) account of an unconfigured instance. Requires the boot key, which is either set via BOOTSTRAP_KEY or printed to the server logs at startup. The endpoint closes forever once a user exists.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      /** @description Boot key and first-user credentials */
+      requestBody: {
+        content: {
+          'application/json': components['schemas']['models.BootstrapRequest'];
+        };
+      };
+      responses: {
+        /** @description Created */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['models.AuthResponse'];
+          };
+        };
+        /** @description Invalid request body or validation error */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Invalid bootstrap key */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Instance already configured */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Rate limit exceeded */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   '/api/v1/auth/forgot-password': {
@@ -1109,6 +1189,15 @@ export interface paths {
             'application/json': components['schemas']['httputil.ErrorResponse'];
           };
         };
+        /** @description Infrastructure failure - the presented token may still be valid; retry */
+        500: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
       };
     };
     delete?: never;
@@ -1312,6 +1401,45 @@ export interface paths {
         };
       };
     };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Bootstrap and registration status
+     * @description Reports whether the instance still needs its first account created (bootstrap) and whether open registration is enabled. Public: the frontend gates its register button and /bootstrap route on it, and automation polls it before bootstrapping.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['models.BootstrapStatusResponse'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -3407,6 +3535,98 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/holidays': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Public holidays for a timezone
+     * @description Serves the offline public-holiday dataset for the country a timezone maps to, for one year.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description IANA timezone (e.g. Europe/Paris) */
+          timezone?: string;
+          /** @description Year (defaults to the current one) */
+          year?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['holidays.YearResponse'];
+          };
+        };
+        /** @description Bad Request */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/holidays/supported': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Countries the offline dataset covers
+     * @description Lists the ISO codes the bundled offline holiday table has national data for.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['holidays.SupportedResponse'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/ics/feed/{token}': {
     parameters: {
       query?: never;
@@ -4638,6 +4858,21 @@ export interface components {
     'handlers.updateCalendarsRequest': {
       calendar_ids?: string[];
     };
+    'holidays.Holiday': {
+      /** @description ISO 8601 (YYYY-MM-DD) */
+      date?: string;
+      name?: string;
+    };
+    'holidays.SupportedResponse': {
+      countries?: string[];
+    };
+    'holidays.YearResponse': {
+      /** @description ISO 3166-1 alpha-2, or "" */
+      country_code?: string;
+      holidays?: components['schemas']['holidays.Holiday'][];
+      /** @description false when the offline table covers no data for this timezone */
+      supported?: boolean;
+    };
     'httputil.ErrorInfo': {
       code?: string;
       details?: components['schemas']['validator.ValidationError'][];
@@ -4659,6 +4894,12 @@ export interface components {
       expires_in?: number;
       /** @description True if 2FA verification is required */
       require_mfa?: boolean;
+      /**
+       * @description SessionID is the server-issued family of the refresh cookie this response
+       *     belongs to. It is stable across rotation and new on every login, so clients
+       *     can converge on the cookie's family instead of a locally guessed nonce.
+       */
+      session_id?: string;
       /** @description Temporary token for 2FA flow (5min expiry) */
       temp_token?: string;
       user?: components['schemas']['models.User'];
@@ -4693,6 +4934,31 @@ export interface components {
     };
     'models.BackupCodesResponse': {
       backup_codes?: string[];
+    };
+    'models.BootstrapRequest': {
+      boot_key: string;
+      /**
+       * @description DisplayName and Locale match RegisterRequest; see its comment about the
+       *     paired `max`/`maxbytes` password tags.
+       */
+      display_name: string;
+      email: string;
+      /** @enum {string} */
+      locale?: 'fr' | 'en';
+      password: string;
+    };
+    'models.BootstrapStatusResponse': {
+      /**
+       * @description NeedsBootstrap is true while the instance has no users yet, which is the
+       *     only time the bootstrap endpoint accepts a request.
+       */
+      needs_bootstrap?: boolean;
+      /**
+       * @description RegistrationEnabled mirrors the server's ALLOWED_REGISTER setting. Open
+       *     registration and the bootstrap flow are both valid ways to create the
+       *     first account; this tells the client which one the UI may offer.
+       */
+      registration_enabled?: boolean;
     };
     'models.CalendarResponse': {
       allow_anonymous_participants?: boolean;

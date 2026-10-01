@@ -59,6 +59,7 @@ func newRouter(d *deps, h *handlers, spa http.Handler) chi.Router {
 	RegisterQuotaRoutes(r, d.quota, d.jwtManager, d.cacheStore)
 	registerICSRoutes(r, d, h)
 	registerSEORoutes(r, h)
+	registerHolidayRoutes(r, h)
 
 	// ========== SWAGGER DOCUMENTATION ==========
 	// swaggerHandler, not httpSwagger.WrapHandler: the library's index builds the UI from
@@ -105,4 +106,12 @@ func registerFallbacks(r chi.Router, spa http.Handler) {
 func registerSEORoutes(r chi.Router, h *handlers) {
 	r.Get("/robots.txt", h.seo.HandleRobotsTxt)
 	r.Get("/sitemap.xml", h.seo.HandleSitemapXML)
+}
+
+// registerHolidayRoutes mounts the public holidays endpoints. They are the
+// single source the frontend shades its participant calendar with, and save the
+// browser bundle from shipping a holiday database.
+func registerHolidayRoutes(r chi.Router, h *handlers) {
+	r.Get("/api/v1/holidays", h.holidays.Year)
+	r.Get("/api/v1/holidays/supported", h.holidays.Supported)
 }

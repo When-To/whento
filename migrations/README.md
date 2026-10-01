@@ -35,7 +35,7 @@ The result is placed in `/app/migrations` inside the container.
 
 ### Local Development
 
-Use Makefile commands with `BUILD_TYPE` environment variable:
+Use Makefile commands with `BUILD_TYPE` environment variable (default `selfhosted`):
 
 ```bash
 # Self-hosted migrations (default)
@@ -49,15 +49,21 @@ BUILD_TYPE=cloud make migrate-status
 
 # Rollback
 BUILD_TYPE=selfhosted make migrate-down
+
+# Reset (roll back everything, then reapply)
+make migrate-reset
 ```
 
-### All Migrations (Legacy)
-
-If you need to apply all migrations (not recommended for production):
+When the `migrate` CLI is not on hand, `scripts/migrate.sh` wraps the same
+commands (`up`, `down`, `reset`, `status`, `create`) and assembles the
+`BUILD_TYPE` migration set itself:
 
 ```bash
-make migrate-up-all
-make migrate-status-all
+# Self-hosted (default)
+./scripts/migrate.sh reset
+
+# Cloud
+BUILD_TYPE=cloud ./scripts/migrate.sh reset
 ```
 
 ## Adding New Migrations
@@ -85,7 +91,7 @@ migrate create -ext sql -dir migrations/selfhosted -seq migration_name
 
 ## Migration Naming
 
-- **Common**: `001_init`, `008_notification_log`, `012_unified_ics_feed`
+- **Common**: `001_init`, `008_notification_log`, `012_unified_ics_feed`, `014_availability_index_cleanup`, `015_refresh_token_grace_window`, `016_reminder_jobs`, `017_app_state`
 - **Cloud**: `005_ecommerce`, `011_order_shop_session`, `013_drop_billing`
 - **Self-hosted**: `005_licenses`, `013_drop_licensing`
 
@@ -93,8 +99,8 @@ migrate create -ext sql -dir migrations/selfhosted -seq migration_name
 > into a build, so a number may be reused between `cloud/` and `selfhosted/` — `005` and
 > `013` both are. It must stay unique against `common/`.
 
-The latest common migration is `012`, so **the next common migration is `014`**: `013` is
-taken by the two per-variant drop migrations.
+The latest common migration is `017`, so **the next common migration is `018`**. (`013` is
+taken by the two per-variant drop migrations; `014`–`017` are common.)
 
 ## Testing
 

@@ -21,6 +21,14 @@ import (
 var (
 	ErrUserNotFound      = errors.New("user not found")
 	ErrUserAlreadyExists = errors.New("user with this email already exists")
+	// ErrFirstUserExists reports that the instance already has a user, so the
+	// one-time bootstrap slot has been taken.
+	ErrFirstUserExists = errors.New("the instance already has a user")
+	// ErrLastAdmin reports that a demotion or deletion would leave the instance
+	// with zero administrators. An instance must always keep at least one admin
+	// (see the admin invariant in UpdateRole and Delete): zero admins is an
+	// operator-locked-out state that only a manual database rescue can undo.
+	ErrLastAdmin = errors.New("the instance must keep at least one administrator")
 )
 
 // UserRepository handles user database operations
@@ -70,7 +78,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 		       email_verified, verification_token, verification_token_expires_at,
 		       password_reset_token, password_reset_token_expires_at,
 		       magic_link_token, magic_link_token_expires_at,
-		       created_at, updated_at
+		       security_generation, created_at, updated_at
 		FROM users
 		WHERE id = $1`
 
@@ -90,6 +98,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 		&user.PasswordResetTokenExpiresAt,
 		&user.MagicLinkToken,
 		&user.MagicLinkTokenExpiresAt,
+		&user.SecurityGeneration,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -111,7 +120,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.
 		       email_verified, verification_token, verification_token_expires_at,
 		       password_reset_token, password_reset_token_expires_at,
 		       magic_link_token, magic_link_token_expires_at,
-		       created_at, updated_at
+		       security_generation, created_at, updated_at
 		FROM users
 		WHERE email = $1`
 
@@ -131,6 +140,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.
 		&user.PasswordResetTokenExpiresAt,
 		&user.MagicLinkToken,
 		&user.MagicLinkTokenExpiresAt,
+		&user.SecurityGeneration,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -140,6 +150,65 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.
 			return nil, ErrUserNotFound
 		}
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
+	}
+
+	return user, nil
+}
+
+// UpdateProfile updates only the profile columns present in the request.
+//
+// A partial `COALESCE` write rather than a whole-row rewrite: the previous
+// read-modify-write flow wrote `display_name`, `locale` and `timezone` together from a
+// snapshot read earlier, so two concurrent partial saves (e.g. the display-name form
+// and the preferences form from two tabs) would each overwrite the other's
+// untouched-by-them field with its stale value. Writing only the columns a request
+// actually carries removes that lost-update window; the row can never regress a field
+// this request did not mean to touch.
+func (r *UserRepository) UpdateProfile(
+	ctx context.Context,
+	userID uuid.UUID,
+	displayName *string,
+	locale *string,
+	timezone *string,
+) (*models.User, error) {
+	query := `
+		UPDATE users
+		SET display_name = COALESCE($2, display_name),
+		    locale = COALESCE($3, locale),
+		    timezone = COALESCE($4, timezone),
+		    updated_at = NOW()
+		WHERE id = $1
+		RETURNING id, email, password_hash, display_name, role, locale, timezone,
+		          email_verified, verification_token, verification_token_expires_at,
+		          password_reset_token, password_reset_token_expires_at,
+		          magic_link_token, magic_link_token_expires_at,
+		          security_generation, created_at, updated_at`
+
+	user := &models.User{}
+	err := r.pool.QueryRow(ctx, query, userID, displayName, locale, timezone).Scan(
+		&user.ID,
+		&user.Email,
+		&user.PasswordHash,
+		&user.DisplayName,
+		&user.Role,
+		&user.Locale,
+		&user.Timezone,
+		&user.EmailVerified,
+		&user.VerificationToken,
+		&user.VerificationTokenExpiresAt,
+		&user.PasswordResetToken,
+		&user.PasswordResetTokenExpiresAt,
+		&user.MagicLinkToken,
+		&user.MagicLinkTokenExpiresAt,
+		&user.SecurityGeneration,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("failed to update user profile: %w", err)
 	}
 
 	return user, nil
@@ -190,13 +259,52 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, p
 }
 
 // UpdateRole updates a user's role
+//
+// Admin invariant: the last administrator cannot be demoted. Demotion is
+// serialised with deletion and with other demotions on advisory lock 2, so two
+// admins demoting each other concurrently cannot both commit — the second one
+// to acquire the lock counts only one administrator and refuses.
 func (r *UserRepository) UpdateRole(ctx context.Context, userID uuid.UUID, role string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Advisory lock 2 serialises every operation that can change how many
+	// administrators exist (UpdateRole, Delete). Counting under the lock is what
+	// makes "is this the last admin?" a decision that cannot be out-raced.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(2)`); err != nil {
+		return fmt.Errorf("failed to acquire advisory lock: %w", err)
+	}
+
+	// Read the target's current role under the lock, before deciding whether a
+	// demotion would leave zero admins.
+	var currentRole string
+	if err := tx.QueryRow(ctx, `SELECT role FROM users WHERE id = $1`, userID).Scan(&currentRole); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrUserNotFound
+		}
+		return fmt.Errorf("failed to read user role: %w", err)
+	}
+
+	// Demoting an admin? Refuse when the instance has only this one.
+	if currentRole == models.RoleAdmin && role != models.RoleAdmin {
+		var admins int
+		if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE role = $1`, models.RoleAdmin).Scan(&admins); err != nil {
+			return fmt.Errorf("failed to count administrators: %w", err)
+		}
+		if admins <= 1 {
+			return ErrLastAdmin
+		}
+	}
+
 	query := `
 		UPDATE users
 		SET role = $2, updated_at = NOW()
 		WHERE id = $1`
 
-	result, err := r.pool.Exec(ctx, query, userID, role)
+	result, err := tx.Exec(ctx, query, userID, role)
 	if err != nil {
 		return fmt.Errorf("failed to update role: %w", err)
 	}
@@ -205,20 +313,61 @@ func (r *UserRepository) UpdateRole(ctx context.Context, userID uuid.UUID, role 
 		return ErrUserNotFound
 	}
 
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return nil
 }
 
 // Delete deletes a user
+//
+// Admin invariant: the last administrator cannot be deleted. Like UpdateRole, this
+// runs under advisory lock 2, so two admins deleting each other concurrently
+// cannot both commit — the second sees one admin left and refuses.
 func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	query := `DELETE FROM users WHERE id = $1`
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 
-	result, err := r.pool.Exec(ctx, query, id)
+	// Same lock as UpdateRole: deletion and demotion both change the admin
+	// count, so they must serialize with each other.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(2)`); err != nil {
+		return fmt.Errorf("failed to acquire advisory lock: %w", err)
+	}
+
+	var currentRole string
+	if err := tx.QueryRow(ctx, `SELECT role FROM users WHERE id = $1`, id).Scan(&currentRole); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrUserNotFound
+		}
+		return fmt.Errorf("failed to read user role: %w", err)
+	}
+
+	// Deleting an admin? Refuse when the instance has only this one.
+	if currentRole == models.RoleAdmin {
+		var admins int
+		if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE role = $1`, models.RoleAdmin).Scan(&admins); err != nil {
+			return fmt.Errorf("failed to count administrators: %w", err)
+		}
+		if admins <= 1 {
+			return ErrLastAdmin
+		}
+	}
+
+	result, err := tx.Exec(ctx, `DELETE FROM users WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
 		return ErrUserNotFound
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
@@ -231,7 +380,7 @@ func (r *UserRepository) List(ctx context.Context) ([]*models.User, error) {
 		       email_verified, verification_token, verification_token_expires_at,
 		       password_reset_token, password_reset_token_expires_at,
 		       magic_link_token, magic_link_token_expires_at,
-		       created_at, updated_at
+		       security_generation, created_at, updated_at
 		FROM users
 		ORDER BY created_at DESC`
 
@@ -259,6 +408,7 @@ func (r *UserRepository) List(ctx context.Context) ([]*models.User, error) {
 			&user.PasswordResetTokenExpiresAt,
 			&user.MagicLinkToken,
 			&user.MagicLinkTokenExpiresAt,
+			&user.SecurityGeneration,
 			&user.CreatedAt,
 			&user.UpdatedAt,
 		)
@@ -288,34 +438,149 @@ func (r *UserRepository) Count(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-// DetermineRoleAtomically checks user count under an advisory lock to prevent
-// TOCTOU race conditions where concurrent registrations could all become admin.
-// Returns "admin" if no users exist, "user" otherwise.
-func (r *UserRepository) DetermineRoleAtomically(ctx context.Context) (string, error) {
+// HasUsers answers "is the users table non-empty?" without summing the whole
+// table. The registration fast path historically used it as a
+// bootstrap-completed marker; that role now belongs to the durable
+// app_state.first_user_created flag (see FirstUserCreated), because a mutable
+// account table can be emptied by deletion. HasUsers remains as a plain
+// existence probe for callers that genuinely want to know about current rows.
+func (r *UserRepository) HasUsers(ctx context.Context) (bool, error) {
+	query := `SELECT EXISTS (SELECT 1 FROM users)`
+
+	var has bool
+	err := r.pool.QueryRow(ctx, query).Scan(&has)
+	if err != nil {
+		return false, fmt.Errorf("failed to check users existence: %w", err)
+	}
+
+	return has, nil
+}
+
+// CreateFirstUser is the bootstrap slot: it creates the first user atomically
+// with the emptiness check, under the first-user advisory lock, so two racing
+// requests — bootstrap or open registration — cannot both become the first (and
+// therefore admin) account.
+//
+// Register and the bootstrap flow both go through it. The emptiness check and
+// the insert live in one transaction under advisory lock 1, which is what makes
+// "am I the first user?" a decision that cannot be out-raced: a split
+// count-then-insert (the removed DetermineRoleAtomically-then-Create pattern)
+// let a loser read zero users, lose the race, and then still insert itself as
+// admin. This method is the only way to claim the first-user slot; it is kept
+// deliberately exclusive so the unsafe pattern cannot quietly return.
+func (r *UserRepository) CreateFirstUser(ctx context.Context, user *models.User) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to begin transaction: %w", err)
+		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Acquire advisory lock (key 1 = first-user registration)
+	// First-user advisory lock: the one decision "is the table still empty?"
+	// that must be serialised across every replica. Open registration and
+	// bootstrap both take it, so the two first-user paths cannot interleave.
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1)`); err != nil {
-		return "", fmt.Errorf("failed to acquire advisory lock: %w", err)
+		return fmt.Errorf("failed to acquire advisory lock: %w", err)
 	}
 
-	var count int
-	if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
-		return "", fmt.Errorf("failed to count users: %w", err)
+	// Is the first-user slot still open? The durable app_state marker is the
+	// monotonic authority; the users-table EXISTS covers instances whose
+	// schema predates 017_app_state (a shared test database that created users
+	// before the migration, for instance). Under advisory lock 1 neither answer
+	// can change mid-transaction, so the two agree on every migrated instance.
+	//
+	// EXISTS, not COUNT (*: this runs inside the advisory-locked first-user
+	// transaction on *every* open registration, so it must not cost a full scan
+	// of a table that grows with every sign-up.
+	var slotTaken bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM users)
+		    OR COALESCE((SELECT first_user_created FROM app_state WHERE id = 1), FALSE)
+	`).Scan(&slotTaken); err != nil {
+		return fmt.Errorf("failed to check for users: %w", err)
+	}
+	if slotTaken {
+		return ErrFirstUserExists
+	}
+
+	query := `
+		INSERT INTO users (id, email, password_hash, display_name, role, locale, timezone, email_verified, verification_token, verification_token_expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING created_at, updated_at`
+	err = tx.QueryRow(ctx, query,
+		user.ID,
+		user.Email,
+		user.PasswordHash,
+		user.DisplayName,
+		user.Role,
+		user.Locale,
+		user.Timezone,
+		user.EmailVerified,
+		user.VerificationToken,
+		user.VerificationTokenExpiresAt,
+	).Scan(&user.CreatedAt, &user.UpdatedAt)
+	if err != nil {
+		if dberr.IsUniqueViolation(err) {
+			return ErrUserAlreadyExists
+		}
+		return fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// Flip the durable marker in the same transaction as the insert, so
+	// "bootstrap completed" is committed atomically with the first account and
+	// can never be reverted by later account deletion.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO app_state (id, first_user_created, updated_at)
+		VALUES (1, TRUE, now())
+		ON CONFLICT (id) DO UPDATE SET first_user_created = TRUE, updated_at = now()
+	`); err != nil {
+		return fmt.Errorf("failed to record first-user marker: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return "", fmt.Errorf("failed to commit transaction: %w", err)
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	if count == 0 {
-		return "admin", nil
+	return nil
+}
+
+// FirstUserCreated reports whether a first user has ever been created on this
+// instance. Unlike HasUsers it reads the durable app_state marker, which is set
+// once inside CreateFirstUser's transaction and never cleared, so deleting
+// accounts cannot make the instance "unbootstrapped" again. This is the answer
+// the bootstrap status cache and the registration fast path rely on.
+//
+// The read is self-healing. A rolling upgrade can leave a pre-017 binary serving
+// traffic against a database that has already run migration 017: that binary
+// creates users through the plain Create path, which predates the marker, so the
+// marker alone would disagree with the users table. We therefore reconcile: if
+// users exist but the marker is not set, the marker is corrected atomically in
+// the same statement, so the split-brain cannot persist (or reopen bootstrap).
+func (r *UserRepository) FirstUserCreated(ctx context.Context) (bool, error) {
+	query := `
+		WITH reconcile AS (
+			UPDATE app_state
+			SET first_user_created = TRUE, updated_at = now()
+			WHERE id = 1 AND NOT first_user_created AND EXISTS (SELECT 1 FROM users)
+			RETURNING first_user_created
+		)
+		SELECT EXISTS (SELECT 1 FROM reconcile)
+		    OR EXISTS (SELECT 1 FROM app_state WHERE id = 1 AND first_user_created)
+		    OR EXISTS (SELECT 1 FROM users)`
+
+	var created bool
+	err := r.pool.QueryRow(ctx, query).Scan(&created)
+	if err != nil {
+		// A schema older than 017_app_state has no app_state table, so the
+		// reconcile CTE cannot run at all. Fall back to the users table so the
+		// question still has a sensible answer. Postgres reports the missing
+		// table as 42P01.
+		if dberr.HasCode(err, dberr.CodeUndefinedTable) {
+			return r.HasUsers(ctx)
+		}
+		return false, fmt.Errorf("failed to read first-user marker: %w", err)
 	}
-	return "user", nil
+
+	return created, nil
 }
 
 // ExistsByEmail checks if a user exists with the given email
@@ -357,7 +622,7 @@ func (r *UserRepository) GetByVerificationToken(ctx context.Context, token strin
 		       email_verified, verification_token, verification_token_expires_at,
 		       password_reset_token, password_reset_token_expires_at,
 		       magic_link_token, magic_link_token_expires_at,
-		       created_at, updated_at
+		       security_generation, created_at, updated_at
 		FROM users
 		WHERE verification_token = $1
 		  AND verification_token_expires_at > NOW()`
@@ -378,6 +643,7 @@ func (r *UserRepository) GetByVerificationToken(ctx context.Context, token strin
 		&user.PasswordResetTokenExpiresAt,
 		&user.MagicLinkToken,
 		&user.MagicLinkTokenExpiresAt,
+		&user.SecurityGeneration,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -442,7 +708,7 @@ func (r *UserRepository) GetByPasswordResetToken(ctx context.Context, token stri
 		SELECT id, email, password_hash, display_name, role, locale, timezone,
 		       email_verified, verification_token, verification_token_expires_at,
 		       password_reset_token, password_reset_token_expires_at,
-		       created_at, updated_at
+		       security_generation, created_at, updated_at
 		FROM users
 		WHERE password_reset_token = $1
 		  AND password_reset_token_expires_at > NOW()`
@@ -461,6 +727,7 @@ func (r *UserRepository) GetByPasswordResetToken(ctx context.Context, token stri
 		&user.VerificationTokenExpiresAt,
 		&user.PasswordResetToken,
 		&user.PasswordResetTokenExpiresAt,
+		&user.SecurityGeneration,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -504,7 +771,7 @@ func (r *UserRepository) GetByEmailVerified(ctx context.Context, email string) (
 		       email_verified, verification_token, verification_token_expires_at,
 		       password_reset_token, password_reset_token_expires_at,
 		       magic_link_token, magic_link_token_expires_at,
-		       created_at, updated_at
+		       security_generation, created_at, updated_at
 		FROM users
 		WHERE email = $1 AND email_verified = true`
 
@@ -524,6 +791,7 @@ func (r *UserRepository) GetByEmailVerified(ctx context.Context, email string) (
 		&user.PasswordResetTokenExpiresAt,
 		&user.MagicLinkToken,
 		&user.MagicLinkTokenExpiresAt,
+		&user.SecurityGeneration,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -567,7 +835,7 @@ func (r *UserRepository) GetByMagicLinkToken(ctx context.Context, token string) 
 		       email_verified, verification_token, verification_token_expires_at,
 		       password_reset_token, password_reset_token_expires_at,
 		       magic_link_token, magic_link_token_expires_at,
-		       created_at, updated_at
+		       security_generation, created_at, updated_at
 		FROM users
 		WHERE magic_link_token = $1
 		  AND magic_link_token_expires_at > NOW()`
@@ -588,6 +856,7 @@ func (r *UserRepository) GetByMagicLinkToken(ctx context.Context, token string) 
 		&user.PasswordResetTokenExpiresAt,
 		&user.MagicLinkToken,
 		&user.MagicLinkTokenExpiresAt,
+		&user.SecurityGeneration,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)

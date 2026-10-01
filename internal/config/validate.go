@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -65,6 +66,7 @@ func (c *Config) Validate() error {
 		c.validateCrypto,
 		c.validateExpiries,
 		c.validateNetworkLists,
+		c.validateBootstrap,
 		c.validateProductionCoherence,
 	}
 	for _, check := range checks {
@@ -249,6 +251,23 @@ func validateCORSOrigins(origins []string) error {
 // validateProductionCoherence holds the few rules that only make sense once
 // APP_ENV says this is a real deployment. Kept deliberately short: a rule that
 // is merely opinionated turns an upgrade into an outage at restart.
+// validateBootstrap keeps the configured boot key consistent with what the
+// HTTP request validator will accept for POST /api/v1/auth/bootstrap. The
+// request model enforces 16–256 characters; a BOOTSTRAP_KEY outside that range
+// would sail through startup, be announced as active, and then be refused at
+// the only place it is ever submitted — an operator-facing dead end.
+func (c *Config) validateBootstrap() error {
+	const (
+		minBootKeyLen = 16
+		maxBootKeyLen = 256
+	)
+	if c.BootstrapKey != "" && (utf8.RuneCountInString(c.BootstrapKey) < minBootKeyLen || utf8.RuneCountInString(c.BootstrapKey) > maxBootKeyLen) {
+		return fmt.Errorf("BOOTSTRAP_KEY must be between %d and %d characters (it is %d); the bootstrap endpoint refuses anything else",
+			minBootKeyLen, maxBootKeyLen, utf8.RuneCountInString(c.BootstrapKey))
+	}
+	return nil
+}
+
 func (c *Config) validateProductionCoherence() error {
 	if !strings.EqualFold(c.AppEnv, productionEnv) {
 		return nil

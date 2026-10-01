@@ -57,6 +57,9 @@ func TestGetByPublicToken(t *testing.T) {
 func TestGetCalendarInfoByPublicToken(t *testing.T) {
 	pool := dbtest.Pool(t)
 	ctx := dbtest.Context(t)
+	// A user row is instance-wide state as far as the first-user tests are
+	// concerned; serialize with them for the test's lifetime.
+	dbtest.LockSingletonAccounts(ctx, t, pool)
 
 	// A calendar with every rule set, so the scan has something to get wrong. The
 	// participant view enforces all of these client-side from this one payload.

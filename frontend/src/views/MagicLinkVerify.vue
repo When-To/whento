@@ -120,7 +120,7 @@ onMounted(async () => {
 
     // Set auth tokens in store
     authStore.user = response.user;
-    apiClient.setToken(response.access_token, response.expires_in);
+    apiClient.setToken(response.access_token, response.expires_in, response.session_id);
 
     // Redirect to dashboard
     await router.push('/dashboard');
