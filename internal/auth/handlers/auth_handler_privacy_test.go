@@ -9,6 +9,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -59,6 +60,11 @@ func captureDefaultLogger(t *testing.T) *bytes.Buffer {
 // the line is still there — dropping the log entirely would pass a "no address"
 // check and leave an operator blind during a credential-stuffing run.
 func TestLoginNeverLogsTheEmailAddress(t *testing.T) {
+	// The tag is hex under a salt drawn per process, so about one run in three
+	// hundred it contains "ada" by chance. Blank it before looking for the local
+	// part, or the test fails on its own fingerprint rather than on a leak.
+	accountRef := regexp.MustCompile(`"account_ref":"[0-9a-f]*"`)
+
 	tests := []struct {
 		name    string
 		address string
@@ -85,7 +91,7 @@ func TestLoginNeverLogsTheEmailAddress(t *testing.T) {
 			if strings.Contains(written, tt.address) {
 				t.Errorf("the log carries the address in clear:\n%s", written)
 			}
-			if local, _, found := strings.Cut(tt.address, "@"); found && strings.Contains(written, local) {
+			if local, _, found := strings.Cut(tt.address, "@"); found && strings.Contains(accountRef.ReplaceAllString(written, `"account_ref":""`), local) {
 				t.Errorf("the log carries the local part %q:\n%s", local, written)
 			}
 			// Still diagnosable: an administrator has to be able to tell one

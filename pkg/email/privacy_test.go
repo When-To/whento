@@ -7,6 +7,7 @@ package email
 import (
 	"bytes"
 	"log/slog"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +22,11 @@ import (
 // host, which is the branch that logs at error) and the addresses must not
 // appear in either line.
 func TestSendNeverLogsARecipientAddress(t *testing.T) {
+	// The tag is hex under a salt drawn per process, so about one run in three
+	// hundred it contains "ada" by chance. Blank it before looking for the local
+	// part, or the test fails on its own fingerprint rather than on a leak.
+	recipientRef := regexp.MustCompile(`"recipient_ref":"[0-9a-f]*"`)
+
 	tests := []struct {
 		name string
 		to   []string
@@ -58,7 +64,7 @@ func TestSendNeverLogsARecipientAddress(t *testing.T) {
 				if strings.Contains(written, address) {
 					t.Errorf("the log carries %q in clear:\n%s", address, written)
 				}
-				if local, _, found := strings.Cut(address, "@"); found && strings.Contains(written, local) {
+				if local, _, found := strings.Cut(address, "@"); found && strings.Contains(recipientRef.ReplaceAllString(written, `"recipient_ref":""`), local) {
 					t.Errorf("the log carries the local part %q:\n%s", local, written)
 				}
 			}
