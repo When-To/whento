@@ -20,7 +20,7 @@ fi
 
 if ! command -v golangci-lint &> /dev/null; then
     echo "  → Installing golangci-lint..."
-    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 fi
 
 if ! command -v swag &> /dev/null; then

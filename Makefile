@@ -5,7 +5,7 @@ BUILD_TYPE ?= selfhosted
 
 # Pinned dev tools (keep in sync with .devcontainer/ and .githooks/pre-commit)
 GOIMPORTS_VERSION := v0.48.0
-GOLANGCI_LINT_VERSION := v2.12.2
+GOLANGCI_LINT_VERSION := v2.14.0
 
 # Load environment variables from .env file if it exists
 -include .env
