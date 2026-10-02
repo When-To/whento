@@ -55,7 +55,7 @@ Requirements:
 
 | Tool | Version | Why pinned |
 | --- | --- | --- |
-| Go | 1.26 | `go.mod`, CI, every Dockerfile |
+| Go | 1.27 (`go.mod` declares a 1.26 minimum) | CI and every Dockerfile must agree; `cmd/dockerfiles_test.go` fails when they do not |
 | Node | 24 (LTS) | CI, Dockerfiles, Dependabot ignores majors past it |
 | Docker + Compose | — | Postgres and Redis for development |
 | `goimports` | **v0.48.0** | Output differs between releases; a mismatch fails `make format-check-go` |

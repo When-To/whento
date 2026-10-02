@@ -322,7 +322,7 @@ whento/
 
 | Layer                   | Technology                                         |
 | ----------------------- | -------------------------------------------------- |
-| Backend                 | Go 1.26, Chi router, pgx/v5, go-redis/v9           |
+| Backend                 | Go 1.27, Chi router, pgx/v5, go-redis/v9           |
 | Frontend                | Vue 3, Vite 8, TypeScript, Tailwind CSS 4, Pinia 4 |
 | Database                | PostgreSQL 16, Redis 7                             |
 | Auth                    | JWT RS256 (asymmetric keys), bcrypt                |
@@ -454,7 +454,7 @@ and the SSE and header requirements: [docs/reverse-proxy.md](docs/reverse-proxy.
 
 ### Prerequisites
 
-- Go 1.26
+- Go 1.26 or newer (CI and the images build with 1.27)
 - Node.js 24
 - Docker & Docker Compose
 

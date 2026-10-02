@@ -45,6 +45,10 @@ var (
 	goInstallPattern = regexp.MustCompile(`(github\.com/[\w./-]+)@(v[\w.-]+)`)
 	// MIGRATE_VERSION: vX.Y.Z, in the CI workflow's env block
 	ciMigrateVersion = regexp.MustCompile(`(?m)^\s*MIGRATE_VERSION:\s*(\S+)`)
+	// FROM … golang:X.Y-alpine… — the Go minor the images are compiled with
+	golangImageMinor = regexp.MustCompile(`(?m)^FROM\s+(?:--platform=\S+\s+)?golang:(\d+\.\d+)\b`)
+	// GO_VERSION: 'X.Y', in a workflow's env block
+	workflowGoVersion = regexp.MustCompile(`(?m)^\s*GO_VERSION:\s*['"]?([\d.]+)['"]?`)
 )
 
 // pinnedArgs are the build arguments whose value is a supply-chain decision, and
@@ -177,6 +181,52 @@ func TestDockerfilesAgreeOnTheirPins(t *testing.T) {
 		}
 	})
 
+	// Dependabot moves the golang tag in the Dockerfiles, but nothing moves
+	// GO_VERSION: it is a plain env value, which the github-actions ecosystem
+	// does not read. #132 took the images to 1.27 and CI went on testing, linting
+	// and running govulncheck under 1.26 for weeks, so the toolchain that shipped
+	// was not the one anything had checked.
+	t.Run("Go matches every workflow", func(t *testing.T) {
+		var want, wantFile string
+		for _, name := range dockerfiles {
+			for _, match := range golangImageMinor.FindAllStringSubmatch(sources[name], -1) {
+				if wantFile == "" {
+					want, wantFile = match[1], name
+
+					continue
+				}
+				if match[1] != want {
+					t.Errorf("%s builds with golang:%s, but %s with golang:%s", name, match[1], wantFile, want)
+				}
+			}
+		}
+		if wantFile == "" {
+			t.Fatal("no Dockerfile builds FROM golang:X.Y; the check below has nothing to compare against")
+		}
+
+		workflows, err := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.yml"))
+		if err != nil {
+			t.Fatalf("list workflows: %v", err)
+		}
+		for _, path := range workflows {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			match := workflowGoVersion.FindSubmatch(content)
+			if match == nil {
+				continue
+			}
+			// A floating minor is the convention, but a full patch would still
+			// name the same toolchain, so compare on the minor alone.
+			if got := majorMinor(string(match[1])); got != want {
+				rel, _ := filepath.Rel(root, path)
+				t.Errorf("%s sets GO_VERSION %s, but the Dockerfiles build with golang:%s (%s)",
+					filepath.ToSlash(rel), match[1], want, wantFile)
+			}
+		}
+	})
+
 	// The root Dockerfile is the only one that generates the Swagger spec, and
 	// its own comment says the swag version must match the devcontainer's, so
 	// that the spec an image ships is the one the annotations were written
@@ -212,6 +262,16 @@ func argValue(source, name string) (string, bool) {
 	}
 
 	return "", false
+}
+
+// majorMinor trims a Go version to its first two components: 1.27.3 -> 1.27.
+func majorMinor(version string) string {
+	parts := strings.SplitN(version, ".", 3)
+	if len(parts) < 2 {
+		return version
+	}
+
+	return parts[0] + "." + parts[1]
 }
 
 // sectionBetween returns the text from start up to end, excluding end. Both

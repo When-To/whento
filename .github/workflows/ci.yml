@@ -43,7 +43,7 @@ env:
   # toolcache first, and the hosted image ships a Go of its own — '1.26' matched the
   # preinstalled 1.26.5 and the version manifest was never consulted, which is how a
   # toolchain with six known stdlib advisories kept being used after 1.26.6 shipped.
-  GO_VERSION: '1.26'
+  GO_VERSION: '1.27'
   NODE_VERSION: '24'
   # Must match the version the Dockerfiles install, or migrations are validated with a
   # different binary from the one that applies them in production.
