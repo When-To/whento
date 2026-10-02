@@ -59,6 +59,14 @@ updates:
       frontend:
         applies-to: version-updates
         update-types: [minor, patch]
+      # Majors fall outside the group above, so each package got its own pull
+      # request. @vitest/* peer-depends on the exact vitest version, which made
+      # every one of those red on npm ci until the others were merged by hand.
+      # Minor and patch bumps still travel with the frontend group.
+      vitest:
+        applies-to: version-updates
+        patterns: ['vitest', '@vitest/*']
+        update-types: [major]
     ignore:
       # typescript-eslint 8.x declares the peer range >=4.8.4 <6.1.0, and no
       # TypeScript 7 compatible release exists yet. Lift this once it ships.
