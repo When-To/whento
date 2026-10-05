@@ -146,7 +146,7 @@ func (m *mockCalendarRepo) Patch(_ context.Context, _ uuid.UUID, patch repositor
 		updated.EndDate = nil
 	}
 	if updated.StartDate != nil && updated.EndDate != nil && updated.EndDate.Before(*updated.StartDate) {
-		return nil, errors.New("end_date must be after start_date")
+		return nil, repository.ErrInvalidDateRange
 	}
 	m.updated = &updated
 	return &updated, nil
@@ -312,18 +312,18 @@ func TestCreateCalendarDates(t *testing.T) {
 		name      string
 		startDate string
 		endDate   string
-		wantErr   bool
+		wantErr   error
 	}{
 		{name: "neither", startDate: "", endDate: ""},
 		{name: "start only", startDate: "2026-01-01"},
 		{name: "end only", endDate: "2026-12-31"},
 		{name: "a valid range", startDate: "2026-01-01", endDate: "2026-12-31"},
 		{name: "a single-day range", startDate: "2026-06-15", endDate: "2026-06-15"},
-		{name: "end before start", startDate: "2026-12-31", endDate: "2026-01-01", wantErr: true},
-		{name: "end one day before start", startDate: "2026-06-16", endDate: "2026-06-15", wantErr: true},
-		{name: "an unparseable start", startDate: "01/01/2026", wantErr: true},
-		{name: "an unparseable end", endDate: "31 December", wantErr: true},
-		{name: "a timestamp rather than a date", startDate: "2026-01-01T00:00:00Z", wantErr: true},
+		{name: "end before start", startDate: "2026-12-31", endDate: "2026-01-01", wantErr: ErrInvalidDateRange},
+		{name: "end one day before start", startDate: "2026-06-16", endDate: "2026-06-15", wantErr: ErrInvalidDateRange},
+		{name: "an unparseable start", startDate: "01/01/2026", wantErr: ErrInvalidDate},
+		{name: "an unparseable end", endDate: "31 December", wantErr: ErrInvalidDate},
+		{name: "a timestamp rather than a date", startDate: "2026-01-01T00:00:00Z", wantErr: ErrInvalidDate},
 	}
 
 	for _, tt := range tests {
@@ -337,9 +337,9 @@ func TestCreateCalendarDates(t *testing.T) {
 				EndDate:   tt.endDate,
 			})
 
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected an error, got nil")
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("error = %v, want %v", err, tt.wantErr)
 				}
 				return
 			}
@@ -1037,7 +1037,7 @@ func TestUpdateCalendarDates(t *testing.T) {
 		existingEnd   *time.Time
 		start         *string
 		end           *string
-		wantErr       bool
+		wantErr       error
 		wantStartNil  bool
 		wantEndNil    bool
 	}{
@@ -1070,13 +1070,13 @@ func TestUpdateCalendarDates(t *testing.T) {
 			name:          "a new end before the stored start is refused",
 			existingStart: &dec,
 			end:           ptr("2026-01-01"),
-			wantErr:       true,
+			wantErr:       ErrInvalidDateRange,
 		},
 		{
 			name:        "a new start after the stored end is refused",
 			existingEnd: &jan,
 			start:       ptr("2026-12-31"),
-			wantErr:     true,
+			wantErr:     ErrInvalidDateRange,
 		},
 		{
 			// Clearing one side removes the conflict entirely.
@@ -1086,8 +1086,8 @@ func TestUpdateCalendarDates(t *testing.T) {
 			end:           ptr("2026-01-01"),
 			wantStartNil:  true, wantEndNil: false,
 		},
-		{name: "an unparseable start", start: ptr("01/01/2026"), wantErr: true},
-		{name: "an unparseable end", end: ptr("someday"), wantErr: true},
+		{name: "an unparseable start", start: ptr("01/01/2026"), wantErr: ErrInvalidDate},
+		{name: "an unparseable end", end: ptr("someday"), wantErr: ErrInvalidDate},
 	}
 
 	for _, tt := range tests {
@@ -1107,9 +1107,9 @@ func TestUpdateCalendarDates(t *testing.T) {
 				&models.UpdateCalendarRequest{StartDate: tt.start, EndDate: tt.end},
 			)
 
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected an error, got nil")
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("error = %v, want %v", err, tt.wantErr)
 				}
 				return
 			}

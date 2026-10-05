@@ -104,6 +104,8 @@ line per release rather than listed individually.
   without exposing database errors. Magic links remain retryable after transient
   MFA lookup or session insertion failures. Trusted origins normalize both
   scheme and hostname; legacy verification uses the correct 405 error code.
+- Creating or updating a calendar with a malformed `start_date`/`end_date`, or
+  an end before the start, answers 400 instead of 500.
 
 ---
 

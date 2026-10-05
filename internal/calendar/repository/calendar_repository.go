@@ -22,6 +22,9 @@ import (
 
 var (
 	ErrCalendarNotFound = errors.New("calendar not found")
+	// ErrInvalidDateRange reports a patch whose effective end_date, checked against
+	// the locked row, falls before its start_date.
+	ErrInvalidDateRange = errors.New("end_date must be after start_date")
 )
 
 // CalendarRepository handles calendar database operations
@@ -487,7 +490,7 @@ func (r *CalendarRepository) Patch(ctx context.Context, id uuid.UUID, patch Cale
 		end = patch.EndDate
 	}
 	if start != nil && end != nil && end.Before(*start) {
-		return nil, fmt.Errorf("end_date must be after start_date")
+		return nil, ErrInvalidDateRange
 	}
 	if patch.AllowedHours != nil {
 		merged, err := MergeAllowedHours(existing, *patch.AllowedHours)

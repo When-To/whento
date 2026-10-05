@@ -28,6 +28,10 @@ var (
 	ErrUnauthorized        = errors.New("you don't have permission to access this calendar")
 	ErrParticipantExists   = errors.New("participant with this name already exists")
 	ErrInvalidTokenType    = errors.New("invalid token type, must be 'public' or 'ics'")
+	// ErrInvalidDate and ErrInvalidDateRange are caller mistakes, answered with a
+	// 400 rather than the 500 an unrecognised error falls through to.
+	ErrInvalidDate      = errors.New("invalid date format, expected YYYY-MM-DD")
+	ErrInvalidDateRange = errors.New("end_date must be after start_date")
 )
 
 // CalendarRepository defines the interface for calendar repository operations
@@ -143,21 +147,21 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 	if req.StartDate != "" {
 		parsed, err := time.Parse("2006-01-02", req.StartDate)
 		if err != nil {
-			return nil, fmt.Errorf("invalid start_date format, expected YYYY-MM-DD: %w", err)
+			return nil, fmt.Errorf("%w: start_date %q", ErrInvalidDate, req.StartDate)
 		}
 		startDate = &parsed
 	}
 	if req.EndDate != "" {
 		parsed, err := time.Parse("2006-01-02", req.EndDate)
 		if err != nil {
-			return nil, fmt.Errorf("invalid end_date format, expected YYYY-MM-DD: %w", err)
+			return nil, fmt.Errorf("%w: end_date %q", ErrInvalidDate, req.EndDate)
 		}
 		endDate = &parsed
 	}
 
 	// Validate that end_date is after start_date if both are set
 	if startDate != nil && endDate != nil && endDate.Before(*startDate) {
-		return nil, fmt.Errorf("end_date must be after start_date")
+		return nil, ErrInvalidDateRange
 	}
 
 	calendar := &models.Calendar{
@@ -546,7 +550,7 @@ func (s *CalendarService) UpdateCalendar(ctx context.Context, userID, userRole, 
 		} else {
 			parsed, err := time.Parse("2006-01-02", *req.StartDate)
 			if err != nil {
-				return nil, fmt.Errorf("invalid start_date format, expected YYYY-MM-DD: %w", err)
+				return nil, fmt.Errorf("%w: start_date %q", ErrInvalidDate, *req.StartDate)
 			}
 			calendar.StartDate = &parsed
 		}
@@ -560,7 +564,7 @@ func (s *CalendarService) UpdateCalendar(ctx context.Context, userID, userRole, 
 		} else {
 			parsed, err := time.Parse("2006-01-02", *req.EndDate)
 			if err != nil {
-				return nil, fmt.Errorf("invalid end_date format, expected YYYY-MM-DD: %w", err)
+				return nil, fmt.Errorf("%w: end_date %q", ErrInvalidDate, *req.EndDate)
 			}
 			calendar.EndDate = &parsed
 		}
@@ -639,6 +643,9 @@ func (s *CalendarService) UpdateCalendar(ctx context.Context, userID, userRole, 
 	// can never leave the cached row ahead of the database.
 	updated, err := s.calendarRepo.Patch(ctx, calendar.ID, patch)
 	if err != nil {
+		if errors.Is(err, repository.ErrInvalidDateRange) {
+			return nil, ErrInvalidDateRange
+		}
 		return nil, err
 	}
 	calendar = updated

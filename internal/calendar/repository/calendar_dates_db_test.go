@@ -5,6 +5,7 @@
 package repository_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -36,7 +37,7 @@ func TestConcurrentDatePatchesCannotInvertTheStoredRange(t *testing.T) {
 	failures := 0
 	for range 2 {
 		if err := <-results; err != nil {
-			if err.Error() != "end_date must be after start_date" {
+			if !errors.Is(err, repository.ErrInvalidDateRange) {
 				t.Fatalf("expected domain validation, not a raw database constraint error: %v", err)
 			}
 			failures++
@@ -75,7 +76,7 @@ func TestInvalidDatePatchRollsBackEverySuppliedField(t *testing.T) {
 			}
 			if _, err := repo.Patch(ctx, calendar.ID, patch); err == nil {
 				t.Fatal("invalid dates were accepted")
-			} else if err.Error() != "end_date must be after start_date" {
+			} else if !errors.Is(err, repository.ErrInvalidDateRange) {
 				t.Fatalf("expected domain validation, not a raw database constraint error: %v", err)
 			}
 			got, err := repo.GetByID(ctx, calendar.ID)

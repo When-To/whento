@@ -29,6 +29,7 @@ type mockCalendarRepository struct {
 	calendars                    []*models.Calendar
 	participants                 []models.Participant
 	err                          error
+	patchErr                     error
 	createWithParticipantsCalled bool
 }
 
@@ -74,6 +75,9 @@ func (m *mockCalendarRepository) Update(ctx context.Context, calendar *models.Ca
 func (m *mockCalendarRepository) Patch(ctx context.Context, id uuid.UUID, patch repository.CalendarPatch) (*models.Calendar, error) {
 	if m.err != nil {
 		return nil, m.err
+	}
+	if m.patchErr != nil {
+		return nil, m.patchErr
 	}
 	updated := *m.calendar
 	if patch.Name != nil {
@@ -327,4 +331,66 @@ func TestCalendarHandler_CreateCalendar_Unauthorized(t *testing.T) {
 	}
 }
 
-// More tests to be added: GetCalendar, ListMyCalendars, UpdateCalendar, DeleteCalendar, RegenerateToken, GetPublicCalendar
+// TestCalendarHandler_InvalidDatesAreBadRequests pins that a malformed or inverted
+// date range is answered as the caller's mistake, not as a server failure.
+func TestCalendarHandler_InvalidDatesAreBadRequests(t *testing.T) {
+	ownerID := uuid.New()
+	cfg := &config.Config{Email: config.EmailConfig{VerificationEnabled: false}}
+
+	t.Run("create", func(t *testing.T) {
+		for name, body := range map[string]map[string]interface{}{
+			"end before start":  {"name": "Trip", "start_date": "2026-06-16", "end_date": "2026-06-15"},
+			"unparseable start": {"name": "Trip", "start_date": "16/06/2026"},
+		} {
+			t.Run(name, func(t *testing.T) {
+				mockCalRepo := &mockCalendarRepository{}
+				calendarSvc := service.NewCalendarService(mockCalRepo, &mockParticipantRepository{}, nil, &mockCache{})
+				handler := handlers.NewCalendarHandler(calendarSvc, &mockQuotaService{canCreate: true}, nil, cfg, nil)
+
+				req := testutil.WithAuth(testutil.MakeJSONRequest(http.MethodPost, "/api/v1/calendars", body), ownerID.String(), "user")
+				w := httptest.NewRecorder()
+				handler.CreateCalendar(w, req)
+
+				if w.Code != http.StatusBadRequest {
+					t.Errorf("status = %d, want 400: %s", w.Code, w.Body.String())
+				}
+				if mockCalRepo.createWithParticipantsCalled {
+					t.Error("an invalid calendar reached the repository")
+				}
+			})
+		}
+	})
+
+	t.Run("update", func(t *testing.T) {
+		end := "2026-06-15"
+		unparseable := "someday"
+		for name, tc := range map[string]struct {
+			body     map[string]interface{}
+			patchErr error
+		}{
+			// The repository compares against the locked row, so the inversion is only
+			// detected there.
+			"inverted against the locked row": {body: map[string]interface{}{"end_date": end}, patchErr: repository.ErrInvalidDateRange},
+			"unparseable end":                 {body: map[string]interface{}{"end_date": unparseable}},
+		} {
+			t.Run(name, func(t *testing.T) {
+				calendar := &models.Calendar{OwnerID: ownerID, Name: "Trip"}
+				calendar.ID = uuid.New()
+				mockCalRepo := &mockCalendarRepository{calendar: calendar, patchErr: tc.patchErr}
+				calendarSvc := service.NewCalendarService(mockCalRepo, &mockParticipantRepository{}, nil, &mockCache{})
+				handler := handlers.NewCalendarHandler(calendarSvc, &mockQuotaService{canCreate: true}, nil, cfg, nil)
+
+				req := testutil.MakeJSONRequest(http.MethodPatch, "/api/v1/calendars/"+calendar.ID.String(), tc.body)
+				req = testutil.WithURLParams(testutil.WithAuth(req, ownerID.String(), "user"), map[string]string{"id": calendar.ID.String()})
+				w := httptest.NewRecorder()
+				handler.UpdateCalendar(w, req)
+
+				if w.Code != http.StatusBadRequest {
+					t.Errorf("status = %d, want 400: %s", w.Code, w.Body.String())
+				}
+			})
+		}
+	})
+}
+
+// More tests to be added: GetCalendar, ListMyCalendars, DeleteCalendar, RegenerateToken, GetPublicCalendar

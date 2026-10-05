@@ -246,6 +246,9 @@ func (h *CalendarHandler) createUnderQuota(
 
 	calendar, err := h.calendarService.CreateCalendar(ctx, userID, req)
 	if err != nil {
+		if writeDateError(w, err) {
+			return
+		}
 		logger.FromContext(ctx).Error("Failed to create calendar", "error", err, "user_id", userID)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to create calendar")
 		return
@@ -369,6 +372,9 @@ func (h *CalendarHandler) UpdateCalendar(w http.ResponseWriter, r *http.Request)
 		}
 		if errors.Is(err, service.ErrUnauthorized) {
 			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "You don't have permission to modify this calendar")
+			return
+		}
+		if writeDateError(w, err) {
 			return
 		}
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to update calendar")
@@ -531,4 +537,18 @@ func (h *CalendarHandler) ListUserCalendars(w http.ResponseWriter, r *http.Reque
 	}
 
 	httputil.JSON(w, http.StatusOK, calendars)
+}
+
+// writeDateError answers a malformed or inverted start_date/end_date with a 400.
+// Both are mistakes in the request; without this they fell through to a 500.
+func writeDateError(w http.ResponseWriter, err error) bool {
+	switch {
+	case errors.Is(err, service.ErrInvalidDate):
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, err.Error())
+	case errors.Is(err, service.ErrInvalidDateRange):
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "End date must be after start date")
+	default:
+		return false
+	}
+	return true
 }
