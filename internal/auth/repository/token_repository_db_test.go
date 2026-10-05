@@ -79,55 +79,6 @@ func TestRefreshTokenRoundTrip(t *testing.T) {
 // The UPDATE carries `consumed_at IS NULL`, so two callers presenting the same token
 // cannot both believe they rotated it — which is what lets the loser be told apart from
 // somebody replaying a stolen cookie.
-func TestConsumeIsWonByExactlyOneCaller(t *testing.T) {
-	pool := dbtest.Pool(t)
-	users := repository.NewUserRepository(pool)
-	tokens := repository.NewTokenRepository(pool)
-	ctx := dbtest.Context(t)
-
-	user := newUser(ctx, t, pool)
-	if err := users.Create(ctx, user); err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-
-	hash := repository.HashToken(uuid.NewString())
-	token := &models.RefreshToken{
-		UserID:    user.ID,
-		TokenHash: hash,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
-	}
-	token.ID = uuid.New()
-	if err := tokens.Create(ctx, token, 0); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-
-	won, err := tokens.Consume(ctx, hash)
-	if err != nil {
-		t.Fatalf("Consume: %v", err)
-	}
-	if !won {
-		t.Fatal("the first caller did not win the rotation")
-	}
-
-	again, err := tokens.Consume(ctx, hash)
-	if err != nil {
-		t.Fatalf("Consume (second): %v", err)
-	}
-	if again {
-		t.Error("a second caller also believed it rotated the token")
-	}
-
-	// The row survives, and says when it was spent. That is what the grace window
-	// reads to tell a racing tab from a replay.
-	stored, err := tokens.GetByHash(ctx, hash)
-	if err != nil {
-		t.Fatalf("GetByHash after Consume: %v", err)
-	}
-	if stored.ConsumedAt == nil {
-		t.Error("the token was rotated but carries no consumed_at")
-	}
-}
-
 // TestDeleteExpiredKeepsUnexpiredReplayEvidence is the production sweep. Consumed
 // hashes stay until the JWT itself expires; deleting them earlier made a replay
 // look unknown and left the successor live.
@@ -142,21 +93,19 @@ func TestDeleteExpiredKeepsUnexpiredReplayEvidence(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 
-	live := repository.HashToken(uuid.NewString())
-	spent := repository.HashToken(uuid.NewString())
-	for _, hash := range []string{live, spent} {
-		token := &models.RefreshToken{
-			UserID:    user.ID,
-			TokenHash: hash,
-			ExpiresAt: time.Now().Add(24 * time.Hour),
-		}
-		token.ID = uuid.New()
-		if err := tokens.Create(ctx, token, 0); err != nil {
-			t.Fatalf("Create: %v", err)
-		}
+	live := insertRefresh(ctx, t, tokens, user.ID, "sweep-live").TokenHash
+	spent := insertRefresh(ctx, t, tokens, user.ID, "sweep-spent").TokenHash
+	// Rotate through the production path, which leaves the ancestor consumed.
+	successor := &models.RefreshToken{
+		UserID: user.ID, TokenHash: repository.HashToken(uuid.NewString()),
+		ExpiresAt: time.Now().Add(24 * time.Hour), FamilyID: "sweep-spent",
 	}
-	if _, err := tokens.Consume(ctx, spent); err != nil {
-		t.Fatalf("Consume: %v", err)
+	successor.ID = uuid.New()
+	if err := tokens.CommitRotation(ctx, spent, successor, time.Minute); err != nil {
+		t.Fatalf("CommitRotation: %v", err)
+	}
+	if stored, err := tokens.GetByHash(ctx, spent); err != nil || stored.ConsumedAt == nil {
+		t.Fatalf("the rotated ancestor is not marked consumed: %+v, %v", stored, err)
 	}
 
 	if _, err := tokens.DeleteExpired(ctx); err != nil {

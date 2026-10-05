@@ -318,8 +318,6 @@ func (s *stubAuthTokenRepo) DeleteByUserID(context.Context, uuid.UUID) (int64, e
 	return 0, nil
 }
 
-func (s *stubAuthTokenRepo) Consume(context.Context, string) (bool, error) { return true, nil }
-
 func (s *stubAuthTokenRepo) CreatePendingMFASession(context.Context, string, time.Time, *authModels.RefreshToken, int64) (bool, error) {
 	if s.finalizeErr != nil {
 		return false, s.finalizeErr

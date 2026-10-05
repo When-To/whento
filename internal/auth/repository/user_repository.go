@@ -766,27 +766,6 @@ func (r *UserRepository) GetByMagicLinkToken(ctx context.Context, token string) 
 	return user, nil
 }
 
-// ClearMagicLinkToken clears the magic link token for a user
-func (r *UserRepository) ClearMagicLinkToken(ctx context.Context, userID uuid.UUID) error {
-	query := `
-		UPDATE users
-		SET magic_link_token = NULL,
-		    magic_link_token_expires_at = NULL,
-		    updated_at = NOW()
-		WHERE id = $1`
-
-	result, err := r.pool.Exec(ctx, query, userID)
-	if err != nil {
-		return fmt.Errorf("failed to clear magic link token: %w", err)
-	}
-
-	if result.RowsAffected() == 0 {
-		return ErrUserNotFound
-	}
-
-	return nil
-}
-
 // ConsumeMagicLinkToken finalizes a prepared mailbox login under the session
 // lock. It revalidates the proof and captured security generation, then clears
 // the proof and inserts the optional refresh session in the same transaction.

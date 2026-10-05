@@ -68,8 +68,6 @@ type UserRepository interface {
 type TokenRepository interface {
 	Create(ctx context.Context, token *models.RefreshToken, securityGeneration int64) error
 	GetByHash(ctx context.Context, tokenHash string) (*models.RefreshToken, error)
-	// Consume marks a token rotated and reports whether this call won the race.
-	Consume(ctx context.Context, tokenHash string) (bool, error)
 	// CreatePendingMFASession finalizes a pending-MFA login atomically: claims the
 	// temp token's JTI digest as a one-time nonce, verifies the captured security
 	// generation, and inserts the refresh token in one transaction. A failed

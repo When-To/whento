@@ -115,27 +115,6 @@ func (r *TokenRepository) GetByHash(ctx context.Context, tokenHash string) (*mod
 	return token, nil
 }
 
-// Consume marks a refresh token as rotated, and reports whether this call is the one
-// that did it.
-//
-// The `consumed_at IS NULL` in the WHERE clause is what makes concurrent refreshes
-// decidable rather than racy: two callers presenting the same token both run this
-// statement, and exactly one sees a row affected. The loser learns it lost instead of
-// finding the row deleted and having to guess whether that was a race or a replay.
-func (r *TokenRepository) Consume(ctx context.Context, tokenHash string) (bool, error) {
-	query := `
-		UPDATE refresh_tokens
-		SET consumed_at = NOW()
-		WHERE token_hash = $1 AND consumed_at IS NULL`
-
-	result, err := r.pool.Exec(ctx, query, tokenHash)
-	if err != nil {
-		return false, fmt.Errorf("failed to consume token: %w", err)
-	}
-
-	return result.RowsAffected() == 1, nil
-}
-
 // CreatePendingMFASession finalizes a pending-MFA login atomically: it claims
 // the temp token's JTI digest as a one-time nonce, verifies the captured
 // security generation is still current, and inserts the refresh token — all in

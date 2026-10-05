@@ -284,20 +284,6 @@ func (f *fakeTokenRepo) DeleteByUserID(_ context.Context, userID uuid.UUID) (int
 	return 0, nil
 }
 
-// Consume mirrors the SQL: the UPDATE carries `consumed_at IS NULL`, so only the first
-// caller sees a row affected and the rest learn they lost the race.
-func (f *fakeTokenRepo) Consume(_ context.Context, hash string) (bool, error) {
-	token, ok := f.stored[hash]
-	if !ok || token.ConsumedAt != nil {
-		return false, nil
-	}
-
-	now := time.Now()
-	token.ConsumedAt = &now
-
-	return true, nil
-}
-
 func (f *fakeTokenRepo) RevokePresentedFamily(_ context.Context, hash string) error {
 	token, ok := f.stored[hash]
 	if !ok {

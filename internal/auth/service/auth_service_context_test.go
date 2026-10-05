@@ -84,14 +84,6 @@ func (r *contextTokenRepo) CommitRotation(
 	return nil
 }
 
-func (r *contextTokenRepo) Consume(ctx context.Context, hash string) (bool, error) {
-	if err := ctx.Err(); err != nil {
-		return false, err
-	}
-
-	return r.fakeTokenRepo.Consume(ctx, hash)
-}
-
 func (r *contextTokenRepo) CreatePendingMFASession(ctx context.Context, digest string, expiresAt time.Time, token *models.RefreshToken, generation int64) (bool, error) {
 	r.creates++
 	r.createCtx = ctx

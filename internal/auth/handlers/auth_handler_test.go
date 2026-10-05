@@ -142,10 +142,6 @@ func (m *mockTokenRepository) DeleteByUserID(ctx context.Context, userID uuid.UU
 	return 0, m.err
 }
 
-func (m *mockTokenRepository) Consume(context.Context, string) (bool, error) {
-	return m.err == nil, m.err
-}
-
 func (m *mockTokenRepository) CreatePendingMFASession(context.Context, string, time.Time, *models.RefreshToken, int64) (bool, error) {
 	return m.err == nil, m.err
 }
