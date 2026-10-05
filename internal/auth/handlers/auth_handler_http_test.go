@@ -303,6 +303,9 @@ func TestRegisterValidatesTheBody(t *testing.T) {
 		{"no password", `{"email":"ada@example.test","display_name":"Ada"}`},
 		// A short password is refused here rather than hashed and stored.
 		{"a short password", `{"email":"ada@example.test","password":"short","display_name":"Ada"}`},
+		// 39 characters but 74 UTF-8 bytes: within max=72 runes, beyond what bcrypt
+		// accepts, so it must be refused here instead of failing as a 500 at hashing.
+		{"a password over 72 UTF-8 bytes", `{"email":"ada@example.test","password":"Aa1!` + strings.Repeat("é", 35) + `","display_name":"Ada"}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			r := newRig(t, rigOptions{allowedRegister: true})
@@ -797,6 +800,9 @@ func TestChangePasswordRequiresTheCurrentOne(t *testing.T) {
 		},
 		{name: "a malformed body", body: `{"current_password":`, wantStatus: http.StatusBadRequest},
 		{name: "a short new password", body: `{"current_password":"Correct-Horse-9","new_password":"short"}`, wantStatus: http.StatusBadRequest},
+		// bcrypt's ceiling is 72 bytes, not 72 characters.
+		{name: "a new password of exactly 72 UTF-8 bytes", body: `{"current_password":"Correct-Horse-9","new_password":"Aa1!` + strings.Repeat("é", 34) + `"}`, wantStatus: http.StatusOK},
+		{name: "a new password over 72 UTF-8 bytes", body: `{"current_password":"Correct-Horse-9","new_password":"Aa1!` + strings.Repeat("é", 35) + `"}`, wantStatus: http.StatusBadRequest},
 	}
 
 	for _, tt := range tests {

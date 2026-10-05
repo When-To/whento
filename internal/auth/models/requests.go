@@ -7,7 +7,7 @@ package models
 // RegisterRequest represents a registration request
 type RegisterRequest struct {
 	Email       string `json:"email" validate:"required,email,max=255"`
-	Password    string `json:"password" validate:"required,strongpassword,max=72"`
+	Password    string `json:"password" validate:"required,strongpassword,max=72,maxbytes=72"`
 	DisplayName string `json:"display_name" validate:"required,min=2,max=100"`
 	Locale      string `json:"locale" validate:"omitempty,oneof=fr en"`
 }
@@ -33,7 +33,7 @@ type UpdateProfileRequest struct {
 // ChangePasswordRequest represents a password change request
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password" validate:"required"`
-	NewPassword     string `json:"new_password" validate:"required,strongpassword,max=72"`
+	NewPassword     string `json:"new_password" validate:"required,strongpassword,max=72,maxbytes=72"`
 }
 
 // UpdateRoleRequest represents a role update request (admin only)

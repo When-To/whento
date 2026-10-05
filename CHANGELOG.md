@@ -106,6 +106,9 @@ line per release rather than listed individually.
   scheme and hostname; legacy verification uses the correct 405 error code.
 - Creating or updating a calendar with a malformed `start_date`/`end_date`, or
   an end before the start, answers 400 instead of 500.
+- Registration and password changes also enforce the 72-byte bcrypt ceiling:
+  a multibyte password of 72 characters or fewer but more than 72 bytes is
+  refused with 400 instead of failing with 500 at hashing.
 
 ---
 
