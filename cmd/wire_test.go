@@ -111,3 +111,36 @@ func isNilPointer(v any) bool {
 
 	return rv.Kind() == reflect.Pointer && rv.IsNil()
 }
+
+func TestMagicLinkTrustedOriginsAreBareOrigins(t *testing.T) {
+	tests := []struct {
+		name        string
+		appURL      string
+		corsOrigins []string
+		want        []string
+	}{
+		{name: "a plain APP_URL", appURL: "https://whento.example.com", want: []string{"https://whento.example.com"}},
+		{name: "a trailing slash", appURL: "https://whento.example.com/", want: []string{"https://whento.example.com"}},
+		// A browser's Origin never carries a path; dropping the whole entry used to
+		// reject every same-origin magic-link confirmation with a 403.
+		{name: "an APP_URL with a path", appURL: "https://example.com/whento", want: []string{"https://example.com"}},
+		{name: "a port is kept", appURL: "http://localhost:8080", want: []string{"http://localhost:8080"}},
+		{name: "mixed case is lowered", appURL: "https://WhenTo.Example.com", want: []string{"https://whento.example.com"}},
+		{
+			name:        "CORS origins are added, deduplicated, and the wildcard never is",
+			appURL:      "https://whento.example.com",
+			corsOrigins: []string{"*", "https://whento.example.com/", "https://admin.example.com", ""},
+			want:        []string{"https://whento.example.com", "https://admin.example.com"},
+		},
+		{name: "an entry that is not an http(s) URL is ignored", appURL: "https://whento.example.com", corsOrigins: []string{"whento.example.com", "ftp://files.example.com"}, want: []string{"https://whento.example.com"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := magicLinkTrustedOrigins(&config.Config{AppURL: tt.appURL, CORSOrigins: tt.corsOrigins})
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("magicLinkTrustedOrigins = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -271,8 +272,10 @@ func buildHandlers(d *deps) (*handlers, error) {
 //
 // The application origin is always trusted: the SPA is served from it, and a
 // same-origin confirmation is the point of the whole POST/CSRF rework. Each
-// CORS_ORIGINS entry is also trusted when it is a real origin — scheme://host,
-// with the trailing slash normalized away. The wildcard "*" is not: it means
+// CORS_ORIGINS entry is also trusted when it is a real origin. Each value is
+// reduced to scheme://host[:port], lowercased: that is all a browser's Origin
+// header ever carries, so an APP_URL with a path (or a trailing slash) must not
+// drop the application origin from the set. The wildcard "*" is not: it means
 // "any origin may call the API" for the CORS middleware, but for magic links it
 // is exactly the broad-open value that would let an attack site confirm on the
 // victim's behalf, so it can never contribute to this set.
@@ -280,11 +283,12 @@ func magicLinkTrustedOrigins(cfg *config.Config) []string {
 	seen := make(map[string]struct{}, len(cfg.CORSOrigins)+1)
 	origins := make([]string, 0, len(cfg.CORSOrigins)+1)
 
-	add := func(o string) {
-		o = strings.TrimRight(o, "/")
-		if o == "" {
+	add := func(raw string) {
+		u, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 			return
 		}
+		o := strings.ToLower(u.Scheme + "://" + u.Host)
 		if _, ok := seen[o]; ok {
 			return
 		}

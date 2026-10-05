@@ -109,6 +109,8 @@ line per release rather than listed individually.
 - Registration and password changes also enforce the 72-byte bcrypt ceiling:
   a multibyte password of 72 characters or fewer but more than 72 bytes is
   refused with 400 instead of failing with 500 at hashing.
+- An `APP_URL` with a path no longer drops the application origin from the
+  magic-link trusted origins, which made every confirmation fail with 403.
 
 ---
 
