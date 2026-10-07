@@ -72,6 +72,19 @@ type (
 		LogNotification(ctx context.Context, calendarID uuid.UUID, date time.Time, eventType, recipientType string, recipientID uuid.UUID, channel string) error
 	}
 
+	// ActivityLog is the per-date journal, read to find out who this transition is
+	// actually about. Two facts per date and nothing else, so one call answers both
+	// "who joined last" and "who withdrew last" — see
+	// internal/availability/models/activity.go.
+	//
+	// Like the stores above it names only a models type, so the tests satisfy it with
+	// a fake and no database.
+	ActivityLog interface {
+		GetForDate(
+			ctx context.Context, calendarID uuid.UUID, date time.Time,
+		) (*availabilityModels.DateActivity, error)
+	}
+
 	// Mailer is the SMTP sender. IsConfigured is as important as Send: an
 	// instance with no mail set up skips the whole email path.
 	Mailer interface {
@@ -98,6 +111,7 @@ type NotifyService struct {
 	calendarRepo     CalendarStore
 	participantRepo  ParticipantStore
 	availabilityRepo AvailabilityStore
+	activityLog      ActivityLog
 	userRepo         UserStore
 	notificationLog  NotificationLog
 	emailService     Mailer
@@ -112,6 +126,7 @@ func NewNotifyService(
 	calendarRepo CalendarStore,
 	participantRepo ParticipantStore,
 	availabilityRepo AvailabilityStore,
+	activityLog ActivityLog,
 	userRepo UserStore,
 	notificationLog NotificationLog,
 	emailService Mailer,
@@ -124,6 +139,7 @@ func NewNotifyService(
 		calendarRepo:     calendarRepo,
 		participantRepo:  participantRepo,
 		availabilityRepo: availabilityRepo,
+		activityLog:      activityLog,
 		userRepo:         userRepo,
 		notificationLog:  notificationLog,
 		emailService:     emailService,
@@ -215,6 +231,11 @@ func (s *NotifyService) CheckThresholdAndNotify(
 		return nil
 	}
 
+	// Who this transition is about, from the journal the availability service wrote
+	// before waking this check. A failure leaves both refs nil and the messages keep
+	// their old shape: the notification is the point, the name is the improvement.
+	s.attachActivity(ctx, calendarID, date, transition)
+
 	s.logger.Info("Threshold transition detected - SENDING NOTIFICATIONS",
 		"calendar_id", calendarID,
 		"date", date.Format("2006-01-02"),
@@ -240,6 +261,33 @@ func (s *NotifyService) CheckThresholdAndNotify(
 	}
 
 	return nil
+}
+
+// attachActivity fills the transition's two participant refs from the activity journal.
+//
+// Both slots are read even though a given transition only renders one of them: which
+// one is a property of the message being built, not of the lookup, and the journal
+// answers both in a single row.
+func (s *NotifyService) attachActivity(
+	ctx context.Context,
+	calendarID uuid.UUID,
+	date time.Time,
+	transition *models.ThresholdTransition,
+) {
+	activity, err := s.activityLog.GetForDate(ctx, calendarID, date)
+	if err != nil {
+		s.logger.Error("Failed to read the activity journal for the date",
+			"calendar_id", calendarID, "date", date.Format("2006-01-02"), "error", err)
+		return
+	}
+	if activity == nil {
+		return
+	}
+
+	// Assigned, not converted: models.ParticipantRef is an alias of the journal's own
+	// ref, so these are the same type.
+	transition.LastJoined = activity.LastJoined
+	transition.LastWithdrawn = activity.LastWithdrawn
 }
 
 // notifyOwnerExternalChannels sends external notifications (Discord, Slack, Telegram) to calendar owner
@@ -585,6 +633,29 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 	return nil
 }
 
+// participantSuffix renders "<label><name>", or the empty string when there is no ref.
+//
+// Empty rather than "(unknown)" on purpose: a journal entry can be missing because the
+// date predates the journal or because the participant has since been deleted, and in
+// both cases the honest message is the one that was sent before any of this existed —
+// byte for byte, so nothing about an absent entry leaks into the wording.
+func participantSuffix(ref *availabilityModels.ParticipantRef, label string) string {
+	if ref == nil {
+		return ""
+	}
+
+	return label + ref.Name
+}
+
+// htmlParticipantSuffix is the same, escaped for the HTML body.
+func htmlParticipantSuffix(ref *availabilityModels.ParticipantRef, label string) string {
+	if ref == nil {
+		return ""
+	}
+
+	return label + html.EscapeString(ref.Name)
+}
+
 // buildNotificationMessage creates the notification content (text for non-email channels)
 func (s *NotifyService) buildNotificationMessage(
 	calendar *calendarModels.Calendar,
@@ -595,19 +666,21 @@ func (s *NotifyService) buildNotificationMessage(
 	switch transition.TransitionType {
 	case "threshold_reached":
 		return fmt.Sprintf(
-			"🎉 Calendar '%s': Threshold reached for %s! (%d/%d participants available)",
+			"🎉 Calendar '%s': Threshold reached for %s! (%d/%d participants available)%s",
 			calendar.Name,
 			dateStr,
 			transition.NewCount,
 			transition.Threshold,
+			participantSuffix(transition.LastJoined, " — last to join: "),
 		)
 	case "threshold_lost":
 		return fmt.Sprintf(
-			"⚠️ Calendar '%s': Threshold lost for %s (%d/%d participants)",
+			"⚠️ Calendar '%s': Threshold lost for %s (%d/%d participants)%s",
 			calendar.Name,
 			dateStr,
 			transition.NewCount,
 			transition.Threshold,
+			participantSuffix(transition.LastWithdrawn, " — withdrew: "),
 		)
 	}
 
@@ -646,18 +719,20 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 		case "threshold_reached":
 			emoji = "🎉"
 			messageText = fmt.Sprintf(
-				"Seuil atteint pour %s ! (%d/%d participants disponibles)",
+				"Seuil atteint pour %s ! (%d/%d participants disponibles)%s",
 				dateStr,
 				transition.NewCount,
 				transition.Threshold,
+				htmlParticipantSuffix(transition.LastJoined, " — dernier inscrit : "),
 			)
 		case "threshold_lost":
 			emoji = "⚠️"
 			messageText = fmt.Sprintf(
-				"Seuil perdu pour %s (%d/%d participants)",
+				"Seuil perdu pour %s (%d/%d participants)%s",
 				dateStr,
 				transition.NewCount,
 				transition.Threshold,
+				htmlParticipantSuffix(transition.LastWithdrawn, " — s'est retiré : "),
 			)
 		default:
 			messageText = fmt.Sprintf(
@@ -680,18 +755,20 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 		case "threshold_reached":
 			emoji = "🎉"
 			messageText = fmt.Sprintf(
-				"Threshold reached for %s! (%d/%d participants available)",
+				"Threshold reached for %s! (%d/%d participants available)%s",
 				dateStr,
 				transition.NewCount,
 				transition.Threshold,
+				htmlParticipantSuffix(transition.LastJoined, " — last to join: "),
 			)
 		case "threshold_lost":
 			emoji = "⚠️"
 			messageText = fmt.Sprintf(
-				"Threshold lost for %s (%d/%d participants)",
+				"Threshold lost for %s (%d/%d participants)%s",
 				dateStr,
 				transition.NewCount,
 				transition.Threshold,
+				htmlParticipantSuffix(transition.LastWithdrawn, " — withdrew: "),
 			)
 		default:
 			messageText = fmt.Sprintf(

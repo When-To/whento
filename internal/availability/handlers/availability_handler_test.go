@@ -38,6 +38,8 @@ type stubAvailabilityRepo struct {
 	// What the summary endpoints read: the repository expands recurrences in SQL, so
 	// the service is handed occurrences rather than table rows.
 	occurrences []models.Occurrence
+	// The range-grained projection the activity journal reads, keyed by "2006-01-02".
+	dateStats map[string]models.DateStats
 }
 
 var _ service.AvailabilityRepository = (*stubAvailabilityRepo)(nil)
@@ -74,6 +76,12 @@ func (s *stubAvailabilityRepo) GetOccurrencesForRange(
 	context.Context, uuid.UUID, time.Time, time.Time,
 ) ([]models.Occurrence, error) {
 	return s.occurrences, nil
+}
+
+func (s *stubAvailabilityRepo) GetDateStatsForRange(
+	context.Context, uuid.UUID, time.Time, time.Time, int,
+) (map[string]models.DateStats, error) {
+	return s.dateStats, nil
 }
 
 func (s *stubAvailabilityRepo) Update(context.Context, *models.Availability) error { return nil }
@@ -153,6 +161,28 @@ func (s *stubRecurrenceRepo) GetExceptionsByRecurrenceIDs(
 
 func (s *stubRecurrenceRepo) DeleteException(context.Context, uuid.UUID, string) error { return nil }
 
+// stubActivityLog is the journal with nothing in it. The activity endpoint's own tests
+// seed it — see activity_handler_privacy_test.go.
+type stubActivityLog struct {
+	journal map[string]*models.DateActivity
+}
+
+var _ service.ActivityLogRepository = (*stubActivityLog)(nil)
+
+func (s *stubActivityLog) RecordJoin(context.Context, uuid.UUID, time.Time, uuid.UUID, time.Time) error {
+	return nil
+}
+
+func (s *stubActivityLog) RecordWithdrawal(context.Context, uuid.UUID, time.Time, uuid.UUID, time.Time) error {
+	return nil
+}
+
+func (s *stubActivityLog) GetForRange(
+	context.Context, uuid.UUID, time.Time, time.Time,
+) (map[string]*models.DateActivity, error) {
+	return s.journal, nil
+}
+
 type stubNotifyService struct{}
 
 var _ service.NotifyService = (*stubNotifyService)(nil)
@@ -195,6 +225,7 @@ func newHandler(t *testing.T, calendar *repository.Calendar, calendarErr error, 
 		&stubCalendarRepo{calendar: calendar, err: calendarErr},
 		&stubParticipantRepo{participants: participants},
 		&stubRecurrenceRepo{},
+		&stubActivityLog{},
 		&stubNotifyService{},
 		cache.NewRedisCache(nil),
 	)

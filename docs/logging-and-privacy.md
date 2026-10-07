@@ -327,7 +327,7 @@ For a data-protection register, the honest picture is:
 
 | Store                       | Contains                                                                                    | Lifetime                                 |
 | --------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| PostgreSQL (`postgres_data`) | Users (email, password hash, MFA secrets, passkeys), calendars, participants (name, optional email), availabilities, notification log | Until deleted through the application     |
+| PostgreSQL (`postgres_data`) | Users (email, password hash, MFA secrets, passkeys), calendars, participants (name, optional email), availabilities, notification log, date activity log (§8.1) | Until deleted through the application     |
 | Redis (`redis_data`)         | The cache and short-lived auth state of §5                                                   | Minutes                                  |
 | Logs (stdout)                | §2, §3 and §6                                                                                    | Your retention                           |
 | Backups                      | A full copy of PostgreSQL                                                                    | Your retention                           |
@@ -337,6 +337,47 @@ The last row is the one people forget. Every verification, magic-link, reset and
 notification email goes through the SMTP provider configured in `SMTP_HOST`, and
 that provider sees recipient addresses and the links themselves. Choose it as
 carefully as you chose where to host the database.
+
+### 8.1 The date activity log
+
+`date_activity_log`
+([migration 016](../migrations/common/016_date_activity_log.up.sql)) is an audit
+trail the calendar owner reads on their settings page, and through
+`GET /api/v1/calendars/{id}/activity`. It is the one table in this list whose
+purpose is to remember something about a person after the fact, so it is worth
+stating exactly what it can and cannot say.
+
+**What it holds.** At most one row per (calendar, date), with exactly two facts,
+each overwritten by the next event of its own kind:
+
+- the participant id of whoever joined that date last, and when;
+- the participant id of whoever withdrew from it last **while the date had
+  already reached the calendar's threshold**, and when.
+
+**What it does not hold.** No cumulative history — the previous joiner is gone
+the moment somebody else joins. No counters, no notes, no times of day, no
+copied name, no IP address, no user-agent, no token. It also does not record
+*who was available*: that question is answered at read time from the
+availabilities and recurrences, so the journal can never hold a second, staler
+answer to it.
+
+**Names.** The table stores participant ids only. Names come from a `LEFT JOIN`
+on `participants` when a row is read, which is why deleting a participant is
+enough to forget them here: nothing is left to join against and the entry stops
+existing.
+
+**Lifetime.** A row dies with its calendar (`ON DELETE CASCADE`) and each slot
+dies with its participant (`ON DELETE SET NULL` — deliberately not `CASCADE`, so
+forgetting one person does not destroy the other slot of the same row). There is
+no scheduled purge and no background job: WhenTo runs no scheduler, and
+`NotificationLogRepository.CleanupOldLogs` — the only cleanup routine in the
+codebase — is called from nowhere. If you want rows for past dates removed, run
+`DELETE FROM date_activity_log WHERE date < CURRENT_DATE - INTERVAL '90 days'`
+from whatever cron you already operate.
+
+**Not in the logs.** This is data at rest, not a `slog` stream. No participant
+name or id is written to a log line anywhere on this path; the one error line it
+can emit uses `logger.Fingerprint` under a `participant_ref` field, per §3.
 
 ## No third-party requests from the browser
 

@@ -400,12 +400,12 @@ func TestNotifyThresholdAsync(t *testing.T) {
 			t.Cleanup(func() { logger.SetDefault(previous) })
 
 			notifier := newRecordingNotifier(tt.err, tt.panicWith)
-			svc := NewAvailabilityService(nil, nil, nil, nil, notifier, nil)
+			svc := NewAvailabilityService(nil, nil, nil, nil, &mockActivityLog{}, notifier, nil)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			svc.notifyThresholdAsync(ctx, uuid.New(), time.Now(), 2)
+			svc.notifyThresholdAsync(ctx, uuid.New(), time.Now(), 2, nil)
 
 			if tt.cancelRequest {
 				// The handler has returned and chi has cancelled the request context.

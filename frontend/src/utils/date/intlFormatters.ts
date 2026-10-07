@@ -62,7 +62,52 @@ export function formatISODate(iso: ISODate, locale: string, style: DateStyle): s
   return getFormatter(locale, style).format(parseISODate(iso));
 }
 
+const relativeCache = new Map<string, Intl.RelativeTimeFormat>();
+
+/** Get a memoized `Intl.RelativeTimeFormat` for a locale. */
+function getRelativeFormatter(locale: string): Intl.RelativeTimeFormat {
+  let formatter = relativeCache.get(locale);
+  if (!formatter) {
+    formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+    relativeCache.set(locale, formatter);
+  }
+  return formatter;
+}
+
+/** Thresholds walked largest-unit-first, each with how many seconds it spans. */
+const RELATIVE_UNITS: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, number]> = [
+  ['year', 365 * 24 * 3600],
+  ['month', 30 * 24 * 3600],
+  ['day', 24 * 3600],
+  ['hour', 3600],
+  ['minute', 60],
+];
+
+/**
+ * Format an instant relative to `now` — "2 days ago", "il y a 3 heures".
+ *
+ * Used by the activity journal, where an exact timestamp is noise: what the owner is
+ * reading is how recently somebody joined or left, not the second they did it.
+ *
+ * Months and years are approximated at 30 and 365 days. The journal holds at most one
+ * entry per date and the view asks for a few weeks at a time, so the error is never
+ * reached in practice; anything older reads as "last year" either way.
+ */
+export function formatRelativeTime(date: Date, locale: string, now: Date = new Date()): string {
+  const elapsedSeconds = (date.getTime() - now.getTime()) / 1000;
+
+  for (const [unit, secondsPerUnit] of RELATIVE_UNITS) {
+    if (Math.abs(elapsedSeconds) >= secondsPerUnit) {
+      return getRelativeFormatter(locale).format(Math.round(elapsedSeconds / secondsPerUnit), unit);
+    }
+  }
+
+  // Below a minute, `numeric: 'auto'` renders 0 seconds as "now" / "maintenant".
+  return getRelativeFormatter(locale).format(Math.round(elapsedSeconds), 'second');
+}
+
 /** Drop every cached formatter. Exposed for tests that switch locale or timezone. */
 export function clearFormatterCache(): void {
   cache.clear();
+  relativeCache.clear();
 }

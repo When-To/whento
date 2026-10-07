@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime/debug"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -45,6 +46,7 @@ var (
 	ErrInvalidDayOfWeek        = errors.New("day_of_week must be between 0 (Sunday) and 6 (Saturday)")
 	ErrWeekdayNotAllowed       = errors.New("this day of the week is not allowed for this calendar")
 	ErrDateInPast              = errors.New("cannot modify availability for past dates")
+	ErrActivityRangeTooLong    = errors.New("the activity range is longer than 92 days")
 )
 
 // AvailabilityRepository defines the interface for availability repository operations
@@ -59,6 +61,12 @@ type AvailabilityRepository interface {
 	GetOccurrencesForDate(ctx context.Context, calendarID uuid.UUID, date time.Time) ([]models.Occurrence, error)
 	GetOccurrencesForRange(ctx context.Context, calendarID uuid.UUID, startDate, endDate time.Time) ([]models.Occurrence, error)
 	GetParticipantCountForDate(ctx context.Context, calendarID uuid.UUID, date time.Time) (int, error)
+	// The same two questions for a whole range, in one round trip — what the
+	// owner-facing activity journal reads. See the repository for why it is not
+	// the per-date pair in a loop.
+	GetDateStatsForRange(
+		ctx context.Context, calendarID uuid.UUID, startDate, endDate time.Time, minDurationHours int,
+	) (map[string]models.DateStats, error)
 	Update(ctx context.Context, availability *models.Availability) error
 	Delete(ctx context.Context, participantID uuid.UUID, date time.Time) error
 }
@@ -90,6 +98,18 @@ type RecurrenceRepository interface {
 	DeleteException(ctx context.Context, recurrenceID uuid.UUID, excludedDate string) error
 }
 
+// ActivityLogRepository is the per-date activity journal.
+//
+// Two facts per calendar date, each overwriting the previous one of its own kind, and
+// nothing else: it is an audit trail the calendar owner reads, not a history. The
+// service writes to it beside every threshold check and reads it back for the
+// owner-facing endpoint.
+type ActivityLogRepository interface {
+	RecordJoin(ctx context.Context, calendarID uuid.UUID, date time.Time, participantID uuid.UUID, at time.Time) error
+	RecordWithdrawal(ctx context.Context, calendarID uuid.UUID, date time.Time, participantID uuid.UUID, at time.Time) error
+	GetForRange(ctx context.Context, calendarID uuid.UUID, startDate, endDate time.Time) (map[string]*models.DateActivity, error)
+}
+
 // NotifyService defines the interface for notification service operations
 type NotifyService interface {
 	CheckThresholdAndNotify(ctx context.Context, calendarID uuid.UUID, date time.Time, previousCount int) error
@@ -101,6 +121,7 @@ type AvailabilityService struct {
 	calendarRepo     CalendarRepository
 	participantRepo  ParticipantRepository
 	recurrenceRepo   RecurrenceRepository
+	activityLog      ActivityLogRepository
 	notifyService    NotifyService
 	cache            cache.Cache
 }
@@ -111,6 +132,7 @@ func NewAvailabilityService(
 	calendarRepo CalendarRepository,
 	participantRepo ParticipantRepository,
 	recurrenceRepo RecurrenceRepository,
+	activityLog ActivityLogRepository,
 	notifyService NotifyService,
 	c cache.Cache,
 ) *AvailabilityService {
@@ -119,6 +141,7 @@ func NewAvailabilityService(
 		calendarRepo:     calendarRepo,
 		participantRepo:  participantRepo,
 		recurrenceRepo:   recurrenceRepo,
+		activityLog:      activityLog,
 		notifyService:    notifyService,
 		cache:            c,
 	}
@@ -129,6 +152,20 @@ func NewAvailabilityService(
 // stop a wedged SMTP or database call from pinning a goroutine for the life of the
 // process, one per availability written.
 const notifyThresholdTimeout = 30 * time.Second
+
+// activityWrite is the journal entry an availability change leaves behind, or nil when
+// it leaves none.
+//
+// It rides along with the threshold check rather than being written on its own because
+// the order between the two matters: the notification names the people this journal
+// remembers, so it has to read a journal that already includes the change that woke it.
+type activityWrite struct {
+	// withdrawal picks the slot. The two are independent — neither write clears the
+	// other — so this only chooses which one is replaced.
+	withdrawal    bool
+	participantID uuid.UUID
+	at            time.Time
+}
 
 // notifyThresholdAsync runs the threshold check outside the request that caused it.
 //
@@ -144,6 +181,7 @@ func (s *AvailabilityService) notifyThresholdAsync(
 	calendarID uuid.UUID,
 	date time.Time,
 	previousCount int,
+	entry *activityWrite,
 ) {
 	log := logger.FromContext(ctx)
 	detached := context.WithoutCancel(ctx)
@@ -164,6 +202,39 @@ func (s *AvailabilityService) notifyThresholdAsync(
 
 		notifyCtx, cancel := context.WithTimeout(detached, notifyThresholdTimeout)
 		defer cancel()
+
+		// The journal is written before the threshold check, not after: the check is
+		// what builds the notification, and the notification names whoever this entry
+		// records. Reversed, every email would name the previous person.
+		//
+		// Recurrences are deliberately outside this. CreateRecurrence, DeleteRecurrence,
+		// CreateException and DeleteException send no threshold notification today —
+		// none of them reaches this function — and the journal follows that boundary
+		// rather than widening it. Joining or leaving a date through a recurrence is
+		// therefore not journalled.
+		//
+		// A failure here is logged and dropped, exactly like a failed notification: the
+		// availability is already committed, and an audit trail must never be able to
+		// undo the thing it is describing.
+		if entry != nil {
+			record := s.activityLog.RecordJoin
+			if entry.withdrawal {
+				record = s.activityLog.RecordWithdrawal
+			}
+
+			if err := record(notifyCtx, calendarID, date, entry.participantID, entry.at); err != nil {
+				// No name, no participant id: pkg/logger/logfields_test.go fails the
+				// build on either. The fingerprint is enough to correlate two lines
+				// about the same person without naming them.
+				log.Error("activity journal write failed",
+					"calendar_id", calendarID,
+					"date", date.Format("2006-01-02"),
+					"participant_ref", logger.Fingerprint(entry.participantID.String()),
+					"withdrawal", entry.withdrawal,
+					"error", err,
+				)
+			}
+		}
 
 		if err := s.notifyService.CheckThresholdAndNotify(notifyCtx, calendarID, date, previousCount); err != nil {
 			log.Error("threshold notification failed",
@@ -297,8 +368,12 @@ func (s *AvailabilityService) CreateAvailability(ctx context.Context, token, par
 	}
 
 	// The availability is already stored: the threshold check must not be able to fail
-	// the write, so it runs detached from the request.
-	s.notifyThresholdAsync(ctx, calendarID, date, previousCount)
+	// the write, so it runs detached from the request. The journal entry goes with it,
+	// under the same rule and in the same goroutine.
+	s.notifyThresholdAsync(ctx, calendarID, date, previousCount, &activityWrite{
+		participantID: partID,
+		at:            time.Now(),
+	})
 
 	return toAvailabilityResponse(availability, participant.Name, participant.Email, participant.EmailVerified), nil
 }
@@ -496,21 +571,29 @@ func (s *AvailabilityService) UpdateAvailability(ctx context.Context, token, par
 
 	// An update does not change the participant count, but the threshold configuration
 	// may have changed since, so the check still runs.
-	s.notifyThresholdAsync(ctx, calendarID, date, currentCount)
+	//
+	// Nothing is journalled: changing the hours of an answer already given is neither
+	// joining nor withdrawing, and the journal records only those two.
+	s.notifyThresholdAsync(ctx, calendarID, date, currentCount, nil)
 
 	return toAvailabilityResponse(availability, participant.Name, participant.Email, participant.EmailVerified), nil
 }
 
 // DeleteAvailability deletes an availability
 func (s *AvailabilityService) DeleteAvailability(ctx context.Context, token, participantID, dateStr string) error {
-	// Validate calendar token
-	calendarID, err := s.calendarRepo.GetByPublicToken(ctx, token)
+	// Validate calendar token.
+	//
+	// The full calendar rather than just its id, because the journal below needs the
+	// threshold to decide whether this withdrawal is worth recording. It is the same
+	// single query either way — GetByPublicToken selects one column of the same row.
+	calendarInfo, err := s.calendarRepo.GetCalendarInfoByPublicToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, repository.ErrCalendarNotFound) {
 			return ErrCalendarNotFound
 		}
 		return err
 	}
+	calendarID := calendarInfo.ID
 
 	// Parse participant ID
 	partID, err := uuid.Parse(participantID)
@@ -559,7 +642,24 @@ func (s *AvailabilityService) DeleteAvailability(ctx context.Context, token, par
 		return err
 	}
 
-	s.notifyThresholdAsync(ctx, calendarID, date, previousCount)
+	// Journalled only when the date had ALREADY reached its threshold — not when it
+	// loses it. Going from 5 to 4 on a calendar with a threshold of 3 is recorded even
+	// though it notifies nobody: what the owner wants to know is who walked away from a
+	// date that was working, and a date at 5/3 was working.
+	//
+	// previousCount is -1 when the count could not be read above. That fails the
+	// comparison for any sane threshold, so an unknown count journals nothing rather
+	// than guessing.
+	var entry *activityWrite
+	if previousCount >= calendarInfo.Threshold {
+		entry = &activityWrite{
+			withdrawal:    true,
+			participantID: partID,
+			at:            time.Now(),
+		}
+	}
+
+	s.notifyThresholdAsync(ctx, calendarID, date, previousCount, entry)
 
 	return nil
 }
@@ -1654,4 +1754,94 @@ func countThatCanMeet(participants []models.ParticipantAvailabilitySummary, minD
 	}
 
 	return models.MaxSimultaneousFor(windows, minDurationHours*60)
+}
+
+// maxActivityRangeDays bounds the activity endpoint's range.
+//
+// Not a performance guard — the read below is two queries whatever the span — but a
+// bound on the size of the answer, which carries a name per available participant per
+// date. Three months is more than the owner view asks for and far less than a payload
+// nobody can read.
+const maxActivityRangeDays = 92
+
+// GetDateActivity is the owner-facing activity journal for a date range.
+//
+// Two reads and nothing else: the occurrences covering the range, projected into who is
+// available and how many fit together, and the journal rows. The calendar comes from the
+// caller, which has already loaded it to check ownership, so its threshold and minimum
+// duration cost nothing here.
+//
+// A date appears when it has a journal entry or somebody available, which are different
+// sets: a date everyone has since left keeps its entries, and a date nobody has left has
+// availability but may have no entry at all.
+//
+// available is always the live expansion, never the journal. The journal holds no names
+// and no list of who was there, only two participant ids — see the migration.
+func (s *AvailabilityService) GetDateActivity(
+	ctx context.Context,
+	calendarID uuid.UUID,
+	threshold, minDurationHours int,
+	startDateStr, endDateStr string,
+) (*models.DateActivityResponse, error) {
+	startDate, err := parseDate(startDateStr)
+	if err != nil {
+		return nil, ErrInvalidDate
+	}
+
+	endDate, err := parseDate(endDateStr)
+	if err != nil {
+		return nil, ErrInvalidDate
+	}
+
+	if endDate.Before(startDate) {
+		return nil, ErrInvalidDateRange
+	}
+
+	if endDate.Sub(startDate) > maxActivityRangeDays*24*time.Hour {
+		return nil, ErrActivityRangeTooLong
+	}
+
+	stats, err := s.availabilityRepo.GetDateStatsForRange(ctx, calendarID, startDate, endDate, minDurationHours)
+	if err != nil {
+		return nil, err
+	}
+
+	journal, err := s.activityLog.GetForRange(ctx, calendarID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	dates := make([]string, 0, len(stats)+len(journal))
+	for date := range stats {
+		dates = append(dates, date)
+	}
+	for date := range journal {
+		if _, ok := stats[date]; !ok {
+			dates = append(dates, date)
+		}
+	}
+	sort.Strings(dates)
+
+	entries := make([]models.DateActivityEntry, 0, len(dates))
+	for _, date := range dates {
+		entry := models.DateActivityEntry{
+			Date:      date,
+			Threshold: threshold,
+			Available: []models.AvailableParticipant{},
+		}
+
+		if stat, ok := stats[date]; ok {
+			entry.Count = stat.Count
+			entry.Available = stat.Available
+		}
+
+		if activity, ok := journal[date]; ok && activity != nil {
+			entry.LastJoined = activity.LastJoined
+			entry.LastWithdrawn = activity.LastWithdrawn
+		}
+
+		entries = append(entries, entry)
+	}
+
+	return &models.DateActivityResponse{Activity: entries}, nil
 }
