@@ -127,6 +127,9 @@ line per release rather than listed individually.
   refused with 400 instead of failing with 500 at hashing.
 - An `APP_URL` with a path no longer drops the application origin from the
   magic-link trusted origins, which made every confirmation fail with 403.
+- Bootstrap audit lines ("Bootstrap key rejected", "Bootstrap administrator
+  created") carry the request id, and the startup message names
+  `BOOTSTRAP_KEY_FILE` as well as `BOOTSTRAP_KEY` as the key's source.
 
 ---
 

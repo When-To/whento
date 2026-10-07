@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/whento/pkg/logger"
 	"github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/auth/repository"
 	"github.com/whento/whento/internal/config"
@@ -258,12 +259,12 @@ func (s *BootstrapService) CreateFirstUser(ctx context.Context, req *models.Boot
 	// — config validation and the HTTP endpoint — in agreement, so a too-short
 	// key cannot be a "valid" config value that every request then rejects.
 	if strings.EqualFold(s.cfg.AppEnv, config.EnvProduction) && utf8.RuneCountInString(req.BootKey) < 32 {
-		s.log.Warn("Bootstrap key rejected")
+		s.logFor(ctx).Warn("Bootstrap key rejected")
 		return nil, ErrBootstrapKeyInvalid
 	}
 
 	if subtle.ConstantTimeCompare([]byte(req.BootKey), []byte(s.key)) != 1 {
-		s.log.Warn("Bootstrap key rejected")
+		s.logFor(ctx).Warn("Bootstrap key rejected")
 		return nil, ErrBootstrapKeyInvalid
 	}
 
@@ -318,7 +319,7 @@ func (s *BootstrapService) CreateFirstUser(ctx context.Context, req *models.Boot
 	s.setConfiguredLocked()
 	// Record the committed account even if session issuance subsequently fails.
 	// Never log the submitted key, password or email address.
-	s.log.Info("Bootstrap administrator created", "user_id", user.ID.String())
+	s.logFor(ctx).Info("Bootstrap administrator created", "user_id", user.ID.String())
 
 	return s.authSvc.IssueSession(ctx, user)
 }
@@ -350,7 +351,7 @@ func (s *BootstrapService) ensureKeyLocked(ctx context.Context) error {
 
 	if s.cfg.BootstrapKey != "" {
 		s.key = s.cfg.BootstrapKey
-		s.log.Info("Bootstrap: the instance has no users yet; the boot key is the one set via BOOTSTRAP_KEY. " +
+		s.log.Info("Bootstrap: the instance has no users yet; the boot key is the one set via BOOTSTRAP_KEY or BOOTSTRAP_KEY_FILE. " +
 			"Create the first administrator at /bootstrap.")
 		return nil
 	}
@@ -380,4 +381,13 @@ func generateBootKey() (string, error) {
 		return "", fmt.Errorf("failed to read randomness for boot key: %w", err)
 	}
 	return hex.EncodeToString(buf), nil
+}
+
+// logFor tags the audit lines with the request they belong to, so a rejected key
+// can be matched against the request log (and its rate limiting).
+func (s *BootstrapService) logFor(ctx context.Context) *slog.Logger {
+	if id := logger.RequestID(ctx); id != "" {
+		return s.log.With("request_id", id)
+	}
+	return s.log
 }

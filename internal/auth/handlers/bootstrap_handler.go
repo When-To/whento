@@ -57,7 +57,7 @@ func (h *BootstrapHandler) Status(w http.ResponseWriter, r *http.Request) {
 	status, err := h.service.Status(r.Context())
 	if err != nil {
 		h.logger.Error("Failed to read bootstrap status", "error", err)
-		httputil.Error(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Bootstrap state temporarily unavailable")
+		httputil.Error(w, http.StatusServiceUnavailable, httputil.ErrCodeUnavailable, "Bootstrap state temporarily unavailable")
 		return
 	}
 

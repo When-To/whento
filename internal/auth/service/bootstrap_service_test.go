@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/whento/pkg/logger"
 	"github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/auth/repository"
 	"github.com/whento/whento/internal/config"
@@ -164,11 +165,16 @@ func TestBootstrapAuditLogsDoNotLeakSubmittedSecrets(t *testing.T) {
 	var logs bytes.Buffer
 	f.service.log = slog.New(slog.NewJSONHandler(&logs, nil))
 	req := &models.BootstrapRequest{BootKey: "wrong-operator-secret-key", Email: "owner@example.test", Password: "Str0ng!Passw0rd", DisplayName: "Owner"}
-	if _, err := f.service.CreateFirstUser(context.Background(), req); !errors.Is(err, ErrBootstrapKeyInvalid) {
+	ctx := logger.WithRequestID(context.Background(), "req-audit-1")
+	if _, err := f.service.CreateFirstUser(ctx, req); !errors.Is(err, ErrBootstrapKeyInvalid) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(logs.String(), "Bootstrap key rejected") {
 		t.Fatal("missing failed-key audit event")
+	}
+	// The rejection must be traceable to its request (and so to the request log).
+	if !strings.Contains(logs.String(), `"request_id":"req-audit-1"`) {
+		t.Fatalf("failed-key audit event carries no request id: %s", logs.String())
 	}
 	req.BootKey = cfg.BootstrapKey
 	f.tokens.createErr = errors.New("session storage unavailable")

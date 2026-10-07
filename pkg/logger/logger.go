@@ -74,6 +74,14 @@ func WithUserID(ctx context.Context, userID string) context.Context {
 	return context.WithValue(ctx, userIDKey, userID)
 }
 
+// RequestID returns the request ID stored by WithRequestID, or "" when there is
+// none. It lets code that logs through an injected logger still tag its lines
+// with the request they belong to.
+func RequestID(ctx context.Context) string {
+	id, _ := ctx.Value(requestIDKey).(string)
+	return id
+}
+
 // FromContext returns a logger with context values
 func FromContext(ctx context.Context) *slog.Logger {
 	l := defaultLogger

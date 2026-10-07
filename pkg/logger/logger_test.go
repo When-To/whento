@@ -227,3 +227,12 @@ func TestContextKeysAreNotPlainStrings(t *testing.T) {
 		t.Errorf("request_id = %v, want the value set through WithRequestID", line["request_id"])
 	}
 }
+
+func TestRequestIDReadsWhatWithRequestIDStored(t *testing.T) {
+	if got := RequestID(context.Background()); got != "" {
+		t.Errorf("RequestID on a bare context = %q, want empty", got)
+	}
+	if got := RequestID(WithRequestID(context.Background(), "req-42")); got != "req-42" {
+		t.Errorf("RequestID = %q, want req-42", got)
+	}
+}
