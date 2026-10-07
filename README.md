@@ -183,11 +183,11 @@ SET role = 'admin', updated_at = now()
 WHERE id = 'REPLACE-WITH-TRUSTED-USER-UUID'::uuid
   AND NOT EXISTS (SELECT 1 FROM users WHERE role = 'admin')
 RETURNING id, role;
--- COMMIT only after verifying exactly the intended account was returned.
-COMMIT;
 ```
 
-Use `ROLLBACK` instead if the result is not the intended single account. Restart
+The transaction stays open on purpose: check that `RETURNING` shows exactly
+the intended single account, then type `COMMIT;` yourself, or `ROLLBACK;` if
+it shows anything else (including no row). Restart
 the app replicas and sign out/sign back in to obtain a token with the new role.
 Never reset `app_state.first_user_created`, delete users, or roll back migration
 019 to reopen bootstrap; those are not recovery procedures. A previously
