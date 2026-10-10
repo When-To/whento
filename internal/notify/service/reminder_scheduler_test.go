@@ -43,11 +43,6 @@ type renewRecord struct {
 	claim uuid.UUID
 }
 
-type cancelRecord struct {
-	calendarID uuid.UUID
-	eventDate  time.Time
-}
-
 // fakeReminderJobStore is an in-memory reminder queue for the scheduler tests.
 // Enqueue records; ClaimDue returns whatever the test pre-seeded, handing back a
 // fresh claim token so the fenced operations below have something to fence on.
@@ -58,10 +53,8 @@ type fakeReminderJobStore struct {
 	sent     []uuid.UUID
 	failed   []failRecord
 	renewed  []renewRecord
-	// canceledClaim records per-delivery cancels (CancelClaim); canceledEvent
-	// records whole-event reconciliation cancels (CancelPendingForEvent).
+	// canceledClaim records per-delivery cancels (CancelClaim).
 	canceledClaim []uuid.UUID
-	canceledEvent []cancelRecord
 
 	enqueueErr error
 	claimErr   error
@@ -146,13 +139,6 @@ func (f *fakeReminderJobStore) CancelClaim(_ context.Context, id uuid.UUID, _ uu
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.canceledClaim = append(f.canceledClaim, id)
-	return nil
-}
-
-func (f *fakeReminderJobStore) CancelPendingForEvent(_ context.Context, calendarID uuid.UUID, eventDate time.Time) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.canceledEvent = append(f.canceledEvent, cancelRecord{calendarID, eventDate})
 	return nil
 }
 
@@ -351,35 +337,6 @@ func TestReminderEnqueuesNothingWhenRemindersAreDisabled(t *testing.T) {
 	}
 }
 
-// TestReminderWindowOpen pins the boundaries of the issue window: not too far in
-// the future, and not deeper in the past than the catch-up grace.
-func TestReminderWindowOpen(t *testing.T) {
-	s := &ReminderScheduler{interval: 5 * time.Minute, catchUp: 15 * time.Minute}
-	now := fixedReminderNow()
-
-	tests := []struct {
-		name        string
-		scheduledAt time.Time
-		want        bool
-	}{
-		{"just before now (catch-up)", now.Add(-14 * time.Minute), true},
-		{"exactly at the catch-up bound", now.Add(-15 * time.Minute), true},
-		{"past the catch-up bound", now.Add(-16 * time.Minute), false},
-		{"just after now (within interval)", now.Add(4 * time.Minute), true},
-		{"exactly at the interval bound", now.Add(5 * time.Minute), true},
-		{"past the interval bound", now.Add(6 * time.Minute), false},
-		{"now itself", now, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := s.windowOpen(tt.scheduledAt, now); got != tt.want {
-				t.Errorf("windowOpen(%v) = %v, want %v", tt.scheduledAt, got, tt.want)
-			}
-		})
-	}
-}
-
 // TestReminderBackoffGrowsExponentiallyAndCaps pins the retry schedule.
 func TestReminderBackoffGrowsExponentiallyAndCaps(t *testing.T) {
 	s := &ReminderScheduler{backoffBase: time.Minute, backoffMax: reminderBackoffMax}
@@ -455,9 +412,6 @@ func TestReminderCancelsSingleDeliveryWhenRemindersAreTurnedOff(t *testing.T) {
 	}
 	if len(f.jobs.sent) != 0 {
 		t.Fatal("job marked sent although it was canceled")
-	}
-	if len(f.jobs.canceledEvent) != 0 {
-		t.Fatalf("individual delivery validation used whole-event cancellation: %+v", f.jobs.canceledEvent)
 	}
 }
 

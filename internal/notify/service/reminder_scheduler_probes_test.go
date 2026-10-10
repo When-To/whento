@@ -217,9 +217,6 @@ func TestReminderTransientCountErrorMustNotCancel(t *testing.T) {
 		MaxAttempts:   5,
 	})
 
-	if len(f.jobs.canceledEvent) > 0 {
-		t.Errorf("transient database error canceled entire event: %+v", f.jobs.canceledEvent)
-	}
 	if len(f.jobs.canceledClaim) > 0 {
 		t.Errorf("transient database error canceled the delivery: %+v", f.jobs.canceledClaim)
 	}

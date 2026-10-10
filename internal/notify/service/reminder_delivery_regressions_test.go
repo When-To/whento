@@ -102,8 +102,8 @@ func TestReminderFanoutStopsImmediatelyWhenClaimIsLost(t *testing.T) {
 	if len(f.mailer.messages()) != 1 {
 		t.Fatalf("sent %d emails after losing claim, want only first", len(f.mailer.messages()))
 	}
-	if len(f.jobs.sent) != 0 || len(f.jobs.failed) != 0 || len(f.jobs.canceledEvent) != 0 {
-		t.Fatal("lost worker mutated the queue or canceled another worker's event")
+	if len(f.jobs.sent) != 0 || len(f.jobs.failed) != 0 {
+		t.Fatal("lost worker mutated the queue")
 	}
 }
 
@@ -160,7 +160,7 @@ func TestReminderDisqualifiedEventOnlyCancelsOwnedClaim(t *testing.T) {
 	job := enqueueDueJob()
 	job.CalendarID = f.calendar.ID
 	f.scheduler.deliverOne(t.Context(), job)
-	if len(f.jobs.canceledClaim) != 1 || len(f.jobs.canceledEvent) != 0 {
+	if len(f.jobs.canceledClaim) != 1 {
 		t.Fatal("event snapshot used an unfenced whole-event cancellation")
 	}
 }

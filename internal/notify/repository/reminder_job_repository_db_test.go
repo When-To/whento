@@ -482,9 +482,7 @@ func TestReminderCanceledDeliveryMustBeRearmable(t *testing.T) {
 	if err := repo.Enqueue(ctx, job); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.CancelPendingForEvent(ctx, job.CalendarID, job.EventDate); err != nil {
-		t.Fatal(err)
-	}
+	cancelPending(ctx, t, pool, job)
 	if err := repo.Enqueue(ctx, job); err != nil {
 		t.Fatal(err)
 	}
@@ -591,9 +589,7 @@ func TestReminderReconcileRearmsCanceledButNeverSent(t *testing.T) {
 	if err := repo.Enqueue(ctx, canceledOther); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.CancelPendingForEvent(ctx, canceledJob.CalendarID, canceledJob.EventDate); err != nil {
-		t.Fatal(err)
-	}
+	cancelPending(ctx, t, pool, canceledJob)
 	if err := repo.Enqueue(ctx, canceledJob); err != nil {
 		t.Fatal(err)
 	}
@@ -650,43 +646,6 @@ func TestReminderReconcileRearmsCanceledButNeverSent(t *testing.T) {
 	}
 	if status != "sent" {
 		t.Errorf("a routine scan rearmed a sent delivery: %s", status)
-	}
-}
-
-func TestReminderJobCancelPendingForEvent(t *testing.T) {
-	pool := dbtest.Pool(t)
-	repo := repository.NewReminderJobRepository(pool)
-	ctx := dbtest.Context(t)
-
-	job := newReminderJob(t, pool)
-	if err := repo.Enqueue(ctx, job); err != nil {
-		t.Fatalf("Enqueue: %v", err)
-	}
-	if err := repo.Enqueue(ctx, &models.ReminderJob{
-		CalendarID:    job.CalendarID,
-		EventDate:     job.EventDate.AddDate(0, 0, 1),
-		RecipientType: models.ReminderRecipientParticipants,
-		Channel:       "email",
-		ScheduledAt:   job.ScheduledAt.AddDate(0, 0, 1),
-		MaxAttempts:   5,
-		NextAttemptAt: job.NextAttemptAt.AddDate(0, 0, 1),
-	}); err != nil {
-		t.Fatalf("Enqueue other event: %v", err)
-	}
-
-	if err := repo.CancelPendingForEvent(ctx, job.CalendarID, job.EventDate); err != nil {
-		t.Fatalf("CancelPendingForEvent: %v", err)
-	}
-
-	var pending int
-	if err := pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM reminder_jobs WHERE calendar_id = $1 AND status = 'pending'`,
-		job.CalendarID).Scan(&pending); err != nil {
-		t.Fatalf("count pending: %v", err)
-	}
-	// One stays (the other event date), the target event was canceled.
-	if pending != 1 {
-		t.Errorf("%d jobs still pending, want 1 (the cancel only hit its own event)", pending)
 	}
 }
 
@@ -789,5 +748,16 @@ func TestReminderRescheduleInvalidatesExpiredClaimToken(t *testing.T) {
 	}
 	if err := repo.MarkSent(ctx, old.ID, old.ClaimToken); !errors.Is(err, models.ErrClaimLost) {
 		t.Fatalf("late completion of rescheduled row: %v", err)
+	}
+}
+
+// cancelPending puts a job's pending row in the canceled state, as a reconciled
+// cancel would.
+func cancelPending(ctx context.Context, t *testing.T, pool *pgxpool.Pool, job *models.ReminderJob) {
+	t.Helper()
+	if _, err := pool.Exec(ctx, `UPDATE reminder_jobs SET status = 'canceled', canceled_at = now(),
+		claim_token = NULL, lease_until = NULL, updated_at = now()
+		WHERE calendar_id = $1 AND event_date = $2 AND status = 'pending'`, job.CalendarID, job.EventDate); err != nil {
+		t.Fatal(err)
 	}
 }

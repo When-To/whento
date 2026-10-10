@@ -487,14 +487,6 @@ func (s *ReminderScheduler) eventMidnight(date time.Time, loc *time.Location) ti
 	return time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, loc)
 }
 
-// windowOpen reports whether a job scheduled at `scheduledAt` should be issued
-// now: not too far into the future, and not so far in the past that it has
-// already expired. The past threshold is the catch-up grace that makes restarts
-// safe.
-func (s *ReminderScheduler) windowOpen(scheduledAt, now time.Time) bool {
-	return scheduledAt.Sub(now) <= s.interval && now.Sub(scheduledAt) <= s.catchUp
-}
-
 // deliverDue claims and delivers one batch of due jobs. It returns false when
 // no more due jobs remain, so the caller can stop looping.
 func (s *ReminderScheduler) deliverDue(ctx context.Context) (bool, error) {

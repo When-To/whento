@@ -328,23 +328,3 @@ func (r *ReminderJobRepository) CancelClaim(ctx context.Context, id, token uuid.
 	}
 	return nil
 }
-
-// CancelPendingForEvent is an unfenced administrative reconciliation operation:
-// it invalidates all pending claims for the event, leaving sent rows untouched.
-// Delivery workers must NOT call it based on an eligibility snapshot; they use
-// CancelClaim so a stale worker cannot invalidate another worker's newer claim.
-func (r *ReminderJobRepository) CancelPendingForEvent(
-	ctx context.Context,
-	calendarID uuid.UUID,
-	eventDate time.Time,
-) error {
-	query := `
-		UPDATE reminder_jobs
-		SET status = 'canceled', canceled_at = now(), claim_token = NULL, lease_until = NULL,
-		    locked_by = NULL, locked_at = NULL, updated_at = now()
-		WHERE calendar_id = $1 AND event_date = $2 AND status = 'pending'`
-	if _, err := r.pool.Exec(ctx, query, calendarID, eventDate); err != nil {
-		return fmt.Errorf("failed to cancel reminder jobs: %w", err)
-	}
-	return nil
-}
