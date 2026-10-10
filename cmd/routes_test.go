@@ -181,6 +181,11 @@ var wantRoutes = []string{
 	"GET /api/v1/availabilities/calendar/{token}/dates/{date}",
 	"GET /api/v1/availabilities/calendar/{token}/range",
 
+	// Holidays (offline dataset + bounded remote fallback; both endpoints are
+	// mounted by the same handler group).
+	"GET /api/v1/holidays",
+	"GET /api/v1/holidays/supported",
+
 	// Quota. Half of the cloud/self-hosted symmetric pair: both variants must
 	// mount this, which is why it is asserted from a test that compiles under
 	// either build tag.
@@ -297,6 +302,10 @@ var wantRateLimited = []string{
 	"DELETE /api/v1/availabilities/calendar/{token}/participant/{pid}/recurrence/{rid}/exception/{date}",
 	"GET /api/v1/availabilities/calendar/{token}/dates/{date}",
 	"GET /api/v1/availabilities/calendar/{token}/range",
+
+	// Holidays: both endpoints mounted with the limiter in the same group.
+	"GET /api/v1/holidays",
+	"GET /api/v1/holidays/supported",
 
 	// Both ICS groups
 	"GET /api/v1/ics/feed/{token}",

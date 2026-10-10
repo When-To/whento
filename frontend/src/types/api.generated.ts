@@ -3655,6 +3655,100 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/holidays': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Public holidays for a country or timezone
+     * @description Serves the public-holiday dataset for a country, for one year. Country wins over timezone when both are given.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description ISO 3166-1 alpha-2 country code (e.g. FR) */
+          country?: string;
+          /** @description IANA timezone (e.g. Europe/Paris) */
+          timezone?: string;
+          /** @description Year (defaults to the current one) */
+          year?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['holidays.YearResponse'];
+          };
+        };
+        /** @description Bad Request */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/holidays/supported': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Countries the offline dataset covers
+     * @description Lists the ISO codes the bundled offline holiday table has national data for.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['holidays.SupportedResponse'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/ics/feed/{token}': {
     parameters: {
       query?: never;
@@ -4885,6 +4979,28 @@ export interface components {
   schemas: {
     'handlers.updateCalendarsRequest': {
       calendar_ids?: string[];
+    };
+    'holidays.Holiday': {
+      /** @description ISO 8601 (YYYY-MM-DD) */
+      date?: string;
+      /** @description absent when it equals Name */
+      local_name?: string;
+      name?: string;
+      /** @description "offline" or "fallback" */
+      source?: string;
+    };
+    'holidays.SupportedResponse': {
+      countries?: string[];
+    };
+    'holidays.YearResponse': {
+      /** @description ISO 3166-1 alpha-2, or "" */
+      country_code?: string;
+      holidays?: components['schemas']['holidays.Holiday'][];
+      /** @description "offline", "fallback" or "unavailable" */
+      source?: string;
+      /** @description true only when the offline dataset covers the country */
+      supported?: boolean;
+      year?: number;
     };
     'httputil.ErrorInfo': {
       code?: string;

@@ -59,6 +59,7 @@ func newRouter(d *deps, h *handlers, spa http.Handler) chi.Router {
 	RegisterQuotaRoutes(r, d.quota, d.jwtManager, d.cacheStore)
 	registerICSRoutes(r, d, h)
 	registerSEORoutes(r, h)
+	registerHolidayRoutes(r, d, h)
 
 	// ========== SWAGGER DOCUMENTATION ==========
 	// swaggerHandler, not httpSwagger.WrapHandler: the library's index builds the UI from

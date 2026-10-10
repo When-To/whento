@@ -61,6 +61,26 @@ line per release rather than listed individually.
   exposed as `REMINDER_HOURS_BEFORE`, `REMINDER_INTERVAL`,
   `REMINDER_CATCH_UP_WINDOW`, `REMINDER_MAX_ATTEMPTS` and
   `REMINDER_RETRY_BACKOFF`.
+- **A bundled offline holiday dataset and a bounded, cached Nager fallback.** The
+  `block`/`allow`/`ignore` holiday policy no longer depends on a third-party
+  library that silently returned false for whole countries. A timezone with no
+  bundled data (Japan, Australia, India, China, South Korea, Thailand, Israel,
+  Turkey and others) is served by a Nager API fallback with a 24h success cache
+  and a one-minute failure cooldown, coalescing concurrent lookups. The bundles
+  keep each country's observed bank holidays into account (US 2026-07-03/04
+  both block) — the `block` policy is only ever applied to a known holiday, and
+  a genuinely unavailable dataset fails open to the ordinary weekday decision
+  instead of refusing an eligible day on a guess.
+- **`GET /api/v1/holidays` and `GET /api/v1/holidays/supported`.** Independent,
+  rate-limited endpoints exposing the same providers the policy runs on:
+  per-country/per-year holidays with a source field (`offline`, `fallback` or
+  `unavailable`) and the list of countries the bundled dataset covers. The
+  frontend keeps its own lazy date-holidays renderer; these endpoints are for
+  tooling, integrations and automated calendar checks.
+- **`SupportedCountries` is safe to call before any other use.** The offline
+  table's initializer now runs unconditionally inside the reader and returns a
+  defensive copy, so a caller (or a cold package raced by goroutines) can never
+  read a half-built table or corrupt it by mutating the result.
 
 ### Changed
 
