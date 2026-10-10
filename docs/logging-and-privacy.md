@@ -353,6 +353,8 @@ Per-recipient reminder completion uses `notification_log`: calendar UUID, civil
 event date, recipient UUID/class, channel and send time. Completion does not expire
 after one hour: it remains available throughout retries for that event. The
 one-hour anti-spam rule for threshold-transition notifications is unchanged.
+Threshold-transition rows (`threshold_reached`, `threshold_lost`) only serve that
+one-hour rule; the same daily pass deletes them once they are 30 days old.
 
 The scheduler automatically removes old reminder jobs and reminder completion
 records once both their event date and last update/send are more than 30 days old.

@@ -89,6 +89,11 @@ func (*fakeNotificationLog) CleanupReminderLogs(context.Context, time.Time, int)
 	return 0, nil
 }
 
+func (f *fakeNotificationLog) CleanupOldLogs(context.Context) error {
+	f.oldCleanups++
+	return nil
+}
+
 func (f *fakeReminderJobStore) Enqueue(_ context.Context, job *models.ReminderJob) error {
 	if f.enqueueErr != nil {
 		return f.enqueueErr

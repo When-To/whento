@@ -117,6 +117,7 @@ type fakeNotificationLog struct {
 	sentRecently map[string]bool
 	checkErr     error
 	logged       []loggedNotification
+	oldCleanups  int
 }
 
 func (f *fakeNotificationLog) WasNotificationSentRecently(

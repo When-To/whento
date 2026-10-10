@@ -385,6 +385,9 @@ because the history cannot be read for it.
 - An email the SMTP server had already accepted is no longer reported as
   failed when the connection drops before the `QUIT` reply (for example a
   shutdown canceling the send), which made reminders go out twice.
+- Threshold-notification rows in `notification_log` are deleted after 30 days.
+  The cleanup existed but nothing called it, so the table grew forever although
+  the rows only serve a one-hour anti-spam check.
 
 ---
 

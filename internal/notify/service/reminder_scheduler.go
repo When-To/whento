@@ -86,6 +86,8 @@ type ReminderNotificationLog interface {
 	NotificationLog
 	WasReminderSent(ctx context.Context, calendarID uuid.UUID, date time.Time, recipientID uuid.UUID, channel string) (bool, error)
 	CleanupReminderLogs(ctx context.Context, before time.Time, limit int) (int64, error)
+	// CleanupOldLogs applies the 30-day retention to the other notification rows.
+	CleanupOldLogs(ctx context.Context) error
 }
 
 // ReminderMailer must honor cancellation and a delivery deadline. The ordinary
@@ -251,8 +253,15 @@ func (s *ReminderScheduler) runOnce(ctx context.Context) {
 			logs, err := s.notificationLog.CleanupReminderLogs(ctx, now.Add(-reminderRetention), 1000)
 			if err != nil {
 				s.logger.Error("Reminder recipient retention cleanup failed", "error", err)
-			} else if count < 1000 && logs < 1000 {
-				s.lastCleanup = now
+			} else {
+				// Threshold-transition rows only need their one-hour anti-spam window;
+				// nothing else deleted them, so they accumulated forever.
+				if err := s.notificationLog.CleanupOldLogs(ctx); err != nil {
+					s.logger.Error("Notification log retention cleanup failed", "error", err)
+				}
+				if count < 1000 && logs < 1000 {
+					s.lastCleanup = now
+				}
 			}
 		}
 	}

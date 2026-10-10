@@ -327,13 +327,13 @@ func TestReminderCleanupRunsDailyAfterDrainingBacklog(t *testing.T) {
 	f := newReminderFixture(t, reminderConfig())
 	f.scheduler.runOnce(t.Context())
 	f.scheduler.runOnce(t.Context())
-	if f.jobs.cleanups != 1 {
-		t.Fatalf("cleanups=%d, want 1", f.jobs.cleanups)
+	if f.jobs.cleanups != 1 || f.log.oldCleanups != 1 {
+		t.Fatalf("cleanups=%d notification-log cleanups=%d, want 1 each", f.jobs.cleanups, f.log.oldCleanups)
 	}
 	f.scheduler.now = func() time.Time { return fixedReminderNow().Add(24 * time.Hour) }
 	f.scheduler.runOnce(t.Context())
-	if f.jobs.cleanups != 2 {
-		t.Fatalf("daily cleanup did not run: %d", f.jobs.cleanups)
+	if f.jobs.cleanups != 2 || f.log.oldCleanups != 2 {
+		t.Fatalf("daily cleanup did not run: jobs=%d notification-log=%d", f.jobs.cleanups, f.log.oldCleanups)
 	}
 }
 
