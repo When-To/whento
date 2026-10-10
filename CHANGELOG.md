@@ -379,6 +379,9 @@ because the history cannot be read for it.
   (`pkg/logger/logfields_test.go`) that fails the build on a log field named after
   an address, a credential, a name or an IP.
 - SPDX headers on every source file (#68).
+- An email the SMTP server had already accepted is no longer reported as
+  failed when the connection drops before the `QUIT` reply (for example a
+  shutdown canceling the send), which made reminders go out twice.
 
 ---
 

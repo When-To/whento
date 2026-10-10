@@ -234,7 +234,11 @@ func (s *Service) sendWithTLS(ctx context.Context, addr string, auth smtp.Auth, 
 		return err
 	}
 
-	return client.Quit()
+	// The server accepted the message in its reply to DATA. A QUIT that fails
+	// afterwards (a canceled context closing the socket, a server hanging up)
+	// must not report a delivered email as failed: the caller would send it again.
+	_ = client.Quit()
+	return nil
 }
 
 // dial opens the connection, in TLS from the first byte on port 465 and in the clear
