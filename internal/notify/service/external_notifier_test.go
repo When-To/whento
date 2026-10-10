@@ -5,7 +5,13 @@
 package service
 
 import (
+	"context"
+	"errors"
+	"io"
+	"log/slog"
 	"net"
+	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -231,4 +237,45 @@ func TestMustParseCIDRPanicsOnGarbage(t *testing.T) {
 	}()
 
 	mustParseCIDR("not-a-cidr")
+}
+
+type failingTransport struct{}
+
+func (failingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("dial tcp: lookup api.telegram.org: no such host")
+}
+
+// A failed Telegram call used to return Go's *url.Error text, which embeds the
+// full request URL and so the bot token; every caller logs that error.
+func TestSendTelegramErrorDoesNotLeakTheBotToken(t *testing.T) {
+	const token = "123456789:SECRET-TELEGRAM-TOKEN"
+	notifier := &ExternalNotifier{
+		logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		httpClient: &http.Client{Transport: failingTransport{}},
+	}
+
+	err := notifier.SendTelegram(context.Background(), token, "42", "hello")
+	if err == nil {
+		t.Fatal("expected the transport failure to surface")
+	}
+	if strings.Contains(err.Error(), "SECRET-TELEGRAM-TOKEN") {
+		t.Fatalf("the bot token leaked into the error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "no such host") {
+		t.Errorf("the underlying cause was lost: %v", err)
+	}
+}
+
+func TestWithoutURLKeepsTheCauseAndDropsTheURL(t *testing.T) {
+	cause := context.DeadlineExceeded
+	err := withoutURL(&url.Error{Op: "Post", URL: "https://hooks.slack.com/services/T/B/SECRET", Err: cause})
+	if strings.Contains(err.Error(), "SECRET") {
+		t.Errorf("webhook URL survived: %v", err)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("errors.Is lost the cause: %v", err)
+	}
+	if plain := errors.New("plain"); withoutURL(plain) != plain {
+		t.Error("a non-URL error must pass through unchanged")
+	}
 }

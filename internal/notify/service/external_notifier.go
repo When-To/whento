@@ -215,13 +215,13 @@ func (e *ExternalNotifier) SendDiscord(
 
 	req, err := http.NewRequestWithContext(ctx, "POST", webhookURL, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return fmt.Errorf("failed to create Discord request: %w", err)
+		return fmt.Errorf("failed to create Discord request: %w", withoutURL(err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := e.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send Discord notification: %w", err)
+		return fmt.Errorf("failed to send Discord notification: %w", withoutURL(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -264,13 +264,13 @@ func (e *ExternalNotifier) SendSlack(
 
 	req, err := http.NewRequestWithContext(ctx, "POST", webhookURL, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return fmt.Errorf("failed to create Slack request: %w", err)
+		return fmt.Errorf("failed to create Slack request: %w", withoutURL(err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := e.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send Slack notification: %w", err)
+		return fmt.Errorf("failed to send Slack notification: %w", withoutURL(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -315,13 +315,13 @@ func (e *ExternalNotifier) SendTelegram(
 
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return fmt.Errorf("failed to create Telegram request: %w", err)
+		return fmt.Errorf("failed to create Telegram request: %w", withoutURL(err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := e.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send Telegram notification: %w", err)
+		return fmt.Errorf("failed to send Telegram notification: %w", withoutURL(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -333,4 +333,15 @@ func (e *ExternalNotifier) SendTelegram(
 	// their mailbox.
 	e.logger.Info("Telegram notification sent successfully", "chat_ref", pkglog.Fingerprint(chatID))
 	return nil
+}
+
+// withoutURL drops the request URL a *url.Error prints. That URL is a secret for
+// every provider here: the Telegram bot token is in its path, and a Discord or
+// Slack webhook URL is itself the credential. Callers log these errors.
+func withoutURL(err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return urlErr.Err
+	}
+	return err
 }

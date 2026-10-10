@@ -118,6 +118,9 @@ line per release rather than listed individually.
 - Magic-link confirmation removes the proof from browser and router history,
   including subsequent Back navigation; reloading the cleaned URL shows
   instructions to reopen the email link. Missing MFA challenges fail closed.
+- Failed Discord, Slack and Telegram calls no longer put the request URL in
+  their error: Go's transport error prints it, and it carries the Telegram bot
+  token or the webhook secret, which then reached the logs.
 
 ### Fixed
 
