@@ -45,7 +45,7 @@ func TestNagerFallbackIsDisabledUntilExplicitlyEnabled(t *testing.T) {
 	})
 	defer func() { http.DefaultTransport = previous }()
 
-	_, coverage, err := HolidaysForYear(context.Background(), "kr", 2026)
+	_, coverage, err := holidaysForYear(context.Background(), "kr", 2026)
 	if coverage != CoverageUnavailable || !errors.Is(err, errHolidayUnavailable) {
 		t.Fatalf("disabled fallback = %v, %v", coverage, err)
 	}
@@ -107,7 +107,8 @@ func TestBundledHolidayReviewMatrixWithoutNetwork(t *testing.T) {
 			}
 		})
 	}
-	countries := SupportedCountries()
+	offlineOnce.Do(buildOfflineCalendars)
+	countries := offlineCountries
 	if len(countries) != 47 || !sort.StringsAreSorted(countries) {
 		t.Fatalf("offline country list = %v; want 47 sorted codes", countries)
 	}
@@ -115,7 +116,7 @@ func TestBundledHolidayReviewMatrixWithoutNetwork(t *testing.T) {
 		if !isOfflineCountry(country) {
 			t.Fatalf("missing offline country %s", country)
 		}
-		holidays, coverage, err := HolidaysForYear(context.Background(), strings.ToLower(country), 2026)
+		holidays, coverage, err := holidaysForYear(context.Background(), strings.ToLower(country), 2026)
 		if err != nil || coverage != CoverageOffline || len(holidays) == 0 {
 			t.Fatalf("%s list = %v, %v, %v", country, holidays, coverage, err)
 		}

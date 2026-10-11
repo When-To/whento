@@ -49,7 +49,7 @@ func (c Coverage) String() string {
 	}
 }
 
-// Holiday is one public holiday as served by HolidaysForYear.
+// Holiday is one public holiday, from the offline table or the Nager fallback.
 type Holiday struct {
 	Date      time.Time // the holiday's calendar date
 	Name      string    // the holiday name (local language for the offline source, English for the fallback)
@@ -145,8 +145,7 @@ func newNagerClient(baseURL string) *nagerClient {
 	}
 }
 
-// defaultNager is the process-wide fallback used by IsDateAllowed and
-// HolidaysForYear. SetNagerBaseURL replaces it for tests and mirrors.
+// defaultNager is the process-wide fallback used by IsDateAllowed. SetNagerBaseURL replaces it for tests and mirrors.
 var defaultNager = newNagerClient("")
 
 // SetNagerFallbackEnabled configures the process-wide network fallback before
@@ -175,23 +174,13 @@ func SetNagerBaseURL(url string) (restore func()) {
 	return func() { defaultNager = old }
 }
 
-// HolidaysForYear returns the public holidays of a country for a year. The
+// holidaysForYear returns the public holidays of a country for a year. The
 // bundled offline table answers first when it covers the country; otherwise the
-// Nager fallback is consulted through its bounded cache. A country no provider
-// can serve reports CoverageUnavailable with a non-nil error.
-func HolidaysForYear(ctx context.Context, country string, year int) ([]Holiday, Coverage, error) {
-	cc := strings.ToUpper(strings.TrimSpace(country))
-	if !countryCodeRE.MatchString(cc) {
-		return nil, CoverageUnavailable, fmt.Errorf("%w: %q", errInvalidCountry, country)
-	}
-	if holidays, ok := offlineHolidaysForYear(cc, year); ok {
-		return holidays, CoverageOffline, nil
-	}
-	return defaultNager.fetch(ctx, cc, year)
-}
-
-// holidaysForYear is the internal, unvalidated form used by isHolidayErrCtx.
+// Nager fallback is consulted through its bounded cache (fetch validates the
+// code and the year). A country no provider can serve reports
+// CoverageUnavailable with a non-nil error.
 func holidaysForYear(ctx context.Context, country string, year int) ([]Holiday, Coverage, error) {
+	country = strings.ToUpper(strings.TrimSpace(country))
 	if holidays, ok := offlineHolidaysForYear(country, year); ok {
 		return holidays, CoverageOffline, nil
 	}

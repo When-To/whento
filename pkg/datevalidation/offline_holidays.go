@@ -259,12 +259,3 @@ func offlineHolidaysForYear(countryCode string, year int) ([]Holiday, bool) {
 	})
 	return out, true
 }
-
-// SupportedCountries lists the ISO codes the offline table covers, sorted and
-// as a fresh copy: a caller mutating the returned slice cannot corrupt the
-// package-level table. The initializer is run unconditionally, so the result
-// is well-defined even on a cold package with concurrent callers.
-func SupportedCountries() []string {
-	offlineOnce.Do(buildOfflineCalendars)
-	return append([]string(nil), offlineCountries...)
-}

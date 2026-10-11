@@ -62,7 +62,7 @@ func isHolidayErrCtx(ctx context.Context, date time.Time, countryCode string) (b
 // holiday, the ordinary weekday decision applies — an eligible Wednesday is
 // admitted rather than refused on a guess. A day that IS a known holiday is
 // still refused. Unavailability is surfaced through the error-aware API
-// (HolidaysForYear and IsDateAllowedContext's sibling entry points) instead of
+// (IsDateAllowedContext's sibling entry points) instead of
 // being collapsed into a refusal here.
 func IsDateAllowed(date time.Time, timezone string, allowedWeekdays []int, holidaysPolicy string, allowHolidayEves bool) bool {
 	return IsDateAllowedContext(context.Background(), date, timezone, allowedWeekdays, holidaysPolicy, allowHolidayEves)

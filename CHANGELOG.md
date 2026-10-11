@@ -70,10 +70,6 @@ line per release rather than listed individually.
   fallback coalesces country/year lookups in a bounded cache (24-hour successes,
   one-minute failures), with independent two-second fetch deadlines and no
   redirects. No public holiday lookup API is exposed.
-- **`SupportedCountries` is safe to call before any other use.** The offline
-  table's initializer now runs unconditionally inside the reader and returns a
-  defensive copy, so a caller (or a cold package raced by goroutines) can never
-  read a half-built table or corrupt it by mutating the result.
 
 ### Changed
 

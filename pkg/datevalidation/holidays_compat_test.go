@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 )
@@ -101,52 +100,13 @@ func TestUSObservedSubstituteDayBlocks(t *testing.T) {
 	}
 }
 
-// TestSupportedCountriesReturnsACopy guards the S1 race: the initializer runs
-// unconditionally in the reader, so even a concurrently cold package cannot
-// race a read against the write, and mutating the returned slice cannot corrupt
-// the global table.
-func TestSupportedCountriesReturnsACopy(t *testing.T) {
-	restore := SetNagerBaseURL("")
-	defer restore()
-
-	var wg sync.WaitGroup
-	for i := 0; i < 32; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			countries := SupportedCountries()
-			// Mutate the copy aggressively; the package must be unaffected.
-			for j := range countries {
-				countries[j] = "XX"
-			}
-			if _, ok := offlineHolidays()["US"]; !ok {
-				t.Error("offline table lost US after a returned copy was mutated")
-			}
-		}()
-	}
-	wg.Wait()
-
-	countries := SupportedCountries()
-	for _, code := range []string{"FR", "US", "DE"} {
-		found := false
-		for _, c := range countries {
-			if c == code {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("SupportedCountries() missing %s (global state corrupted?)", code)
-		}
-	}
-}
-
 // TestHolidaysForYearOfflineCoverage verifies the offline provider answers with
 // CoverageOffline and the fallback answers with CoverageFallback.
 func TestHolidaysForYearOfflineCoverage(t *testing.T) {
 	restore := SetNagerBaseURL("http://127.0.0.1:9/unused/%d/%s")
 	defer restore()
 
-	offline, coverage, err := HolidaysForYear(context.Background(), "FR", 2026)
+	offline, coverage, err := holidaysForYear(context.Background(), "FR", 2026)
 	if err != nil || coverage != CoverageOffline {
 		t.Fatalf("FR coverage = %v, err = %v; want offline", coverage, err)
 	}
@@ -168,7 +128,7 @@ func TestHolidaysForYearFallback(t *testing.T) {
 	restore := SetNagerBaseURL(server.URL + "/%d/%s")
 	defer restore()
 
-	holidays, coverage, err := HolidaysForYear(context.Background(), "KR", 2026)
+	holidays, coverage, err := holidaysForYear(context.Background(), "KR", 2026)
 	if err != nil || coverage != CoverageFallback {
 		t.Fatalf("KR coverage = %v, err = %v; want fallback", coverage, err)
 	}
@@ -177,7 +137,7 @@ func TestHolidaysForYearFallback(t *testing.T) {
 	}
 
 	// Cached: a second call must not hit the network again.
-	_, _, err = HolidaysForYear(context.Background(), "KR", 2026)
+	_, _, err = holidaysForYear(context.Background(), "KR", 2026)
 	if err != nil {
 		t.Fatalf("cached call: %v", err)
 	}
@@ -197,7 +157,7 @@ func TestHolidaysForYearFallbackUnavailable(t *testing.T) {
 	restore := SetNagerBaseURL(server.URL + "/%d/%s")
 	defer restore()
 
-	_, coverage, err := HolidaysForYear(context.Background(), "KR", 2026)
+	_, coverage, err := holidaysForYear(context.Background(), "KR", 2026)
 	if coverage != CoverageUnavailable || err == nil {
 		t.Fatalf("coverage = %v, err = %v; want unavailable+err", coverage, err)
 	}
@@ -216,7 +176,7 @@ func TestHolidaysForYearFallbackMalformedJSON(t *testing.T) {
 	restore := SetNagerBaseURL(server.URL + "/%d/%s")
 	defer restore()
 
-	_, coverage, err := HolidaysForYear(context.Background(), "KR", 2026)
+	_, coverage, err := holidaysForYear(context.Background(), "KR", 2026)
 	if coverage != CoverageUnavailable || err == nil {
 		t.Fatalf("coverage = %v, err = %v; want unavailable+err", coverage, err)
 	}
@@ -226,11 +186,11 @@ func TestHolidaysForYearFallbackRejectsInvalidParams(t *testing.T) {
 	restore := SetNagerBaseURL("http://127.0.0.1:9/unused/%d/%s")
 	defer restore()
 
-	if _, _, err := HolidaysForYear(context.Background(), "ZZZ", 2026); err == nil {
+	if _, _, err := holidaysForYear(context.Background(), "ZZZ", 2026); err == nil {
 		t.Error("3-letter country accepted")
 	}
 	// KR is not an offline country, so its year is validated by the fallback.
-	if _, _, err := HolidaysForYear(context.Background(), "KR", 1800); err == nil {
+	if _, _, err := holidaysForYear(context.Background(), "KR", 1800); err == nil {
 		t.Error("out-of-range year accepted")
 	}
 }
@@ -249,7 +209,7 @@ func TestHolidaysForYearContextCancellation(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
-	_, _, err := HolidaysForYear(ctx, "KR", 2027)
+	_, _, err := holidaysForYear(ctx, "KR", 2027)
 	if err == nil {
 		t.Fatal("cancelled fetch did not error")
 	}
