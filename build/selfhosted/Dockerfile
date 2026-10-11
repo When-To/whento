@@ -20,7 +20,7 @@
 # index digests, so multi-platform builds keep working.
 
 # Build stage
-FROM golang:1.27-alpine3.24@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS builder
+FROM golang:1.27-alpine3.24@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS builder
 
 WORKDIR /build
 
@@ -59,7 +59,7 @@ RUN go build \
 
 # Build the migrate CLI. On BUILDPLATFORM, as before, but now because Go
 # cross-compiles natively rather than to dodge QEMU on a download.
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine3.24@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS migrate-builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine3.24@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS migrate-builder
 
 ARG TARGETARCH
 
