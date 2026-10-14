@@ -96,7 +96,7 @@ export default defineConfig(({ mode: _mode }) => {
               },
               {
                 name: 'vendor-date',
-                test: /node_modules[\\/](date-fns|date-fns-tz|countries-and-timezones)[\\/]/,
+                test: /node_modules[\\/]countries-and-timezones[\\/]/,
               },
             ],
           },

@@ -161,18 +161,6 @@ function getBrowserRegion(): string | undefined {
 }
 
 /**
- * Number of grid cells a date sits after the start of its week — the count of
- * leading cells to pad a month grid with, and the offset to subtract to reach
- * a week's first day.
- *
- * @param date         any date
- * @param weekStartDay first day of the week (0 = Sunday ... 6 = Saturday)
- */
-export function getWeekdayOffset(date: Date, weekStartDay: number): number {
-  return (date.getDay() - weekStartDay + 7) % 7;
-}
-
-/**
  * Resolves the first day of the week, most specific source first:
  *   1. explicit user override in localStorage
  *   2. the calendar's timezone (shared by every participant, so everyone

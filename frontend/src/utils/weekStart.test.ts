@@ -16,7 +16,6 @@ import {
   WEEK_START_BY_REGION,
   getWeekStartForRegion,
   getWeekStartForTimezone,
-  getWeekdayOffset,
   resolveWeekStart,
 } from './weekStart';
 
@@ -115,32 +114,6 @@ describe('resolveWeekStart', () => {
     // locale alone would resolve to Sunday.
     withBrowserLanguage('de-DE');
     expect(resolveWeekStart('Europe/Berlin', 'en')).toBe(1);
-  });
-});
-
-describe('getWeekdayOffset', () => {
-  // 2026-08-01 is a Saturday (getDay() === 6)
-  const saturday = new Date(2026, 7, 1);
-
-  it('counts days elapsed since the start of the week', () => {
-    expect(getWeekdayOffset(saturday, 0)).toBe(6); // Sunday-first
-    expect(getWeekdayOffset(saturday, 1)).toBe(5); // Monday-first
-    expect(getWeekdayOffset(saturday, 6)).toBe(0); // Saturday-first
-  });
-
-  it('is zero exactly on the first day of the week', () => {
-    for (let day = 0; day < 7; day++) {
-      // 2026-02-01 is a Sunday, so adding `day` lands on weekday `day`
-      const date = new Date(2026, 1, 1 + day);
-      expect(getWeekdayOffset(date, day)).toBe(0);
-    }
-  });
-
-  it('pads a month grid with the right number of leading cells', () => {
-    // 2026-03-01 is a Sunday
-    const march = new Date(2026, 2, 1);
-    expect(getWeekdayOffset(march, 0)).toBe(0); // Sunday-first: no padding
-    expect(getWeekdayOffset(march, 1)).toBe(6); // Monday-first: a full week of padding
   });
 });
 

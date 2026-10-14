@@ -12,8 +12,6 @@
  * grid allocated 42 of them on every render — and again on every drag frame.
  */
 
-import { parseISODate, type ISODate } from './isoDate';
-
 export type DateStyle =
   | 'weekdayShort'
   | 'weekdayLong'
@@ -55,14 +53,4 @@ export function getFormatter(locale: string, style: DateStyle): Intl.DateTimeFor
 /** Format a Date in the given locale and style. */
 export function formatDate(date: Date, locale: string, style: DateStyle): string {
   return getFormatter(locale, style).format(date);
-}
-
-/** Format a `YYYY-MM-DD` string, parsed in local time so the day never shifts. */
-export function formatISODate(iso: ISODate, locale: string, style: DateStyle): string {
-  return getFormatter(locale, style).format(parseISODate(iso));
-}
-
-/** Drop every cached formatter. Exposed for tests that switch locale or timezone. */
-export function clearFormatterCache(): void {
-  cache.clear();
 }

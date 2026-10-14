@@ -358,6 +358,4 @@ export type ParticipantEmailMessageResponse = AlwaysSent<
 export type UnifiedFeedConfig = AlwaysSent<Schemas['service.UnifiedFeedConfig'], 'configured'>;
 
 // UI Types
-export type Theme = 'light' | 'dark' | 'system';
-
 export type Locale = 'fr' | 'en';
