@@ -50,7 +50,6 @@ var (
 // AvailabilityRepository defines the interface for availability repository operations
 type AvailabilityRepository interface {
 	Create(ctx context.Context, availability *models.Availability) error
-	GetByParticipantID(ctx context.Context, participantID uuid.UUID) ([]*models.Availability, error)
 	GetByParticipantIDWithDateRange(ctx context.Context, participantID uuid.UUID, startDate, endDate *time.Time) ([]*models.Availability, error)
 	GetByParticipantAndDate(ctx context.Context, participantID uuid.UUID, date time.Time) (*models.Availability, error)
 	// The expansion the summary endpoints read: manual answers plus the recurrence
@@ -72,7 +71,6 @@ type CalendarRepository interface {
 // ParticipantRepository defines the interface for participant repository operations
 type ParticipantRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*repository.Participant, error)
-	GetByCalendarID(ctx context.Context, calendarID uuid.UUID) ([]*repository.Participant, error)
 }
 
 // RecurrenceRepository defines the interface for recurrence repository operations

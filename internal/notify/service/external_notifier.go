@@ -146,11 +146,6 @@ func validateWebhookURL(ctx context.Context, rawURL string) error {
 	return nil
 }
 
-// ValidateWebhookURL is the exported version for use by handlers.
-func ValidateWebhookURL(ctx context.Context, rawURL string) error {
-	return validateWebhookURL(ctx, rawURL)
-}
-
 // ValidateDiscordWebhookURL validates that the URL is a valid Discord webhook URL.
 func ValidateDiscordWebhookURL(ctx context.Context, rawURL string) error {
 	if err := validateWebhookURL(ctx, rawURL); err != nil {

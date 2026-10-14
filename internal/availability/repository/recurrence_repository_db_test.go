@@ -136,7 +136,7 @@ func TestDayOfWeekIsBounded(t *testing.T) {
 	}
 }
 
-func TestGetRecurrencesByParticipantAndByCalendar(t *testing.T) {
+func TestGetRecurrencesByParticipant(t *testing.T) {
 	pool := dbtest.Pool(t)
 	repo := repository.NewRecurrenceRepository(pool)
 	ctx := dbtest.Context(t)
@@ -167,23 +167,6 @@ func TestGetRecurrencesByParticipantAndByCalendar(t *testing.T) {
 		t.Errorf("days = %d then %d, want 2 then 5", mine[0].DayOfWeek, mine[1].DayOfWeek)
 	}
 
-	// The calendar query joins through participants; it must pick up everyone's.
-	all, err := repo.GetRecurrencesByCalendar(ctx, f.calendar.ID)
-	if err != nil {
-		t.Fatalf("GetRecurrencesByCalendar: %v", err)
-	}
-	if len(all) != 3 {
-		t.Errorf("GetRecurrencesByCalendar returned %d, want 3", len(all))
-	}
-
-	// A calendar nobody belongs to gets nothing rather than everything.
-	empty, err := repo.GetRecurrencesByCalendar(ctx, uuid.New())
-	if err != nil {
-		t.Fatalf("GetRecurrencesByCalendar for an unknown calendar: %v", err)
-	}
-	if len(empty) != 0 {
-		t.Errorf("an unknown calendar returned %d recurrences", len(empty))
-	}
 }
 
 func TestUpdateAndDeleteRecurrence(t *testing.T) {
@@ -270,12 +253,13 @@ func TestRecurrenceExceptions(t *testing.T) {
 		t.Error("the same date was excluded twice")
 	}
 
-	got, err := repo.GetExceptionsByRecurrence(ctx, rec.ID)
+	byID, err := repo.GetExceptionsByRecurrenceIDs(ctx, []uuid.UUID{rec.ID})
 	if err != nil {
-		t.Fatalf("GetExceptionsByRecurrence: %v", err)
+		t.Fatalf("GetExceptionsByRecurrenceIDs: %v", err)
 	}
+	got := byID[rec.ID]
 	if len(got) != 2 {
-		t.Fatalf("GetExceptionsByRecurrence returned %d, want 2", len(got))
+		t.Fatalf("GetExceptionsByRecurrenceIDs returned %d, want 2", len(got))
 	}
 	if got[0].ExcludedDate != "2027-03-08" || got[1].ExcludedDate != "2027-03-15" {
 		t.Errorf("exceptions = %q then %q, want them in date order", got[0].ExcludedDate, got[1].ExcludedDate)
@@ -293,11 +277,11 @@ func TestRecurrenceExceptions(t *testing.T) {
 	if err := repo.DeleteRecurrence(ctx, rec.ID); err != nil {
 		t.Fatalf("DeleteRecurrence: %v", err)
 	}
-	left, err := repo.GetExceptionsByRecurrence(ctx, rec.ID)
+	left, err := repo.GetExceptionsByRecurrenceIDs(ctx, []uuid.UUID{rec.ID})
 	if err != nil {
-		t.Fatalf("GetExceptionsByRecurrence after delete: %v", err)
+		t.Fatalf("GetExceptionsByRecurrenceIDs after delete: %v", err)
 	}
-	if len(left) != 0 {
+	if len(left[rec.ID]) != 0 {
 		t.Errorf("%d exceptions outlived their recurrence", len(left))
 	}
 }
@@ -354,7 +338,7 @@ func TestGetExceptionsByRecurrenceIDs(t *testing.T) {
 		if len(mine) != 2 {
 			t.Fatalf("got %d exceptions for the first recurrence, want 2", len(mine))
 		}
-		// Same date ordering as the single-recurrence read, which the summaries rely on.
+		// Date ordering, which the summaries rely on.
 		if mine[0].ExcludedDate != "2027-03-08" || mine[1].ExcludedDate != "2027-03-15" {
 			t.Errorf("dates = %q then %q, want them in date order", mine[0].ExcludedDate, mine[1].ExcludedDate)
 		}
@@ -369,32 +353,9 @@ func TestGetExceptionsByRecurrenceIDs(t *testing.T) {
 			t.Errorf("second recurrence = %v, want one exception on 2027-04-05", theirs)
 		}
 
-		// A recurrence with no exception is absent rather than present-and-empty, which
-		// is what GetExceptionsByRecurrence returns too.
+		// A recurrence with no exception is absent rather than present-and-empty.
 		if got, ok := got[withoutExceptions.ID]; ok || got != nil {
 			t.Errorf("a recurrence with no exception yielded %v", got)
-		}
-	})
-
-	t.Run("matches the single-recurrence read", func(t *testing.T) {
-		one, err := repo.GetExceptionsByRecurrence(ctx, withExceptions.ID)
-		if err != nil {
-			t.Fatalf("GetExceptionsByRecurrence: %v", err)
-		}
-
-		batched, err := repo.GetExceptionsByRecurrenceIDs(ctx, []uuid.UUID{withExceptions.ID})
-		if err != nil {
-			t.Fatalf("GetExceptionsByRecurrenceIDs: %v", err)
-		}
-
-		got := batched[withExceptions.ID]
-		if len(got) != len(one) {
-			t.Fatalf("batched returned %d exceptions, single returned %d", len(got), len(one))
-		}
-		for i := range one {
-			if got[i] != one[i] {
-				t.Errorf("exception %d: batched = %+v, single = %+v", i, got[i], one[i])
-			}
 		}
 	})
 

@@ -166,10 +166,7 @@ func run() error {
 	defer cancel()
 
 	// Connect to PostgreSQL (shared by all modules)
-	dbConfig := &database.Config{
-		URL: cfg.DatabaseURL,
-	}
-	pool, err := database.NewPool(ctx, dbConfig)
+	pool, err := database.NewPool(ctx, cfg.DatabaseConfig())
 	if err != nil {
 		return fmt.Errorf("connect to database: %w", err)
 	}

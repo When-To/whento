@@ -41,7 +41,6 @@ type CalendarService interface {
 	DeleteCalendar(ctx context.Context, userID, userRole, calendarID string) error
 	RegenerateToken(ctx context.Context, userID, userRole, calendarID, tokenType string) (*models.CalendarResponse, error)
 	GetPublicCalendar(ctx context.Context, token, participantID string) (*models.PublicCalendarResponse, error)
-	ListUserCalendars(ctx context.Context, targetUserID string) ([]*models.CalendarResponse, error)
 }
 
 // UserLookup is the one question this handler asks of the user store: is the account
@@ -529,7 +528,7 @@ func (h *CalendarHandler) GetPublicCalendar(w http.ResponseWriter, r *http.Reque
 func (h *CalendarHandler) ListUserCalendars(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 
-	calendars, err := h.calendarService.ListUserCalendars(r.Context(), userID)
+	calendars, err := h.calendarService.ListMyCalendars(r.Context(), userID)
 	if err != nil {
 		logger.FromContext(r.Context()).Error("Failed to list user calendars", "error", err, "user_id", userID)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to list user calendars")

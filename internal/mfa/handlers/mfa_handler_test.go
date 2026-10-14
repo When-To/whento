@@ -272,7 +272,6 @@ func (s *stubAuthUserRepo) GetByEmail(context.Context, string) (*authModels.User
 func (s *stubAuthUserRepo) FirstUserCreated(context.Context) (bool, error) {
 	return s.user != nil, nil
 }
-func (s *stubAuthUserRepo) Update(context.Context, *authModels.User) error { return nil }
 
 func (s *stubAuthUserRepo) UpdateProfile(
 	context.Context,
@@ -310,11 +309,6 @@ func (s *stubAuthTokenRepo) Create(_ context.Context, token *authModels.RefreshT
 
 func (s *stubAuthTokenRepo) GetByHash(context.Context, string) (*authModels.RefreshToken, error) {
 	return nil, errors.New("not found")
-}
-func (s *stubAuthTokenRepo) DeleteByHash(context.Context, string) error { return nil }
-
-func (s *stubAuthTokenRepo) DeleteByUserID(context.Context, uuid.UUID) (int64, error) {
-	return 0, nil
 }
 
 func (s *stubAuthTokenRepo) CreatePendingMFASession(context.Context, string, time.Time, *authModels.RefreshToken, int64) (bool, error) {

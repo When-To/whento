@@ -44,10 +44,6 @@ var _ service.AvailabilityRepository = (*stubAvailabilityRepo)(nil)
 
 func (s *stubAvailabilityRepo) Create(context.Context, *models.Availability) error { return nil }
 
-func (s *stubAvailabilityRepo) GetByParticipantID(context.Context, uuid.UUID) ([]*models.Availability, error) {
-	return nil, nil
-}
-
 func (s *stubAvailabilityRepo) GetByParticipantIDWithDateRange(
 	context.Context, uuid.UUID, *time.Time, *time.Time,
 ) ([]*models.Availability, error) {
@@ -115,10 +111,6 @@ func (s *stubParticipantRepo) GetByID(_ context.Context, id uuid.UUID) (*reposit
 	return nil, repository.ErrParticipantNotFound
 }
 
-func (s *stubParticipantRepo) GetByCalendarID(context.Context, uuid.UUID) ([]*repository.Participant, error) {
-	return s.participants, nil
-}
-
 type stubRecurrenceRepo struct{}
 
 var _ service.RecurrenceRepository = (*stubRecurrenceRepo)(nil)
@@ -126,10 +118,6 @@ var _ service.RecurrenceRepository = (*stubRecurrenceRepo)(nil)
 func (s *stubRecurrenceRepo) CreateRecurrence(context.Context, *models.Recurrence) error { return nil }
 
 func (s *stubRecurrenceRepo) GetRecurrencesByParticipant(context.Context, uuid.UUID) ([]models.Recurrence, error) {
-	return nil, nil
-}
-
-func (s *stubRecurrenceRepo) GetRecurrencesByCalendar(context.Context, uuid.UUID) ([]models.Recurrence, error) {
 	return nil, nil
 }
 

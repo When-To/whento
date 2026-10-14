@@ -106,16 +106,6 @@ func TestValidateWebhookURLRejects(t *testing.T) {
 	}
 }
 
-// TestValidateWebhookURLIsExported guards the thin wrapper handlers call, so a future
-// change cannot make the two disagree.
-func TestValidateWebhookURLIsExported(t *testing.T) {
-	const hostile = "https://169.254.169.254/latest/meta-data/"
-
-	if ValidateWebhookURL(t.Context(), hostile) == nil {
-		t.Error("the exported validator accepted the metadata endpoint")
-	}
-}
-
 func TestValidateDiscordWebhookURL(t *testing.T) {
 	tests := []struct {
 		name        string

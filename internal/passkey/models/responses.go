@@ -9,11 +9,6 @@ type RegistrationOptionsResponse struct {
 	PublicKey interface{} `json:"publicKey"`
 }
 
-// AuthenticationOptionsResponse wraps WebAuthn authentication options
-type AuthenticationOptionsResponse struct {
-	PublicKey interface{} `json:"publicKey"`
-}
-
 // DiscoverableAuthenticationOptionsResponse wraps WebAuthn authentication options for discoverable credentials
 type DiscoverableAuthenticationOptionsResponse struct {
 	PublicKey   interface{} `json:"publicKey"`

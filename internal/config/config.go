@@ -216,7 +216,7 @@ func Load() *Config {
 
 		// Registration Control
 		AllowedRegister: l.boolean("ALLOWED_REGISTER", true),
-		AllowedEmails:   getEmailList("ALLOWED_EMAILS", []string{"*"}),
+		AllowedEmails:   getStringList("ALLOWED_EMAILS", []string{"*"}),
 
 		// Bootstrap (first-user creation). If an operator pins the key here,
 		// automation can hand it to POST /api/v1/auth/bootstrap directly instead
@@ -636,28 +636,6 @@ func normalizeOrigins(origins []string) []string {
 		normalized = append(normalized, strings.TrimRight(origin, "/"))
 	}
 	return normalized
-}
-
-func getEmailList(key string, defaultValue []string) []string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-
-	// Split by comma and trim spaces
-	parts := strings.Split(value, ",")
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		if trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-
-	if len(result) == 0 {
-		return defaultValue
-	}
-	return result
 }
 
 // MaskURL returns a copy of raw with the userinfo password replaced by ***.

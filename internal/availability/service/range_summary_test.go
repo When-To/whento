@@ -53,10 +53,6 @@ func (m *mockAvailabilityRepo) Create(context.Context, *models.Availability) err
 	return m.createErr
 }
 
-func (m *mockAvailabilityRepo) GetByParticipantID(context.Context, uuid.UUID) ([]*models.Availability, error) {
-	return nil, nil
-}
-
 func (m *mockAvailabilityRepo) GetByParticipantIDWithDateRange(
 	context.Context, uuid.UUID, *time.Time, *time.Time,
 ) ([]*models.Availability, error) {
@@ -110,7 +106,6 @@ func (m *mockCalendarInfoRepo) GetCalendarInfoByPublicToken(context.Context, str
 
 type mockParticipantsRepo struct {
 	participants []*repository.Participant
-	err          error
 }
 
 var _ ParticipantRepository = (*mockParticipantsRepo)(nil)
@@ -125,10 +120,6 @@ func (m *mockParticipantsRepo) GetByID(_ context.Context, id uuid.UUID) (*reposi
 	return nil, repository.ErrParticipantNotFound
 }
 
-func (m *mockParticipantsRepo) GetByCalendarID(context.Context, uuid.UUID) ([]*repository.Participant, error) {
-	return m.participants, m.err
-}
-
 type mockRecurrenceRepo struct {
 	byParticipant []models.Recurrence
 	exceptions    map[uuid.UUID][]models.RecurrenceException
@@ -141,10 +132,6 @@ func (m *mockRecurrenceRepo) CreateRecurrence(context.Context, *models.Recurrenc
 
 func (m *mockRecurrenceRepo) GetRecurrencesByParticipant(context.Context, uuid.UUID) ([]models.Recurrence, error) {
 	return m.byParticipant, nil
-}
-
-func (m *mockRecurrenceRepo) GetRecurrencesByCalendar(context.Context, uuid.UUID) ([]models.Recurrence, error) {
-	return nil, nil
 }
 
 func (m *mockRecurrenceRepo) GetRecurrenceByID(context.Context, uuid.UUID) (*models.Recurrence, error) {

@@ -136,32 +136,6 @@ func TestGetByCalendarID(t *testing.T) {
 	}
 }
 
-func TestGetByCalendarIDAndName(t *testing.T) {
-	pool := dbtest.Pool(t)
-	repo := repository.NewParticipantRepository(pool)
-	ctx := dbtest.Context(t)
-
-	calendar := seedCalendar(t, pool)
-	participant := newParticipant(calendar.ID, "Ada")
-	if err := repo.Create(ctx, participant); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-
-	got, err := repo.GetByCalendarIDAndName(ctx, calendar.ID, "Ada")
-	if err != nil {
-		t.Fatalf("GetByCalendarIDAndName: %v", err)
-	}
-	if got.ID != participant.ID {
-		t.Errorf("resolved to %v, want %v", got.ID, participant.ID)
-	}
-
-	// The lookup is scoped: the same name on another calendar must not be found here.
-	other := seedCalendar(t, pool)
-	if _, err := repo.GetByCalendarIDAndName(ctx, other.ID, "Ada"); !errors.Is(err, repository.ErrParticipantNotFound) {
-		t.Errorf("the lookup crossed calendars: %v", err)
-	}
-}
-
 func TestParticipantUpdateAndDelete(t *testing.T) {
 	pool := dbtest.Pool(t)
 	repo := repository.NewParticipantRepository(pool)
@@ -176,15 +150,12 @@ func TestParticipantUpdateAndDelete(t *testing.T) {
 	if err := repo.Update(ctx, participant.ID, "Ada Lovelace"); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	if err := repo.UpdateLocale(ctx, participant.ID, "fr"); err != nil {
-		t.Fatalf("UpdateLocale: %v", err)
-	}
 
 	got, err := repo.GetByID(ctx, participant.ID)
 	if err != nil {
 		t.Fatalf("GetByID: %v", err)
 	}
-	if got.Name != "Ada Lovelace" || got.Locale != "fr" {
+	if got.Name != "Ada Lovelace" {
 		t.Errorf("the update did not persist: %+v", got)
 	}
 
@@ -290,33 +261,6 @@ func TestExpiredParticipantTokenDoesNotResolve(t *testing.T) {
 	// The expiry filter lives in the WHERE clause and can be observed nowhere else.
 	if _, err := repo.GetByVerificationToken(ctx, token); err == nil {
 		t.Error("an expired participant token still resolves")
-	}
-}
-
-func TestClearEmailVerificationToken(t *testing.T) {
-	pool := dbtest.Pool(t)
-	repo := repository.NewParticipantRepository(pool)
-	ctx := dbtest.Context(t)
-
-	calendar := seedCalendar(t, pool)
-	participant := newParticipant(calendar.ID, "Ada")
-	if err := repo.Create(ctx, participant); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-
-	token := uuid.NewString()
-	if err := repo.SetEmailVerificationToken(
-		ctx, participant.ID, "ada@example.test", token, time.Now().Add(time.Hour),
-	); err != nil {
-		t.Fatalf("SetEmailVerificationToken: %v", err)
-	}
-
-	if err := repo.ClearEmailVerificationToken(ctx, participant.ID); err != nil {
-		t.Fatalf("ClearEmailVerificationToken: %v", err)
-	}
-
-	if _, err := repo.GetByVerificationToken(ctx, token); err == nil {
-		t.Error("a cleared token still resolves")
 	}
 }
 

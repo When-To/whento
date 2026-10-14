@@ -27,12 +27,11 @@ import (
 )
 
 var (
-	ErrMFANotFound        = errors.New("MFA not configured")
-	ErrMFAAlreadyEnabled  = errors.New("MFA is already enabled")
-	ErrMFANotEnabled      = errors.New("MFA is not enabled")
-	ErrInvalidCode        = errors.New("invalid verification code")
-	ErrUserNotFound       = errors.New("user not found")
-	ErrAllBackupCodesUsed = errors.New("all backup codes have been used")
+	ErrMFANotFound       = errors.New("MFA not configured")
+	ErrMFAAlreadyEnabled = errors.New("MFA is already enabled")
+	ErrMFANotEnabled     = errors.New("MFA is not enabled")
+	ErrInvalidCode       = errors.New("invalid verification code")
+	ErrUserNotFound      = errors.New("user not found")
 )
 
 // MFAStore is the slice of the MFA repository this service needs.

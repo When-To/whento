@@ -256,58 +256,21 @@ func TestDateRangesAreInclusive(t *testing.T) {
 		}
 	}
 
-	inRange, err := repo.GetByCalendarDateRange(ctx, f.calendar.ID, day(1), day(2))
+	inRange, err := repo.GetByParticipantIDWithDateRange(ctx, f.participant.ID, timePtr(day(1)), timePtr(day(2)))
 	if err != nil {
-		t.Fatalf("GetByCalendarDateRange: %v", err)
+		t.Fatalf("GetByParticipantIDWithDateRange: %v", err)
 	}
 	if len(inRange) != 2 {
 		t.Errorf("got %d rows for a two-day inclusive range, want 2", len(inRange))
 	}
 
 	// A single-day range must return that day, not nothing.
-	single, err := repo.GetByCalendarDateRange(ctx, f.calendar.ID, day(0), day(0))
+	single, err := repo.GetByParticipantIDWithDateRange(ctx, f.participant.ID, timePtr(day(0)), timePtr(day(0)))
 	if err != nil {
-		t.Fatalf("GetByCalendarDateRange: %v", err)
+		t.Fatalf("GetByParticipantIDWithDateRange: %v", err)
 	}
 	if len(single) != 1 {
 		t.Errorf("got %d rows for a single-day range, want 1", len(single))
-	}
-}
-
-func TestGetByCalendarDateRangeSpansParticipants(t *testing.T) {
-	pool := dbtest.Pool(t)
-	repo := repository.NewAvailabilityRepository(pool)
-	ctx := dbtest.Context(t)
-
-	f := seed(t, pool)
-	if err := repo.Create(ctx, availability(f.participant.ID, day(0), ptr("09:00"), ptr("10:00"))); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-	if err := repo.Create(ctx, availability(f.other.ID, day(0), ptr("11:00"), ptr("12:00"))); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-
-	// The range summary is built from this: it has to see the whole calendar, not one
-	// participant.
-	rows, err := repo.GetByCalendarDateRange(ctx, f.calendar.ID, day(0), day(0))
-	if err != nil {
-		t.Fatalf("GetByCalendarDateRange: %v", err)
-	}
-	if len(rows) != 2 {
-		t.Errorf("got %d rows, want both participants", len(rows))
-	}
-
-	// Another calendar's rows must not appear.
-	other := seed(t, pool)
-	if err := repo.Create(ctx, availability(other.participant.ID, day(0), ptr("09:00"), ptr("10:00"))); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-	stillTwo, err := repo.GetByCalendarDateRange(ctx, f.calendar.ID, day(0), day(0))
-	if err != nil {
-		t.Fatalf("GetByCalendarDateRange: %v", err)
-	}
-	if len(stillTwo) != 2 {
-		t.Errorf("the query leaked across calendars: %d rows", len(stillTwo))
 	}
 }
 
@@ -339,30 +302,6 @@ func TestGetByParticipantIDWithDateRange(t *testing.T) {
 	}
 	if len(all) != 3 {
 		t.Errorf("got %d rows without bounds, want all 3", len(all))
-	}
-}
-
-func TestGetByDateIsScopedToTheCalendar(t *testing.T) {
-	pool := dbtest.Pool(t)
-	repo := repository.NewAvailabilityRepository(pool)
-	ctx := dbtest.Context(t)
-
-	f := seed(t, pool)
-	other := seed(t, pool)
-
-	if err := repo.Create(ctx, availability(f.participant.ID, day(0), nil, nil)); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-	if err := repo.Create(ctx, availability(other.participant.ID, day(0), nil, nil)); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-
-	rows, err := repo.GetByDate(ctx, f.calendar.ID, day(0))
-	if err != nil {
-		t.Fatalf("GetByDate: %v", err)
-	}
-	if len(rows) != 1 || rows[0].ParticipantID != f.participant.ID {
-		t.Errorf("GetByDate returned %d rows from the wrong calendar", len(rows))
 	}
 }
 

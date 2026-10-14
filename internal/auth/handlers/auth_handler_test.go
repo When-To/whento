@@ -65,10 +65,6 @@ func (m *mockUserRepository) GetByEmail(ctx context.Context, email string) (*mod
 	return m.user, nil
 }
 
-func (m *mockUserRepository) Update(ctx context.Context, user *models.User) error {
-	return m.err
-}
-
 func (m *mockUserRepository) UpdateProfile(
 	ctx context.Context,
 	userID uuid.UUID,
@@ -145,14 +141,6 @@ func (m *mockTokenRepository) GetByHash(ctx context.Context, tokenHash string) (
 	}
 	token.ID = uuid.New()
 	return token, nil
-}
-
-func (m *mockTokenRepository) DeleteByHash(ctx context.Context, tokenHash string) error {
-	return m.err
-}
-
-func (m *mockTokenRepository) DeleteByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
-	return 0, m.err
 }
 
 func (m *mockTokenRepository) CreatePendingMFASession(context.Context, string, time.Time, *models.RefreshToken, int64) (bool, error) {

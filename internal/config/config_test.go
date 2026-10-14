@@ -633,12 +633,6 @@ func TestStringLists(t *testing.T) {
 					t.Errorf("entry %d = %q, want %q", i, got[i], tt.want[i])
 				}
 			}
-
-			// The email list parses identically; it is a separate function only by
-			// history, and a divergence between the two would be a surprise.
-			if email := getEmailList("SOME_LIST", []string{"fallback"}); len(email) != len(tt.want) {
-				t.Errorf("getEmailList disagreed with getStringList: %v vs %v", email, got)
-			}
 		})
 	}
 }

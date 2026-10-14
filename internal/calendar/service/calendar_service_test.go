@@ -1345,30 +1345,6 @@ func TestGetPublicCalendar(t *testing.T) {
 	})
 }
 
-func TestListUserCalendars(t *testing.T) {
-	owner := uuid.New()
-
-	calendar := &models.Calendar{OwnerID: owner, Name: "Theirs"}
-	calendar.ID = uuid.New()
-
-	service := newService(
-		&mockCalendarRepo{owned: []*models.Calendar{calendar}},
-		&mockParticipantRepo{},
-	)
-
-	got, err := service.ListUserCalendars(context.Background(), owner.String())
-	if err != nil {
-		t.Fatalf("ListUserCalendars: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("got %d calendars, want 1", len(got))
-	}
-
-	if _, err := service.ListUserCalendars(context.Background(), "not-a-uuid"); err == nil {
-		t.Error("expected an error for a non-uuid user id")
-	}
-}
-
 // TestParticipantTenancy is the cross-calendar isolation check. A participant id is a
 // bare UUID in the URL, so the service must confirm it belongs to the calendar being
 // addressed — otherwise an owner of calendar A can rename or delete a participant of
