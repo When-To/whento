@@ -305,6 +305,17 @@ describe('CalendarCard', () => {
     expect(focused()).toEqual({ tag: 'BUTTON', action: 'move-up', calendar: 'c-1' });
   });
 
+  it('focuses the newly mounted view after a view switch, not the unmounted one', async () => {
+    // Every view shares one ref per role, so a switch must leave it on the new element.
+    const wrapper = mountCardAttached({ draggable: true, view: 'card' });
+    for (const view of ['expanded', 'list', 'card', 'compact']) {
+      await wrapper.setProps({ view });
+      expect(vmOf(wrapper).focusMoveControl('down')).toBe(true);
+      expect(focused()).toEqual({ tag: 'BUTTON', action: 'move-down', calendar: 'c-1' });
+      expect(wrapper.element.contains(document.activeElement)).toBe(true);
+    }
+  });
+
   it('focuses the row controls in compact view', () => {
     const wrapper = mountCardAttached({ draggable: true, view: 'compact' });
     expect(vmOf(wrapper).focusMoveControl('down')).toBe(true);

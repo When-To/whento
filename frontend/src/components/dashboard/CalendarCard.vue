@@ -46,7 +46,7 @@
       <div class="mb-4 flex items-start justify-between gap-2">
         <div class="min-w-0 flex-1">
           <a
-            ref="cardOpenArea"
+            ref="openArea"
             data-action="open"
             class="card-open-area"
             :class="[nameClass, 'text-left']"
@@ -63,7 +63,6 @@
         <div class="flex shrink-0 items-center gap-1">
           <button
             v-if="draggable"
-            ref="cardDragGrip"
             type="button"
             data-action="drag"
             tabindex="-1"
@@ -76,14 +75,9 @@
             @dragstart="handleDragStart"
             @dragend="emit('end-drag')"
           >
-            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-              <path
-                d="M7 2a2 2 0 10.001 4.001A2 2 0 007 2zm0 6a2 2 0 10.001 4.001A2 2 0 007 8zm0 6a2 2 0 10.001 4.001A2 2 0 007 14zm6-8a2 2 0 10-.001-4.001A2 2 0 0013 6zm0 2a2 2 0 10.001 4.001A2 2 0 0013 8zm0 6a2 2 0 10.001 4.001A2 2 0 0013 14z"
-              />
-            </svg>
+            <CardIcon name="grip" class="h-4 w-4" />
           </button>
           <button
-            ref="cardPinButton"
             type="button"
             data-action="pin"
             class="card-action"
@@ -93,49 +87,19 @@
             :aria-pressed="pinned"
             @click.stop.prevent="emit('toggle-pin')"
           >
-            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-              <path
-                d="M9.05 2.915a1 1 0 011.9 0l1 3a1 1 0 01-.13.82L11 8.5V12l2 2.5V6.695a1 1 0 01-.13-.82l1-3a1 1 0 011.9 0l.87 2.61a2 2 0 01.36 1.1V8l2.826 3.533a1 1 0 01-.784 1.6H13.2l-1.7 5.1a1 1 0 01-1.9 0l-1.7-5.1H2.934a1 1 0 01-.784-1.6L5 8V6.695a2 2 0 01.36-1.1l.87-2.61a1 1 0 011.9 0l.87 2.61a1 1 0 01.13.82V4.985a1 1 0 01-.13-.82l1-3z"
-              />
-            </svg>
+            <CardIcon name="pin" class="h-4 w-4" />
           </button>
           <div
             class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-600 dark:bg-primary-900 dark:text-primary-400"
           >
-            <svg
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
+            <CardIcon name="calendar" class="h-5 w-5" />
           </div>
         </div>
       </div>
 
       <div class="mb-4 flex items-center space-x-4 text-sm">
         <div class="flex items-center text-gray-600 dark:text-gray-400">
-          <svg
-            class="mr-1 h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-            />
-          </svg>
+          <CardIcon name="people" class="mr-1 h-4 w-4" />
           <span>{{ participantCount }} {{ t('calendar.participantCount') }}</span>
         </div>
       </div>
@@ -159,7 +123,7 @@
       <div class="flex items-center space-x-2">
         <template v-if="draggable">
           <button
-            ref="cardMoveUp"
+            ref="moveUp"
             type="button"
             data-action="move-up"
             class="card-action"
@@ -168,23 +132,10 @@
             :disabled="!canMoveUp"
             @click.stop.prevent="emit('move-up')"
           >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M5 15l7-7 7 7"
-              />
-            </svg>
+            <CardIcon name="up" class="h-4 w-4" />
           </button>
           <button
-            ref="cardMoveDown"
+            ref="moveDown"
             type="button"
             data-action="move-down"
             class="card-action"
@@ -193,74 +144,27 @@
             :disabled="!canMoveDown"
             @click.stop.prevent="emit('move-down')"
           >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
+            <CardIcon name="down" class="h-4 w-4" />
           </button>
         </template>
         <button
-          ref="cardCopyButton"
           type="button"
           data-action="copy"
           class="btn btn-ghost btn-sm flex-1"
           :title="t('calendar.copyLink')"
           @click.stop.prevent="emit('copy-link')"
         >
-          <svg
-            class="mr-1 h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-            />
-          </svg>
+          <CardIcon name="copy" class="mr-1 h-4 w-4" />
           {{ t('common.copy') }}
         </button>
         <button
-          ref="cardSettingsButton"
           type="button"
           data-action="settings"
           class="btn btn-ghost btn-sm"
           :title="t('common.settings')"
           @click.stop.prevent="emit('settings')"
         >
-          <svg
-            class="h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-            />
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-          </svg>
+          <CardIcon name="settings" class="h-4 w-4" />
         </button>
       </div>
     </template>
@@ -272,7 +176,6 @@
       <div class="flex items-start gap-3">
         <button
           v-if="draggable"
-          ref="expandedDragGrip"
           type="button"
           data-action="drag"
           tabindex="-1"
@@ -285,36 +188,19 @@
           @dragstart="handleDragStart"
           @dragend="emit('end-drag')"
         >
-          <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-            <path
-              d="M7 2a2 2 0 10.001 4.001A2 2 0 007 2zm0 6a2 2 0 10.001 4.001A2 2 0 007 8zm0 6a2 2 0 10.001 4.001A2 2 0 007 14zm6-8a2 2 0 10-.001-4.001A2 2 0 0013 6zm0 2a2 2 0 10.001 4.001A2 2 0 0013 8zm0 6a2 2 0 10.001 4.001A2 2 0 0013 14z"
-            />
-          </svg>
+          <CardIcon name="grip" class="h-4 w-4" />
         </button>
 
         <div
           class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-600 dark:bg-primary-900 dark:text-primary-400"
         >
-          <svg
-            class="h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
+          <CardIcon name="calendar" class="h-4 w-4" />
         </div>
 
         <div class="min-w-0 flex-1">
           <div class="flex items-start justify-between gap-2">
             <a
-              ref="expandedOpenArea"
+              ref="openArea"
               data-action="open"
               class="card-open-area"
               :class="[nameClass, 'text-left']"
@@ -325,7 +211,6 @@
               {{ calendar.name }}
             </a>
             <button
-              ref="expandedPinButton"
               type="button"
               data-action="pin"
               class="card-action"
@@ -335,11 +220,7 @@
               :aria-pressed="pinned"
               @click.stop.prevent="emit('toggle-pin')"
             >
-              <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                <path
-                  d="M9.05 2.915a1 1 0 011.9 0l1 3a1 1 0 01-.13.82L11 8.5V12l2 2.5V6.695a1 1 0 01-.13-.82l1-3a1 1 0 011.9 0l.87 2.61a2 2 0 01.36 1.1V8l2.826 3.533a1 1 0 01-.784 1.6H13.2l-1.7 5.1a1 1 0 01-1.9 0l-1.7-5.1H2.934a1 1 0 01-.784-1.6L5 8V6.695a2 2 0 01.36-1.1l.87-2.61a1 1 0 011.9 0l.87 2.61a1 1 0 01.13.82V4.985a1 1 0 01-.13-.82l1-3z"
-                />
-              </svg>
+              <CardIcon name="pin" class="h-4 w-4" />
             </button>
           </div>
           <p v-if="calendar.description" :class="descriptionClass">
@@ -347,20 +228,7 @@
           </p>
           <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
             <span class="flex items-center text-gray-600 dark:text-gray-400">
-              <svg
-                class="mr-1 h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                />
-              </svg>
+              <CardIcon name="people" class="mr-1 h-4 w-4" />
               {{ participantCount }} {{ t('calendar.participantCount') }}
             </span>
             <label
@@ -387,7 +255,7 @@
         <div class="flex shrink-0 items-center gap-1">
           <template v-if="draggable">
             <button
-              ref="expandedMoveUp"
+              ref="moveUp"
               type="button"
               data-action="move-up"
               class="card-action"
@@ -396,23 +264,10 @@
               :disabled="!canMoveUp"
               @click.stop.prevent="emit('move-up')"
             >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M5 15l7-7 7 7"
-                />
-              </svg>
+              <CardIcon name="up" class="h-4 w-4" />
             </button>
             <button
-              ref="expandedMoveDown"
+              ref="moveDown"
               type="button"
               data-action="move-down"
               class="card-action"
@@ -421,24 +276,10 @@
               :disabled="!canMoveDown"
               @click.stop.prevent="emit('move-down')"
             >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
+              <CardIcon name="down" class="h-4 w-4" />
             </button>
           </template>
           <button
-            ref="expandedCopyButton"
             type="button"
             data-action="copy"
             class="card-action"
@@ -446,23 +287,9 @@
             :aria-label="t('calendar.copyLink')"
             @click.stop.prevent="emit('copy-link')"
           >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
+            <CardIcon name="copy" class="h-4 w-4" />
           </button>
           <button
-            ref="expandedSettingsButton"
             type="button"
             data-action="settings"
             class="card-action"
@@ -470,26 +297,7 @@
             :aria-label="t('common.settings')"
             @click.stop.prevent="emit('settings')"
           >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-              />
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
+            <CardIcon name="settings" class="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -502,7 +310,6 @@
       <div class="flex items-center gap-3">
         <button
           v-if="draggable"
-          ref="rowDragGrip"
           type="button"
           data-action="drag"
           tabindex="-1"
@@ -515,33 +322,16 @@
           @dragstart="handleDragStart"
           @dragend="emit('end-drag')"
         >
-          <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-            <path
-              d="M7 2a2 2 0 10.001 4.001A2 2 0 007 2zm0 6a2 2 0 10.001 4.001A2 2 0 007 8zm0 6a2 2 0 10.001 4.001A2 2 0 007 14zm6-8a2 2 0 10-.001-4.001A2 2 0 0013 6zm0 2a2 2 0 10.001 4.001A2 2 0 0013 8zm0 6a2 2 0 10.001 4.001A2 2 0 0013 14z"
-            />
-          </svg>
+          <CardIcon name="grip" class="h-4 w-4" />
         </button>
 
         <div :class="iconContainerClass">
-          <svg
-            :class="iconClass"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
+          <CardIcon name="calendar" :class="iconClass" />
         </div>
 
         <div class="min-w-0 flex-1">
           <a
-            ref="rowOpenArea"
+            ref="openArea"
             data-action="open"
             class="card-open-area"
             :class="[nameClass, 'text-left']"
@@ -563,7 +353,7 @@
         <div class="flex shrink-0 items-center gap-1">
           <template v-if="draggable">
             <button
-              ref="rowMoveUp"
+              ref="moveUp"
               type="button"
               data-action="move-up"
               class="card-action"
@@ -572,23 +362,10 @@
               :disabled="!canMoveUp"
               @click.stop.prevent="emit('move-up')"
             >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M5 15l7-7 7 7"
-                />
-              </svg>
+              <CardIcon name="up" class="h-4 w-4" />
             </button>
             <button
-              ref="rowMoveDown"
+              ref="moveDown"
               type="button"
               data-action="move-down"
               class="card-action"
@@ -597,24 +374,10 @@
               :disabled="!canMoveDown"
               @click.stop.prevent="emit('move-down')"
             >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
+              <CardIcon name="down" class="h-4 w-4" />
             </button>
           </template>
           <button
-            ref="rowPinButton"
             type="button"
             data-action="pin"
             class="card-action"
@@ -624,14 +387,9 @@
             :aria-pressed="pinned"
             @click.stop.prevent="emit('toggle-pin')"
           >
-            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-              <path
-                d="M9.05 2.915a1 1 0 011.9 0l1 3a1 1 0 01-.13.82L11 8.5V12l2 2.5V6.695a1 1 0 01-.13-.82l1-3a1 1 0 011.9 0l.87 2.61a2 2 0 01.36 1.1V8l2.826 3.533a1 1 0 01-.784 1.6H13.2l-1.7 5.1a1 1 0 01-1.9 0l-1.7-5.1H2.934a1 1 0 01-.784-1.6L5 8V6.695a2 2 0 01.36-1.1l.87-2.61a1 1 0 011.9 0l.87 2.61a1 1 0 01.13.82V4.985a1 1 0 01-.13-.82l1-3z"
-              />
-            </svg>
+            <CardIcon name="pin" class="h-4 w-4" />
           </button>
           <button
-            ref="rowCopyButton"
             type="button"
             data-action="copy"
             class="card-action"
@@ -639,23 +397,9 @@
             :aria-label="t('calendar.copyLink')"
             @click.stop.prevent="emit('copy-link')"
           >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
+            <CardIcon name="copy" class="h-4 w-4" />
           </button>
           <button
-            ref="rowSettingsButton"
             type="button"
             data-action="settings"
             class="card-action"
@@ -663,26 +407,7 @@
             :aria-label="t('common.settings')"
             @click.stop.prevent="emit('settings')"
           >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-              />
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
+            <CardIcon name="settings" class="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -706,7 +431,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, h, ref, type FunctionalComponent } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { CalendarWithParticipants } from '@/types';
 import type { DashboardViewMode } from '@/stores/dashboard';
@@ -739,6 +464,68 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+
+/** The card's icons, drawn once here instead of inline in every view. */
+const ICONS = {
+  grip: {
+    solid: true,
+    paths: [
+      'M7 2a2 2 0 10.001 4.001A2 2 0 007 2zm0 6a2 2 0 10.001 4.001A2 2 0 007 8zm0 6a2 2 0 10.001 4.001A2 2 0 007 14zm6-8a2 2 0 10-.001-4.001A2 2 0 0013 6zm0 2a2 2 0 10.001 4.001A2 2 0 0013 8zm0 6a2 2 0 10.001 4.001A2 2 0 0013 14z',
+    ],
+  },
+  pin: {
+    solid: true,
+    paths: [
+      'M9.05 2.915a1 1 0 011.9 0l1 3a1 1 0 01-.13.82L11 8.5V12l2 2.5V6.695a1 1 0 01-.13-.82l1-3a1 1 0 011.9 0l.87 2.61a2 2 0 01.36 1.1V8l2.826 3.533a1 1 0 01-.784 1.6H13.2l-1.7 5.1a1 1 0 01-1.9 0l-1.7-5.1H2.934a1 1 0 01-.784-1.6L5 8V6.695a2 2 0 01.36-1.1l.87-2.61a1 1 0 011.9 0l.87 2.61a1 1 0 01.13.82V4.985a1 1 0 01-.13-.82l1-3z',
+    ],
+  },
+  calendar: {
+    solid: false,
+    paths: [
+      'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+    ],
+  },
+  people: {
+    solid: false,
+    paths: [
+      'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
+    ],
+  },
+  up: { solid: false, paths: ['M5 15l7-7 7 7'] },
+  down: { solid: false, paths: ['M19 9l-7 7-7-7'] },
+  copy: {
+    solid: false,
+    paths: [
+      'M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z',
+    ],
+  },
+  settings: {
+    solid: false,
+    paths: [
+      'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z',
+      'M15 12a3 3 0 11-6 0 3 3 0 016 0z',
+    ],
+  },
+} satisfies Record<string, { solid: boolean; paths: string[] }>;
+
+const SOLID = { fill: 'currentColor', viewBox: '0 0 20 20', 'aria-hidden': 'true' };
+const OUTLINE = {
+  fill: 'none',
+  viewBox: '0 0 24 24',
+  stroke: 'currentColor',
+  'aria-hidden': 'true',
+};
+const STROKE = { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2' };
+
+/** Decorative icon; the size comes from the caller's `class`. */
+const CardIcon: FunctionalComponent<{ name: keyof typeof ICONS }> = ({ name }) => {
+  const { solid, paths } = ICONS[name];
+  return h(
+    'svg',
+    solid ? SOLID : OUTLINE,
+    paths.map(d => h('path', solid ? { d } : { ...STROKE, d }))
+  );
+};
 
 const participantCount = computed(() => props.calendar.participants?.length || 0);
 
@@ -774,39 +561,11 @@ function isEnabled(el: HTMLElement | null | undefined): el is HTMLElement {
   return !!el && !(el instanceof HTMLButtonElement && el.disabled);
 }
 
-// One ref pair per rendered view: exactly one view is drawn at a time, so a move
-// focuses only the controls that are actually visible — never a hidden sibling.
-const cardMoveUp = ref<HTMLButtonElement | null>(null);
-const cardMoveDown = ref<HTMLButtonElement | null>(null);
-const cardOpenArea = ref<HTMLAnchorElement | null>(null);
-const expandedMoveUp = ref<HTMLButtonElement | null>(null);
-const expandedMoveDown = ref<HTMLButtonElement | null>(null);
-const expandedOpenArea = ref<HTMLAnchorElement | null>(null);
-const rowMoveUp = ref<HTMLButtonElement | null>(null);
-const rowMoveDown = ref<HTMLButtonElement | null>(null);
-const rowOpenArea = ref<HTMLAnchorElement | null>(null);
-
-function moveControls(): { up: HTMLButtonElement | null; down: HTMLButtonElement | null } {
-  switch (props.view) {
-    case 'card':
-      return { up: cardMoveUp.value, down: cardMoveDown.value };
-    case 'expanded':
-      return { up: expandedMoveUp.value, down: expandedMoveDown.value };
-    default:
-      return { up: rowMoveUp.value, down: rowMoveDown.value };
-  }
-}
-
-function openControl(): HTMLAnchorElement | null {
-  switch (props.view) {
-    case 'card':
-      return cardOpenArea.value;
-    case 'expanded':
-      return expandedOpenArea.value;
-    default:
-      return rowOpenArea.value;
-  }
-}
+// Exactly one view is mounted at a time, so each role needs a single ref: a move
+// focuses only the controls that are actually visible, never a hidden sibling.
+const moveUp = ref<HTMLButtonElement | null>(null);
+const moveDown = ref<HTMLButtonElement | null>(null);
+const openArea = ref<HTMLAnchorElement | null>(null);
 
 /**
  * Focus this card's move control for `direction`.
@@ -817,25 +576,26 @@ function openControl(): HTMLAnchorElement | null {
  * Dashboard also uses `'auto'` after a drag, where there is no direction to speak of.
  */
 function focusMoveControl(direction: 'up' | 'down' | 'auto'): boolean {
-  const { up, down } = moveControls();
+  const up = moveUp.value;
+  const down = moveDown.value;
   if (direction === 'up') {
     if (isEnabled(up)) return focusWithRing(up);
     if (isEnabled(down)) return focusWithRing(down);
-    return focusWithRing(openControl());
+    return focusWithRing(openArea.value);
   }
   if (direction === 'down') {
     if (isEnabled(down)) return focusWithRing(down);
     if (isEnabled(up)) return focusWithRing(up);
-    return focusWithRing(openControl());
+    return focusWithRing(openArea.value);
   }
   if (isEnabled(up)) return focusWithRing(up);
   if (isEnabled(down)) return focusWithRing(down);
-  return focusWithRing(openControl());
+  return focusWithRing(openArea.value);
 }
 
 /** Focus the calendar's own open link (name). */
 function focusOpen(): boolean {
-  return focusWithRing(openControl());
+  return focusWithRing(openArea.value);
 }
 
 defineExpose({ focusMoveControl, focusOpen });
