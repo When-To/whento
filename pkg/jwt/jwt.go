@@ -18,10 +18,9 @@ import (
 )
 
 var (
-	ErrInvalidToken     = errors.New("invalid token")
-	ErrExpiredToken     = errors.New("token has expired")
-	ErrInvalidSignature = errors.New("invalid token signature")
-	ErrMFAPendingToken  = errors.New("mfa pending tokens cannot be used as access tokens")
+	ErrInvalidToken    = errors.New("invalid token")
+	ErrExpiredToken    = errors.New("token has expired")
+	ErrMFAPendingToken = errors.New("mfa pending tokens cannot be used as access tokens")
 )
 
 // Claims represents JWT claims
@@ -117,12 +116,6 @@ type refreshClaims struct {
 	FamilyID string `json:"fid,omitempty"`
 }
 
-// GenerateRefreshToken generates a new refresh token in a fresh session family.
-func (m *Manager) GenerateRefreshToken(userID string) (string, time.Time, error) {
-	token, expiresAt, _, err := m.IssueRefreshToken(userID, "")
-	return token, expiresAt, err
-}
-
 // IssueRefreshToken generates a refresh token in familyID, creating a family when empty.
 //
 // Rotation must pass the presented token's family so the successor stays in it. A login
@@ -206,35 +199,6 @@ func (m *Manager) ValidateAccessToken(tokenString string) (*Claims, error) {
 	}
 
 	return claims, nil
-}
-
-// ValidateRefreshToken validates a refresh token and returns the user ID
-func (m *Manager) ValidateRefreshToken(tokenString string) (string, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return m.publicKey, nil
-	})
-
-	if err != nil {
-		if errors.Is(err, jwt.ErrTokenExpired) {
-			return "", ErrExpiredToken
-		}
-		return "", fmt.Errorf("%w: %v", ErrInvalidToken, err)
-	}
-
-	claims, ok := token.Claims.(*jwt.RegisteredClaims)
-	if !ok || !token.Valid {
-		return "", ErrInvalidToken
-	}
-
-	return claims.Subject, nil
-}
-
-// GetPublicKey returns the public key for external verification
-func (m *Manager) GetPublicKey() *rsa.PublicKey {
-	return m.publicKey
 }
 
 // GenerateCustomToken generates a token with custom claims (for MFA temp tokens)

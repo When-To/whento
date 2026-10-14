@@ -14,13 +14,13 @@ import (
 
 // Re-export shared enums for backward compatibility
 const (
-	RoleUser  = string(models.RoleUser)
-	RoleAdmin = string(models.RoleAdmin)
+	RoleUser  = models.RoleUser
+	RoleAdmin = models.RoleAdmin
 )
 
 const (
-	LocaleFR = string(models.LocaleFR)
-	LocaleEN = string(models.LocaleEN)
+	LocaleFR = models.LocaleFR
+	LocaleEN = models.LocaleEN
 )
 
 // User represents a user in the system

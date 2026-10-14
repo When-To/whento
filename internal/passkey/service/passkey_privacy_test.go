@@ -90,8 +90,7 @@ func (c *recordingCache) Delete(_ context.Context, keys ...string) error {
 	return nil
 }
 
-func (c *recordingCache) Exists(context.Context, string) (bool, error) { return false, nil }
-func (c *recordingCache) IsEnabled() bool                              { return true }
+func (c *recordingCache) IsEnabled() bool { return true }
 
 func (c *recordingCache) stored() []string {
 	c.mu.Lock()

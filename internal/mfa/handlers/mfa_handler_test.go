@@ -146,9 +146,8 @@ func (c *countingCache) Delete(_ context.Context, keys ...string) error {
 	return nil
 }
 
-func (c *countingCache) Exists(context.Context, string) (bool, error) { return false, nil }
-func (c *countingCache) IsEnabled() bool                              { return c.enabled }
-func (c *countingCache) Close() error                                 { return nil }
+func (c *countingCache) IsEnabled() bool { return c.enabled }
+func (c *countingCache) Close() error    { return nil }
 
 // newJWTManager builds a manager over a freshly generated key pair; NewManager only
 // accepts keys from disk.

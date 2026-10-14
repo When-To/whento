@@ -689,9 +689,9 @@ func TestRefreshInfrastructureFailureIsServerFailure(t *testing.T) {
 			}
 			r := newRig(t, opts)
 
-			token, _, err := r.manager.GenerateRefreshToken(user.ID.String())
+			token, _, _, err := r.manager.IssueRefreshToken(user.ID.String(), "")
 			if err != nil {
-				t.Fatalf("GenerateRefreshToken: %v", err)
+				t.Fatalf("IssueRefreshToken: %v", err)
 			}
 			if stage == "user_lookup" {
 				users.err = errAuditDBFailure
@@ -727,9 +727,9 @@ func TestRefreshRejectionStillAnswers401(t *testing.T) {
 		tokens:          &mockTokenRepository{err: repository.ErrTokenNotFound},
 	})
 
-	token, _, err := r.manager.GenerateRefreshToken(user.ID.String())
+	token, _, _, err := r.manager.IssueRefreshToken(user.ID.String(), "")
 	if err != nil {
-		t.Fatalf("GenerateRefreshToken: %v", err)
+		t.Fatalf("IssueRefreshToken: %v", err)
 	}
 
 	if _, err := r.registry.RefreshToken(context.Background(), token); !errors.Is(err, service.ErrInvalidToken) {

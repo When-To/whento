@@ -21,9 +21,3 @@ type TimestampedEntity struct {
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
-
-// SoftDeletableEntity represents an entity that can be soft deleted.
-type SoftDeletableEntity struct {
-	TimestampedEntity
-	DeletedAt *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
-}

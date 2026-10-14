@@ -37,7 +37,6 @@ func (c *lockedOutCache) Get(_ context.Context, _ string, dest interface{}) erro
 
 func (c *lockedOutCache) Set(context.Context, string, interface{}, time.Duration) error { return nil }
 func (c *lockedOutCache) Delete(context.Context, ...string) error                       { return nil }
-func (c *lockedOutCache) Exists(context.Context, string) (bool, error)                  { return true, nil }
 func (c *lockedOutCache) IsEnabled() bool                                               { return true }
 
 var _ cache.Cache = (*lockedOutCache)(nil)

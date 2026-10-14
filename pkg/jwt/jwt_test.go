@@ -240,13 +240,13 @@ func TestExpiry(t *testing.T) {
 				t.Errorf("ValidateAccessToken error = %v, want %v", err, tt.wantErr)
 			}
 
-			refresh, _, err := m.GenerateRefreshToken("user-123")
+			refresh, _, _, err := m.IssueRefreshToken("user-123", "")
 			if err != nil {
 				t.Fatalf("generate refresh: %v", err)
 			}
 
-			if _, err := m.ValidateRefreshToken(refresh); !errors.Is(err, tt.wantErr) {
-				t.Errorf("ValidateRefreshToken error = %v, want %v", err, tt.wantErr)
+			if _, _, err := m.RefreshIdentity(refresh); !errors.Is(err, tt.wantErr) {
+				t.Errorf("RefreshIdentity error = %v, want %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -331,8 +331,8 @@ func TestSigningMethodIsPinned(t *testing.T) {
 			if _, err := m.ValidateAccessToken(forged); !errors.Is(err, ErrInvalidToken) {
 				t.Errorf("ValidateAccessToken accepted a forged token (err = %v)", err)
 			}
-			if _, err := m.ValidateRefreshToken(forged); !errors.Is(err, ErrInvalidToken) {
-				t.Errorf("ValidateRefreshToken accepted a forged token (err = %v)", err)
+			if _, _, err := m.RefreshIdentity(forged); !errors.Is(err, ErrInvalidToken) {
+				t.Errorf("RefreshIdentity accepted a forged token (err = %v)", err)
 			}
 			if _, err := m.ValidateCustomToken(forged); !errors.Is(err, ErrInvalidToken) {
 				t.Errorf("ValidateCustomToken accepted a forged token (err = %v)", err)
@@ -385,17 +385,17 @@ func TestRejectsForeignAndTamperedTokens(t *testing.T) {
 			if _, err := m.ValidateAccessToken(tt.token); err == nil {
 				t.Error("ValidateAccessToken accepted the token")
 			}
-			if _, err := m.ValidateRefreshToken(tt.token); err == nil {
-				t.Error("ValidateRefreshToken accepted the token")
+			if _, _, err := m.RefreshIdentity(tt.token); err == nil {
+				t.Error("RefreshIdentity accepted the token")
 			}
 		})
 	}
 }
 
-func TestValidateRefreshToken(t *testing.T) {
+func TestRefreshIdentity(t *testing.T) {
 	m := newTestManager(t)
 
-	token, expiresAt, err := m.GenerateRefreshToken("user-123")
+	token, expiresAt, _, err := m.IssueRefreshToken("user-123", "")
 	if err != nil {
 		t.Fatalf("generate refresh token: %v", err)
 	}
@@ -404,7 +404,7 @@ func TestValidateRefreshToken(t *testing.T) {
 		t.Errorf("expiresAt = %v, want approximately %v", expiresAt, want)
 	}
 
-	subject, err := m.ValidateRefreshToken(token)
+	subject, _, err := m.RefreshIdentity(token)
 	if err != nil {
 		t.Fatalf("validate refresh token: %v", err)
 	}
@@ -462,8 +462,8 @@ func TestGenerateWithoutPrivateKey(t *testing.T) {
 	if _, err := m.GenerateAccessToken("user-123", "user@example.com", "user"); err == nil {
 		t.Error("GenerateAccessToken succeeded without a private key")
 	}
-	if _, _, err := m.GenerateRefreshToken("user-123"); err == nil {
-		t.Error("GenerateRefreshToken succeeded without a private key")
+	if _, _, _, err := m.IssueRefreshToken("user-123", ""); err == nil {
+		t.Error("IssueRefreshToken succeeded without a private key")
 	}
 	if _, err := m.GenerateCustomToken(map[string]interface{}{"user_id": "user-123"}); err == nil {
 		t.Error("GenerateCustomToken succeeded without a private key")
@@ -483,13 +483,6 @@ func TestGenerateWithoutPrivateKey(t *testing.T) {
 func TestAccessExpiryAccessor(t *testing.T) {
 	if got := newTestManager(t).AccessExpiry(); got != 15*time.Minute {
 		t.Errorf("AccessExpiry() = %v, want %v", got, 15*time.Minute)
-	}
-}
-
-func TestGetPublicKey(t *testing.T) {
-	m := newTestManager(t)
-	if m.GetPublicKey() != m.publicKey {
-		t.Error("GetPublicKey did not return the manager's public key")
 	}
 }
 

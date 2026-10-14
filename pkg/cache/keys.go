@@ -13,11 +13,8 @@ import (
 
 // Cache key prefixes
 const (
-	PrefixCalendar     = "calendar"
-	PrefixParticipant  = "participant"
-	PrefixAvailability = "availability"
-	PrefixICS          = "ics"
-	PrefixAuth         = "auth"
+	PrefixCalendar = "calendar"
+	PrefixAuth     = "auth"
 )
 
 // defaultKeySalt is a domain separator, not a secret. It only keeps a WhenTo
@@ -87,62 +84,11 @@ func HashKeyPart(part string) string {
 }
 
 // Calendar cache keys
-func CalendarByIDKey(id string) string {
-	return fmt.Sprintf("%s:id:%s", PrefixCalendar, HashKeyPart(id))
-}
-
 func CalendarByPublicTokenKey(token string) string {
 	return fmt.Sprintf("%s:token:%s", PrefixCalendar, HashKeyPart(token))
-}
-
-func CalendarByICSTokenKey(token string) string {
-	return fmt.Sprintf("%s:ics:%s", PrefixCalendar, HashKeyPart(token))
-}
-
-func CalendarParticipantsKey(calendarID string) string {
-	return fmt.Sprintf("%s:participants:%s", PrefixCalendar, HashKeyPart(calendarID))
-}
-
-func UserCalendarsKey(userID string) string {
-	return fmt.Sprintf("%s:user:%s", PrefixCalendar, HashKeyPart(userID))
-}
-
-// Availability cache keys
-func ParticipantAvailabilitiesKey(participantID string) string {
-	return fmt.Sprintf("%s:participant:%s", PrefixAvailability, HashKeyPart(participantID))
-}
-
-func CalendarDateSummaryKey(calendarID, date string) string {
-	// The date is not personal data on its own and stays readable, which keeps
-	// these keys diagnosable; the calendar it belongs to does not.
-	return fmt.Sprintf("%s:summary:%s:%s", PrefixAvailability, HashKeyPart(calendarID), date)
-}
-
-func CalendarRangeSummaryKey(calendarID, start, end string) string {
-	return fmt.Sprintf("%s:range:%s:%s:%s", PrefixAvailability, HashKeyPart(calendarID), start, end)
-}
-
-// ICS cache keys
-func ICSFeedKey(token string) string {
-	return fmt.Sprintf("%s:feed:%s", PrefixICS, HashKeyPart(token))
 }
 
 // Auth cache keys
 func UserPasswordChangedKey(userID string) string {
 	return fmt.Sprintf("%s:pwd_changed:%s", PrefixAuth, HashKeyPart(userID))
-}
-
-// Helper to invalidate all cache keys for a calendar
-func CalendarCacheKeys(calendarID string) []string {
-	return []string{
-		CalendarByIDKey(calendarID),
-		CalendarParticipantsKey(calendarID),
-	}
-}
-
-// Helper to invalidate all cache keys for a participant
-func ParticipantCacheKeys(participantID string) []string {
-	return []string{
-		ParticipantAvailabilitiesKey(participantID),
-	}
 }

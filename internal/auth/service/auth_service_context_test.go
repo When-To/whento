@@ -193,7 +193,7 @@ func authEntryPoints() []authEntryPoint {
 			invoke: func(t *testing.T, f *contextFixture, ctx context.Context) error {
 				user := f.seedUser(t, "refresh@example.test", contextTestPassword)
 
-				token, expiresAt, err := f.jwt.GenerateRefreshToken(user.ID.String())
+				token, expiresAt, _, err := f.jwt.IssueRefreshToken(user.ID.String(), "")
 				if err != nil {
 					t.Fatalf("generate refresh token: %v", err)
 				}

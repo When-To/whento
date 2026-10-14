@@ -409,12 +409,6 @@ func (c *countingCache) Delete(_ context.Context, keys ...string) error {
 	return nil
 }
 
-func (c *countingCache) Exists(_ context.Context, key string) (bool, error) {
-	_, ok := c.values[key]
-
-	return ok, nil
-}
-
 func (c *countingCache) IsEnabled() bool { return true }
 
 // --- fixtures ------------------------------------------------------------------

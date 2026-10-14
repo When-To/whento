@@ -27,7 +27,7 @@ const Name = "refresh_token"
 // cookie whose Expires and MaxAge come from the token's own expiry.
 //
 // expiresAt is the instant the refresh token stops being valid (the second
-// value returned by jwt.Manager.GenerateRefreshToken). The cookie expires with
+// value returned by jwt.Manager.IssueRefreshToken). The cookie expires with
 // it; a token and its cookie never outlive each other.
 func SetRefreshToken(w http.ResponseWriter, r *http.Request, token string, expiresAt time.Time) {
 	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"

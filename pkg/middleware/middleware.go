@@ -20,24 +20,15 @@ import (
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/logger"
+	"github.com/whento/pkg/metrics"
 )
 
 type ctxKey string
 
 const (
-	UserIDKey    ctxKey = "user_id"
-	UserEmailKey ctxKey = "user_email"
-	UserRoleKey  ctxKey = "user_role"
+	UserIDKey   ctxKey = "user_id"
+	UserRoleKey ctxKey = "user_role"
 )
-
-// errCodeUnavailable is returned when a request cannot be authorised because a
-// dependency is unreachable, as opposed to because it was refused.
-const errCodeUnavailable = "SERVICE_UNAVAILABLE"
-
-// unroutedLabel replaces the route in the access log when chi never matched
-// one (404s, or the middleware used outside a chi router). The raw path is
-// never a safe substitute: in this API the path itself carries the credential.
-const unroutedLabel = "unrouted"
 
 // RequestID adds a unique request ID to each request
 func RequestID(next http.Handler) http.Handler {
@@ -107,13 +98,14 @@ func Logger(next http.Handler) http.Handler {
 	})
 }
 
-// routePattern returns the chi route pattern for a request, or unroutedLabel
-// when no route matched. RouteContext and RoutePattern are both nil-safe, so
+// routePattern returns the chi route pattern for a request, or
+// metrics.RouteUnrouted when no route matched (the raw path is never a safe
+// substitute: in this API the path itself carries the credential). RouteContext and RoutePattern are both nil-safe, so
 // this also covers the middleware being used outside a chi router.
 func routePattern(r *http.Request) string {
 	pattern := chi.RouteContext(r.Context()).RoutePattern()
 	if pattern == "" {
-		return unroutedLabel
+		return metrics.RouteUnrouted
 	}
 	return pattern
 }
@@ -220,7 +212,7 @@ func Auth(jwtManager *jwt.Manager, c cache.Cache) func(http.Handler) http.Handle
 					logger.FromContext(r.Context()).Error("token revocation check failed, refusing the request",
 						"error", err,
 					)
-					httputil.Error(w, http.StatusServiceUnavailable, errCodeUnavailable, "Unable to verify token revocation")
+					httputil.Error(w, http.StatusServiceUnavailable, httputil.ErrCodeUnavailable, "Unable to verify token revocation")
 					return
 				}
 			}
@@ -228,7 +220,6 @@ func Auth(jwtManager *jwt.Manager, c cache.Cache) func(http.Handler) http.Handle
 			// Add user info to context
 			ctx := r.Context()
 			ctx = context.WithValue(ctx, UserIDKey, claims.UserID)
-			ctx = context.WithValue(ctx, UserEmailKey, claims.Email)
 			ctx = context.WithValue(ctx, UserRoleKey, claims.Role)
 			ctx = logger.WithUserID(ctx, claims.UserID)
 
@@ -269,14 +260,6 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 func GetUserID(ctx context.Context) string {
 	if userID, ok := ctx.Value(UserIDKey).(string); ok {
 		return userID
-	}
-	return ""
-}
-
-// GetUserEmail extracts user email from context
-func GetUserEmail(ctx context.Context) string {
-	if email, ok := ctx.Value(UserEmailKey).(string); ok {
-		return email
 	}
 	return ""
 }

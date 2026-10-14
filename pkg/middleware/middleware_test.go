@@ -27,8 +27,10 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/whento/pkg/cache"
+	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/logger"
+	"github.com/whento/pkg/metrics"
 )
 
 // This is the outermost security boundary of the API: every request passes through it
@@ -336,8 +338,8 @@ func TestLoggerFallsBackWhenNoRouteMatched(t *testing.T) {
 			tt.serve(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, target, nil))
 
 			line := decodeLogLine(t, buf)
-			if got, _ := line["route"].(string); got != unroutedLabel {
-				t.Errorf("route = %q, want %q", got, unroutedLabel)
+			if got, _ := line["route"].(string); got != metrics.RouteUnrouted {
+				t.Errorf("route = %q, want %q", got, metrics.RouteUnrouted)
 			}
 			if strings.Contains(buf.String(), stolenToken) {
 				t.Errorf("the fallback leaked the raw path: %s", buf.String())
@@ -604,10 +606,9 @@ func TestAuthPutsTheClaimsInTheContext(t *testing.T) {
 		t.Fatalf("GenerateAccessToken: %v", err)
 	}
 
-	var gotID, gotEmail, gotRole string
+	var gotID, gotRole string
 	handler := Auth(manager, nil)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		gotID = GetUserID(r.Context())
-		gotEmail = GetUserEmail(r.Context())
 		gotRole = GetUserRole(r.Context())
 	}))
 
@@ -615,10 +616,10 @@ func TestAuthPutsTheClaimsInTheContext(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 
-	// Every handler downstream reads ownership from these three values; a missing user
+	// Every handler downstream reads ownership from these values; a missing user
 	// id turns an owner check into a comparison against the empty string.
-	if gotID != "user-1" || gotEmail != "ada@example.test" || gotRole != "admin" {
-		t.Errorf("claims = %q/%q/%q, want user-1/ada@example.test/admin", gotID, gotEmail, gotRole)
+	if gotID != "user-1" || gotRole != "admin" {
+		t.Errorf("claims = %q/%q, want user-1/admin", gotID, gotRole)
 	}
 }
 
@@ -738,7 +739,6 @@ func (c *stubCache) Get(_ context.Context, key string, dest interface{}) error {
 
 func (c *stubCache) Set(context.Context, string, interface{}, time.Duration) error { return nil }
 func (c *stubCache) Delete(context.Context, ...string) error                       { return nil }
-func (c *stubCache) Exists(context.Context, string) (bool, error)                  { return false, nil }
 func (c *stubCache) IsEnabled() bool                                               { return c.enabled }
 func (c *stubCache) Close() error                                                  { return nil }
 
@@ -869,7 +869,7 @@ func TestContextGettersOnAnEmptyContext(t *testing.T) {
 
 	// These return "" rather than panicking, which is what lets a handler treat an
 	// unauthenticated request as anonymous instead of crashing.
-	if GetUserID(ctx) != "" || GetUserEmail(ctx) != "" || GetUserRole(ctx) != "" {
+	if GetUserID(ctx) != "" || GetUserRole(ctx) != "" {
 		t.Error("a bare context yielded non-empty user values")
 	}
 
@@ -967,7 +967,7 @@ func TestErrorResponsesUseTheStandardEnvelope(t *testing.T) {
 			handler:    Auth(manager, &stubCache{enabled: true, failure: errors.New("connection refused")})(okHandler(new(bool))),
 			request:    authed(),
 			wantStatus: http.StatusServiceUnavailable,
-			wantCode:   errCodeUnavailable,
+			wantCode:   httputil.ErrCodeUnavailable,
 		},
 		{
 			name:       "a request that never authenticated",
