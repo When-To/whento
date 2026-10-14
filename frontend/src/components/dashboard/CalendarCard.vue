@@ -173,7 +173,7 @@
     <!-- Expanded view (rich row: description and feed included)             -->
     <!-- ------------------------------------------------------------------ -->
     <template v-else-if="view === 'expanded'">
-      <div class="flex items-start gap-3">
+      <div class="flex flex-wrap items-start gap-3">
         <button
           v-if="draggable"
           type="button"
@@ -197,7 +197,7 @@
           <CardIcon name="calendar" class="h-4 w-4" />
         </div>
 
-        <div class="min-w-0 flex-1">
+        <div class="min-w-0 flex-1 basis-48">
           <div class="flex items-start justify-between gap-2">
             <a
               ref="openArea"
@@ -252,7 +252,7 @@
           </div>
         </div>
 
-        <div class="flex shrink-0 items-center gap-1">
+        <div class="ml-auto flex shrink-0 items-center gap-1">
           <template v-if="draggable">
             <button
               ref="moveUp"
@@ -307,7 +307,7 @@
     <!-- List and compact views (horizontal rows)                            -->
     <!-- ------------------------------------------------------------------ -->
     <template v-else>
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-3">
         <button
           v-if="draggable"
           type="button"
@@ -329,7 +329,7 @@
           <CardIcon name="calendar" :class="iconClass" />
         </div>
 
-        <div class="min-w-0 flex-1">
+        <div class="min-w-0 flex-1 basis-40">
           <a
             ref="openArea"
             data-action="open"
@@ -350,7 +350,7 @@
           {{ participantCount }}
         </span>
 
-        <div class="flex shrink-0 items-center gap-1">
+        <div class="ml-auto flex shrink-0 items-center gap-1">
           <template v-if="draggable">
             <button
               ref="moveUp"
@@ -624,9 +624,9 @@ const rootClass = computed(() => {
     return 'calendar-card card card-hover group cursor-pointer p-4';
   }
   if (props.view === 'compact') {
-    return 'calendar-card card card-hover group cursor-pointer flex items-center gap-3 px-3 py-2';
+    return 'calendar-card card card-hover group cursor-pointer px-3 py-2';
   }
-  return 'calendar-card card card-hover group cursor-pointer flex items-center gap-3 p-3';
+  return 'calendar-card card card-hover group cursor-pointer p-3';
 });
 
 const nameClass = computed(() => {
@@ -645,7 +645,7 @@ const nameClass = computed(() => {
 const descriptionClass = computed(() =>
   props.view === 'list'
     ? 'mt-0.5 truncate text-sm text-gray-500 dark:text-gray-400'
-    : 'mt-1 flex-1 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-400'
+    : 'mt-1 flex-1 whitespace-pre-wrap wrap-anywhere text-sm text-gray-600 dark:text-gray-400'
 );
 
 const iconContainerClass = computed(() => {
