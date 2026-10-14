@@ -17,8 +17,6 @@
 /** A calendar date, `YYYY-MM-DD`. Always produced by {@link formatDateISO}. */
 export type ISODate = string;
 
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
 /**
  * Format a Date as an ISO date string (YYYY-MM-DD) using local time.
  * Used when building API payloads or map keys keyed by calendar date.
@@ -43,20 +41,9 @@ export function parseISODate(iso: ISODate): Date {
   return new Date(year, month - 1, day);
 }
 
-/** True when the string is a well-formed, real calendar date. */
-export function isValidISODate(value: string): boolean {
-  if (!ISO_DATE_PATTERN.test(value)) return false;
-  return formatDateISO(parseISODate(value)) === value;
-}
-
 /** The year component, without allocating a Date. */
 export function yearOf(iso: ISODate): number {
   return Number(iso.slice(0, 4));
-}
-
-/** The month component (0-11), without allocating a Date. */
-export function monthOf(iso: ISODate): number {
-  return Number(iso.slice(5, 7)) - 1;
 }
 
 /**
@@ -71,17 +58,6 @@ export function addDaysISO(iso: ISODate, days: number): ISODate {
   return formatDateISO(date);
 }
 
-/** Shift a calendar date by whole months, clamping to the end of the target month. */
-export function addMonthsISO(iso: ISODate, months: number): ISODate {
-  const date = parseISODate(iso);
-  const targetMonth = date.getMonth() + months;
-  const dayOfMonth = date.getDate();
-  date.setDate(1);
-  date.setMonth(targetMonth);
-  date.setDate(Math.min(dayOfMonth, daysInMonth(date.getFullYear(), date.getMonth())));
-  return formatDateISO(date);
-}
-
 /** Number of days in the given month (0-indexed month). */
 export function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
@@ -90,22 +66,6 @@ export function daysInMonth(year: number, month: number): number {
 /** Day of week (0 = Sunday) for a calendar date, in local time. */
 export function dayOfWeekISO(iso: ISODate): number {
   return parseISODate(iso).getDay();
-}
-
-/**
- * Every calendar date from `startISO` to `endISO`, inclusive.
- * Returns an empty array when the range is inverted.
- */
-export function isoRange(startISO: ISODate, endISO: ISODate): ISODate[] {
-  if (startISO > endISO) return [];
-  const dates: ISODate[] = [];
-  const cursor = parseISODate(startISO);
-  const last = parseISODate(endISO);
-  while (cursor <= last) {
-    dates.push(formatDateISO(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return dates;
 }
 
 /**
@@ -137,9 +97,4 @@ export function todayISO(timeZone?: string): ISODate {
 export function startOfWeekISO(iso: ISODate, weekStartDay: number): ISODate {
   const offset = (dayOfWeekISO(iso) - weekStartDay + 7) % 7;
   return addDaysISO(iso, -offset);
-}
-
-/** First day of the month containing `iso`. */
-export function startOfMonthISO(iso: ISODate): ISODate {
-  return `${iso.slice(0, 8)}01`;
 }

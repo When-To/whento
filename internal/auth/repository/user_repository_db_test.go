@@ -63,6 +63,15 @@ func newUser(ctx context.Context, t *testing.T, pool *pgxpool.Pool, configure ..
 	return user
 }
 
+// countUsers reads the size of the shared users table, the oracle the first-user
+// race tests assert against.
+func countUsers(ctx context.Context, pool *pgxpool.Pool) (int, error) {
+	var count int
+	err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count)
+
+	return count, err
+}
+
 func TestUserRoundTrip(t *testing.T) {
 	pool := dbtest.Pool(t)
 	repo := repository.NewUserRepository(pool)
@@ -188,24 +197,6 @@ func TestUserUpdates(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	t.Run("profile", func(t *testing.T) {
-		user.DisplayName = "Renamed"
-		user.Locale = models.LocaleFR
-		user.Timezone = "America/New_York"
-
-		if err := repo.Update(ctx, user); err != nil {
-			t.Fatalf("Update: %v", err)
-		}
-
-		got, err := repo.GetByID(ctx, user.ID)
-		if err != nil {
-			t.Fatalf("GetByID: %v", err)
-		}
-		if got.DisplayName != "Renamed" || got.Locale != models.LocaleFR || got.Timezone != "America/New_York" {
-			t.Errorf("profile did not persist: %+v", got)
-		}
-	})
-
 	t.Run("password", func(t *testing.T) {
 		if err := repo.UpdatePassword(ctx, user.ID, "$2a$04$zzzzzzzzzzzzzzzzzzzzzz", user.PasswordHash); err != nil {
 			t.Fatalf("UpdatePassword: %v", err)
@@ -251,33 +242,6 @@ func TestUserDelete(t *testing.T) {
 
 	if _, err := repo.GetByID(ctx, user.ID); !errors.Is(err, repository.ErrUserNotFound) {
 		t.Errorf("the user survived deletion: %v", err)
-	}
-}
-
-func TestExistsByEmail(t *testing.T) {
-	pool := dbtest.Pool(t)
-	repo := repository.NewUserRepository(pool)
-	ctx := dbtest.Context(t)
-
-	user := newUser(ctx, t, pool)
-	if err := repo.Create(ctx, user); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-
-	exists, err := repo.ExistsByEmail(ctx, user.Email)
-	if err != nil {
-		t.Fatalf("ExistsByEmail: %v", err)
-	}
-	if !exists {
-		t.Error("a created user does not exist by email")
-	}
-
-	exists, err = repo.ExistsByEmail(ctx, fmt.Sprintf("nobody-%s@example.test", uuid.New()))
-	if err != nil {
-		t.Fatalf("ExistsByEmail: %v", err)
-	}
-	if exists {
-		t.Error("an address that was never registered exists")
 	}
 }
 
@@ -349,15 +313,6 @@ func TestExpiredTokensDoNotResolve(t *testing.T) {
 			},
 		},
 		{
-			name: "password reset",
-			set: func(token string) error {
-				return repo.SetPasswordResetToken(ctx, user.ID, token, time.Now().Add(-time.Hour))
-			},
-			lookup: func(token string) (*models.User, error) {
-				return repo.GetByPasswordResetToken(ctx, token)
-			},
-		},
-		{
 			name: "magic link",
 			set: func(token string) error {
 				return repo.SetMagicLinkToken(ctx, user.ID, token, time.Now().Add(-time.Hour))
@@ -384,7 +339,7 @@ func TestExpiredTokensDoNotResolve(t *testing.T) {
 	}
 }
 
-func TestPasswordResetTokenIsCleared(t *testing.T) {
+func TestListSeesCreatedUsers(t *testing.T) {
 	pool := dbtest.Pool(t)
 	repo := repository.NewUserRepository(pool)
 	ctx := dbtest.Context(t)
@@ -392,47 +347,6 @@ func TestPasswordResetTokenIsCleared(t *testing.T) {
 	user := newUser(ctx, t, pool)
 	if err := repo.Create(ctx, user); err != nil {
 		t.Fatalf("Create: %v", err)
-	}
-
-	token := uuid.NewString()
-	if err := repo.SetPasswordResetToken(ctx, user.ID, token, time.Now().Add(time.Hour)); err != nil {
-		t.Fatalf("SetPasswordResetToken: %v", err)
-	}
-	if _, err := repo.GetByPasswordResetToken(ctx, token); err != nil {
-		t.Fatalf("GetByPasswordResetToken: %v", err)
-	}
-
-	if err := repo.ClearPasswordResetToken(ctx, user.ID); err != nil {
-		t.Fatalf("ClearPasswordResetToken: %v", err)
-	}
-
-	// A reset link must be single use, or an intercepted mail stays valid until expiry.
-	if _, err := repo.GetByPasswordResetToken(ctx, token); !errors.Is(err, repository.ErrUserNotFound) {
-		t.Errorf("a cleared reset token still resolves: %v", err)
-	}
-}
-
-func TestListAndCountSeeCreatedUsers(t *testing.T) {
-	pool := dbtest.Pool(t)
-	repo := repository.NewUserRepository(pool)
-	ctx := dbtest.Context(t)
-
-	user := newUser(ctx, t, pool)
-	if err := repo.Create(ctx, user); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-
-	// Not even a relative assertion holds here. Count reads the whole users table, and
-	// `go test ./...` runs packages concurrently against one database, so another
-	// package's cleanup can delete a user between two counts and cancel out this one.
-	// What is left to check is that Count reads users at all and agrees with List that
-	// the table is not empty.
-	count, err := repo.Count(ctx)
-	if err != nil {
-		t.Fatalf("Count: %v", err)
-	}
-	if count < 1 {
-		t.Errorf("Count = %d with a user just created", count)
 	}
 
 	users, err := repo.List(ctx)
@@ -509,7 +423,7 @@ func TestCreateFirstUser(t *testing.T) {
 	// The shared database may or may not already hold users; document which
 	// branch the rest of this test is in. The count is owned by the lock above,
 	// so it cannot change while this test runs.
-	count, err := repo.Count(ctx)
+	count, err := countUsers(ctx, pool)
 	if err != nil {
 		t.Fatalf("Count: %v", err)
 	}
@@ -623,8 +537,7 @@ func TestCreateFirstUserConcurrent(t *testing.T) {
 	dbtest.LockSingletonAccounts(ctx, t, pool)
 
 	// Only meaningful against an empty table: the race is over the *first* row.
-	existing := repository.NewUserRepository(pool)
-	if count, err := existing.Count(ctx); err != nil {
+	if count, err := countUsers(ctx, pool); err != nil {
 		t.Fatalf("Count: %v", err)
 	} else if count > 0 {
 		t.Skip("the shared database already has users; the first-user race cannot be exercised")
@@ -682,7 +595,7 @@ func TestCreateFirstUserConcurrent(t *testing.T) {
 		}
 
 		// Exactly one admin exists in the shared table afterwards.
-		count, err := existing.Count(ctx)
+		count, err := countUsers(ctx, pool)
 		if err != nil {
 			t.Fatalf("Count after the race: %v", err)
 		}
@@ -733,7 +646,7 @@ func TestCreateFirstUserConcurrent(t *testing.T) {
 			t.Fatalf("winners = %d (got errors %v, %v), want exactly 1", winners, first.err, second.err)
 		}
 
-		count, err := existing.Count(ctx)
+		count, err := countUsers(ctx, pool)
 		if err != nil {
 			t.Fatalf("Count after the race: %v", err)
 		}
@@ -756,7 +669,7 @@ func TestHasUsers(t *testing.T) {
 	// the pairing cannot be disturbed mid-run.
 	dbtest.LockSingletonAccounts(ctx, t, pool)
 
-	count, err := repo.Count(ctx)
+	count, err := countUsers(ctx, pool)
 	if err != nil {
 		t.Fatalf("Count: %v", err)
 	}
@@ -1266,10 +1179,7 @@ func TestConsumePasswordResetTokenAppliesAtomically(t *testing.T) {
 		t.Errorf("generation read back %d, want %d", byEmail.SecurityGeneration, claimed.SecurityGeneration)
 	}
 
-	// Proof spent and every session gone.
-	if _, err := repo.GetByPasswordResetToken(ctx, resetToken); !errors.Is(err, repository.ErrUserNotFound) {
-		t.Errorf("reset proof still resolves after use: %v", err)
-	}
+	// Every session gone.
 	for i := 0; i < 2; i++ {
 		if _, err := tokens.GetByHash(ctx, repository.HashToken(fmt.Sprintf("session-%d", i))); !errors.Is(err, repository.ErrTokenNotFound) {
 			t.Errorf("session %d survived the reset: %v", i, err)

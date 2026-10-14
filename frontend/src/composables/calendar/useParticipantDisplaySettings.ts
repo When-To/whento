@@ -16,14 +16,30 @@
  * date range* — the mode and the number of periods — trigger a reload while the ones
  * that only change the drawing of a week do not.
  *
- * The last point is the reason this is not simply `useCalendarViewState` plus a watcher:
- * the reload is asymmetric, and turning it into a blanket "persist and refetch" would
- * fire a request every time somebody drags the week's start hour.
+ * The reload is asymmetric on purpose: a blanket "persist and refetch" would fire a
+ * request every time somebody drags the week's start hour.
  */
 
 import { ref, watch, type ComputedRef, type Ref } from 'vue';
 import { useCalendarHistoryStore } from '@/stores/calendarHistory';
-import { normalizeViewStyle, type DisplayMode, type ViewStyle } from './useCalendarViewState';
+
+export type DisplayMode = 'month' | 'week';
+
+/**
+ * `grid` covers what used to be `classic` and `compact`: the month grid transposes
+ * itself in CSS below 768px, so there is no longer a mode to choose between them.
+ */
+export type ViewStyle = 'grid' | 'list';
+
+/**
+ * Normalize a persisted view style.
+ *
+ * Old entries hold `classic` or `compact`; both become `grid`. The storage key and
+ * every field name are unchanged, so downgrading is not a data loss either.
+ */
+export function normalizeViewStyle(value: string | undefined): ViewStyle {
+  return value === 'list' ? 'list' : 'grid';
+}
 
 /** Upper bound on the number of displayed periods, which differs per mode. */
 export function maxPeriodsFor(mode: DisplayMode): number {

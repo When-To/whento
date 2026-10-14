@@ -215,31 +215,6 @@ func (r *UserRepository) UpdateProfile(
 	return user, nil
 }
 
-// Update updates a user
-func (r *UserRepository) Update(ctx context.Context, user *models.User) error {
-	query := `
-		UPDATE users
-		SET display_name = $2, locale = $3, timezone = $4, updated_at = NOW()
-		WHERE id = $1
-		RETURNING updated_at`
-
-	err := r.pool.QueryRow(ctx, query,
-		user.ID,
-		user.DisplayName,
-		user.Locale,
-		user.Timezone,
-	).Scan(&user.UpdatedAt)
-
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrUserNotFound
-		}
-		return fmt.Errorf("failed to update user: %w", err)
-	}
-
-	return nil
-}
-
 // UpdatePassword changes the verified password and revokes sessions atomically.
 // Matching the previously verified hash prevents a concurrent reset from being
 // overwritten by a request authenticated against the old password.
@@ -438,19 +413,6 @@ func (r *UserRepository) List(ctx context.Context) ([]*models.User, error) {
 	return users, nil
 }
 
-// Count returns the total number of users
-func (r *UserRepository) Count(ctx context.Context) (int, error) {
-	query := `SELECT COUNT(*) FROM users`
-
-	var count int
-	err := r.pool.QueryRow(ctx, query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count users: %w", err)
-	}
-
-	return count, nil
-}
-
 // HasUsers answers "is the users table non-empty?" without summing the whole
 // table. The registration fast path historically used it as a
 // bootstrap-completed marker; that role now belongs to the durable
@@ -593,19 +555,6 @@ func (r *UserRepository) FirstUserCreated(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-// ExistsByEmail checks if a user exists with the given email
-func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
-	query := `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`
-
-	var exists bool
-	err := r.pool.QueryRow(ctx, query, email).Scan(&exists)
-	if err != nil {
-		return false, fmt.Errorf("failed to check user exists: %w", err)
-	}
-
-	return exists, nil
-}
-
 // SetVerificationToken sets the verification token for a user
 func (r *UserRepository) SetVerificationToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) error {
 	query := `
@@ -702,68 +651,6 @@ func (r *UserRepository) SetPasswordResetToken(ctx context.Context, userID uuid.
 	result, err := r.pool.Exec(ctx, query, userID, token, expiresAt)
 	if err != nil {
 		return fmt.Errorf("failed to set password reset token: %w", err)
-	}
-
-	if result.RowsAffected() == 0 {
-		return ErrUserNotFound
-	}
-
-	return nil
-}
-
-// GetByPasswordResetToken retrieves a user by password reset token
-// Only returns the user if the token is valid and not expired
-func (r *UserRepository) GetByPasswordResetToken(ctx context.Context, token string) (*models.User, error) {
-	query := `
-		SELECT id, email, password_hash, display_name, role, locale, timezone,
-		       email_verified, verification_token, verification_token_expires_at,
-		       password_reset_token, password_reset_token_expires_at,
-		       security_generation, created_at, updated_at
-		FROM users
-		WHERE password_reset_token = $1
-		  AND password_reset_token_expires_at > NOW()`
-
-	user := &models.User{}
-	err := r.pool.QueryRow(ctx, query, token).Scan(
-		&user.ID,
-		&user.Email,
-		&user.PasswordHash,
-		&user.DisplayName,
-		&user.Role,
-		&user.Locale,
-		&user.Timezone,
-		&user.EmailVerified,
-		&user.VerificationToken,
-		&user.VerificationTokenExpiresAt,
-		&user.PasswordResetToken,
-		&user.PasswordResetTokenExpiresAt,
-		&user.SecurityGeneration,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
-
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrUserNotFound
-		}
-		return nil, fmt.Errorf("failed to get user by password reset token: %w", err)
-	}
-
-	return user, nil
-}
-
-// ClearPasswordResetToken clears the password reset token for a user
-func (r *UserRepository) ClearPasswordResetToken(ctx context.Context, userID uuid.UUID) error {
-	query := `
-		UPDATE users
-		SET password_reset_token = NULL,
-		    password_reset_token_expires_at = NULL,
-		    updated_at = NOW()
-		WHERE id = $1`
-
-	result, err := r.pool.Exec(ctx, query, userID)
-	if err != nil {
-		return fmt.Errorf("failed to clear password reset token: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {

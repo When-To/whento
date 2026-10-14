@@ -23,9 +23,6 @@ type Cache interface {
 	// Delete removes a value from cache
 	Delete(ctx context.Context, keys ...string) error
 
-	// Exists checks if a key exists in cache
-	Exists(ctx context.Context, key string) (bool, error)
-
 	// IsEnabled returns true if caching is enabled
 	IsEnabled() bool
 }
@@ -71,12 +68,6 @@ func (c *RedisCache) Delete(ctx context.Context, keys ...string) error {
 	return c.client.Del(ctx, keys...).Err()
 }
 
-// Exists checks if a key exists in Redis
-func (c *RedisCache) Exists(ctx context.Context, key string) (bool, error) {
-	n, err := c.client.Exists(ctx, key).Result()
-	return n > 0, err
-}
-
 // IsEnabled returns true for RedisCache
 func (c *RedisCache) IsEnabled() bool {
 	return true
@@ -98,11 +89,6 @@ func (c *NoOpCache) Set(ctx context.Context, key string, value interface{}, ttl 
 // Delete does nothing
 func (c *NoOpCache) Delete(ctx context.Context, keys ...string) error {
 	return nil
-}
-
-// Exists always returns false
-func (c *NoOpCache) Exists(ctx context.Context, key string) (bool, error) {
-	return false, nil
 }
 
 // IsEnabled returns false for NoOpCache

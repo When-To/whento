@@ -98,14 +98,6 @@ func (s *stubCalendarService) GetPublicCalendar(_ context.Context, token, partic
 	return s.public, nil
 }
 
-func (s *stubCalendarService) ListUserCalendars(_ context.Context, targetUserID string) ([]*models.CalendarResponse, error) {
-	s.lastUserID = targetUserID
-	if s.err != nil {
-		return nil, s.err
-	}
-	return s.calendars, nil
-}
-
 func (s *stubCalendarService) AddParticipant(_ context.Context, userID, userRole, calendarID string, _ *models.AddParticipantRequest) (*models.Participant, error) {
 	s.lastUserID, s.lastRole, s.lastID = userID, userRole, calendarID
 	if s.err != nil {

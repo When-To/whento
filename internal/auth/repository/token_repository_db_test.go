@@ -67,12 +67,6 @@ func TestRefreshTokenRoundTrip(t *testing.T) {
 		t.Errorf("UserID = %v, want %v", stored.UserID, user.ID)
 	}
 
-	if err := tokens.DeleteByHash(ctx, hash); err != nil {
-		t.Fatalf("DeleteByHash: %v", err)
-	}
-	if _, err := tokens.GetByHash(ctx, hash); !errors.Is(err, repository.ErrTokenNotFound) {
-		t.Errorf("the token survived deletion: %v", err)
-	}
 }
 
 // TestConsumeIsWonByExactlyOneCaller is the property the whole grace window rests on.
@@ -127,58 +121,6 @@ func TestUnknownRefreshTokenIsASentinel(t *testing.T) {
 
 	if _, err := tokens.GetByHash(ctx, repository.HashToken(uuid.NewString())); !errors.Is(err, repository.ErrTokenNotFound) {
 		t.Errorf("error = %v, want ErrTokenNotFound", err)
-	}
-}
-
-// TestDeleteByUserIDEndsEverySession is what a password change relies on: one call has
-// to invalidate every device, not merely the one making the request.
-func TestDeleteByUserIDEndsEverySession(t *testing.T) {
-	pool := dbtest.Pool(t)
-	users := repository.NewUserRepository(pool)
-	tokens := repository.NewTokenRepository(pool)
-	ctx := dbtest.Context(t)
-
-	user := newUser(ctx, t, pool)
-	if err := users.Create(ctx, user); err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-
-	other := newUser(ctx, t, pool)
-	if err := users.Create(ctx, other); err != nil {
-		t.Fatalf("create other user: %v", err)
-	}
-
-	var hashes []string
-	for range 3 {
-		hash := repository.HashToken(uuid.NewString())
-		hashes = append(hashes, hash)
-
-		token := &models.RefreshToken{UserID: user.ID, TokenHash: hash, ExpiresAt: time.Now().Add(time.Hour)}
-		token.ID = uuid.New()
-		if err := tokens.Create(ctx, token, 0); err != nil {
-			t.Fatalf("Create: %v", err)
-		}
-	}
-
-	// Another user's session, which must survive.
-	otherHash := repository.HashToken(uuid.NewString())
-	otherToken := &models.RefreshToken{UserID: other.ID, TokenHash: otherHash, ExpiresAt: time.Now().Add(time.Hour)}
-	otherToken.ID = uuid.New()
-	if err := tokens.Create(ctx, otherToken, 0); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-
-	if _, err := tokens.DeleteByUserID(ctx, user.ID); err != nil {
-		t.Fatalf("DeleteByUserID: %v", err)
-	}
-
-	for i, hash := range hashes {
-		if _, err := tokens.GetByHash(ctx, hash); !errors.Is(err, repository.ErrTokenNotFound) {
-			t.Errorf("session %d survived: %v", i, err)
-		}
-	}
-	if _, err := tokens.GetByHash(ctx, otherHash); err != nil {
-		t.Errorf("another user's session was deleted: %v", err)
 	}
 }
 
@@ -336,88 +278,6 @@ func TestLegacyRotationLogoutRevokesTheSuccessor(t *testing.T) {
 	}
 }
 
-func TestDeleteByUserIDRemovesASuccessorCommittedUnderTheLock(t *testing.T) {
-	pool := dbtest.Pool(t)
-	users := repository.NewUserRepository(pool)
-	tokens := repository.NewTokenRepository(pool)
-	ctx := dbtest.Context(t)
-
-	user := newUser(ctx, t, pool)
-	if err := users.Create(ctx, user); err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-	a := insertRefresh(ctx, t, tokens, user.ID, "family-a")
-	b := &models.RefreshToken{
-		UserID: user.ID, TokenHash: repository.HashToken(uuid.NewString()),
-		ExpiresAt: time.Now().Add(24 * time.Hour), FamilyID: "family-a",
-	}
-	b.ID = uuid.New()
-
-	rotationPool, rotationPID, rotationCtx := dedicatedPool(ctx, t, pool)
-	deletionPool, deletionPID, deletionCtx := dedicatedPool(ctx, t, pool)
-	blocker, err := pool.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = blocker.Rollback(ctx) }()
-	var blockerPID int
-	if err := blocker.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&blockerPID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := blocker.Exec(ctx, `UPDATE refresh_tokens SET expires_at = expires_at WHERE token_hash = $1`, a.TokenHash); err != nil {
-		t.Fatal(err)
-	}
-	rotErr := make(chan error, 1)
-	go func() {
-		rotErr <- repository.NewTokenRepository(rotationPool).CommitRotation(rotationCtx, a.TokenHash, b, time.Minute)
-	}()
-	waitForBlocked(ctx, t, pool, rotationPID, blockerPID)
-	delErr := make(chan error, 1)
-	go func() {
-		_, err := repository.NewTokenRepository(deletionPool).DeleteByUserID(deletionCtx, user.ID)
-		delErr <- err
-	}()
-	waitForBlocked(ctx, t, pool, deletionPID, rotationPID)
-	if err := blocker.Commit(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if err := <-rotErr; err != nil {
-		t.Fatalf("rotation: %v", err)
-	}
-	if err := <-delErr; err != nil {
-		t.Fatalf("DeleteByUserID: %v", err)
-	}
-	if _, err := tokens.GetByHash(ctx, b.TokenHash); !errors.Is(err, repository.ErrTokenNotFound) {
-		t.Errorf("successor B survived user-wide revocation: %v", err)
-	}
-}
-
-func TestDeleteByUserIDBeforeRotationLeavesNoSuccessor(t *testing.T) {
-	pool := dbtest.Pool(t)
-	users := repository.NewUserRepository(pool)
-	tokens := repository.NewTokenRepository(pool)
-	ctx := dbtest.Context(t)
-	user := newUser(ctx, t, pool)
-	if err := users.Create(ctx, user); err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-	a := insertRefresh(ctx, t, tokens, user.ID, "family-a")
-	if _, err := tokens.DeleteByUserID(ctx, user.ID); err != nil {
-		t.Fatalf("DeleteByUserID: %v", err)
-	}
-	b := &models.RefreshToken{
-		UserID: user.ID, TokenHash: repository.HashToken(uuid.NewString()),
-		ExpiresAt: time.Now().Add(24 * time.Hour), FamilyID: "family-a",
-	}
-	b.ID = uuid.New()
-	if err := tokens.CommitRotation(ctx, a.TokenHash, b, time.Minute); err == nil {
-		t.Fatal("rotation of a revoked token succeeded")
-	}
-	if _, err := tokens.GetByHash(ctx, b.TokenHash); !errors.Is(err, repository.ErrTokenNotFound) {
-		t.Errorf("a successor was published after user-wide revocation: %v", err)
-	}
-}
-
 func TestConcurrentLegacyRotationsDoNotSplitTheFamily(t *testing.T) {
 	pool := dbtest.Pool(t)
 	users := repository.NewUserRepository(pool)
@@ -490,8 +350,8 @@ func TestCreateAfterSecurityRevocationDoesNotPublishASession(t *testing.T) {
 		ExpiresAt: time.Now().Add(24 * time.Hour), FamilyID: "login-family",
 	}
 	pending.ID = uuid.New()
-	// Capture the old generation, then finish revocation before publishing it.
-	if _, err := tokens.DeleteByUserID(ctx, user.ID); err != nil {
+	// Capture the old generation, then finish a security transition before publishing it.
+	if _, err := pool.Exec(ctx, `UPDATE users SET security_generation = security_generation + 1 WHERE id = $1`, user.ID); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
 	if err := tokens.Create(ctx, pending, 0); !errors.Is(err, repository.ErrStaleSecurityGeneration) {

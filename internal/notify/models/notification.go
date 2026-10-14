@@ -19,24 +19,3 @@ type ThresholdTransition struct {
 	Threshold      int
 	TransitionType string // "reached", "lost", "none"
 }
-
-// NotificationEvent represents a notification event to be sent
-type NotificationEvent struct {
-	CalendarID   uuid.UUID
-	CalendarName string
-	Date         time.Time
-	EventType    string // "threshold_reached", "threshold_lost", "reminder"
-	Message      string
-	Participants []string
-	TimeSlotInfo string
-	CalendarURL  string
-	PublicToken  string
-}
-
-// NotificationRecipient represents a recipient of a notification
-type NotificationRecipient struct {
-	RecipientID   uuid.UUID
-	RecipientType string // "owner", "participant"
-	Email         *string
-	Name          string
-}

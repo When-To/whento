@@ -277,7 +277,7 @@ describe('calendarHistory', () => {
     /**
      * The store persists whatever view style it is given, including the retired
      * `classic` and `compact` names, and getDisplaySettings hands them back unchanged.
-     * Only useCalendarViewState's normalizeViewStyle maps them onto `grid`.
+     * Only useParticipantDisplaySettings' normalizeViewStyle maps them onto `grid`.
      *
      * Pinned as documentation, not endorsement: a consumer reading getDisplaySettings
      * directly receives the un-migrated value and has to normalise it itself.

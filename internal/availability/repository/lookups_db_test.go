@@ -197,25 +197,4 @@ func TestParticipantLookups(t *testing.T) {
 		t.Errorf("error = %v, want ErrParticipantNotFound", err)
 	}
 
-	all, err := repo.GetByCalendarID(ctx, f.calendar.ID)
-	if err != nil {
-		t.Fatalf("GetByCalendarID: %v", err)
-	}
-	if len(all) != 2 {
-		t.Fatalf("GetByCalendarID returned %d, want 2", len(all))
-	}
-	// Ordered by creation, which is the order the roster was submitted in and the order
-	// the participant list is drawn in.
-	if all[0].Name != "Ada" || all[1].Name != "Grace" {
-		t.Errorf("participants = %q then %q, want Ada then Grace", all[0].Name, all[1].Name)
-	}
-
-	// An unknown calendar gets an empty list, not everybody.
-	none, err := repo.GetByCalendarID(ctx, uuid.New())
-	if err != nil {
-		t.Fatalf("GetByCalendarID for an unknown calendar: %v", err)
-	}
-	if len(none) != 0 {
-		t.Errorf("an unknown calendar returned %d participants", len(none))
-	}
 }

@@ -8,15 +8,10 @@ import { describe, expect, it } from 'vitest';
 import { inTimezone } from '@/test/timezone';
 import {
   addDaysISO,
-  addMonthsISO,
   dayOfWeekISO,
   daysInMonth,
   formatDateISO,
-  isValidISODate,
-  isoRange,
-  monthOf,
   parseISODate,
-  startOfMonthISO,
   startOfWeekISO,
   todayISO,
   yearOf,
@@ -100,47 +95,6 @@ describe('addDaysISO', () => {
   });
 });
 
-describe('addMonthsISO', () => {
-  it('clamps to the end of a shorter target month', () => {
-    expect(addMonthsISO('2026-01-31', 1)).toBe('2026-02-28');
-    expect(addMonthsISO('2028-01-31', 1)).toBe('2028-02-29');
-    expect(addMonthsISO('2026-03-31', -1)).toBe('2026-02-28');
-  });
-
-  it('crosses years', () => {
-    expect(addMonthsISO('2026-12-15', 1)).toBe('2027-01-15');
-    expect(addMonthsISO('2026-01-15', -1)).toBe('2025-12-15');
-    expect(addMonthsISO('2026-01-15', 12)).toBe('2027-01-15');
-  });
-});
-
-describe('isoRange', () => {
-  it('is inclusive on both ends', () => {
-    expect(isoRange('2026-04-05', '2026-04-08')).toEqual([
-      '2026-04-05',
-      '2026-04-06',
-      '2026-04-07',
-      '2026-04-08',
-    ]);
-  });
-
-  it('returns a single date when start equals end', () => {
-    expect(isoRange('2026-04-05', '2026-04-05')).toEqual(['2026-04-05']);
-  });
-
-  it('returns empty for an inverted range', () => {
-    expect(isoRange('2026-04-08', '2026-04-05')).toEqual([]);
-  });
-
-  it('spans a DST boundary without duplicating or losing a day', () => {
-    inTimezone('Europe/Paris', () => {
-      const range = isoRange('2026-03-27', '2026-03-31');
-      expect(range).toEqual(['2026-03-27', '2026-03-28', '2026-03-29', '2026-03-30', '2026-03-31']);
-      expect(new Set(range).size).toBe(range.length);
-    });
-  });
-});
-
 describe('startOfWeekISO', () => {
   // 2026-04-08 is a Wednesday.
   it('honours a Monday-first locale', () => {
@@ -164,8 +118,8 @@ describe('startOfWeekISO', () => {
 
 describe('todayISO', () => {
   it('returns a well-formed date for a valid timezone', () => {
-    expect(isValidISODate(todayISO('Europe/Paris'))).toBe(true);
-    expect(isValidISODate(todayISO('Pacific/Auckland'))).toBe(true);
+    expect(todayISO('Europe/Paris')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(todayISO('Pacific/Auckland')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it('differs between far-apart timezones at some point in the day', () => {
@@ -186,8 +140,6 @@ describe('todayISO', () => {
 describe('string accessors', () => {
   it('reads components without allocating a Date', () => {
     expect(yearOf('2026-04-05')).toBe(2026);
-    expect(monthOf('2026-04-05')).toBe(3);
-    expect(startOfMonthISO('2026-04-05')).toBe('2026-04-01');
   });
 
   it('computes the weekday in local time', () => {
@@ -202,20 +154,5 @@ describe('string accessors', () => {
     expect(daysInMonth(2026, 1)).toBe(28);
     expect(daysInMonth(2028, 1)).toBe(29);
     expect(daysInMonth(2026, 3)).toBe(30);
-  });
-});
-
-describe('isValidISODate', () => {
-  it('accepts real dates', () => {
-    expect(isValidISODate('2026-04-05')).toBe(true);
-    expect(isValidISODate('2028-02-29')).toBe(true);
-  });
-
-  it('rejects malformed or impossible dates', () => {
-    expect(isValidISODate('2026-4-5')).toBe(false);
-    expect(isValidISODate('2026-13-01')).toBe(false);
-    expect(isValidISODate('2026-02-30')).toBe(false);
-    expect(isValidISODate('not-a-date')).toBe(false);
-    expect(isValidISODate('')).toBe(false);
   });
 });

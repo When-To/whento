@@ -14,8 +14,23 @@ import { useCalendarHistoryStore } from '@/stores/calendarHistory';
 import {
   defaultViewStyle,
   maxPeriodsFor,
+  normalizeViewStyle,
   useParticipantDisplaySettings,
 } from './useParticipantDisplaySettings';
+
+describe('normalizeViewStyle', () => {
+  it('keeps list and grid', () => {
+    expect(normalizeViewStyle('list')).toBe('list');
+    expect(normalizeViewStyle('grid')).toBe('grid');
+  });
+
+  it('maps the retired names and anything unrecognised onto grid', () => {
+    expect(normalizeViewStyle('classic')).toBe('grid');
+    expect(normalizeViewStyle('compact')).toBe('grid');
+    expect(normalizeViewStyle(undefined)).toBe('grid');
+    expect(normalizeViewStyle('LIST')).toBe('grid');
+  });
+});
 
 /**
  * Two things go wrong with view settings, and both are invisible until a user complains.

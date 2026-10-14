@@ -202,45 +202,6 @@ func (r *TokenRepository) CreatePendingMFASession(
 	return err == nil, err
 }
 
-// DeleteByHash deletes a refresh token by its hash
-func (r *TokenRepository) DeleteByHash(ctx context.Context, tokenHash string) error {
-	query := `DELETE FROM refresh_tokens WHERE token_hash = $1`
-
-	result, err := r.pool.Exec(ctx, query, tokenHash)
-	if err != nil {
-		return fmt.Errorf("failed to delete token: %w", err)
-	}
-
-	if result.RowsAffected() == 0 {
-		return ErrTokenNotFound
-	}
-
-	return nil
-}
-
-// DeleteByUserID deletes all refresh tokens for a user and advances the account
-// security generation, under the session lock. The new generation is returned so
-// a security transition that then issues its own session (password reset) can
-// present it. A login that captured the previous generation cannot insert after
-// this returns.
-func (r *TokenRepository) DeleteByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
-	var generation int64
-	err := r.withSessionLock(ctx, userID, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `
-			UPDATE users
-			SET security_generation = security_generation + 1
-			WHERE id = $1
-			RETURNING security_generation`, userID).Scan(&generation); err != nil {
-			return fmt.Errorf("failed to advance security generation: %w", err)
-		}
-		if _, err := tx.Exec(ctx, `DELETE FROM refresh_tokens WHERE user_id = $1`, userID); err != nil {
-			return fmt.Errorf("failed to delete tokens: %w", err)
-		}
-		return nil
-	})
-	return generation, err
-}
-
 // DeleteExpired deletes all expired refresh tokens
 func (r *TokenRepository) DeleteExpired(ctx context.Context) (int64, error) {
 	query := `DELETE FROM refresh_tokens WHERE expires_at < NOW()`

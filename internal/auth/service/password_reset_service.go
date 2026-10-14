@@ -71,7 +71,6 @@ type PasswordResetMailer interface {
 // well as the pending-MFA token an MFA-protected account gets instead.
 type PasswordResetTokenIssuer interface {
 	GenerateAccessToken(userID, email, role string) (string, error)
-	GenerateRefreshToken(userID string) (string, time.Time, error)
 	IssueRefreshToken(userID, familyID string) (string, time.Time, string, error)
 	GenerateCustomToken(claims map[string]interface{}) (string, error)
 }

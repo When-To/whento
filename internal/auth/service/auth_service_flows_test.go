@@ -133,8 +133,6 @@ func (f *fakeUserRepo) GetByEmail(_ context.Context, email string) (*models.User
 	return nil, repository.ErrUserNotFound
 }
 
-func (f *fakeUserRepo) Update(context.Context, *models.User) error { return f.updateErr }
-
 func (f *fakeUserRepo) UpdateProfile(
 	_ context.Context,
 	userID uuid.UUID,
@@ -219,7 +217,6 @@ type fakeTokenRepo struct {
 	stored map[string]*models.RefreshToken
 
 	createErr        error
-	deletedByHash    []string
 	deletedByUserIDs []uuid.UUID
 
 	// consumedOneTime mirrors the mfa_pending_nonce ledger: the same digest can
@@ -288,13 +285,6 @@ func (f *fakeTokenRepo) GetByHash(_ context.Context, hash string) (*models.Refre
 	}
 
 	return nil, repository.ErrTokenNotFound
-}
-
-func (f *fakeTokenRepo) DeleteByHash(_ context.Context, hash string) error {
-	f.deletedByHash = append(f.deletedByHash, hash)
-	delete(f.stored, hash)
-
-	return nil
 }
 
 func (f *fakeTokenRepo) DeleteByUserID(_ context.Context, userID uuid.UUID) (int64, error) {
@@ -407,12 +397,6 @@ func (c *countingCache) Delete(_ context.Context, keys ...string) error {
 	}
 
 	return nil
-}
-
-func (c *countingCache) Exists(_ context.Context, key string) (bool, error) {
-	_, ok := c.values[key]
-
-	return ok, nil
 }
 
 func (c *countingCache) IsEnabled() bool { return true }

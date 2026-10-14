@@ -73,7 +73,6 @@ type UserRepository interface {
 	FirstUserCreated(ctx context.Context) (bool, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*models.User, error)
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
-	Update(ctx context.Context, user *models.User) error
 	UpdateProfile(
 		ctx context.Context,
 		userID uuid.UUID,
@@ -99,8 +98,6 @@ type TokenRepository interface {
 	// still have exactly one winner. It reports whether this call created the
 	// session (false means the nonce was already claimed).
 	CreatePendingMFASession(ctx context.Context, digest string, nonceExpiresAt time.Time, token *models.RefreshToken, securityGeneration int64) (bool, error)
-	DeleteByHash(ctx context.Context, tokenHash string) error
-	DeleteByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	// CommitRotation consumes presentedHash and inserts successor under a per-user
 	// lock shared with RevokePresentedFamily, so a logout cannot lose to a successor
 	// published after it returned.

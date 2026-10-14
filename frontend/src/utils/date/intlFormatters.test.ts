@@ -4,13 +4,8 @@
  * SPDX-License-Identifier: BSL-1.1
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
-import { inTimezone } from '@/test/timezone';
-import { clearFormatterCache, formatDate, formatISODate, getFormatter } from './intlFormatters';
-
-beforeEach(() => {
-  clearFormatterCache();
-});
+import { describe, expect, it } from 'vitest';
+import { formatDate, getFormatter } from './intlFormatters';
 
 describe('getFormatter', () => {
   it('returns the same instance for the same locale and style', () => {
@@ -49,14 +44,5 @@ describe('formatDate', () => {
 
   it('formats month and year', () => {
     expect(formatDate(date, 'en', 'monthYear')).toBe('April 2026');
-  });
-});
-
-describe('formatISODate', () => {
-  it('parses in local time, so the weekday never shifts', () => {
-    inTimezone('America/New_York', () => {
-      clearFormatterCache();
-      expect(formatISODate('2026-04-05', 'en', 'weekdayLong')).toBe('Sunday');
-    });
   });
 });

@@ -133,37 +133,6 @@ func (r *ParticipantRepository) GetByCalendarID(ctx context.Context, calendarID 
 	return participants, nil
 }
 
-// GetByCalendarIDAndName retrieves a participant by calendar ID and name
-func (r *ParticipantRepository) GetByCalendarIDAndName(ctx context.Context, calendarID uuid.UUID, name string) (*models.Participant, error) {
-	query := `
-		SELECT id, calendar_id, name, email, email_verified,
-		       email_verification_token, email_verification_token_expires_at, locale, created_at
-		FROM participants
-		WHERE calendar_id = $1 AND name = $2`
-
-	participant := &models.Participant{}
-	err := r.pool.QueryRow(ctx, query, calendarID, name).Scan(
-		&participant.ID,
-		&participant.CalendarID,
-		&participant.Name,
-		&participant.Email,
-		&participant.EmailVerified,
-		&participant.EmailVerificationToken,
-		&participant.EmailVerificationTokenExpiresAt,
-		&participant.Locale,
-		&participant.CreatedAt,
-	)
-
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrParticipantNotFound
-		}
-		return nil, fmt.Errorf("failed to get participant by name: %w", err)
-	}
-
-	return participant, nil
-}
-
 // Update updates a participant's name
 func (r *ParticipantRepository) Update(ctx context.Context, id uuid.UUID, name string) error {
 	query := `
@@ -193,22 +162,6 @@ func (r *ParticipantRepository) Delete(ctx context.Context, id uuid.UUID) error 
 	result, err := r.pool.Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete participant: %w", err)
-	}
-
-	if result.RowsAffected() == 0 {
-		return ErrParticipantNotFound
-	}
-
-	return nil
-}
-
-// UpdateLocale updates the locale for a participant
-func (r *ParticipantRepository) UpdateLocale(ctx context.Context, id uuid.UUID, locale string) error {
-	query := `UPDATE participants SET locale = $1 WHERE id = $2`
-
-	result, err := r.pool.Exec(ctx, query, locale, id)
-	if err != nil {
-		return fmt.Errorf("failed to update participant locale: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
@@ -295,29 +248,6 @@ func (r *ParticipantRepository) VerifyEmail(ctx context.Context, participantID u
 	result, err := r.pool.Exec(ctx, query, participantID)
 	if err != nil {
 		return fmt.Errorf("failed to verify email: %w", err)
-	}
-
-	if result.RowsAffected() == 0 {
-		return ErrParticipantNotFound
-	}
-
-	return nil
-}
-
-// ClearEmailVerificationToken clears the verification token
-func (r *ParticipantRepository) ClearEmailVerificationToken(
-	ctx context.Context,
-	participantID uuid.UUID,
-) error {
-	query := `
-		UPDATE participants
-		SET email_verification_token = NULL,
-		    email_verification_token_expires_at = NULL
-		WHERE id = $1`
-
-	result, err := r.pool.Exec(ctx, query, participantID)
-	if err != nil {
-		return fmt.Errorf("failed to clear email verification token: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {

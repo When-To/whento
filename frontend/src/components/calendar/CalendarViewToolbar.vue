@@ -100,8 +100,11 @@
  */
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { maxPeriodsFor } from '@/composables/calendar/useParticipantDisplaySettings';
-import type { DisplayMode, ViewStyle } from '@/composables/calendar/useCalendarViewState';
+import {
+  maxPeriodsFor,
+  type DisplayMode,
+  type ViewStyle,
+} from '@/composables/calendar/useParticipantDisplaySettings';
 
 defineProps<{
   /** Preformatted "from … to …" for the calendar's own date bounds; may be empty. */

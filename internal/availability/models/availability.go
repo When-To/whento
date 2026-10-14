@@ -271,9 +271,3 @@ func MaxSimultaneousFor(windows []TimeWindow, minMinutes int) int {
 
 	return maxCount
 }
-
-// MaxSimultaneous is MaxSimultaneousFor with no minimum: the largest number of windows
-// open at the same moment, however briefly.
-func MaxSimultaneous(windows []TimeWindow) int {
-	return MaxSimultaneousFor(windows, 0)
-}

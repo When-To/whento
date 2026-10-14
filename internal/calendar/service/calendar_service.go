@@ -981,36 +981,6 @@ func (s *CalendarService) GetPublicCalendar(ctx context.Context, token, particip
 	return response, nil
 }
 
-// ListUserCalendars lists all calendars owned by a specific user (admin only)
-func (s *CalendarService) ListUserCalendars(ctx context.Context, targetUserID string) ([]*models.CalendarResponse, error) {
-	ownerUUID, err := uuid.Parse(targetUserID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user id: %w", err)
-	}
-
-	calendars, err := s.calendarRepo.GetByOwnerID(ctx, ownerUUID)
-	if err != nil {
-		return nil, err
-	}
-
-	var responses []*models.CalendarResponse
-	for _, calendar := range calendars {
-		// Get participants for each calendar
-		participants, err := s.participantRepo.GetByCalendarID(ctx, calendar.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		response, err := buildCalendarResponse(calendar, participants)
-		if err != nil {
-			return nil, err
-		}
-		responses = append(responses, response)
-	}
-
-	return responses, nil
-}
-
 // generateToken generates a random 64-character hex token
 func generateToken() (string, error) {
 	b := make([]byte, 32)

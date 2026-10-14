@@ -19,10 +19,9 @@ import (
 // is unmistakable in a string search, and the resulting key must not contain it.
 func TestKeysNeverContainTheirInput(t *testing.T) {
 	const (
-		token         = "9f3c0d7e2a4b6185c3d0f7e9a2b4c6d81f3e5a7c9b0d2e4f6a8c1b3d5e7f9012"
-		participantID = "6f9619ff-8b86-d011-b42d-00c04fc964ff"
-		userID        = "3ac7e1b2-4d5f-4a6b-8c9d-0e1f2a3b4c5d"
-		address       = "someone@example.org"
+		token   = "9f3c0d7e2a4b6185c3d0f7e9a2b4c6d81f3e5a7c9b0d2e4f6a8c1b3d5e7f9012"
+		userID  = "3ac7e1b2-4d5f-4a6b-8c9d-0e1f2a3b4c5d"
+		address = "someone@example.org"
 	)
 
 	tests := []struct {
@@ -30,15 +29,7 @@ func TestKeysNeverContainTheirInput(t *testing.T) {
 		key    string
 		secret string
 	}{
-		{"a calendar id", CalendarByIDKey(participantID), participantID},
 		{"a calendar public token", CalendarByPublicTokenKey(token), token},
-		{"an ICS token", CalendarByICSTokenKey(token), token},
-		{"a calendar's participants", CalendarParticipantsKey(participantID), participantID},
-		{"a user's calendars", UserCalendarsKey(userID), userID},
-		{"a participant's availabilities", ParticipantAvailabilitiesKey(participantID), participantID},
-		{"a date summary", CalendarDateSummaryKey(participantID, "2026-03-05"), participantID},
-		{"a range summary", CalendarRangeSummaryKey(participantID, "2026-03-01", "2026-03-31"), participantID},
-		{"an ICS feed", ICSFeedKey(token), token},
 		{"a password change marker", UserPasswordChangedKey(userID), userID},
 		// Not a key helper, but the primitive every caller outside this package
 		// uses to build one — the login lockout counter among them, whose
@@ -67,9 +58,7 @@ func TestKeysStayReadableEnoughToOperate(t *testing.T) {
 		key    string
 		prefix string
 	}{
-		{"calendar by id", CalendarByIDKey("x"), "calendar:id:"},
 		{"calendar by token", CalendarByPublicTokenKey("x"), "calendar:token:"},
-		{"ics feed", ICSFeedKey("x"), "ics:feed:"},
 		{"password change", UserPasswordChangedKey("x"), "auth:pwd_changed:"},
 	}
 

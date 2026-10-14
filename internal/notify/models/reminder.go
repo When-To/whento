@@ -13,10 +13,9 @@ import (
 
 // Reminder job states.
 const (
-	ReminderJobPending  = "pending"
-	ReminderJobSent     = "sent"
-	ReminderJobFailed   = "failed"
-	ReminderJobCanceled = "canceled"
+	ReminderJobPending = "pending"
+	ReminderJobSent    = "sent"
+	ReminderJobFailed  = "failed"
 )
 
 // ReminderRecipientType identifies who a reminder job reaches. Participant

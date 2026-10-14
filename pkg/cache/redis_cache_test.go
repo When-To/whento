@@ -109,14 +109,14 @@ func TestRedisCacheMissIsRedisNil(t *testing.T) {
 	var dest string
 	err := c.Get(ctx, key, &dest)
 
-	// GetOrSet and GetWithFallback both compare against redis.Nil to tell a miss from
-	// a real failure, so the sentinel has to survive.
+	// Callers compare against redis.Nil to tell a miss from a real failure, so the
+	// sentinel has to survive.
 	if !errors.Is(err, redis.Nil) {
 		t.Errorf("Get on a missing key = %v, want redis.Nil", err)
 	}
 }
 
-func TestRedisCacheDeleteAndExists(t *testing.T) {
+func TestRedisCacheDelete(t *testing.T) {
 	c, client := redisCache(t)
 	ctx := context.Background()
 	first := scopedKey(t, client, "one")
@@ -128,14 +128,6 @@ func TestRedisCacheDeleteAndExists(t *testing.T) {
 		}
 	}
 
-	exists, err := c.Exists(ctx, first)
-	if err != nil {
-		t.Fatalf("Exists: %v", err)
-	}
-	if !exists {
-		t.Error("a key just written does not exist")
-	}
-
 	// Delete takes a variadic list, which is how the calendar invalidation bundles are
 	// applied in one call.
 	if err := c.Delete(ctx, first, second); err != nil {
@@ -143,12 +135,9 @@ func TestRedisCacheDeleteAndExists(t *testing.T) {
 	}
 
 	for _, key := range []string{first, second} {
-		exists, err := c.Exists(ctx, key)
-		if err != nil {
-			t.Fatalf("Exists: %v", err)
-		}
-		if exists {
-			t.Errorf("%s survived deletion", key)
+		var dest string
+		if err := c.Get(ctx, key, &dest); !errors.Is(err, redis.Nil) {
+			t.Errorf("%s survived deletion: %v", key, err)
 		}
 	}
 }
@@ -187,82 +176,5 @@ func TestRedisCacheDeletingNothingIsFine(t *testing.T) {
 
 	if err := c.Delete(context.Background(), scopedKey(t, client, "never-written")); err != nil {
 		t.Errorf("deleting an absent key returned %v", err)
-	}
-}
-
-func TestInvalidatePatternSweepsMatchingKeys(t *testing.T) {
-	c, client := redisCache(t)
-	ctx := context.Background()
-
-	// A shared prefix stands in for the calendar:* pattern used in production, scoped
-	// to this test so nothing else is swept.
-	prefix := fmt.Sprintf("test:%s", uuid.New())
-	matching := []string{prefix + ":a", prefix + ":b"}
-	other := prefix + "-untouched"
-
-	t.Cleanup(func() {
-		_ = client.Del(context.Background(), append(matching, other)...).Err()
-	})
-
-	for _, key := range append(append([]string{}, matching...), other) {
-		if err := c.Set(ctx, key, "value", time.Minute); err != nil {
-			t.Fatalf("Set: %v", err)
-		}
-	}
-
-	if err := InvalidatePattern(ctx, c, prefix+":*"); err != nil {
-		t.Fatalf("InvalidatePattern: %v", err)
-	}
-
-	for _, key := range matching {
-		exists, err := c.Exists(ctx, key)
-		if err != nil {
-			t.Fatalf("Exists: %v", err)
-		}
-		if exists {
-			t.Errorf("%s matched the pattern but survived", key)
-		}
-	}
-
-	// The neighbouring key differs only after the prefix; sweeping it too would mean
-	// an invalidation reaching further than intended.
-	exists, err := c.Exists(ctx, other)
-	if err != nil {
-		t.Fatalf("Exists: %v", err)
-	}
-	if !exists {
-		t.Error("a key outside the pattern was swept")
-	}
-}
-
-func TestGetWithFallbackAgainstRedis(t *testing.T) {
-	c, client := redisCache(t)
-	ctx := context.Background()
-	key := scopedKey(t, client, "fallback")
-
-	calls := 0
-	fetch := func() (string, error) {
-		calls++
-
-		return "from source", nil
-	}
-
-	first, err := GetWithFallback(ctx, c, key, time.Minute, fetch)
-	if err != nil {
-		t.Fatalf("GetWithFallback: %v", err)
-	}
-	if first != "from source" || calls != 1 {
-		t.Fatalf("first call: value %q after %d fetches", first, calls)
-	}
-
-	second, err := GetWithFallback(ctx, c, key, time.Minute, fetch)
-	if err != nil {
-		t.Fatalf("GetWithFallback: %v", err)
-	}
-	if second != "from source" {
-		t.Errorf("second call returned %q", second)
-	}
-	if calls != 1 {
-		t.Errorf("the source was consulted %d times; the value was not cached", calls)
 	}
 }

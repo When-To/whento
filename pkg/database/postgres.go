@@ -38,20 +38,10 @@ type Config struct {
 	MaxConnIdleTime time.Duration
 }
 
-// DefaultConfig returns default database configuration
-func DefaultConfig() *Config {
-	return &Config{
-		MaxConns:        DefaultMaxConns,
-		MinConns:        DefaultMinConns,
-		MaxConnLifetime: DefaultMaxConnLifetime,
-		MaxConnIdleTime: DefaultMaxConnIdleTime,
-	}
-}
-
 // NewPool creates a new PostgreSQL connection pool
 func NewPool(ctx context.Context, cfg *Config) (*pgxpool.Pool, error) {
 	if cfg == nil {
-		cfg = DefaultConfig()
+		cfg = &Config{}
 	}
 
 	// Apply default values if not set

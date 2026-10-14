@@ -158,10 +158,6 @@ func (m *mockCache) Delete(ctx context.Context, keys ...string) error {
 	return nil
 }
 
-func (m *mockCache) Exists(ctx context.Context, key string) (bool, error) {
-	return false, nil
-}
-
 func (m *mockCache) IsEnabled() bool {
 	return true
 }

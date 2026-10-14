@@ -29,77 +29,26 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// SQLSTATE codes this schema can raise. Class 23 — Integrity Constraint
-// Violation — covers the invariant guards, and class 42 — Syntax Error or
-// Access Rule Violation — covers the query-time "object does not exist" case
-// that a pre-migration schema produces. See
+// SQLSTATE codes the application reacts to. See
 // https://www.postgresql.org/docs/current/errcodes-appendix.html
 const (
 	// CodeUniqueViolation is raised by a UNIQUE constraint or unique index, and is
 	// how "this row already exists" reaches the application.
 	CodeUniqueViolation = "23505"
-	// CodeForeignKeyViolation is raised when a referenced row is missing, or when a
-	// referenced row is deleted without ON DELETE CASCADE.
-	CodeForeignKeyViolation = "23503"
-	// CodeCheckViolation is raised by a CHECK constraint, such as the
-	// `day_of_week BETWEEN 0 AND 6` and `source IN ('manual', 'recurrence')` guards.
-	CodeCheckViolation = "23514"
 	// CodeUndefinedTable is raised when a query names a table the schema does not
 	// have yet, e.g. reading app_state on a database older than migration 019.
 	CodeUndefinedTable = "42P01"
 )
 
-// PgError extracts the *pgconn.PgError from anywhere in err's chain. It reports false
-// for a nil error, for a client-side failure such as a broken connection, and for any
-// error the driver did not produce.
-func PgError(err error) (*pgconn.PgError, bool) {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		return pgErr, true
-	}
-
-	return nil, false
-}
-
-// Code returns the SQLSTATE carried by err, or "" when err did not come from the server.
-func Code(err error) string {
-	if pgErr, ok := PgError(err); ok {
-		return pgErr.Code
-	}
-
-	return ""
-}
-
-// HasCode reports whether err is a server error with exactly the given SQLSTATE.
+// HasCode reports whether err is a server error with exactly the given SQLSTATE,
+// anywhere in its chain.
 func HasCode(err error, code string) bool {
-	pgErr, ok := PgError(err)
+	var pgErr *pgconn.PgError
 
-	return ok && pgErr.Code == code
-}
-
-// ConstraintName returns the name of the constraint the server blamed, or "" when err
-// is not a server error or the failure was not attributed to a named constraint. Use it
-// to tell two unique constraints on the same table apart — for example a participant's
-// name colliding versus their email.
-func ConstraintName(err error) string {
-	if pgErr, ok := PgError(err); ok {
-		return pgErr.ConstraintName
-	}
-
-	return ""
+	return errors.As(err, &pgErr) && pgErr.Code == code
 }
 
 // IsUniqueViolation reports whether err is a unique constraint violation (23505).
 func IsUniqueViolation(err error) bool {
 	return HasCode(err, CodeUniqueViolation)
-}
-
-// IsForeignKeyViolation reports whether err is a foreign key violation (23503).
-func IsForeignKeyViolation(err error) bool {
-	return HasCode(err, CodeForeignKeyViolation)
-}
-
-// IsCheckViolation reports whether err is a check constraint violation (23514).
-func IsCheckViolation(err error) bool {
-	return HasCode(err, CodeCheckViolation)
 }

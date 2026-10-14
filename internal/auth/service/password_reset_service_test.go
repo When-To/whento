@@ -104,10 +104,6 @@ func (f *resetTokenIssuerFixture) GenerateAccessToken(_, _, _ string) (string, e
 	return "access-token", nil
 }
 
-func (f *resetTokenIssuerFixture) GenerateRefreshToken(string) (string, time.Time, error) {
-	return "refresh-token", f.refreshExpiresAt, nil
-}
-
 func (f *resetTokenIssuerFixture) IssueRefreshToken(string, string) (string, time.Time, string, error) {
 	return "refresh-token", f.refreshExpiresAt, "family-reset", nil
 }

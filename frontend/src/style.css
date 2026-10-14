@@ -194,14 +194,6 @@
     @apply bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-100;
   }
 
-  .badge-success {
-    @apply bg-success-100 text-success-800 dark:bg-success-900 dark:text-success-100;
-  }
-
-  .badge-danger {
-    @apply bg-danger-100 text-danger-800 dark:bg-danger-900 dark:text-danger-100;
-  }
-
   /* Container */
   .container-app {
     @apply mx-auto max-w-7xl px-2 sm:px-4 md:px-6 lg:px-8;
@@ -216,12 +208,6 @@
   .page-fade-enter-from,
   .page-fade-leave-to {
     opacity: 0;
-  }
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
   }
 }
 
