@@ -147,6 +147,17 @@ export default [
     },
   },
 
+  // public/ is copied verbatim into dist and loaded as classic browser scripts.
+  {
+    files: ['public/**/*.js'],
+    languageOptions: {
+      sourceType: 'script',
+      globals: {
+        ...globals.browser,
+      },
+    },
+  },
+
   // Prettier config - MUST be last to disable conflicting ESLint rules
   // @ts-expect-error - eslintConfigPrettier is used in the config array
   eslintConfigPrettier,

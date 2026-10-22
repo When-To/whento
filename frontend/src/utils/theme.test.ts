@@ -7,6 +7,8 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import indexHtml from '../../index.html?raw';
+import themeInit from '../../public/theme-init.js?raw';
 import { applyTheme, resolveTheme, THEME_STORAGE_KEY } from './theme';
 
 /** jsdom has no matchMedia; every test states the OS preference it assumes. */
@@ -46,26 +48,33 @@ describe('resolveTheme', () => {
     expect(resolveTheme()).toBe('dark');
   });
 
-  it('agrees with the pre-paint snippet in index.html', () => {
+  it('agrees with the pre-paint snippet in public/theme-init.js', () => {
     // The snippet is duplicated on purpose — it has to run before the bundle exists —
-    // so the two must not drift. This mirrors its logic exactly.
-    const snippet = () => {
-      const stored = localStorage.getItem('theme');
-      return stored === 'dark' ||
-        (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-        ? 'dark'
-        : 'light';
-    };
+    // so the two must not drift. This runs the real file, not a copy of it.
+    const snippet = new Function(themeInit);
 
     for (const dark of [true, false]) {
       systemPrefersDark(dark);
       for (const stored of [null, 'dark', 'light', 'nonsense']) {
         localStorage.clear();
         if (stored !== null) localStorage.setItem(THEME_STORAGE_KEY, stored);
+        document.documentElement.classList.remove('dark');
 
-        expect(resolveTheme()).toBe(snippet());
+        snippet();
+        const applied = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+        expect(resolveTheme()).toBe(applied);
       }
     }
+  });
+});
+
+describe('index.html', () => {
+  it('carries no inline script, which script-src self refuses', () => {
+    const html = indexHtml.replace(/<!--[\s\S]*?-->/g, '');
+    const tags = html.match(/<script\b[^>]*>/g) ?? [];
+
+    expect(tags.filter(tag => !tag.includes('src='))).toEqual([]);
+    expect(html).toContain('<script src="/theme-init.js"></script>');
   });
 });
 
