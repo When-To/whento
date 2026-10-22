@@ -77,7 +77,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { getAllTimezones } from 'countries-and-timezones';
+import { getAllTimezones, getCountryForTimezone } from 'countries-and-timezones';
 
 interface Props {
   modelValue: string;
@@ -99,10 +99,23 @@ const showDropdown = ref(false);
 
 // Build timezones list from countries-and-timezones package
 const timezones = computed(() => {
-  const allTimezones = getAllTimezones();
+  const allTimezones = getAllTimezones({ deprecated: true });
+  const seenAliases = new Set<string>();
 
   return Object.values(allTimezones)
-    .filter(tz => !tz.aliasOf) // Exclude aliases to avoid duplicates
+    .filter(tz => {
+      if (!tz.aliasOf) return true;
+      // tzdata folds zones like Europe/Copenhagen into Europe/Berlin, which would
+      // leave Denmark (and its holidays) unselectable. Keep an alias when it names a
+      // country its target does not, once per target and country so old spellings
+      // (Asia/Calcutta, Pacific/Truk, US/Eastern) stay out.
+      const targetCountry = getCountryForTimezone(tz.aliasOf)?.id ?? '';
+      if (!tz.name.includes('/') || tz.countries.includes(targetCountry)) return false;
+      const key = `${tz.aliasOf}|${tz.countries.join()}`;
+      if (seenAliases.has(key)) return false;
+      seenAliases.add(key);
+      return true;
+    })
     .map(tz => {
       const parts = tz.name.split('/');
       const region = parts[0];
