@@ -70,11 +70,11 @@ describe('resolveTheme', () => {
 
 describe('index.html', () => {
   it('carries no inline script, which script-src self refuses', () => {
-    const html = indexHtml.replace(/<!--[\s\S]*?-->/g, '');
-    const tags = html.match(/<script\b[^>]*>/g) ?? [];
+    // A real parser, not a regex: it skips comments and is case-insensitive like a browser.
+    const doc = new DOMParser().parseFromString(indexHtml, 'text/html');
 
-    expect(tags.filter(tag => !tag.includes('src='))).toEqual([]);
-    expect(html).toContain('<script src="/theme-init.js"></script>');
+    expect([...doc.querySelectorAll('script:not([src])')].map(s => s.outerHTML)).toEqual([]);
+    expect(doc.head.querySelector('script')?.getAttribute('src')).toBe('/theme-init.js');
   });
 });
 
