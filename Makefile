@@ -232,28 +232,31 @@ sync:
 	@echo "✓ Workspace synced! Now reload VS Code's Go Language Server:"
 	@echo "  Ctrl+Shift+P → 'Go: Restart Language Server'"
 
-# Migrations (using golang-migrate directly)
+# Migrations — delegate to the single guarded wrapper (scripts/migrate.sh).
+# BUILD_TYPE (default selfhosted) and DATABASE_URL come from the environment;
+# the wrapper resolves the canonical URL, assembles the chain into its own
+# mktemp scratch directory, and cleans only that directory.
+#
+# `make migrate-reset` requires explicit consent: interactive typing of the
+# exact database name, or for automation:
+#   make migrate-reset MIGRATE_ARGS="--yes --confirm-database=<exact-db-name>"
+migrate-up:
+	@bash scripts/migrate.sh --build-type $(BUILD_TYPE) up
+
+migrate-down:
+	@bash scripts/migrate.sh --build-type $(BUILD_TYPE) down 1
+
+migrate-reset:
+	@bash scripts/migrate.sh --build-type $(BUILD_TYPE) $(MIGRATE_ARGS) reset
+
+migrate-status:
+	@bash scripts/migrate.sh --build-type $(BUILD_TYPE) status
+
+# The wrapper owns its scratch directory; no shared chain needs pre-building.
 migrate-build:
-	@echo "Building $(BUILD_TYPE) migrations..."
-	@bash scripts/build-migrations.sh $(BUILD_TYPE) ./migrations-build
+	@echo "migrate-build was removed: scripts/migrate.sh assembles its own scratch chain per run." >&2
+	@exit 2
 
-migrate-up: migrate-build
-	migrate -path ./migrations-build -database "$$DATABASE_URL" up
-	@rm -rf ./migrations-build
-
-migrate-down: migrate-build
-	migrate -path ./migrations-build -database "$$DATABASE_URL" down 1
-	@rm -rf ./migrations-build
-
-migrate-reset: migrate-build
-	migrate -path ./migrations-build -database "$$DATABASE_URL" down force
-	migrate -path ./migrations-build -database "$$DATABASE_URL" up force
-	@rm -rf ./migrations-build
-
-migrate-status: migrate-build
-	@echo "Checking migration status..."
-	@migrate -path ./migrations-build -database "$$DATABASE_URL" version || echo "No migrations applied yet"
-	@rm -rf ./migrations-build
 
 # Docker Production
 #

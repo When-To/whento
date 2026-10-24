@@ -255,15 +255,21 @@ what a calendar is, it belongs in `internal/`.
 [ADR-0003](adr/0003-no-orm-hand-written-sql.md).
 
 Migrations are golang-migrate, in three source directories —
-`migrations/{common,cloud,selfhosted}` — merged at build time by
-[`scripts/build-migrations.sh`](../scripts/build-migrations.sh) into a temporary
-`migrations-build/` that every `make migrate-*` target deletes afterwards. Never
-run `migrate` directly against `migrations/`.
+`migrations/{common,cloud,selfhosted}` — assembled per run by
+[`scripts/build-migrations.sh`](../scripts/build-migrations.sh) into a scratch
+directory owned by the writer. All `make migrate-*` targets go through
+[`scripts/migrate.sh`](../scripts/migrate.sh), which resolves one canonical
+`DATABASE_URL`, builds the chain into its own `mktemp` directory, applies the
+requested operation, and removes only that directory on success, failure and
+signals. Both `reset` and `down` are destructive: `reset` requires explicit
+database-name confirmation, while the explicitly requested `down [N]` rollback
+does not prompt. Never run `migrate` directly against `migrations/`.
 
 The numbering space is **shared across all three directories**, with one
 exception: a number may be reused between `cloud/` and `selfhosted/`, since only
 one of them is ever copied into a given build. `005` and `013` are both reused
-that way. The highest common migration today is `014`; the next one is `015`.
+that way. Use `scripts/migrate.sh create <variant> <name>` to derive the next
+number from the actual inventory; see [migrations/README.md](../migrations/README.md).
 
 Migrations run automatically at container start. What to do when one of them is
 the problem is [migration-rollback.md](migration-rollback.md).
