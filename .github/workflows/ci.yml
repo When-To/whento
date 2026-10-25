@@ -49,6 +49,8 @@ env:
   # different binary from the one that applies them in production.
   MIGRATE_VERSION: v4.19.1
   # sha256 of migrate.linux-amd64.tar.gz, from the release's own sha256sum.txt.
+  # Keep version/checksum aligned with scripts/migrate.sh and its installer
+  # assertions in scripts/test-migrations.sh when updating the release.
   MIGRATE_SHA256: 2ac648fbd1b127b69ab5a7b33cf96212178f71e22379fc50573630c6f4c7ce18
 
 jobs:
@@ -403,6 +405,14 @@ jobs:
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/whento_test?sslmode=disable
         run: make migrate-up BUILD_TYPE=selfhosted
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Migration wrapper and both-variant upgrade acceptance
+        env:
+          DISPOSABLE_DB_URL: postgres://test:test@localhost:5432/whento_test?sslmode=disable
+        run: bash scripts/test-migrations.sh
 
       - name: Run tests with coverage
         env:

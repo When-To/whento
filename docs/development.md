@@ -87,7 +87,23 @@ make dev-fullstack
 ```
 
 `make` auto-loads `.env` (`-include .env` plus `export`), which is where the
-`migrate-*` targets get `DATABASE_URL`.
+`migrate-*` targets get `DATABASE_URL`. Make preserves quotes literally; for
+quoted dotenv values use the direct migration wrapper or decoded Make command-line
+variables; Make file assignments override inherited environment values by default.
+See the [dotenv rules and
+limitations](../migrations/README.md#local-environment-syntax).
+
+Migration wrappers require Bash >= 4; creation and binary installation additionally
+require GNU-compatible find (`-printf`) and ln (`-T`). Use Linux/the devcontainer,
+or install compatible tools;
+macOS's bundled Bash 3.2 is refused before any database configuration is read.
+The chain builder itself still works under POSIX/BusyBox `sh`.
+
+On Linux x86_64, `bash scripts/migrate.sh install-migrate` installs a verified
+v4.19.1 release to `$HOME/.local/bin/migrate` (override with `MIGRATE_INSTALL_DIR`).
+It never replaces an existing destination. On other platforms use the Go install
+command above. Release version/archive checksum bumps must update `ci.yml`,
+`scripts/migrate.sh` and `scripts/test-migrations.sh` together.
 
 ### `make hooks` is opt-in, once per clone
 
@@ -160,12 +176,16 @@ migrations/{common,cloud,selfhosted}/NNN_snake_case_name.{up,down}.sql
 
 - The numbering space is **shared across all three directories**. A number may be
   reused between `cloud/` and `selfhosted/` only, since one build gets one of
-  them (`005` and `013` are both reused that way).
-- Highest common migration today is `014`; **the next one is `015`**.
+  them (`005` and `013` are both reused that way). The current inventory and how
+  to derive the next free number are in
+  [`migrations/README.md`](../migrations/README.md) — never hard-code "the next
+  version" in prose; use `scripts/migrate.sh create <variant> <name>` or the
+  chain-scanning check documented there.
 - Always write both `.up.sql` and `.down.sql`.
-- Never run `migrate` against `migrations/` directly — `scripts/build-migrations.sh`
-  merges the directories into a temporary `migrations-build/` that the `migrate-*`
-  targets delete afterwards.
+- Never run `migrate` against `migrations/` directly — all migration operations
+  go through [`scripts/migrate.sh`](../scripts/migrate.sh) (or the `make
+  migrate-*` targets that delegate to it), which assembles the chain into its
+  own disposable scratch directory and cleans only that directory.
 
 ### Adding user-facing text
 

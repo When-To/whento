@@ -112,6 +112,32 @@ line per release rather than listed individually.
   session-family metadata. Messages are validated (family, token presence and
   expiry, sender) and never echoed, and a client can be disposed (timers,
   channel, listeners) for tests and HMR.
+- **Safer migration tooling.** `scripts/migrate.sh` (and the `make migrate-*`
+  targets that delegate to it) now resolves one canonical `DATABASE_URL`
+  (explicit `DATABASE_URL` wins over `DB_*`; otherwise built from `DB_*` with
+  percent-encoded credentials, port and sslmode), assembles the chain into its
+  own `mktemp` scratch directory and deletes only that directory on success,
+  failure and signals — never the shared `./migrations-build`. `reset` requires
+  explicit database confirmation: interactive (type the
+  exact connected database name, shown redacted with its identity) or
+  non-interactive `--yes --confirm-database <exact-name>` (also accepting
+  `--confirm-database=<exact-name>`) that must equal
+  `current_database()`. Explicit `down [N]` is destructive and does not prompt.
+  A reset on an instance that was never initialized
+  skips `down -all`; a failed `down` stops before any `up`; `status` reports a
+  genuine "no migration applied" separately from real errors. `init-db.sh`
+  never resets just because tables exist — it applies pending `up` migrations,
+  and `--reset` delegates to the guarded reset. The builder validates
+  `BUILD_TYPE` before touching its output and refuses to write into a
+  non-empty directory. Install help points at the pinned golang-migrate
+  release v4.19.1 (same as CI), not the stale `x/tools/cmd/migrate` alias, and
+  `scripts/migrate.sh install-migrate` fetches it by checksum on Linux x86_64
+  into `$HOME/.local/bin/migrate` (override with `MIGRATE_INSTALL_DIR`), without
+  overwriting existing destinations. Failed chain assembly stops before invoking
+  the CLI; source paths work independently of the caller's working directory.
+  Creation uses three-digit sequence prefixes. Wrappers reject Bash < 4 before
+  loading configuration; create/install require GNU-compatible find and ln, while the chain
+  builder remains BusyBox/POSIX `sh` compatible.
 
 ### Changed
 
