@@ -708,8 +708,9 @@ async function onDropOn(targetId: string) {
   const to = group.indexOf(targetId);
   if (from === -1 || to === -1) return;
 
-  // Drop inserts before the target, accounting for the source's removal.
-  persistGroupMove(sourceId, to - (from < to ? 1 : 0));
+  // The dropped card takes the target's slot, so dropping onto the next card swaps
+  // the two and the last slot of the group is reachable.
+  persistGroupMove(sourceId, to);
   announceMove(sourceId, 'drop');
   await nextTick();
   focusCardAfterMove(sourceId, 'auto');
