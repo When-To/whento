@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"strings"
 	"sync"
 	"testing"
@@ -627,4 +628,25 @@ func mustUUID(t *testing.T) uuid.UUID {
 		t.Fatalf("uuid: %v", err)
 	}
 	return id
+}
+
+func TestBootstrapURL(t *testing.T) {
+	ip := net.ParseIP("192.0.2.10")
+	tests := []struct {
+		appURL string
+		ip     net.IP
+		want   string
+	}{
+		{"https://whento.example.com/", ip, "https://whento.example.com/bootstrap"},
+		{"https://example.com:8443/app", ip, "https://example.com:8443/app/bootstrap"},
+		{"http://localhost:8080", ip, "http://192.0.2.10:8080/bootstrap"},
+		{"http://127.0.0.1", ip, "http://192.0.2.10/bootstrap"},
+		{"http://localhost:8080", net.ParseIP("2001:db8::1"), "http://[2001:db8::1]:8080/bootstrap"},
+		{"http://localhost:8080", nil, "http://localhost:8080/bootstrap"},
+	}
+	for _, tt := range tests {
+		if got := bootstrapURL(tt.appURL, tt.ip); got != tt.want {
+			t.Errorf("bootstrapURL(%q, %v) = %q, want %q", tt.appURL, tt.ip, got, tt.want)
+		}
+	}
 }
