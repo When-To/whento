@@ -323,6 +323,38 @@ func TestReminderMissedWindowIsRecordedAndWarnedOnlyOnce(t *testing.T) {
 	}
 }
 
+// A date that reaches its threshold after its send window, while the scheduler
+// was running, qualified late: it still gets its reminder before the event.
+func TestReminderLateQualificationIsDeliveredWhileWatching(t *testing.T) {
+	f := newReminderFixture(t, reminderConfig())
+	f.scheduler.catchUp = time.Minute
+	f.slots.count = 0
+
+	f.scheduler.now = func() time.Time { return time.Date(2026, 3, 31, 23, 0, 0, 0, time.UTC) }
+	f.scheduler.enqueueDue(t.Context())
+
+	// 2026-04-02 qualifies at 01:02, an hour after its 00:00 send window.
+	f.slots.count = f.calendar.Threshold
+	f.scheduler.now = func() time.Time { return time.Date(2026, 4, 1, 1, 2, 0, 0, time.UTC) }
+	f.scheduler.enqueueDue(t.Context())
+
+	if len(f.jobs.missed) != 0 || len(f.jobs.enqueued) != 5 {
+		t.Fatalf("missed=%d enqueued=%d, want the late event enqueued", len(f.jobs.missed), len(f.jobs.enqueued))
+	}
+}
+
+type panickingReminderJobStore struct{ *fakeReminderJobStore }
+
+func (panickingReminderJobStore) Cleanup(context.Context, time.Time, int) (int64, error) {
+	panic("boom")
+}
+
+func TestReminderPassPanicDoesNotEscape(t *testing.T) {
+	f := newReminderFixture(t, reminderConfig())
+	f.scheduler.jobs = panickingReminderJobStore{f.jobs}
+	f.scheduler.safeRunOnce(t.Context())
+}
+
 func TestReminderCleanupRunsDailyAfterDrainingBacklog(t *testing.T) {
 	f := newReminderFixture(t, reminderConfig())
 	f.scheduler.runOnce(t.Context())
