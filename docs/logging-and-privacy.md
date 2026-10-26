@@ -428,8 +428,8 @@ retention timestamps. Calendar deletion cascades immediately to both tables. Bac
 application logs remain subject to the operator's own retention policy; upgrading
 cannot remove secrets already present in historical backups or logs.
 
-Missed catch-up windows create one canceled row per delivery key and one warning
-when first recorded. The warning includes calendar UUID, event date, schedule and
+Missed catch-up windows (a send time that passed while the scheduler was down)
+create one canceled row per delivery key and one warning when first recorded. The warning includes calendar UUID, event date, schedule and
 channel, never recipient addresses or provider credentials. Participant reminder
 emails include a localized cancellation link for that date, using the same
 participant calendar flow as threshold emails. That link contains a credential and
