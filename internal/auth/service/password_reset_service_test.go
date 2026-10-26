@@ -134,7 +134,7 @@ func newResetServiceFixture(t *testing.T, resetExpiry time.Duration) (*PasswordR
 	mfa := &resetMFARepository{}
 
 	svc := NewPasswordResetService(
-		users, tokens, mfa, mailer, issuer,
+		users, tokens, mfa, mailer, issuer, nil,
 		&config.Config{Email: config.EmailConfig{PasswordResetExpiry: resetExpiry}},
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		4,
@@ -176,8 +176,16 @@ func TestPasswordResetHonoursTheConfiguredExpiry(t *testing.T) {
 // the service hands the hashed new password to the repository's single
 // consume-and-apply operation, and only then issues a session, so a replay of a
 // spent proof cannot re-apply anything.
+type recordingRevoker struct{ revoked []string }
+
+func (r *recordingRevoker) RevokeAccessTokens(_ context.Context, userID string) {
+	r.revoked = append(r.revoked, userID)
+}
+
 func TestPasswordResetConsumesTheProofAndAppliesTheHash(t *testing.T) {
 	svc, users, _, tokens, _ := newResetServiceFixture(t, 15*time.Minute)
+	revoker := &recordingRevoker{}
+	svc.revoker = revoker
 
 	resp, err := svc.ResetPassword(context.Background(), &models.ResetPasswordRequest{
 		Token:       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -201,6 +209,9 @@ func TestPasswordResetConsumesTheProofAndAppliesTheHash(t *testing.T) {
 	}
 	if resp.RequireMFA {
 		t.Error("auto-login response must not require MFA for an MFA-disabled account")
+	}
+	if len(revoker.revoked) != 1 || revoker.revoked[0] != users.user.ID.String() {
+		t.Errorf("access tokens revoked for %v, want the reset account only", revoker.revoked)
 	}
 }
 

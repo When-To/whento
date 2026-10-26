@@ -198,6 +198,9 @@ func (h *MFAHandler) FinishSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Enabling MFA revoked every refresh session; a stolen access token goes too.
+	h.authService.RevokeAccessTokens(r.Context(), userUUID.String())
+
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "MFA enabled successfully"})
 }
 
