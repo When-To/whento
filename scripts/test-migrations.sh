@@ -500,10 +500,12 @@ reject_non_gnu_create() {
     printf '#!/bin/sh\nexit 1\n' > "$fixture/find"
     chmod +x "$fixture/find"
     : > "$FAKE_LOG"
-    env -i PATH="$fixture:$WORK/bin:/usr/bin:/bin" FAKE_LOG="$FAKE_LOG" \
-        bash "$MIG" create common rejected > "$WORK/non-gnu.log" 2>&1 && return 1
+    # Run the fixture copy: if the guard regresses, files land there, not in the worktree.
+    (cd "$creation_repo" && env -i PATH="$fixture:$WORK/bin:/usr/bin:/bin" FAKE_LOG="$FAKE_LOG" \
+        bash scripts/migrate.sh create common rejected) > "$WORK/non-gnu.log" 2>&1 && return 1
     grep -q 'GNU-compatible find' "$WORK/non-gnu.log" && [ ! -s "$FAKE_LOG" ] &&
-        [ ! -d migrations/.create-lock ]
+        [ ! -d "$creation_repo/migrations/.create-lock" ] &&
+        ! compgen -G "$creation_repo/migrations/common/*_rejected.*" >/dev/null
 }
 check "creation rejects unsupported tools before writing or invoking migrate" reject_non_gnu_create
 
@@ -607,8 +609,10 @@ if [ -n "${DISPOSABLE_DB_URL:-}" ]; then
         DATABASE_URL="$uri" BUILD_TYPE="$variant" bash "$MIG" up || return 1
         # Exercise the documented Make automation against a real, fresh database
         # owned by this harness only; never reset the caller's supplied database.
+        # Pass the target as Make command-line variables: a developer's .env is
+        # loaded with -include and would otherwise win over the environment.
         if [ "$mode" = fresh ]; then
-            DATABASE_URL="$uri" BUILD_TYPE="$variant" make --no-print-directory migrate-reset \
+            make --no-print-directory migrate-reset DATABASE_URL="${uri//\$/\$\$}" BUILD_TYPE="$variant" \
                 MIGRATE_ARGS="--yes --confirm-database=$database" </dev/null || return 1
         fi
         # An ordinary initialization of an already populated database is an
