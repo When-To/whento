@@ -5,6 +5,7 @@
  */
 
 import { watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 
 /**
@@ -22,10 +23,17 @@ import { useAuthStore } from '@/stores/auth';
  */
 export function useAccountScopedReload(loader: () => void | Promise<void>): void {
   const authStore = useAuthStore();
+  const router = useRouter();
   watch(
     () => authStore.accountGeneration,
     () => {
       if (!authStore.isAuthenticated) return;
+      // Route guards only run on navigation. A non-admin replacing an admin on an
+      // admin page leaves it rather than keeping the previous account's list on screen.
+      if (router.currentRoute.value.meta.requiresAdmin && !authStore.isAdmin) {
+        void router.replace({ name: 'dashboard' });
+        return;
+      }
       void loader();
     }
   );
