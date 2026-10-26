@@ -42,8 +42,8 @@ line per release rather than listed individually.
 
 A major version: the first administrator is now created through an operator-key
 bootstrap rather than by the first public registration, the legacy magic-link `GET`
-is gone, and the holiday lookup no longer reaches the network by default. Seven
-migrations (016 to 022) apply on the first start.
+is gone, and the holiday lookup no longer reaches the network by default. Eight
+migrations (016 to 023) apply on the first start.
 
 ### Upgrading from v2.0.0
 
@@ -330,6 +330,12 @@ Existing sessions survive: nobody is signed out.
   CVE-2026-97031 (#187) and CVE-2026-111943 (#209).
 - The root module requires chi v5.5.0 for GHSA-j6qf-3m9c-vwj3 (#216). WhenTo
   never called the affected middleware.
+- **MFA codes are spent once.** A backup code is now marked used by a single
+  conditional `UPDATE` before it is accepted, so two concurrent sign-ins with
+  the same code have one winner, and a failed write rejects the code instead of
+  accepting it unrecorded. TOTP codes gain replay protection: the last accepted
+  time step is stored per user (migration 023, `user_mfa.totp_last_step`) and a
+  code whose step is at or before it is refused.
 
 ### Fixed
 

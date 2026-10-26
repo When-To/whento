@@ -19,7 +19,7 @@ Two consequences follow directly:
 - **The schema version is a property of the image tag.** Rolling the application
   back to an older image does *not* roll the schema back, and the older image
   does not start against the newer schema either: its `migrate up` finds a
-  database version it has no file for (`no migration found for version 22`),
+  database version it has no file for (`no migration found for version 23`),
   exits, and the container refuses to start. Rolling an image back across a
   release that added migrations means reverting those migrations first, with
   the *newer* image (§4).
@@ -174,8 +174,8 @@ top of this page), so its migrations have to be reverted first, using the
 cd /opt/whento
 docker compose stop app
 # Back up (§1), then count the migrations the older release does not ship. From
-# v3.0.0 back to v2.0.0 that is 016 to 022: seven.
-docker compose run --rm --no-deps --entrypoint sh app -c   'migrate -path /app/migrations -database "$DATABASE_URL" down 7'
+# v3.0.0 back to v2.0.0 that is 016 to 023: eight.
+docker compose run --rm --no-deps --entrypoint sh app -c   'migrate -path /app/migrations -database "$DATABASE_URL" down 8'
 # Pin the older image in docker-compose.yml, then start it.
 docker compose up -d app
 ```
@@ -183,8 +183,8 @@ docker compose up -d app
 Read [the limits](#the-limits-a-down-migration-is-not-an-undo) first: from v3.0.0
 to v2.0.0 this discards the refresh-session families (sessions themselves
 survive), the reminder queue (a reminder still inside its send window can go out twice
-after a later upgrade), the per-date activity journal (gone for good) and the
-first-user marker (recomputed on the next upgrade).
+after a later upgrade), the per-date activity journal (gone for good), the TOTP
+replay record and the first-user marker (recomputed on the next upgrade).
 
 ---
 
