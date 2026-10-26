@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -403,8 +404,14 @@ func bootstrapURL(appURL string, ip net.IP) string {
 }
 
 // serverIP returns the first non-loopback unicast address of the host,
-// preferring IPv4, or nil when there is none.
+// preferring IPv4, or nil when there is none. Inside a container it is nil: the
+// container's own address is a bridge or pod IP the operator cannot reach
+// either, while the published APP_URL port (localhost:8080 on the Docker host by
+// default) is.
 func serverIP() net.IP {
+	if runningInContainer() {
+		return nil
+	}
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return nil
@@ -423,6 +430,20 @@ func serverIP() net.IP {
 		}
 	}
 	return v6
+}
+
+// runningInContainer reports the markers Docker, Podman and Kubernetes leave in
+// a container.
+func runningInContainer() bool {
+	if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
+		return true
+	}
+	for _, marker := range []string{"/.dockerenv", "/run/.containerenv"} {
+		if _, err := os.Stat(marker); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // generateBootKey produces a cryptographically random, hex-encoded boot key.

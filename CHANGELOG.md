@@ -163,6 +163,8 @@ Existing sessions survive: nobody is signed out.
   settings, and threshold emails to the owner name the person. Participants are
   never shown it, in the app or by email. Rows have no automatic retention.
 - The login page links to `/bootstrap` while the instance has no account yet.
+- The first-run log prints the full bootstrap address: `APP_URL`, or on a
+  binary install left at the localhost default, the server's own IP (#218).
 - **Bundled offline national holiday rules for 47 countries**, including
   Australia, Japan and Thailand, supplied by the third-party `rickar/cal/v2`
   library instead of the network-only `go-holidays` library. Covered countries
