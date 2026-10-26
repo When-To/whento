@@ -113,6 +113,40 @@ func (r *MFARepository) Update(ctx context.Context, mfa *models.UserMFA) error {
 	return nil
 }
 
+// ConsumeBackupCode marks one stored backup-code hash as used. The check and the
+// append are one statement, so of two concurrent requests presenting the same
+// code exactly one sees a row affected. It reports false when the hash is no
+// longer spendable: already used, regenerated away, or MFA no longer enabled.
+func (r *MFARepository) ConsumeBackupCode(ctx context.Context, userID uuid.UUID, hash string) (bool, error) {
+	result, err := r.pool.Exec(ctx, `
+		UPDATE user_mfa
+		SET backup_codes_used = array_append(COALESCE(backup_codes_used, '{}'), $2)
+		WHERE user_id = $1 AND enabled
+			AND $2 = ANY(backup_codes)
+			AND NOT ($2 = ANY(COALESCE(backup_codes_used, '{}')))
+	`, userID, hash)
+	if err != nil {
+		return false, fmt.Errorf("failed to consume backup code: %w", err)
+	}
+	return result.RowsAffected() == 1, nil
+}
+
+// ConsumeTOTPStep records step as the last accepted TOTP time step for secret.
+// It reports false when a step at or after it was already accepted, so a code
+// can be spent once and an older one never after a newer one.
+func (r *MFARepository) ConsumeTOTPStep(ctx context.Context, userID uuid.UUID, secret string, step int64) (bool, error) {
+	result, err := r.pool.Exec(ctx, `
+		UPDATE user_mfa
+		SET totp_last_step = $3
+		WHERE user_id = $1 AND enabled AND secret = $2
+			AND (totp_last_step IS NULL OR totp_last_step < $3)
+	`, userID, secret, step)
+	if err != nil {
+		return false, fmt.Errorf("failed to consume TOTP step: %w", err)
+	}
+	return result.RowsAffected() == 1, nil
+}
+
 // Delete deletes MFA configuration
 func (r *MFARepository) Delete(ctx context.Context, userID uuid.UUID) error {
 	query := `DELETE FROM user_mfa WHERE user_id = $1`

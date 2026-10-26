@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"slices"
 	"testing"
 	"time"
 
@@ -36,6 +37,12 @@ type fakeMFAStore struct {
 	mfa *models.UserMFA
 	err error
 
+	// snapshot, when set, is what GetByUserID returns instead of mfa: a read
+	// taken before another request changed the stored row.
+	snapshot   *models.UserMFA
+	lastStep   *int64
+	consumeErr error
+
 	created   *models.UserMFA
 	updated   *models.UserMFA
 	deleted   uuid.UUID
@@ -56,11 +63,40 @@ func (f *fakeMFAStore) GetByUserID(context.Context, uuid.UUID) (*models.UserMFA,
 	if f.err != nil {
 		return nil, f.err
 	}
+	if f.snapshot != nil {
+		return f.snapshot, nil
+	}
 	if f.mfa == nil {
 		return nil, repository.ErrMFANotFound
 	}
 
 	return f.mfa, nil
+}
+
+// ConsumeBackupCode and ConsumeTOTPStep apply the same conditions as the SQL
+// in the repository, against the stored row rather than any snapshot.
+func (f *fakeMFAStore) ConsumeBackupCode(_ context.Context, _ uuid.UUID, hash string) (bool, error) {
+	if f.consumeErr != nil {
+		return false, f.consumeErr
+	}
+	if f.mfa == nil || !f.mfa.Enabled || !slices.Contains(f.mfa.BackupCodes, hash) || slices.Contains(f.mfa.BackupCodesUsed, hash) {
+		return false, nil
+	}
+	f.mfa.BackupCodesUsed = append(f.mfa.BackupCodesUsed, hash)
+
+	return true, nil
+}
+
+func (f *fakeMFAStore) ConsumeTOTPStep(_ context.Context, _ uuid.UUID, secret string, step int64) (bool, error) {
+	if f.consumeErr != nil {
+		return false, f.consumeErr
+	}
+	if f.mfa == nil || !f.mfa.Enabled || f.mfa.Secret != secret || (f.lastStep != nil && *f.lastStep >= step) {
+		return false, nil
+	}
+	f.lastStep = &step
+
+	return true, nil
 }
 
 func (f *fakeMFAStore) Update(_ context.Context, mfa *models.UserMFA) error {
@@ -523,5 +559,111 @@ func TestGeneratedBackupCodesAreDistinct(t *testing.T) {
 		if len(code) != 8 {
 			t.Errorf("code %q has length %d, want 8 — VerifyCode routes by length", code, len(code))
 		}
+	}
+}
+
+// TestVerifyCodeSpendsEachCodeOnce pins the replay rules: a backup code or a TOTP
+// step is accepted only if the store atomically records it as spent, and a store
+// failure rejects the code instead of accepting it unrecorded.
+func TestVerifyCodeSpendsEachCodeOnce(t *testing.T) {
+	const backup = "ABCDEFGH"
+	hash, err := bcrypt.GenerateFromPassword([]byte(backup), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash backup code: %v", err)
+	}
+	key, err := totp.Generate(totp.GenerateOpts{Issuer: "WhenTo", AccountName: "user@example.com"})
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	secret := key.Secret()
+	now := time.Now()
+	currentStep := now.Unix() / totpPeriod
+	codeAt := func(t *testing.T, at time.Time) string {
+		t.Helper()
+		code, err := totp.GenerateCode(secret, at)
+		if err != nil {
+			t.Fatalf("generate code: %v", err)
+		}
+		return code
+	}
+	stored := func() *models.UserMFA {
+		return &models.UserMFA{Enabled: true, Secret: secret, BackupCodes: []string{string(hash)}, BackupCodesUsed: []string{}}
+	}
+	step := func(s int64) *int64 { return &s }
+
+	tests := []struct {
+		name     string
+		code     func(t *testing.T) string
+		setup    func(store *fakeMFAStore)
+		wantOK   bool
+		wantErr  bool
+		wantStep *int64
+	}{
+		{
+			name:   "a fresh backup code is accepted and recorded",
+			code:   func(*testing.T) string { return backup },
+			wantOK: true,
+		},
+		{
+			name: "a backup code spent by a concurrent request after the read is rejected",
+			code: func(*testing.T) string { return backup },
+			setup: func(store *fakeMFAStore) {
+				store.snapshot = stored()
+				store.mfa.BackupCodesUsed = []string{string(hash)}
+			},
+		},
+		{
+			name:    "a backup code is rejected when recording it fails",
+			code:    func(*testing.T) string { return backup },
+			setup:   func(store *fakeMFAStore) { store.consumeErr = errStore },
+			wantErr: true,
+		},
+		{
+			name:     "a fresh TOTP code is accepted and its step recorded",
+			code:     func(t *testing.T) string { return codeAt(t, now) },
+			wantOK:   true,
+			wantStep: step(currentStep),
+		},
+		{
+			name:     "a TOTP code whose step was already accepted is a replay",
+			code:     func(t *testing.T) string { return codeAt(t, now) },
+			setup:    func(store *fakeMFAStore) { store.lastStep = step(currentStep) },
+			wantStep: step(currentStep),
+		},
+		{
+			name:     "an older TOTP code after a newer one was accepted is rejected",
+			code:     func(t *testing.T) string { return codeAt(t, now.Add(-totpPeriod*time.Second)) },
+			setup:    func(store *fakeMFAStore) { store.lastStep = step(currentStep) },
+			wantStep: step(currentStep),
+		},
+		{
+			name:    "a TOTP code is rejected when recording its step fails",
+			code:    func(t *testing.T) string { return codeAt(t, now) },
+			setup:   func(store *fakeMFAStore) { store.consumeErr = errStore },
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fixture := newFixture(t, stored())
+			if tt.setup != nil {
+				tt.setup(fixture.store)
+			}
+
+			ok, err := fixture.service.VerifyCode(context.Background(), fixture.userID, tt.code(t))
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("VerifyCode error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if ok != tt.wantOK {
+				t.Errorf("VerifyCode = %v, want %v", ok, tt.wantOK)
+			}
+			if tt.wantOK && tt.code(t) == backup && !slices.Contains(fixture.store.mfa.BackupCodesUsed, string(hash)) {
+				t.Error("an accepted backup code was not recorded as used")
+			}
+			if tt.wantStep != nil && (fixture.store.lastStep == nil || *fixture.store.lastStep != *tt.wantStep) {
+				t.Errorf("last accepted step = %v, want %d", fixture.store.lastStep, *tt.wantStep)
+			}
+		})
 	}
 }

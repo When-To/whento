@@ -83,7 +83,7 @@ bash scripts/migrate.sh create selfhosted migration_name
 
 ## Migration Naming
 
-- **Common**: `001_init`, `008_notification_log`, `012_unified_ics_feed`, `014_availability_index_cleanup`, `015_refresh_token_grace_window`, `016_refresh_token_family`, `017_security_generation`, `018_mfa_pending_nonce`, `019_app_state`, `020_reminder_jobs`, `021_date_activity_log`, `022_date_activity_log_participant_indexes`
+- **Common**: `001_init`, `008_notification_log`, `012_unified_ics_feed`, `014_availability_index_cleanup`, `015_refresh_token_grace_window`, `016_refresh_token_family`, `017_security_generation`, `018_mfa_pending_nonce`, `019_app_state`, `020_reminder_jobs`, `021_date_activity_log`, `022_date_activity_log_participant_indexes`, `023_mfa_totp_last_step`
 - **Cloud**: `005_ecommerce`, `011_order_shop_session`, `013_drop_billing`
 - **Self-hosted**: `005_licenses`, `013_drop_licensing`
 

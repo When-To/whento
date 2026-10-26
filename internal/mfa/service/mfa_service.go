@@ -44,6 +44,8 @@ type MFAStore interface {
 	Create(ctx context.Context, mfa *models.UserMFA) error
 	GetByUserID(ctx context.Context, userID uuid.UUID) (*models.UserMFA, error)
 	Update(ctx context.Context, mfa *models.UserMFA) error
+	ConsumeBackupCode(ctx context.Context, userID uuid.UUID, hash string) (bool, error)
+	ConsumeTOTPStep(ctx context.Context, userID uuid.UUID, secret string, step int64) (bool, error)
 	EnableAndRevokeSessions(ctx context.Context, userID uuid.UUID, secret string, enabledAt time.Time) error
 	Delete(ctx context.Context, userID uuid.UUID) error
 }
@@ -236,20 +238,49 @@ func (s *MFAService) VerifyCode(ctx context.Context, userID uuid.UUID, code stri
 
 	// Try TOTP code first (6 digits)
 	if len(code) == 6 {
-		valid := totp.Validate(code, mfa.Secret)
-		return valid, nil
+		step, ok := matchTOTPStep(code, mfa.Secret, time.Now())
+		if !ok {
+			return false, nil
+		}
+		// Each step is accepted once, and never at or behind one already accepted,
+		// so an observed code cannot be replayed inside its validity window.
+		return s.repo.ConsumeTOTPStep(ctx, userID, mfa.Secret, step)
 	}
 
 	// Try backup code (8 characters)
 	if len(code) == 8 {
-		return s.verifyBackupCode(ctx, mfa, code)
+		return s.verifyBackupCode(ctx, userID, mfa, code)
 	}
 
 	return false, nil
 }
 
+// totpPeriod and totpSkew are the defaults totp.Validate applies, unrolled so
+// the step a code matched is known.
+const (
+	totpPeriod = 30
+	totpSkew   = 1
+)
+
+// matchTOTPStep returns the time step code is valid for, within totpSkew steps
+// of now.
+func matchTOTPStep(code, secret string, now time.Time) (int64, bool) {
+	current := now.Unix() / totpPeriod
+	for step := current - totpSkew; step <= current+totpSkew; step++ {
+		ok, _ := totp.ValidateCustom(code, secret, time.Unix(step*totpPeriod, 0), totp.ValidateOpts{
+			Period:    totpPeriod,
+			Digits:    otp.DigitsSix,
+			Algorithm: otp.AlgorithmSHA1,
+		})
+		if ok {
+			return step, true
+		}
+	}
+	return 0, false
+}
+
 // verifyBackupCode verifies and marks a backup code as used
-func (s *MFAService) verifyBackupCode(ctx context.Context, mfa *models.UserMFA, code string) (bool, error) {
+func (s *MFAService) verifyBackupCode(ctx context.Context, userID uuid.UUID, mfa *models.UserMFA, code string) (bool, error) {
 	// Check each backup code
 	for _, hashedCode := range mfa.BackupCodes {
 		// Skip if already used
@@ -267,16 +298,9 @@ func (s *MFAService) verifyBackupCode(ctx context.Context, mfa *models.UserMFA, 
 		// Verify backup code
 		err := bcrypt.CompareHashAndPassword([]byte(hashedCode), []byte(code))
 		if err == nil {
-			// Mark as used
-			mfa.BackupCodesUsed = append(mfa.BackupCodesUsed, hashedCode)
-
-			// Update in database
-			if err := s.repo.Update(ctx, mfa); err != nil {
-				s.logger.Error("Failed to update backup code usage", "error", err)
-				// Don't fail verification if update fails
-			}
-
-			return true, nil
+			// Spent atomically in the store: a concurrent request with the same
+			// code that got there first, or a failed write, is a rejection.
+			return s.repo.ConsumeBackupCode(ctx, userID, hashedCode)
 		}
 	}
 
