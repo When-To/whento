@@ -501,6 +501,32 @@ func TestCheckThresholdAndNotifyDeduplicatesRecipients(t *testing.T) {
 	}
 }
 
+// TestThresholdEmailNamesThePersonToTheOwnerOnly: the journal is owner-only, so a
+// participant's copy of "threshold lost" must not say who withdrew.
+func TestThresholdEmailNamesThePersonToTheOwnerOnly(t *testing.T) {
+	f := newNotifyFixture(t, emailConfig())
+	f.detector.transition = &models.ThresholdTransition{
+		Date: f.date, PreviousCount: 2, NewCount: 1, Threshold: 2, TransitionType: "threshold_lost",
+	}
+	f.journal.activity = &availabilityModels.DateActivity{
+		LastWithdrawn: &availabilityModels.ParticipantRef{ID: uuid.New(), Name: "Grace", At: f.date},
+	}
+
+	if err := f.service().CheckThresholdAndNotify(context.Background(), f.calendar.ID, f.date, 2); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, msg := range f.mailer.messages() {
+		named := strings.Contains(msg.Body, "Grace")
+		if owner := msg.To[0] == f.owner.Email; owner != named {
+			t.Errorf("%s: names the person who withdrew = %v, want %v", msg.To[0], named, owner)
+		}
+	}
+	if len(f.mailer.messages()) != 2 {
+		t.Fatalf("expected owner + Ada, got %d message(s)", len(f.mailer.messages()))
+	}
+}
+
 // TestCheckThresholdAndNotifyEmailRecipientRules covers who is left out.
 func TestCheckThresholdAndNotifyEmailRecipientRules(t *testing.T) {
 	tests := []struct {

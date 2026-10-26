@@ -583,7 +583,15 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 			calendarURL = fmt.Sprintf("%s/c/%s", s.appURL, calendar.PublicToken)
 		}
 
-		htmlMessage := s.buildHTMLNotificationMessage(calendar, transition, calendarURL, recipient.ParticipantID != nil, recipient.Locale, participantNames)
+		// The activity journal is owner-only (see activity_handler.go): a participant
+		// is not told who joined last or, worse, who withdrew.
+		recipientTransition := transition
+		if !recipient.IsOwner {
+			withoutJournal := *transition
+			withoutJournal.LastJoined, withoutJournal.LastWithdrawn = nil, nil
+			recipientTransition = &withoutJournal
+		}
+		htmlMessage := s.buildHTMLNotificationMessage(calendar, recipientTransition, calendarURL, recipient.ParticipantID != nil, recipient.Locale, participantNames)
 
 		// calendarURL is deliberately absent from this line. It is
 		// {app}/c/{public token}/p/{participant id} — the calendar's credential
