@@ -6,6 +6,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -15,6 +16,7 @@ import (
 	"github.com/whento/pkg/middleware"
 	"github.com/whento/whento/internal/availability/models"
 	calendarModels "github.com/whento/whento/internal/calendar/models"
+	calendarRepository "github.com/whento/whento/internal/calendar/repository"
 )
 
 // ActivityCalendarStore is the slice of the calendar repository this handler needs:
@@ -89,7 +91,12 @@ func (h *ActivityHandler) GetActivity(w http.ResponseWriter, r *http.Request) {
 	// nobody can read is a 404, one somebody else owns is a 403.
 	calendar, err := h.calendarRepo.GetByID(ctx, calendarID)
 	if err != nil {
-		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
+		// Only a missing row is a 404; a database outage must not pass for one.
+		if errors.Is(err, calendarRepository.ErrCalendarNotFound) {
+			httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
+			return
+		}
+		handleAvailabilityError(w, r, err, "Failed to load the calendar")
 		return
 	}
 

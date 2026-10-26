@@ -6,6 +6,7 @@ package handlers_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	"github.com/whento/whento/internal/availability/repository"
 	"github.com/whento/whento/internal/availability/service"
 	calendarModels "github.com/whento/whento/internal/calendar/models"
+	calendarRepository "github.com/whento/whento/internal/calendar/repository"
 )
 
 // The activity journal answers a question about everybody on a calendar — who joined,
@@ -38,9 +40,13 @@ const activityDate = "2026-03-05"
 // activityCalendarStore is the one row the ownership check reads.
 type activityCalendarStore struct {
 	calendar *calendarModels.Calendar
+	err      error
 }
 
 func (s *activityCalendarStore) GetByID(context.Context, uuid.UUID) (*calendarModels.Calendar, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
 	return s.calendar, nil
 }
 
@@ -180,6 +186,23 @@ func TestGetActivityShowsNamesToTheOwnerDespiteLockParticipants(t *testing.T) {
 	for _, want := range []string{"Alice", "Bob", "last_joined", "last_withdrawn", activityDate} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the owner's response is missing %q: %s", want, body)
+		}
+	}
+}
+
+// A database failure reading the calendar is a 500, not a calendar that does not exist.
+func TestGetActivityMapsCalendarLookupErrors(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want int
+	}{
+		{calendarRepository.ErrCalendarNotFound, http.StatusNotFound},
+		{errors.New("connection refused"), http.StatusInternalServerError},
+	} {
+		f := newActivityFixture(t, uuid.New(), false)
+		f.handler = handlers.NewActivityHandler(&activityCalendarStore{err: tc.err}, nil)
+		if got := f.as(uuid.New()).Code; got != tc.want {
+			t.Errorf("GetByID error %q: status %d, want %d", tc.err, got, tc.want)
 		}
 	}
 }
