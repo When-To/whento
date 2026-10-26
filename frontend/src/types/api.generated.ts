@@ -1381,7 +1381,7 @@ export interface paths {
     put?: never;
     /**
      * Reset password
-     * @description Validates the reset token and updates the password. Automatically logs in the user and returns JWT tokens.
+     * @description Validates the reset token and updates the password. Without MFA, signs the user in: the access token is returned and the refresh token is set as an httpOnly cookie. With MFA enabled no session is issued: require_mfa and temp_token are returned, and the login completes through the MFA flow.
      */
     post: {
       parameters: {
@@ -1403,11 +1403,20 @@ export interface paths {
             [name: string]: unknown;
           };
           content: {
-            'application/json': components['schemas']['models.AuthResponse'];
+            'application/json': components['schemas']['models.ResetPasswordResponse'];
           };
         };
         /** @description Invalid request, validation error, or invalid/expired token */
         400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Internal server error */
+        500: {
           headers: {
             [name: string]: unknown;
           };
@@ -5381,6 +5390,17 @@ export interface components {
     'models.ResetPasswordRequest': {
       new_password: string;
       token: string;
+    };
+    'models.ResetPasswordResponse': {
+      access_token?: string;
+      message?: string;
+      /** @description True if 2FA verification is required */
+      require_mfa?: boolean;
+      /** @description SessionID is the server family of the auto-login cookie, same contract as AuthResponse. */
+      session_id?: string;
+      /** @description Temporary token for 2FA flow (5min expiry) */
+      temp_token?: string;
+      user?: components['schemas']['models.UserResponse'];
     };
     'models.SlackChannelConfig': {
       enabled?: boolean;

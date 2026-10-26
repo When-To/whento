@@ -20,7 +20,7 @@ enableAutoUnmount(afterEach);
 const routerPush = vi.fn();
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: routerPush }),
+  useRouter: () => ({ push: routerPush, currentRoute: { value: { meta: {} } } }),
 }));
 
 const calendarsApi = {
@@ -273,7 +273,19 @@ describe('Dashboard.vue — my calendars', () => {
     await byId(wrapper, 'c').find('article').trigger('drop');
     await nextTick();
 
-    expect(renderedIds(wrapper)).toEqual(['b', 'a', 'c']);
+    // The dropped card takes the target's slot, the last one included.
+    expect(renderedIds(wrapper)).toEqual(['b', 'c', 'a']);
+
+    // Onto the adjacent card is a swap, not a no-op; upwards works the same way.
+    await byId(wrapper, 'b').find('.drag-grip').trigger('dragstart');
+    await byId(wrapper, 'c').find('article').trigger('drop');
+    await nextTick();
+    expect(renderedIds(wrapper)).toEqual(['c', 'b', 'a']);
+
+    await byId(wrapper, 'a').find('.drag-grip').trigger('dragstart');
+    await byId(wrapper, 'c').find('article').trigger('drop');
+    await nextTick();
+    expect(renderedIds(wrapper)).toEqual(['a', 'c', 'b']);
   });
 
   it('does not let drag-and-drop cross the pinned/unpinned boundary', async () => {
@@ -612,7 +624,7 @@ describe('Dashboard.vue — keyboard focus after reorder (S3 regression)', () =>
     await byId(wrapper, 'c').find('article').trigger('drop');
     await flushPromises();
 
-    expect(renderedIds(wrapper)).toEqual(['b', 'a', 'c', 'd']);
+    expect(renderedIds(wrapper)).toEqual(['b', 'c', 'a', 'd']);
     // The dragged calendar ("a") keeps focus on one of its enabled move controls.
     expect(focused()?.calendar).toBe('a');
     expect(focused()?.disabled).toBe(false);

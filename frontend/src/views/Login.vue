@@ -15,7 +15,19 @@
           <h1 class="font-display text-3xl font-bold text-gray-900 dark:text-white">
             {{ t('auth.login') }}
           </h1>
-          <p v-if="registrationEnabled" class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          <!-- A fresh instance has no account to sign in to: point at the setup page. -->
+          <p
+            v-if="authStore.bootstrapRequired"
+            class="mt-2 text-sm text-gray-600 dark:text-gray-400"
+          >
+            <router-link
+              to="/bootstrap"
+              class="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+            >
+              {{ t('auth.bootstrap.needUser') }}
+            </router-link>
+          </p>
+          <p v-else-if="registrationEnabled" class="mt-2 text-sm text-gray-600 dark:text-gray-400">
             {{ t('auth.noAccount') }}
             <router-link
               to="/register"

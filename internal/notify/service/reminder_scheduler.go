@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"runtime/debug"
 	"time"
 
 	"github.com/google/uuid"
@@ -171,6 +172,10 @@ type ReminderScheduler struct {
 	lastCleanup      time.Time
 	now              func() time.Time
 	logger           *slog.Logger
+	// watchingSince is when this process first scanned. A send window that
+	// opened after it was observed by a live scan, so an event qualifying past
+	// the catch-up window qualified late rather than during an outage.
+	watchingSince time.Time
 }
 
 // NewReminderScheduler uses settings already defaulted and validated by config.Load.
@@ -225,7 +230,7 @@ func (s *ReminderScheduler) Run(ctx context.Context) {
 		"interval", s.interval.String(),
 		"instance", s.instanceID)
 
-	s.runOnce(ctx)
+	s.safeRunOnce(ctx)
 
 	for {
 		select {
@@ -233,9 +238,23 @@ func (s *ReminderScheduler) Run(ctx context.Context) {
 			s.logger.Info("Reminder scheduler stopped")
 			return
 		case <-ticker.C:
-			s.runOnce(ctx)
+			s.safeRunOnce(ctx)
 		}
 	}
+}
+
+// safeRunOnce contains a panic to one pass. The worker goroutine has no
+// Recoverer, so a panic would otherwise take the whole server down; a claimed
+// job's lease simply expires and the job is handed back.
+func (s *ReminderScheduler) safeRunOnce(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.Error("Reminder scheduler pass panicked",
+				"panic", r,
+				"stack", string(debug.Stack()))
+		}
+	}()
+	s.runOnce(ctx)
 }
 
 // runOnce issues then delivers.
@@ -297,7 +316,15 @@ func (s *ReminderScheduler) enqueueDue(ctx context.Context) {
 	}
 
 	now := s.now()
+	if s.watchingSince.IsZero() {
+		s.watchingSince = now
+	}
 	for _, calendar := range calendars {
+		// A shutdown mid-scan would otherwise run, and log, a failing count
+		// query for every remaining calendar.
+		if ctx.Err() != nil {
+			return
+		}
 		s.enqueueCalendar(ctx, calendar, now)
 	}
 }
@@ -345,7 +372,11 @@ func (s *ReminderScheduler) enqueueCalendar(ctx context.Context, calendar *calen
 				MaxAttempts:   s.maxAttempts,
 				NextAttemptAt: scheduledAt,
 			}
-			if now.Sub(scheduledAt) > s.catchUp {
+			// The catch-up window bounds what an outage may deliver late. A window
+			// that opened while this process was scanning was not missed: the
+			// event qualified afterwards (someone joined the day before), and
+			// it is delivered now while the event is still ahead.
+			if now.Sub(scheduledAt) > s.catchUp && scheduledAt.Before(s.watchingSince) {
 				recorded, err := s.jobs.RecordMissed(ctx, job)
 				if err != nil {
 					s.logger.Error("Failed to record missed reminder", "calendar_id", calendar.ID, "error", err)

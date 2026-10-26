@@ -2271,6 +2271,16 @@ describe('apiClient', () => {
       expect(api.isDisposed).toBe(true);
     });
 
+    it('removes its storage listener', () => {
+      const remove = vi.spyOn(window, 'removeEventListener');
+      const api = new ApiClient();
+      live.push(api);
+
+      api.dispose();
+
+      expect(remove).toHaveBeenCalledWith('storage', expect.any(Function));
+    });
+
     it('stops reacting after disposal', () => {
       const api = new ApiClient();
       live.push(api);

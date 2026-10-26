@@ -289,7 +289,7 @@ export class ApiClient {
 
     this.setupInterceptors();
     this.setupChannel();
-    this.setupStorageFallback();
+    this.removeStorageListener = this.setupStorageFallback();
     this.setupWakeUp();
   }
 

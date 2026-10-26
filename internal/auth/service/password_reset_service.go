@@ -75,6 +75,11 @@ type PasswordResetTokenIssuer interface {
 	GenerateCustomToken(claims map[string]interface{}) (string, error)
 }
 
+// AccessTokenRevoker withdraws the access tokens a user already holds.
+type AccessTokenRevoker interface {
+	RevokeAccessTokens(ctx context.Context, userID string)
+}
+
 // PasswordResetService handles password reset business logic
 type PasswordResetService struct {
 	userRepo          PasswordResetUserStore
@@ -82,6 +87,7 @@ type PasswordResetService struct {
 	mfaRepo           MFARepository
 	emailService      PasswordResetMailer
 	jwtManager        PasswordResetTokenIssuer
+	revoker           AccessTokenRevoker
 	cfg               *config.Config
 	logger            *slog.Logger
 	bcryptCost        int
@@ -96,6 +102,7 @@ func NewPasswordResetService(
 	mfaRepo MFARepository,
 	emailService PasswordResetMailer,
 	jwtManager PasswordResetTokenIssuer,
+	revoker AccessTokenRevoker,
 	cfg *config.Config,
 	logger *slog.Logger,
 	bcryptCost int,
@@ -118,6 +125,7 @@ func NewPasswordResetService(
 		mfaRepo:           mfaRepo,
 		emailService:      emailService,
 		jwtManager:        jwtManager,
+		revoker:           revoker,
 		cfg:               cfg,
 		logger:            logger,
 		bcryptCost:        bcryptCost,
@@ -230,6 +238,12 @@ func (s *PasswordResetService) ResetPassword(ctx context.Context, req *models.Re
 			return nil, ErrInvalidToken
 		}
 		return nil, fmt.Errorf("failed to consume password reset token: %w", err)
+	}
+
+	// The refresh rows went with the claim; access tokens an attacker may hold
+	// are withdrawn here, before the fresh session below is issued.
+	if s.revoker != nil {
+		s.revoker.RevokeAccessTokens(ctx, user.ID.String())
 	}
 
 	// The reset itself has landed. An MFA-protected account still has to prove the

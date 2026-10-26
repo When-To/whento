@@ -40,6 +40,37 @@ line per release rather than listed individually.
 
 ## [Unreleased]
 
+A major version: the first administrator is now created through an operator-key
+bootstrap rather than by the first public registration, the legacy magic-link `GET`
+is gone, and the holiday lookup no longer reaches the network by default. Seven
+migrations (016 to 022) apply on the first start.
+
+### Upgrading from v2.0.0
+
+1. **Back up first.** The migrations apply automatically. Going back to the v2.0.0
+   image afterwards means reverting them with the new image first
+   ([migration rollback](docs/migration-rollback.md#4-going-back-to-an-older-release)).
+2. `docker-compose.yml` follows `:latest`, so a plain `docker compose pull` moves
+   to this release. Pin a tag if you want to choose when.
+3. **Empty database:** create the administrator at `/bootstrap` with the key from
+   `docker compose logs app`, or pin `BOOTSTRAP_KEY` / `BOOTSTRAP_KEY_FILE` (a
+   secret file needs its own mount). **Users but no administrator:** promote one
+   with SQL ([First Account](README.md#first-account)).
+4. **Reminders start being sent.** v2.0.0 stored reminder settings and never sent
+   anything; calendars that already had reminders enabled will now notify their
+   owner (and participants, if configured).
+5. **Holidays:** countries outside the 47 bundled ones no longer block holidays
+   unless `HOLIDAYS_NAGER_FALLBACK_ENABLED=true`.
+6. Clients calling `GET /api/v1/auth/magic-link/verify/{token}` must move to
+   `POST /api/v1/auth/magic-link/verify`; the `GET` now answers 405.
+7. `DB_MAX_CONNS`, `DB_MIN_CONNS`, `DB_MAX_CONN_LIFETIME` and
+   `DB_MAX_CONN_IDLE_TIME` were ignored by v2.0.0 and now take effect: check
+   any value you had set.
+8. The activity journal has no automatic retention; schedule your own purge if
+   you want one ([logging and privacy](docs/logging-and-privacy.md)).
+
+Existing sessions survive: nobody is signed out.
+
 ### Added
 
 - One-time operator bootstrap at `/bootstrap` and `POST /api/v1/auth/bootstrap`,
@@ -56,11 +87,84 @@ line per release rather than listed individually.
   a logout cannot lose each other.
 - A reminder scheduler (`internal/notify/service`) wired into `cmd` that issues,
   claims and delivers persisted reminder jobs, re-arms canceled deliveries
-  within the catch-up window once availability/config return, and renews its
+  once availability/config return before the event, and renews its
   claim lease immediately before each bounded external send. The operator tunables are
   exposed as `REMINDER_HOURS_BEFORE`, `REMINDER_INTERVAL`,
   `REMINDER_CATCH_UP_WINDOW`, `REMINDER_MAX_ATTEMPTS` and
-  `REMINDER_RETRY_BACKOFF`.
+  `REMINDER_RETRY_BACKOFF`. The catch-up window bounds what an outage may
+  deliver late; a date that reaches its threshold after its send time while the
+  scheduler is running is reminded at once, as long as the event is still ahead.
+- **Reminder delivery is a durable, fenced queue.** Reminders are persisted in
+  a `reminder_jobs` table (migration `020`) and delivered by a scheduler loop:
+  each job is claimed atomically under a per-acquisition UUID claim token and a
+  lease (`FOR UPDATE SKIP LOCKED`), so only one worker owns an unexpired claim.
+  Every queue-state transition is fenced by its token: a late worker's failure report on a job
+  somebody else already sent is a recognizable no-op, and a `sent` row can never
+  be rewritten. Delivery is retried with exponential backoff and permanently
+  fails after `max_attempts`. External delivery remains at least once: a crash
+  after a provider accepts a send but before completion is recorded can cause a
+  retry; exactly-once delivery is not promised.
+- **Reminder deadlines are calendar-local.** The scheduler enumerates candidate
+  event dates in the calendar's own IANA timezone (never a fixed UTC window), so
+  a calendar east of UTC does not lose the day its event lands on, and DST
+  shifts cannot move a scheduled instant onto the wrong date.
+- **Transient errors never cancel an event.** A failed count/availability query
+  while verifying a claimed job retries that job with backoff; only an
+  authoritatively confirmed non-qualifying event cancels the worker's own
+  claim. Each other delivery rechecks eligibility without an unfenced event-wide
+  cancellation. No longer does one bad read silently kill every reminder for an
+  event.
+- **Email is gated on real SMTP, re-read at delivery.** With no mailer
+  configured the scheduler enqueues no email jobs (chat channels are
+  unaffected), and a job whose SMTP vanished before delivery is suppressed
+  rearmably instead of burning its attempt budget. Participant email requires
+  the calendar's full consent configuration *and* SMTP, verified again at
+  delivery time, and the participant-email endpoints refuse when the email
+  channel is off, participant delivery is off, or SMTP is absent.
+- **The frontend SMTP probe preserves saved owner intent.** Instead of a boolean
+  that defaults to “available”, the probe is `unknown | available | unavailable
+  | error`: a failed probe shows a retryable warning. Neither a failed probe nor
+  unavailable SMTP rewrites saved `email.enabled`; only an explicit owner edit
+  changes that preference. Capability still gates delivery and new enablement.
+  Saved consent can be explicitly disabled even while SMTP is unavailable, and
+  stale capability responses cannot overwrite a newer probe result.
+- **Reminder timing and shutdown are bounded.** Rescheduling later cannot retain
+  an earlier claim time; elapsed calendar-local events are not reminded. Retry
+  delays saturate before arithmetic overflow and use each job's stored attempt
+  limit. Invalid operator tunables fail startup instead of silently falling back.
+  Every provider send renews the claim and honors a shorter context deadline,
+  including each recipient in a slow fanout. Lost claims/shutdown stop further
+  sends; chat delivery ledger failures are retried rather than ignored.
+- **Reminder transport errors do not persist provider credentials.** Webhook
+  URLs, bot tokens and recipient addresses embedded in provider errors are not
+  copied into reminder logs or the queue's `last_error`; wrapped error identity
+  remains available for cancellation handling.
+- **Reminder retries retain per-recipient completion for the entire event.**
+  A bouncing participant no longer makes successful recipients receive another
+  reminder after the threshold ledger's one-hour anti-spam window. Lease renewal
+  cannot shorten a live claim. Successful delivery clears previous error metadata.
+  Bounded cleanup also scrubs legacy free-form provider errors in retained rows.
+- **Reminder state has bounded retention and missed-window visibility.** Jobs and
+  recipient completion are cleaned in bounded batches after the event and state
+  are more than 30 days old. Missed windows are recorded and warned once per
+  delivery. Participant emails include localized participation-cancellation links.
+- **Reminder workers are joined before database shutdown.** Canceled SMTP sockets
+  close promptly, while confirmed sends get bounded completion writes before the
+  pool closes. Migration 020 checks valid delivery states and channels, and scans
+  only notification/reminder-enabled calendars through a matching partial index.
+- **Participant email status survives capability-probe failures.** Existing verified
+  or pending addresses remain visible with a warning and retry; sending actions
+  wait for available SMTP and owner consent. The no-op SMTP config adapter is gone.
+  Both locales explain the local-midnight reminder anchor, and participant mail
+  APIs document their consent/capability 403 responses.
+- **Per-date activity journal** (migration 021, indexed by 022): for each date,
+  who joined last and who withdrew last while the date was at its threshold.
+  Owners read it at `GET /api/v1/calendars/{id}/activity` and in calendar
+  settings, and threshold emails to the owner name the person. Participants are
+  never shown it, in the app or by email. Rows have no automatic retention.
+- The login page links to `/bootstrap` while the instance has no account yet.
+- The first-run log prints the full bootstrap address: `APP_URL`, or on a
+  binary install left at the localhost default, the server's own IP (#218).
 - **Bundled offline national holiday rules for 47 countries**, including
   Australia, Japan and Thailand, supplied by the third-party `rickar/cal/v2`
   library instead of the network-only `go-holidays` library. Covered countries
@@ -162,7 +266,8 @@ line per release rather than listed individually.
 - Production Compose PID limits now agree between the service-level `pids_limit`
   and `deploy.resources.limits.pids` (app 256, postgres 512, redis 128). Compose
   2.20+ refuses a top-level `pids_limit` that disagrees with the deploy-resource
-  spelling, so a stack that set both used to fail at `docker compose up`.
+  spelling, and v2.0.0 set no `deploy` pids limit, so the stack failed at
+  `docker compose up` on current Compose.
 - `make test` now primes the two artifacts a clean checkout is missing (`web/dist`
   placeholder and generated Swagger docs) before running the root and shared-module
   Go suites.
@@ -174,6 +279,13 @@ line per release rather than listed individually.
 - **The last administrator is protected.** Demoting or deleting the last admin
   is refused transactionally, even under concurrent demotions or a deletion
   racing a registration.
+- The "Why WhenTo" page is served on self-hosted instances too, as an internal
+  link instead of one to whento.be (#126).
+- Expired refresh tokens are swept hourly, so abandoned sessions no longer
+  accumulate.
+- The images ship `THIRD-PARTY-LICENSES.md` in `/app`.
+- Dependency updates (#132, #136–#144, #147, #149–#152, #155–#159, #162, #164,
+  #165, #167–#169, #174, #175, #181, #182, #194–#198, #202–#205, #212–#215).
 
 ### Security
 
@@ -206,6 +318,18 @@ line per release rather than listed individually.
 - Failed Discord, Slack and Telegram calls no longer put the request URL in
   their error: Go's transport error prints it, and it carries the Telegram bot
   token or the webhook secret, which then reached the logs.
+- **Revoking sessions now withdraws access tokens too.** A password reset, MFA
+  activation, role change or account deletion used to delete the refresh
+  sessions only, leaving issued access tokens valid until `JWT_ACCESS_EXPIRY`
+  (a demoted administrator kept admin access for that long). They are now
+  revoked at once, like a password change. Without Redis, access tokens still
+  live out their expiry.
+- Threshold emails name the person who joined or withdrew to the calendar owner
+  only: participants received the name of whoever had just withdrawn.
+- Images build with Go 1.27.3, clearing CVE-2026-78667, CVE-2026-78669,
+  CVE-2026-97031 (#187) and CVE-2026-111943 (#209).
+- The root module requires chi v5.5.0 for GHSA-j6qf-3m9c-vwj3 (#216). WhenTo
+  never called the affected middleware.
 
 ### Fixed
 
@@ -225,70 +349,31 @@ line per release rather than listed individually.
 - Bootstrap audit lines ("Bootstrap key rejected", "Bootstrap administrator
   created") carry the request id, and the startup message names
   `BOOTSTRAP_KEY_FILE` as well as `BOOTSTRAP_KEY` as the key's source.
-
-- **Reminder delivery is a durable, fenced queue.** Reminders are persisted in
-  a `reminder_jobs` table (migration `020`) and delivered by a scheduler loop:
-  each job is claimed atomically under a per-acquisition UUID claim token and a
-  lease (`FOR UPDATE SKIP LOCKED`), so only one worker owns an unexpired claim.
-  Every queue-state transition is fenced by its token: a late worker's failure report on a job
-  somebody else already sent is a recognizable no-op, and a `sent` row can never
-  be rewritten. Delivery is retried with exponential backoff and permanently
-  fails after `max_attempts`. External delivery remains at least once: a crash
-  after a provider accepts a send but before completion is recorded can cause a
-  retry; exactly-once delivery is not promised.
-- **Reminder deadlines are calendar-local.** The scheduler enumerates candidate
-  event dates in the calendar's own IANA timezone (never a fixed UTC window), so
-  a calendar east of UTC does not lose the day its event lands on, and DST
-  shifts cannot move a scheduled instant onto the wrong date.
-- **Transient errors never cancel an event.** A failed count/availability query
-  while verifying a claimed job retries that job with backoff; only an
-  authoritatively confirmed non-qualifying event cancels the worker's own
-  claim. Each other delivery rechecks eligibility without an unfenced event-wide
-  cancellation. No longer does one bad read silently kill every reminder for an
-  event.
-- **Email is gated on real SMTP, re-read at delivery.** With no mailer
-  configured the scheduler enqueues no email jobs (chat channels are
-  unaffected), and a job whose SMTP vanished before delivery is suppressed
-  rearmably instead of burning its attempt budget. Participant email requires
-  the calendar's full consent configuration *and* SMTP, verified again at
-  delivery time, and the participant-email endpoints refuse when the email
-  channel is off, participant delivery is off, or SMTP is absent.
-- **The frontend SMTP probe preserves saved owner intent.** Instead of a boolean
-  that defaults to “available”, the probe is `unknown | available | unavailable
-  | error`: a failed probe shows a retryable warning. Neither a failed probe nor
-  unavailable SMTP rewrites saved `email.enabled`; only an explicit owner edit
-  changes that preference. Capability still gates delivery and new enablement.
-  Saved consent can be explicitly disabled even while SMTP is unavailable, and
-  stale capability responses cannot overwrite a newer probe result.
-- **Reminder timing and shutdown are bounded.** Rescheduling later cannot retain
-  an earlier claim time; elapsed calendar-local events are not reminded. Retry
-  delays saturate before arithmetic overflow and use each job's stored attempt
-  limit. Invalid operator tunables fail startup instead of silently falling back.
-  Every provider send renews the claim and honors a shorter context deadline,
-  including each recipient in a slow fanout. Lost claims/shutdown stop further
-  sends; chat delivery ledger failures are retried rather than ignored.
-- **Reminder transport errors do not persist provider credentials.** Webhook
-  URLs, bot tokens and recipient addresses embedded in provider errors are not
-  copied into reminder logs or the queue's `last_error`; wrapped error identity
-  remains available for cancellation handling.
-- **Reminder retries retain per-recipient completion for the entire event.**
-  A bouncing participant no longer makes successful recipients receive another
-  reminder after the threshold ledger's one-hour anti-spam window. Lease renewal
-  cannot shorten a live claim. Successful delivery clears previous error metadata.
-  Bounded cleanup also scrubs legacy free-form provider errors in retained rows.
-- **Reminder state has bounded retention and missed-window visibility.** Jobs and
-  recipient completion are cleaned in bounded batches after the event and state
-  are more than 30 days old. Missed windows are recorded and warned once per
-  delivery. Participant emails include localized participation-cancellation links.
-- **Reminder workers are joined before database shutdown.** Canceled SMTP sockets
-  close promptly, while confirmed sends get bounded completion writes before the
-  pool closes. Migration 020 checks valid delivery states and channels, and scans
-  only notification/reminder-enabled calendars through a matching partial index.
-- **Participant email status survives capability-probe failures.** Existing verified
-  or pending addresses remain visible with a warning and retry; sending actions
-  wait for available SMTP and owner consent. The no-op SMTP config adapter is gone.
-  Both locales explain the local-midnight reminder anchor, and participant mail
-  APIs document their consent/capability 403 responses.
+- An email the SMTP server had already accepted is no longer reported as
+  failed when the connection drops before the `QUIT` reply (for example a
+  shutdown canceling the send), which made reminders go out twice.
+- Threshold-notification rows in `notification_log` are deleted after 30 days.
+  The cleanup existed but nothing called it, so the table grew forever although
+  the rows only serve a one-hour anti-spam check.
+- `DB_MAX_CONNS`, `DB_MIN_CONNS`, `DB_MAX_CONN_LIFETIME` and
+  `DB_MAX_CONN_IDLE_TIME` reach the connection pool; v2.0.0 read and ignored
+  them (#200).
+- The cloud image builds again: its migrate-builder stage was truncated, so the
+  v2.0.0 cloud image never built (#124).
+- Dark-theme users get a dark first paint: the pre-paint theme script was inline
+  and the CSP refused it (#208).
+- The timezone selector offers zones tzdata folded into another country, such
+  as Copenhagen, Oslo, Stockholm and Amsterdam (#207).
+- Long calendar descriptions stay inside dashboard cards (#199).
+- The footer's documentation and contributing links point at real files (#125).
+- An admin page left open while another tab signs in as a non-admin redirects
+  to the dashboard instead of keeping the previous administrator's user list on
+  screen.
+- Dropping a dashboard card onto the next one moves it there, and the last slot
+  of a group is reachable by drag and drop.
+- The activity endpoint answers 500, not 404, when the calendar cannot be read.
+- A panic in the reminder scheduler is logged instead of stopping the server,
+  and a shutdown during a scan stops it at once.
 - Cancelling an HTTP request no longer opens the shared Redis circuit breaker
   or briefly blocks other users' session checks; cancelled probes do not mark
   an unhealthy dependency as recovered. Transport outages still fail closed.
@@ -470,12 +555,6 @@ because the history cannot be read for it.
   (`pkg/logger/logfields_test.go`) that fails the build on a log field named after
   an address, a credential, a name or an IP.
 - SPDX headers on every source file (#68).
-- An email the SMTP server had already accepted is no longer reported as
-  failed when the connection drops before the `QUIT` reply (for example a
-  shutdown canceling the send), which made reminders go out twice.
-- Threshold-notification rows in `notification_log` are deleted after 30 days.
-  The cleanup existed but nothing called it, so the table grew forever although
-  the rows only serve a one-hour anti-spam check.
 
 ---
 

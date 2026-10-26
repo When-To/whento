@@ -478,13 +478,20 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID string, req *mo
 		return fmt.Errorf("failed to update password: %w", err)
 	}
 
-	// Invalidate all active access tokens by recording password change time
+	s.RevokeAccessTokens(ctx, userID)
+
+	return nil
+}
+
+// RevokeAccessTokens invalidates every access token issued to the user before
+// now. Access tokens are self-contained, so this cache entry, checked by
+// middleware.Auth, is the only way to withdraw one before it expires; without
+// Redis an access token lives out its JWT_ACCESS_EXPIRY.
+func (s *AuthService) RevokeAccessTokens(ctx context.Context, userID string) {
 	if s.cache != nil && s.cache.IsEnabled() {
 		pwdKey := cache.UserPasswordChangedKey(userID)
 		_ = s.cache.Set(ctx, pwdKey, time.Now().Unix(), s.jwtManager.AccessExpiry())
 	}
-
-	return nil
 }
 
 // ListUsers returns all users (admin only)
@@ -516,6 +523,9 @@ func (s *AuthService) UpdateUserRole(ctx context.Context, currentUserID, targetU
 		return err
 	}
 
+	// The role is a claim of the access token: a demoted admin must not keep it.
+	s.RevokeAccessTokens(ctx, uid.String())
+
 	return nil
 }
 
@@ -536,6 +546,8 @@ func (s *AuthService) DeleteUser(ctx context.Context, currentUserID, targetUserI
 		}
 		return err
 	}
+
+	s.RevokeAccessTokens(ctx, uid.String())
 
 	return nil
 }

@@ -17,8 +17,12 @@ for the common case and it is the reason this page exists for the uncommon one.
 Two consequences follow directly:
 
 - **The schema version is a property of the image tag.** Rolling the application
-  back to an older image does *not* roll the schema back; the older image simply
-  finds a newer schema and starts against it.
+  back to an older image does *not* roll the schema back, and the older image
+  does not start against the newer schema either: its `migrate up` finds a
+  database version it has no file for (`no migration found for version 22`),
+  exits, and the container refuses to start. Rolling an image back across a
+  release that added migrations means reverting those migrations first, with
+  the *newer* image (§4).
 - **Rolling the schema back while the new image is still deployed achieves
   nothing.** The next container start re-applies the very migration you reverted.
   Pinning the image is part of the rollback, not an afterthought.
@@ -40,7 +44,7 @@ this first.
 | Situation                                                                            | Do this                                                                                                        |
 | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
 | The migration failed part-way; the database is marked dirty and the container will not start. | Repair forward: §2. Rolling back is usually not even possible until the dirty flag is cleared.                  |
-| The migration applied cleanly, but the new application version is broken.            | Roll back the **image**, not the schema — if the old code tolerates the new schema (added nullable columns and new tables usually qualify). |
+| The migration applied cleanly, but the new application version is broken.            | Roll forward with a fixed image if you can. Going back to the older image means reverting every migration it does not ship first: §4. |
 | The migration applied cleanly and the *schema change itself* is wrong.               | Roll forward with a new migration that fixes it. This is the default answer in production.                     |
 | The migration applied cleanly, is wrong, and dropped or rewrote data.                | Neither: **restore from backup** ([backup-restore.md](backup-restore.md)). A down migration will not bring the data back. |
 | The migration applied minutes ago, added structure only, and nothing has written to it yet. | A genuine `down 1` is reasonable: §3.                                                                          |
@@ -157,6 +161,30 @@ you may not have a terminal attached either way. Always write `down 1`.
 
 `--no-deps` keeps Compose from starting a second application container while you
 work.
+
+---
+
+## 4. Going back to an older release
+
+The older image cannot start against a schema newer than its own chain (see the
+top of this page), so its migrations have to be reverted first, using the
+*newer* image, which is the only one that has their `.down.sql` files.
+
+```bash
+cd /opt/whento
+docker compose stop app
+# Back up (§1), then count the migrations the older release does not ship. From
+# v3.0.0 back to v2.0.0 that is 016 to 022: seven.
+docker compose run --rm --no-deps --entrypoint sh app -c   'migrate -path /app/migrations -database "$DATABASE_URL" down 7'
+# Pin the older image in docker-compose.yml, then start it.
+docker compose up -d app
+```
+
+Read [the limits](#the-limits-a-down-migration-is-not-an-undo) first: from v3.0.0
+to v2.0.0 this discards the refresh-session families (sessions themselves
+survive), the reminder queue (a reminder still inside its send window can go out twice
+after a later upgrade), the per-date activity journal (gone for good) and the
+first-user marker (recomputed on the next upgrade).
 
 ---
 

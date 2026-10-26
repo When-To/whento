@@ -650,3 +650,12 @@ func TestBootstrapURL(t *testing.T) {
 		}
 	}
 }
+
+// Inside a container the host's own address is a bridge IP nobody outside can
+// reach, so the printed URL keeps APP_URL.
+func TestServerIPIsNilInsideAContainer(t *testing.T) {
+	t.Setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
+	if ip := serverIP(); ip != nil {
+		t.Errorf("serverIP() = %v inside a container, want nil", ip)
+	}
+}
