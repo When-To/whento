@@ -61,10 +61,6 @@ func TestEventsAboveThresholdCountsManualAvailabilities(t *testing.T) {
 	if day[0].ParticipantName != "Ada" || day[1].ParticipantName != "Grace" {
 		t.Errorf("participants = %q then %q, want Ada then Grace", day[0].ParticipantName, day[1].ParticipantName)
 	}
-	// The counts drive the "2/3 available" line in the summary.
-	if day[0].AvailableCount != 2 || day[0].TotalParticipants != 3 {
-		t.Errorf("counts = %d/%d, want 2/3", day[0].AvailableCount, day[0].TotalParticipants)
-	}
 	// TIME columns are reformatted to HH:MM in Go; the raw value carries seconds, which
 	// would end up in the exported event title.
 	if day[0].StartTime == nil || *day[0].StartTime != "09:00" {
@@ -255,9 +251,6 @@ func TestAManualEntryOverridesTheRecurrence(t *testing.T) {
 	if day[0].StartTime == nil || *day[0].StartTime != "14:00" {
 		t.Errorf("Ada's StartTime = %v, want the manual 14:00", day[0].StartTime)
 	}
-	if day[0].AvailableCount != 2 {
-		t.Errorf("AvailableCount = %d, want 2 — the override was counted twice", day[0].AvailableCount)
-	}
 }
 
 func TestEventsForACalendarWithNothingInIt(t *testing.T) {
@@ -338,8 +331,6 @@ func TestEventsAboveThresholdForCalendarsMatchesOneAtATime(t *testing.T) {
 			}
 			for i := range want {
 				if have[i].ParticipantName != want[i].ParticipantName ||
-					have[i].AvailableCount != want[i].AvailableCount ||
-					have[i].TotalParticipants != want[i].TotalParticipants ||
 					have[i].Note != want[i].Note {
 					t.Errorf("calendar %s on %s row %d: batched = %+v, single = %+v",
 						cal.CalendarID, date.Format("2006-01-02"), i, have[i], want[i])

@@ -122,7 +122,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useCalendarHistoryStore, type CalendarHistoryItem } from '@/stores/calendarHistory';
@@ -190,9 +190,4 @@ function formatLastVisited(timestamp: number): string {
     return t('calendar.justNow');
   }
 }
-
-// Initialize calendar history when component is mounted
-onMounted(() => {
-  historyStore.init();
-});
 </script>

@@ -991,6 +991,30 @@ func TestDeleteUserCannotRemoveLastAdmin(t *testing.T) {
 	}
 }
 
+// TestDeleteUserMissingTargetIs404 pins the repository's ErrUserNotFound being
+// mapped to the service sentinel, so a missing user is a 404 rather than a 500.
+func TestDeleteUserMissingTargetIs404(t *testing.T) {
+	admin := existingUser(t, "Correct-Horse-9")
+	admin.Role = models.RoleAdmin
+	r := newRig(t, rigOptions{
+		allowedRegister: true,
+		users: &mockUserRepository{
+			user: admin,
+			err:  repository.ErrUserNotFound,
+		},
+	})
+
+	target := uuid.New().String()
+	req := withRoute(httptest.NewRequest(http.MethodDelete, "/api/v1/auth/admin/users/"+target, nil),
+		"id", target)
+	rec := httptest.NewRecorder()
+	r.handler.DeleteUser(rec, asUser(req, admin.ID))
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 (%q)", rec.Code, rec.Body.String())
+	}
+}
+
 func TestListUsersEnrichesWithMFAStatus(t *testing.T) {
 	first := existingUser(t, "Correct-Horse-9")
 	second := existingUser(t, "Correct-Horse-9")

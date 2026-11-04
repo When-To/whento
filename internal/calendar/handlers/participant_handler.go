@@ -13,7 +13,6 @@ import (
 
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/middleware"
-	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/calendar/models"
 	"github.com/whento/whento/internal/calendar/service"
 )
@@ -72,12 +71,7 @@ func (h *ParticipantHandler) AddParticipant(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 
@@ -126,12 +120,7 @@ func (h *ParticipantHandler) AddAnonymousParticipant(w http.ResponseWriter, r *h
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 
@@ -198,12 +187,7 @@ func (h *ParticipantHandler) UpdateParticipant(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 

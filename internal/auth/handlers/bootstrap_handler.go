@@ -11,7 +11,6 @@ import (
 	"net/http"
 
 	"github.com/whento/pkg/httputil"
-	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/auth/service"
 	"github.com/whento/whento/internal/auth/sessioncookie"
@@ -89,12 +88,7 @@ func (h *BootstrapHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 

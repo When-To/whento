@@ -100,21 +100,6 @@ func TestUSObservedSubstituteDayBlocks(t *testing.T) {
 	}
 }
 
-// TestHolidaysForYearOfflineCoverage verifies the offline provider answers with
-// CoverageOffline and the fallback answers with CoverageFallback.
-func TestHolidaysForYearOfflineCoverage(t *testing.T) {
-	restore := SetNagerBaseURL("http://127.0.0.1:9/unused/%d/%s")
-	defer restore()
-
-	offline, coverage, err := holidaysForYear(context.Background(), "FR", 2026)
-	if err != nil || coverage != CoverageOffline {
-		t.Fatalf("FR coverage = %v, err = %v; want offline", coverage, err)
-	}
-	if len(offline) == 0 {
-		t.Fatal("FR 2026 offline list is empty, want holidays")
-	}
-}
-
 func TestHolidaysForYearFallback(t *testing.T) {
 	var hits int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -128,16 +113,16 @@ func TestHolidaysForYearFallback(t *testing.T) {
 	restore := SetNagerBaseURL(server.URL + "/%d/%s")
 	defer restore()
 
-	holidays, coverage, err := holidaysForYear(context.Background(), "KR", 2026)
-	if err != nil || coverage != CoverageFallback {
-		t.Fatalf("KR coverage = %v, err = %v; want fallback", coverage, err)
+	holidays, err := defaultNager.fetch(context.Background(), "KR", 2026)
+	if err != nil {
+		t.Fatalf("KR fallback err = %v", err)
 	}
-	if len(holidays) != 1 || holidays[0].Name != "National Liberation Day" {
+	if len(holidays) != 1 || !sameDate(holidays[0], time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)) {
 		t.Fatalf("holidays = %#v", holidays)
 	}
 
 	// Cached: a second call must not hit the network again.
-	_, _, err = holidaysForYear(context.Background(), "KR", 2026)
+	_, err = defaultNager.fetch(context.Background(), "KR", 2026)
 	if err != nil {
 		t.Fatalf("cached call: %v", err)
 	}
@@ -157,9 +142,8 @@ func TestHolidaysForYearFallbackUnavailable(t *testing.T) {
 	restore := SetNagerBaseURL(server.URL + "/%d/%s")
 	defer restore()
 
-	_, coverage, err := holidaysForYear(context.Background(), "KR", 2026)
-	if coverage != CoverageUnavailable || err == nil {
-		t.Fatalf("coverage = %v, err = %v; want unavailable+err", coverage, err)
+	if _, err := defaultNager.fetch(context.Background(), "KR", 2026); err == nil {
+		t.Fatal("want an unavailable error")
 	}
 	// A failure is never promoted to a "known ordinary year".
 	if _, isHolidayErr := isHolidayErrCtx(context.Background(), time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC), "KR"); isHolidayErr == nil {
@@ -176,9 +160,8 @@ func TestHolidaysForYearFallbackMalformedJSON(t *testing.T) {
 	restore := SetNagerBaseURL(server.URL + "/%d/%s")
 	defer restore()
 
-	_, coverage, err := holidaysForYear(context.Background(), "KR", 2026)
-	if coverage != CoverageUnavailable || err == nil {
-		t.Fatalf("coverage = %v, err = %v; want unavailable+err", coverage, err)
+	if _, err := defaultNager.fetch(context.Background(), "KR", 2026); err == nil {
+		t.Fatal("want an unavailable error")
 	}
 }
 
@@ -186,11 +169,11 @@ func TestHolidaysForYearFallbackRejectsInvalidParams(t *testing.T) {
 	restore := SetNagerBaseURL("http://127.0.0.1:9/unused/%d/%s")
 	defer restore()
 
-	if _, _, err := holidaysForYear(context.Background(), "ZZZ", 2026); err == nil {
+	if _, err := defaultNager.fetch(context.Background(), "ZZZ", 2026); err == nil {
 		t.Error("3-letter country accepted")
 	}
 	// KR is not an offline country, so its year is validated by the fallback.
-	if _, _, err := holidaysForYear(context.Background(), "KR", 1800); err == nil {
+	if _, err := defaultNager.fetch(context.Background(), "KR", 1800); err == nil {
 		t.Error("out-of-range year accepted")
 	}
 }
@@ -209,7 +192,7 @@ func TestHolidaysForYearContextCancellation(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
-	_, _, err := holidaysForYear(ctx, "KR", 2027)
+	_, err := defaultNager.fetch(ctx, "KR", 2027)
 	if err == nil {
 		t.Fatal("cancelled fetch did not error")
 	}

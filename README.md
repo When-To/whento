@@ -346,12 +346,9 @@ TRUSTED_PROXIES=                              # Comma-separated trusted reverse 
 # WEBAUTHN_RP_NAME=WhenTo
 # WEBAUTHN_RP_ID=your-domain.com
 # WEBAUTHN_RP_ORIGIN=https://your-domain.com
-# WEBAUTHN_TIMEOUT=60s
 
 # TOTP / 2FA (optional)
 # TOTP_ISSUER=WhenTo
-# TOTP_PERIOD=30
-# TOTP_DIGITS=6
 ```
 
 The two build variants read the same environment. There is nothing to configure that is

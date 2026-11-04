@@ -287,6 +287,12 @@ Existing sessions survive: nobody is signed out.
 - Dependency updates (#132, #136–#144, #147, #149–#152, #155–#159, #162, #164,
   #165, #167–#169, #174, #175, #181, #182, #194–#198, #202–#205, #212–#215).
 
+### Removed
+
+- `TOTP_PERIOD` and `TOTP_DIGITS`. Only setup honoured them, so any non-default
+  value made 2FA enrollment impossible; codes are now always 6 digits every 30s.
+- `WEBAUTHN_TIMEOUT`, which was validated but never applied.
+
 ### Security
 
 - **Magic links no longer log the visitor in by mere link click.** A GET
@@ -383,6 +389,7 @@ Existing sessions survive: nobody is signed out.
 - Cancelling an HTTP request no longer opens the shared Redis circuit breaker
   or briefly blocks other users' session checks; cancelled probes do not mark
   an unhealthy dependency as recovered. Transport outages still fail closed.
+- Deleting a user that does not exist answers 404 instead of 500.
 
 ## [v2.0.0] — 2026-08-18
 

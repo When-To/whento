@@ -337,12 +337,10 @@ export type NotifyConfigResponse = Refine<
 >;
 
 /*
- * Participant email. These three were hand-written for as long as the endpoints
+ * Participant email. These were hand-written for as long as the endpoints
  * declared their body inline in the handler and swaggo had no named model to emit;
  * they now derive from the schema like everything else.
  */
-export type AddParticipantEmailRequest = Schemas['models.AddParticipantEmailRequest'];
-
 export type ParticipantEmailResponse = AlwaysSent<
   Schemas['models.ParticipantEmailResponse'],
   'participant_id' | 'email' | 'verified' | 'message'

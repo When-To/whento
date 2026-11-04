@@ -7,9 +7,7 @@ package service
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -169,13 +167,7 @@ func (s *PasswordResetService) processPasswordReset(email string) {
 	}
 
 	// Generate cryptographically secure token
-	token, err := s.generateResetToken()
-	if err != nil {
-		s.logger.Error("failed to generate reset token",
-			"user_id", user.ID,
-			"error", err.Error())
-		return
-	}
+	token := randomHex(resetTokenLength)
 
 	// Store token with expiry, configured via PASSWORD_RESET_EXPIRY. The expiry
 	// has to be *the* expiry in both places that mention it: stored here for the
@@ -304,15 +296,6 @@ func (s *PasswordResetService) ResetPassword(ctx context.Context, req *models.Re
 		SessionID:        familyID,
 		User:             toUserResponse(user),
 	}, nil
-}
-
-// generateResetToken creates a cryptographically secure random token
-func (s *PasswordResetService) generateResetToken() (string, error) {
-	bytes := make([]byte, resetTokenLength)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate random token: %w", err)
-	}
-	return hex.EncodeToString(bytes), nil
 }
 
 // sendPasswordResetEmail sends the reset email

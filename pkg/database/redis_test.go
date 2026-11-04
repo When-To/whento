@@ -142,7 +142,7 @@ func TestCancelledRedisCallerDoesNotBlockHealthyPeer(t *testing.T) {
 	if url == "" {
 		t.Skip("set REDIS_URL to the disposable integration service")
 	}
-	client, err := NewRedisClient(context.Background(), &RedisConfig{URL: url})
+	client, err := NewRedisClient(context.Background(), url)
 	if err != nil {
 		t.Fatal(err)
 	}

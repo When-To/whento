@@ -170,7 +170,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("connect to database: %w", err)
 	}
-	defer database.Close(pool)
+	defer pool.Close()
 	log.Info("Connected to PostgreSQL")
 
 	// Pool saturation is the first thing to look at when latency rises, and the
@@ -182,15 +182,12 @@ func run() error {
 	}
 
 	// Connect to Redis (shared by all modules) - Optional
-	redisConfig := &database.RedisConfig{
-		URL: cfg.RedisURL,
-	}
-	redisClient, err := database.NewRedisClient(ctx, redisConfig)
+	redisClient, err := database.NewRedisClient(ctx, cfg.RedisURL)
 	if err != nil {
 		log.Warn("Failed to connect to Redis - running without cache", "error", err)
 		redisClient = nil
 	} else {
-		defer func() { _ = database.CloseRedis(redisClient) }()
+		defer func() { _ = redisClient.Close() }()
 		log.Info("Connected to Redis - cache enabled")
 	}
 

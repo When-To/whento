@@ -99,31 +99,11 @@ func (s *ParticipantEmailService) AddEmail(
 	participantName string,
 	locale string,
 ) error {
-	// Generate 64-char token (32 bytes = 64 hex chars)
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		return fmt.Errorf("failed to generate verification token: %w", err)
-	}
-	token := hex.EncodeToString(tokenBytes)
-
-	// Set expiry (24 hours from config)
-	expiresAt := time.Now().Add(s.cfg.Email.VerificationExpiry)
-
-	// Save to database
-	if err := s.participantRepo.SetEmailVerificationToken(
-		ctx, participantID, emailAddress, token, expiresAt,
+	if err := s.issueVerificationToken(
+		ctx, participantID, emailAddress, participantName, locale, "failed to save email verification token",
 	); err != nil {
-		return fmt.Errorf("failed to save email verification token: %w", err)
+		return err
 	}
-
-	// Send verification email (fire-and-forget)
-	go func() {
-		if err := s.sendVerificationEmail(emailAddress, participantName, locale, token); err != nil {
-			s.logger.Error("Failed to send participant verification email",
-				"participant_ref", pkglog.Fingerprint(participantID.String()),
-				"error", err)
-		}
-	}()
 
 	// A participant id is half of what authorises access to a calendar — the
 	// public token is the other half — so it is fingerprinted like the address.
@@ -185,35 +165,48 @@ func (s *ParticipantEmailService) ResendVerification(
 		return fmt.Errorf("no email address set for this participant")
 	}
 
-	// Generate new token
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		return fmt.Errorf("failed to generate verification token: %w", err)
-	}
-	token := hex.EncodeToString(tokenBytes)
-
-	// Set new expiry
-	expiresAt := time.Now().Add(s.cfg.Email.VerificationExpiry)
-
-	// Update token in database
-	if err := s.participantRepo.SetEmailVerificationToken(
-		ctx, participantID, *participant.Email, token, expiresAt,
+	if err := s.issueVerificationToken(
+		ctx, participantID, *participant.Email, participant.Name, locale, "failed to update verification token",
 	); err != nil {
-		return fmt.Errorf("failed to update verification token: %w", err)
+		return err
 	}
-
-	// Send verification email (fire-and-forget)
-	go func() {
-		if err := s.sendVerificationEmail(*participant.Email, participant.Name, locale, token); err != nil {
-			s.logger.Error("Failed to resend participant verification email",
-				"participant_ref", pkglog.Fingerprint(participantID.String()),
-				"error", err)
-		}
-	}()
 
 	s.logger.Info("Participant email verification resent",
 		"participant_ref", pkglog.Fingerprint(participantID.String()),
 		"recipient_ref", pkglog.Fingerprint(*participant.Email))
+
+	return nil
+}
+
+// issueVerificationToken stores a fresh token for emailAddress, expiring after the
+// configured verification expiry, and mails the link in the background. storeFailure prefixes a storage error: the resend
+// endpoint hands its error to the client, so each caller keeps its own wording.
+func (s *ParticipantEmailService) issueVerificationToken(
+	ctx context.Context,
+	participantID uuid.UUID,
+	emailAddress, participantName, locale, storeFailure string,
+) error {
+	// Generate 64-char token (32 bytes = 64 hex chars)
+	tokenBytes := make([]byte, 32)
+	// Since Go 1.24 rand.Read never returns an error: it crashes the program instead.
+	_, _ = rand.Read(tokenBytes)
+	token := hex.EncodeToString(tokenBytes)
+
+	expiresAt := time.Now().Add(s.cfg.Email.VerificationExpiry)
+	if err := s.participantRepo.SetEmailVerificationToken(
+		ctx, participantID, emailAddress, token, expiresAt,
+	); err != nil {
+		return fmt.Errorf("%s: %w", storeFailure, err)
+	}
+
+	// Send verification email (fire-and-forget)
+	go func() {
+		if err := s.sendVerificationEmail(emailAddress, participantName, locale, token); err != nil {
+			s.logger.Error("Failed to send participant verification email",
+				"participant_ref", pkglog.Fingerprint(participantID.String()),
+				"error", err)
+		}
+	}()
 
 	return nil
 }

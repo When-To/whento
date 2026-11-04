@@ -1,4 +1,4 @@
-.PHONY: require-selfhosted-image dev dev-fullstack dev-backend dev-frontend dev-db dev-app test test-root test-pkg test-coverage build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-build-multiarch docker-test-build docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-generate-if-missing swagger-clean types types-check docs-serve docs-validate keys help hooks format format-go format-frontend format-check format-check-go format-check-frontend lint lint-go swagger-contract-check
+.PHONY: require-selfhosted-image dev dev-fullstack dev-backend dev-frontend dev-db dev-app test test-root test-pkg test-coverage build clean migrate-up migrate-down migrate-reset migrate-status sync docker-build docker-build-versioned docker-up docker-down docker-logs docker-ps swagger swagger-generate swagger-generate-if-missing swagger-clean types types-check help hooks format format-go format-frontend format-check format-check-go format-check-frontend lint lint-go swagger-contract-check
 
 # BUILD_TYPE can be 'cloud' or 'selfhosted' (default: selfhosted)
 BUILD_TYPE ?= selfhosted
@@ -35,8 +35,6 @@ help:
 	@echo "  make migrate-status   - Show migration status"
 	@echo "  make docker-build     - Build production Docker image"
 	@echo "  make docker-build-versioned - Build with version tag (VERSION=x.x.x)"
-	@echo "  make docker-build-multiarch - Build multi-arch image (amd64+arm64)"
-	@echo "  make docker-test-build - Test Docker build locally (dry-run)"
 	@echo "  make docker-up        - Start production stack with docker-compose"
 	@echo "  make docker-down      - Stop production stack"
 	@echo "  make docker-logs      - View production logs"
@@ -45,7 +43,6 @@ help:
 	@echo "  make swagger-clean    - Remove generated Swagger files"
 	@echo "  make types            - Regenerate frontend API types from the Swagger spec"
 	@echo "  make types-check      - Fail if the committed API types are stale"
-	@echo "  make docs-serve       - Info on accessing embedded Swagger UI"
 	@echo "  make hooks            - Enable the repo git hooks (format on commit)"
 	@echo "  make format           - Format Go (goimports) + frontend (prettier) files"
 	@echo "  make format-go        - Format Go files only"
@@ -252,17 +249,11 @@ migrate-reset:
 migrate-status:
 	@bash scripts/migrate.sh --build-type $(BUILD_TYPE) status
 
-# The wrapper owns its scratch directory; no shared chain needs pre-building.
-migrate-build:
-	@echo "migrate-build was removed: scripts/migrate.sh assembles its own scratch chain per run." >&2
-	@exit 2
-
-
 # Docker Production
 #
 # The root Dockerfile is hardcoded to selfhosted — it pins `-tags selfhosted`,
 # `npm run build`, and the selfhosted migration set. It declares no BUILD_TYPE
-# ARG, so the `--build-arg BUILD_TYPE=` the targets below pass has always been
+# ARG, so the `--build-arg BUILD_TYPE=` these targets used to pass was always
 # silently discarded: `make docker-build BUILD_TYPE=cloud` produced a
 # *selfhosted* image and said "cloud mode" while doing it. Refusing is the point
 # — a cloud image built from the wrong Dockerfile is exactly the artefact the
@@ -283,7 +274,6 @@ docker-build: require-selfhosted-image
 		--build-arg VERSION=latest \
 		--build-arg BUILD_DATE=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ") \
 		--build-arg VCS_REF=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown") \
-		--build-arg BUILD_TYPE=$(BUILD_TYPE) \
 		.
 	@echo "✓ Image built successfully"
 
@@ -297,55 +287,8 @@ docker-build-versioned: require-selfhosted-image
 		--build-arg VERSION=$(VERSION) \
 		--build-arg BUILD_DATE=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ") \
 		--build-arg VCS_REF=$(shell git rev-parse HEAD 2>/dev/null || echo "unknown") \
-		--build-arg BUILD_TYPE=$(BUILD_TYPE) \
 		.
 	@echo "✓ Image whento:$(VERSION) built successfully"
-
-docker-build-multiarch: require-selfhosted-image
-	@echo "Building multi-architecture Docker image (amd64 + arm64, $(BUILD_TYPE) mode)..."
-	@echo "Note: This requires Docker Buildx and may take 10-15 minutes"
-	@echo ""
-	@# Create buildx builder if it doesn't exist
-	@docker buildx inspect whento-builder >/dev/null 2>&1 || docker buildx create --name whento-builder --use
-	@docker buildx build \
-		--platform linux/amd64,linux/arm64 \
-		--build-arg VERSION=$(shell git describe --tags --always 2>/dev/null || echo "dev") \
-		--build-arg BUILD_DATE=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ") \
-		--build-arg VCS_REF=$(shell git rev-parse HEAD 2>/dev/null || echo "unknown") \
-		--build-arg BUILD_TYPE=$(BUILD_TYPE) \
-		-t whento:latest \
-		--load \
-		.
-	@echo "✓ Multi-arch image built successfully"
-
-docker-test-build: require-selfhosted-image
-	@echo "Testing Docker build (simulating CI/CD workflow, $(BUILD_TYPE) mode)..."
-	@echo ""
-	@echo "Build Arguments:"
-	@echo "  VERSION: $(shell git describe --tags --always 2>/dev/null || echo "dev")"
-	@echo "  BUILD_DATE: $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")"
-	@echo "  VCS_REF: $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")"
-	@echo "  BUILD_TYPE: $(BUILD_TYPE)"
-	@echo ""
-	@echo "Starting build..."
-	docker build \
-		--build-arg VERSION=$(shell git describe --tags --always 2>/dev/null || echo "dev") \
-		--build-arg BUILD_DATE=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ") \
-		--build-arg VCS_REF=$(shell git rev-parse HEAD 2>/dev/null || echo "unknown") \
-		--build-arg BUILD_TYPE=$(BUILD_TYPE) \
-		-t whento:test \
-		.
-	@echo ""
-	@echo "✓ Build successful!"
-	@echo ""
-	@echo "Inspecting image metadata:"
-	@docker inspect whento:test | grep -A 10 "Labels"
-	@echo ""
-	@echo "Image size:"
-	@docker images whento:test --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
-	@echo ""
-	@echo "To test the image:"
-	@echo "  docker run --rm -p 8080:8080 whento:test"
 
 docker-up:
 	@echo "Starting WhenTo production stack..."
@@ -441,13 +384,3 @@ types-check: types
 		exit 1; \
 	fi
 	@echo "✓ Frontend API types match the Swagger spec"
-
-# Aliases for compatibility
-docs-serve:
-	@echo "Note: Swagger is now embedded in the application!"
-	@echo "Start the app with 'make dev' and visit http://localhost:8080/swagger/"
-	@echo ""
-	@echo "Or generate static docs with 'make swagger-generate'"
-
-docs-validate: swagger-contract-check
-	@echo "✓ Swagger documentation generated successfully (validation passed)"

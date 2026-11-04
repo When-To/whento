@@ -123,12 +123,3 @@ func (d *ThresholdDetector) DetectTransition(
 	d.logger.Debug("Transition detection result", "type", transition.TransitionType)
 	return transition, nil
 }
-
-// GetCurrentCount gets the current participant count for a date
-func (d *ThresholdDetector) GetCurrentCount(
-	ctx context.Context,
-	calendarID uuid.UUID,
-	date time.Time,
-) (int, error) {
-	return d.availabilityRepo.GetParticipantCountForDate(ctx, calendarID, date)
-}

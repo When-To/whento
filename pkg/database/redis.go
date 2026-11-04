@@ -16,11 +16,6 @@ import (
 	"github.com/whento/pkg/logger"
 )
 
-// RedisConfig holds Redis configuration
-type RedisConfig struct {
-	URL string
-}
-
 // ErrRedisCircuitOpen is returned for commands that are short-circuited
 // because Redis is currently considered unhealthy.
 var ErrRedisCircuitOpen = errors.New("redis circuit breaker open")
@@ -43,8 +38,8 @@ const circuitBreakerCooldown = 5 * time.Second
 //     outage at ~one slow probe per cooldown window.
 //
 // Callers (cache, rate limiter) handle the degraded path themselves.
-func NewRedisClient(ctx context.Context, cfg *RedisConfig) (*redis.Client, error) {
-	opts, err := redis.ParseURL(cfg.URL)
+func NewRedisClient(ctx context.Context, url string) (*redis.Client, error) {
+	opts, err := redis.ParseURL(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse redis URL: %w", err)
 	}
@@ -208,11 +203,3 @@ func (p *RedisPinger) Ping(ctx context.Context) error {
 // ErrRedisUnavailable is returned when a probe is asked about a Redis client
 // that was never created.
 var ErrRedisUnavailable = errors.New("redis: no client")
-
-// CloseRedis closes the Redis client
-func CloseRedis(client *redis.Client) error {
-	if client != nil {
-		return client.Close()
-	}
-	return nil
-}

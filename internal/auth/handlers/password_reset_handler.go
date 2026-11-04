@@ -11,7 +11,6 @@ import (
 	"net/http"
 
 	"github.com/whento/pkg/httputil"
-	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/auth/service"
 	"github.com/whento/whento/internal/auth/sessioncookie"
@@ -59,12 +58,7 @@ func (h *PasswordResetHandler) ForgotPassword(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 
@@ -96,12 +90,7 @@ func (h *PasswordResetHandler) ResetPassword(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 

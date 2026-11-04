@@ -15,7 +15,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/whento/pkg/httputil"
-	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/auth/service"
 	"github.com/whento/whento/internal/auth/sessioncookie"
@@ -89,12 +88,7 @@ func (h *MagicLinkHandler) RequestMagicLink(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Validate request
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 
@@ -167,12 +161,7 @@ func (h *MagicLinkHandler) VerifyMagicLink(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 

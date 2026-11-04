@@ -251,6 +251,7 @@ import type { AvailabilityOperation } from '@/types/calendar';
 import { buildCoverageMap } from '@/utils/calendar/segments';
 import { buildWeekModel } from '@/utils/calendar/weekModel';
 import { dayOfWeekISO, formatDateISO, parseISODate } from '@/utils/date/isoDate';
+import { formatDate } from '@/utils/date/intlFormatters';
 import { useParticipantCalendar } from '@/composables/calendar/useParticipantCalendar';
 import { useParticipantDisplaySettings } from '@/composables/calendar/useParticipantDisplaySettings';
 import { useCalendarStream } from '@/composables/calendar/useCalendarStream';
@@ -590,15 +591,8 @@ const calendarDateRangeText = computed(() => {
   const endDate = calendar.value.end_date;
 
   // Helper function to format date
-  const formatDateShort = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    const localeCode = locale.value;
-    return new Intl.DateTimeFormat(localeCode, {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }).format(date);
-  };
+  const formatDateShort = (dateStr: string): string =>
+    formatDate(new Date(dateStr), locale.value, 'dayMonthYearShort');
 
   if (startDate && endDate) {
     // Both dates: "from ... to ..."

@@ -75,11 +75,6 @@ func Validate(s interface{}) error {
 	return errs
 }
 
-// ValidateVar validates a single variable
-func ValidateVar(field interface{}, tag string) error {
-	return validate.Var(field, tag)
-}
-
 func getErrorMessage(e validator.FieldError) string {
 	switch e.Tag() {
 	case "required":

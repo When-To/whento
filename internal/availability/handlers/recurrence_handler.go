@@ -12,7 +12,6 @@ import (
 
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/logger"
-	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/availability/models"
 	"github.com/whento/whento/internal/availability/service"
 )
@@ -52,12 +51,7 @@ func (h *RecurrenceHandler) CreateRecurrence(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 
@@ -122,12 +116,7 @@ func (h *RecurrenceHandler) UpdateRecurrence(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 
@@ -194,12 +183,7 @@ func (h *RecurrenceHandler) CreateException(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 

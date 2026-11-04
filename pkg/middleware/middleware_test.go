@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -24,6 +23,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/whento/pkg/cache"
@@ -880,6 +880,35 @@ func TestContextGettersOnAnEmptyContext(t *testing.T) {
 	}
 }
 
+func TestRequireUserUUID(t *testing.T) {
+	id := uuid.New()
+	tests := []struct {
+		name   string
+		userID any
+		status int
+	}{
+		{"no user", nil, http.StatusUnauthorized},
+		{"malformed id", "not-a-uuid", http.StatusBadRequest},
+		{"valid id", id.String(), http.StatusOK},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			if tt.userID != nil {
+				req = req.WithContext(context.WithValue(req.Context(), UserIDKey, tt.userID))
+			}
+			rec := httptest.NewRecorder()
+			got, ok := RequireUserUUID(rec, req)
+			if rec.Code != tt.status || ok != (tt.status == http.StatusOK) {
+				t.Fatalf("status = %d, ok = %v, want %d", rec.Code, ok, tt.status)
+			}
+			if ok && got != id {
+				t.Errorf("id = %v, want %v", got, id)
+			}
+		})
+	}
+}
+
 // TestContextKeysAreNotPlainStrings guards the unexported key type. With plain string
 // keys any other package storing under "user_role" could promote a request to admin.
 func TestContextKeysAreNotPlainStrings(t *testing.T) {
@@ -1031,41 +1060,6 @@ func TestErrorResponsesUseTheStandardEnvelope(t *testing.T) {
 			}
 			if body.Error.Message == "" {
 				t.Error("the error carries no message")
-			}
-		})
-	}
-}
-
-func TestLimitRequestSize(t *testing.T) {
-	const maxBytes = 32
-
-	tests := []struct {
-		name    string
-		body    string
-		wantErr bool
-	}{
-		{name: "under the limit", body: strings.Repeat("a", maxBytes-1)},
-		{name: "exactly at the limit", body: strings.Repeat("a", maxBytes)},
-		{name: "over the limit", body: strings.Repeat("a", maxBytes+1), wantErr: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var readErr error
-			handler := LimitRequestSize(maxBytes)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-				_, readErr = io.ReadAll(r.Body)
-			}))
-
-			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
-			handler.ServeHTTP(httptest.NewRecorder(), req)
-
-			// The limit is what stops an unauthenticated request allocating gigabytes;
-			// the handler learns about it as a read error rather than a short body.
-			if tt.wantErr && readErr == nil {
-				t.Error("an oversized body was read in full")
-			}
-			if !tt.wantErr && readErr != nil {
-				t.Errorf("a body within the limit failed to read: %v", readErr)
 			}
 		})
 	}

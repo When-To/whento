@@ -525,9 +525,6 @@ onMounted(() => {
     locale.value = savedLocale;
   }
 
-  // Initialize calendar history
-  historyStore.init();
-
   // Auth initialization is handled in main.ts
 });
 </script>

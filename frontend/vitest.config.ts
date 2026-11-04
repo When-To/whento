@@ -34,14 +34,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text-summary', 'html', 'lcov'],
       include: ['src/**/*.ts'],
-      exclude: [
-        'src/**/*.test.ts',
-        'src/test/**',
-        'src/types/**',
-        'src/locales/**',
-        'src/main.ts',
-        'src/vite-env.d.ts',
-      ],
+      exclude: ['src/**/*.test.ts', 'src/test/**', 'src/types/**', 'src/locales/**', 'src/main.ts'],
       // A ratchet, not a target. Set just under what the suite currently reaches so
       // that `npm run test:coverage` fails if coverage falls, without failing on the
       // noise of a line or two. Raise it when the next batch of tests lands.

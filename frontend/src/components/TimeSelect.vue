@@ -5,7 +5,8 @@
 -->
 
 <script setup lang="ts">
-import { computed, ref, useAttrs, watch, onMounted, onBeforeUnmount } from 'vue';
+import { computed, ref, useAttrs, watch } from 'vue';
+import { useEventListener } from '@vueuse/core';
 import { useI18n } from 'vue-i18n';
 
 interface Props {
@@ -216,12 +217,7 @@ const handleInput = (event: Event) => {
       const minutes = digits.slice(1, 3);
       formattedValue = `${hours}:${minutes}`;
 
-      const oldDigits = oldValue.replace(/\D/g, '');
-      if (digits.length > oldDigits.length && digits.length >= 2) {
-        newCursorPos = formattedValue.length;
-      } else {
-        newCursorPos = formattedValue.length;
-      }
+      newCursorPos = formattedValue.length;
     }
   }
 
@@ -350,26 +346,8 @@ const handleBlur = () => {
       value = formatTimeInput(value);
     }
 
-    // Check if it matches H:MM or HH:MM format
-    const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
-    if (timeRegex.test(value)) {
-      const [hours, minutes] = value.split(':');
-      let finalHours = parseInt(hours);
-      let finalMinutes = parseInt(minutes);
-
-      // Round minutes to nearest interval based on roundInterval prop
-      const interval = props.roundInterval;
-      let roundedMinutes = Math.round(finalMinutes / interval) * interval;
-
-      // Handle edge case: 60 minutes should become next hour
-      if (roundedMinutes >= 60) {
-        roundedMinutes = 0;
-        finalHours = (finalHours + 1) % 24;
-      }
-      finalMinutes = roundedMinutes;
-
-      // Normalize to HH:MM format
-      const normalized = `${finalHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+    const normalized = roundTime(value);
+    if (normalized) {
       inputRef.value.value = normalized;
       emit('update:modelValue', normalized);
     }
@@ -410,34 +388,28 @@ const handleScroll = (event: Event) => {
   highlightedIndex.value = -1;
 };
 
+/**
+ * Round the minutes of an H:MM / HH:MM value to the nearest roundInterval and
+ * normalise to HH:MM (60 rolls over to the next hour). Null when not a valid time.
+ */
+function roundTime(value: string): string | null {
+  const match = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/.exec(value);
+  if (!match) return null;
+  let hours = Number(match[1]);
+  let minutes = Math.round(Number(match[2]) / props.roundInterval) * props.roundInterval;
+  if (minutes >= 60) {
+    minutes = 0;
+    hours = (hours + 1) % 24;
+  }
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
 // Apply rounding to current value based on roundInterval
 function applyRounding() {
   const value = props.modelValue;
-  if (!value || !value.includes(':')) return;
-
-  const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
-  if (!timeRegex.test(value)) return;
-
-  const [hours, minutes] = value.split(':');
-  let finalHours = parseInt(hours);
-  let finalMinutes = parseInt(minutes);
-
-  // Round minutes to nearest interval based on roundInterval prop
-  const interval = props.roundInterval;
-  let roundedMinutes = Math.round(finalMinutes / interval) * interval;
-
-  // Handle edge case: 60 minutes should become next hour
-  if (roundedMinutes >= 60) {
-    roundedMinutes = 0;
-    finalHours = (finalHours + 1) % 24;
-  }
-  finalMinutes = roundedMinutes;
-
-  // Normalize to HH:MM format
-  const normalized = `${finalHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
-
+  const normalized = value ? roundTime(value) : null;
   // Only emit if value changed
-  if (normalized !== value) {
+  if (normalized && normalized !== value) {
     emit('update:modelValue', normalized);
   }
 }
@@ -450,17 +422,9 @@ watch(
   }
 );
 
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside);
-  window.addEventListener('scroll', handleScroll, true);
-  window.addEventListener('resize', handleScroll);
-});
-
-onBeforeUnmount(() => {
-  document.removeEventListener('click', handleClickOutside);
-  window.removeEventListener('scroll', handleScroll, true);
-  window.removeEventListener('resize', handleScroll);
-});
+useEventListener(document, 'click', handleClickOutside);
+useEventListener(window, 'scroll', handleScroll, true);
+useEventListener(window, 'resize', handleScroll);
 </script>
 
 <template>

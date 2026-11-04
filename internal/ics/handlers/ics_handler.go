@@ -5,6 +5,7 @@
 package handlers
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -52,14 +53,7 @@ type icsFeedEndpoint struct {
 func extractTokenAndHost(r *http.Request) (token, host string) {
 	token = strings.TrimSuffix(chi.URLParam(r, "token"), ".ics")
 
-	host = r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Header.Get("X-Real-Host")
-	}
-	if host == "" {
-		host = r.Host
-	}
-	host = sanitizeICSValue(host)
+	host = sanitizeICSValue(cmp.Or(r.Header.Get("X-Forwarded-Host"), r.Header.Get("X-Real-Host"), r.Host))
 	return token, host
 }
 

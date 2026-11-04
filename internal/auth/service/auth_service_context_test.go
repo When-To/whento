@@ -19,7 +19,7 @@ import (
 	mfaModels "github.com/whento/whento/internal/mfa/models"
 )
 
-// generateAuthResponse used to persist the refresh token under context.Background(),
+// IssueSession used to persist the refresh token under context.Background(),
 // so a client disconnect, a request deadline or a server shutdown could not stop that
 // write. The tests below lock the fix in from every entry point that reaches it:
 // Register, Login, RefreshToken, PasskeyLogin and VerifyMFAAndLogin.
@@ -150,7 +150,7 @@ func (f *contextFixture) seedUser(t *testing.T, email, password string) *models.
 	return f.users.add(user)
 }
 
-// authEntryPoint is one exported call that ends in generateAuthResponse.
+// authEntryPoint is one exported call that ends in IssueSession.
 type authEntryPoint struct {
 	name   string
 	invoke func(t *testing.T, f *contextFixture, ctx context.Context) error
@@ -239,7 +239,7 @@ func authEntryPoints() []authEntryPoint {
 }
 
 // TestAuthFlowsAbortTheRefreshTokenWriteOnADeadContext is the regression guard. With
-// context.Background() hard-coded in generateAuthResponse, every one of these subtests
+// context.Background() hard-coded in IssueSession, every one of these subtests
 // returned no error and persisted a refresh token for a request nobody was waiting on.
 func TestAuthFlowsAbortTheRefreshTokenWriteOnADeadContext(t *testing.T) {
 	deadContexts := []struct {

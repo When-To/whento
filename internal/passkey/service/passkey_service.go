@@ -103,10 +103,6 @@ func (u *WebAuthnUser) WebAuthnCredentials() []webauthn.Credential {
 	return credentials
 }
 
-func (u *WebAuthnUser) WebAuthnIcon() string {
-	return ""
-}
-
 // PasskeyService handles passkey business logic
 // PasskeyStore is the slice of the passkey repository this service needs.
 //
@@ -184,14 +180,7 @@ func (s *PasskeyService) BeginRegistration(ctx context.Context, userID uuid.UUID
 	}
 
 	// Build credential descriptors for exclusion
-	credentials := webAuthnUser.WebAuthnCredentials()
-	credentialDescriptors := make([]protocol.CredentialDescriptor, len(credentials))
-	for i, cred := range credentials {
-		credentialDescriptors[i] = protocol.CredentialDescriptor{
-			Type:         protocol.PublicKeyCredentialType,
-			CredentialID: cred.ID,
-		}
-	}
+	credentialDescriptors := webauthn.Credentials(webAuthnUser.WebAuthnCredentials()).CredentialDescriptors()
 
 	// Generate registration options using high-level API for passkeys
 	options, sessionData, err := s.webAuthn.BeginMediatedRegistration(
@@ -263,17 +252,12 @@ func (s *PasskeyService) FinishRegistration(ctx context.Context, userID uuid.UUI
 
 	// Create passkey record
 	passkey := &models.Passkey{
-		ID:           uuid.New(),
-		UserID:       userID,
-		Name:         defaultName,
-		CredentialID: credential.ID,
-		PublicKey:    credential.PublicKey,
-		AAGUID: uuid.MustParse(fmt.Sprintf("%x-%x-%x-%x-%x",
-			credential.Authenticator.AAGUID[0:4],
-			credential.Authenticator.AAGUID[4:6],
-			credential.Authenticator.AAGUID[6:8],
-			credential.Authenticator.AAGUID[8:10],
-			credential.Authenticator.AAGUID[10:16])),
+		ID:             uuid.New(),
+		UserID:         userID,
+		Name:           defaultName,
+		CredentialID:   credential.ID,
+		PublicKey:      credential.PublicKey,
+		AAGUID:         uuid.UUID(credential.Authenticator.AAGUID),
 		SignCount:      int64(credential.Authenticator.SignCount),
 		BackupEligible: credential.Flags.BackupEligible,
 		BackupState:    credential.Flags.BackupState,

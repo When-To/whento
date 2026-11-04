@@ -116,13 +116,12 @@ func TestPackageLevelHelpersRespectTheLevel(t *testing.T) {
 	var buf bytes.Buffer
 	SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
 
-	Debug("a debug line")
 	Info("an info line")
 	Warn("a warn line")
 	Error("an error line")
 
 	output := buf.String()
-	for _, hidden := range []string{"a debug line", "an info line"} {
+	for _, hidden := range []string{"an info line"} {
 		if strings.Contains(output, hidden) {
 			t.Errorf("%q was written despite the warn level", hidden)
 		}

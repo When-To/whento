@@ -60,11 +60,6 @@ type RefreshToken struct {
 	ConsumedAt *time.Time `json:"-"`
 }
 
-// IsAdmin checks if user has admin role
-func (u *User) IsAdmin() bool {
-	return u.Role == RoleAdmin
-}
-
 // MFAStatus contains MFA/authentication status for a user
 type MFAStatus struct {
 	TOTPEnabled  bool `json:"totp_enabled"`

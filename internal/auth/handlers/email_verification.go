@@ -66,12 +66,7 @@ func (h *AuthHandler) SendVerificationEmail(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Generate verification token (32 bytes = 64 hex chars)
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to generate verification token")
-		return
-	}
-	token := hex.EncodeToString(tokenBytes)
+	token := randomHex(32)
 
 	// Set token expiry (from config)
 	expiresAt := time.Now().Add(h.cfg.Email.VerificationExpiry)
@@ -215,4 +210,12 @@ func (h *AuthHandler) sendVerificationEmail(to, displayName, locale, token strin
 
 	h.logger.Info("Verification email sent", "recipient_ref", logger.Fingerprint(to), "locale", locale)
 	return nil
+}
+
+// randomHex returns n cryptographically random bytes, hex-encoded.
+func randomHex(n int) string {
+	b := make([]byte, n)
+	// Since Go 1.24 rand.Read never returns an error: it crashes the program instead.
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }

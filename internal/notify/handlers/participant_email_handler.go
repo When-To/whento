@@ -89,11 +89,9 @@ func NewParticipantEmailHandler(
 //	@Router			/api/v1/calendars/{token}/participants/{pid}/email [post]
 func (h *ParticipantEmailHandler) AddEmail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	token := chi.URLParam(r, "token")
-	participantID := chi.URLParam(r, "pid")
 
 	// Validate participant ID
-	pid, err := uuid.Parse(participantID)
+	pid, err := uuid.Parse(chi.URLParam(r, "pid"))
 	if err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid participant ID")
 		return
@@ -112,31 +110,8 @@ func (h *ParticipantEmailHandler) AddEmail(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Verify calendar token exists
-	calendar, err := h.calendarRepo.GetByPublicToken(ctx, token)
-	if err != nil {
-		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
-		return
-	}
-
-	// Get participant to verify it belongs to this calendar
-	participant, err := h.participantRepo.GetByID(ctx, pid)
-	if err != nil {
-		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Participant not found")
-		return
-	}
-
-	if participant.CalendarID != calendar.ID {
-		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Participant not found in this calendar")
-		return
-	}
-
-	// The calendar's notify config is the gate for participant email addresses:
-	// notifications must be enabled, and the notify_participants switch must be on.
-	// Without this check an attacker (or a stale bookmark) could register any email
-	// against a calendar whose owner never asked for participant notifications.
-	if !h.participantEmailEnabled(calendar) {
-		httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "This calendar does not accept participant email addresses")
+	participant, ok := h.participantAcceptingEmail(w, r, pid)
+	if !ok {
 		return
 	}
 
@@ -155,6 +130,43 @@ func (h *ParticipantEmailHandler) AddEmail(w http.ResponseWriter, r *http.Reques
 		Verified:      false,
 		Message:       "Verification email sent",
 	})
+}
+
+// participantAcceptingEmail resolves the participant in the path through the calendar
+// the token names, and checks that calendar accepts participant email addresses. On
+// false the error response has been written.
+func (h *ParticipantEmailHandler) participantAcceptingEmail(
+	w http.ResponseWriter, r *http.Request, pid uuid.UUID,
+) (*models.Participant, bool) {
+	// Verify calendar token exists
+	calendar, err := h.calendarRepo.GetByPublicToken(r.Context(), chi.URLParam(r, "token"))
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
+		return nil, false
+	}
+
+	// Get participant to verify it belongs to this calendar
+	participant, err := h.participantRepo.GetByID(r.Context(), pid)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Participant not found")
+		return nil, false
+	}
+
+	if participant.CalendarID != calendar.ID {
+		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Participant not found in this calendar")
+		return nil, false
+	}
+
+	// The calendar's notify config is the gate for participant email addresses:
+	// notifications must be enabled, and the notify_participants switch must be on.
+	// Without this check an attacker (or a stale bookmark) could register any email
+	// against a calendar whose owner never asked for participant notifications.
+	if !h.participantEmailEnabled(calendar) {
+		httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "This calendar does not accept participant email addresses")
+		return nil, false
+	}
+
+	return participant, true
 }
 
 // participantEmailEnabled reports whether a calendar allows participants to add
@@ -231,39 +243,18 @@ func (h *ParticipantEmailHandler) VerifyEmail(w http.ResponseWriter, r *http.Req
 //	@Router			/api/v1/calendars/{token}/participants/{pid}/resend-verification [post]
 func (h *ParticipantEmailHandler) ResendVerification(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	token := chi.URLParam(r, "token")
-	participantID := chi.URLParam(r, "pid")
 
 	// Validate participant ID
-	pid, err := uuid.Parse(participantID)
+	pid, err := uuid.Parse(chi.URLParam(r, "pid"))
 	if err != nil {
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid participant ID")
 		return
 	}
 
-	// Verify calendar token exists
-	calendar, err := h.calendarRepo.GetByPublicToken(ctx, token)
-	if err != nil {
-		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
-		return
-	}
-
-	// Get participant to verify it belongs to this calendar
-	participant, err := h.participantRepo.GetByID(ctx, pid)
-	if err != nil {
-		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Participant not found")
-		return
-	}
-
-	if participant.CalendarID != calendar.ID {
-		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Participant not found in this calendar")
-		return
-	}
-
 	// Same consent gate as adding an address: an owner who turned participant
 	// mail off, or an instance without SMTP, must not be used as a relaying UI.
-	if !h.participantEmailEnabled(calendar) {
-		httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "This calendar does not accept participant email addresses")
+	participant, ok := h.participantAcceptingEmail(w, r, pid)
+	if !ok {
 		return
 	}
 

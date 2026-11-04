@@ -287,7 +287,7 @@ func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (*mod
 	}
 
 	// No MFA - generate full tokens
-	return s.generateAuthResponse(ctx, user)
+	return s.IssueSession(ctx, user)
 }
 
 // incrementLoginAttempts increments the failed login counter for the given key
@@ -544,6 +544,9 @@ func (s *AuthService) DeleteUser(ctx context.Context, currentUserID, targetUserI
 		if errors.Is(err, repository.ErrLastAdmin) {
 			return ErrLastAdmin
 		}
+		if errors.Is(err, repository.ErrUserNotFound) {
+			return ErrUserNotFound
+		}
 		return err
 	}
 
@@ -560,10 +563,6 @@ func (s *AuthService) DeleteUser(ctx context.Context, currentUserID, targetUserI
 // the caller's context: a client disconnect, a request deadline or a server
 // shutdown must be able to cancel it.
 func (s *AuthService) IssueSession(ctx context.Context, user *models.User) (*models.AuthResponse, error) {
-	return s.generateAuthResponse(ctx, user)
-}
-
-func (s *AuthService) generateAuthResponse(ctx context.Context, user *models.User) (*models.AuthResponse, error) {
 	accessToken, refreshToken, expiresAt, familyID, storedToken, err := s.issueSessionTokens(user)
 	if err != nil {
 		return nil, err
@@ -665,7 +664,7 @@ func (s *AuthService) PasskeyLogin(ctx context.Context, user *models.User) (*mod
 	}
 
 	// No MFA - generate full tokens directly
-	return s.generateAuthResponse(ctx, user)
+	return s.IssueSession(ctx, user)
 }
 
 // VerifyMFAAndLogin verifies the MFA code and completes login

@@ -222,7 +222,7 @@ func newHarness(t *testing.T, store *fakeMFAStore, users *fakeUserLookup, appCac
 	manager := newJWTManager(t)
 	// A cost of 4 rather than the production 12: these tests hash backup codes and the
 	// difference is seconds per run.
-	cfg := &config.Config{TOTPIssuer: "WhenTo", TOTPPeriod: 30, TOTPDigits: 6, BcryptCost: bcrypt.MinCost}
+	cfg := &config.Config{TOTPIssuer: "WhenTo", BcryptCost: bcrypt.MinCost}
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	mfaSvc := service.NewMFAService(store, users, cfg, discard)

@@ -337,11 +337,6 @@ export const useCalendarStore = defineStore('calendar', () => {
     });
   }
 
-  function clearCurrentCalendar() {
-    currentCalendar.value = null;
-    currentPublicCalendar.value = null;
-  }
-
   return {
     // State
     calendars,
@@ -365,7 +360,6 @@ export const useCalendarStore = defineStore('calendar', () => {
     deleteParticipant,
     regeneratePublicToken,
     regenerateICSToken,
-    clearCurrentCalendar,
     /** Drops the account-owned calendars and current settings object (used on logout); keeps the current *public* calendar. */
     clearCalendars,
     clearError,

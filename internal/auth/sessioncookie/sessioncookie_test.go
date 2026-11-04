@@ -47,7 +47,11 @@ func TestSetRefreshToken(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Header.Set("X-Forwarded-Proto", "https")
 
+		// The clock moves while SetRefreshToken runs, so a second boundary can fall
+		// between it and this test: accept any value the call could have seen.
+		maxBefore := maxAgeSeconds(expiresAt, time.Now())
 		SetRefreshToken(rec, req, "the-refresh-token", expiresAt)
+		minAfter := maxAgeSeconds(expiresAt, time.Now())
 
 		var c *http.Cookie
 		for _, cookie := range rec.Result().Cookies() {
@@ -77,8 +81,8 @@ func TestSetRefreshToken(t *testing.T) {
 		if !c.Expires.Equal(expiresAt) {
 			t.Errorf("Expires = %v, want %v", c.Expires, expiresAt)
 		}
-		if got, want := c.MaxAge, maxAgeSeconds(expiresAt, time.Now()); got != want {
-			t.Errorf("MaxAge = %d, want %d (the token's remaining lifetime, ceiling)", got, want)
+		if c.MaxAge < minAfter || c.MaxAge > maxBefore {
+			t.Errorf("MaxAge = %d, want %d..%d (the token's remaining lifetime, ceiling)", c.MaxAge, minAfter, maxBefore)
 		}
 	})
 

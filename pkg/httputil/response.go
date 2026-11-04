@@ -33,53 +33,43 @@ type ErrorResponse struct {
 
 // JSON writes a JSON response with cache-prevention headers
 func JSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.WriteHeader(status)
-
-	resp := Response{
-		Success: status >= 200 && status < 300,
-		Data:    data,
-	}
-
-	_ = json.NewEncoder(w).Encode(resp)
+	write(w, status, Response{Success: status >= 200 && status < 300, Data: data})
 }
 
 // Error writes an error response with cache-prevention headers
 func Error(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.WriteHeader(status)
-
-	resp := Response{
-		Success: false,
-		Error: &ErrorInfo{
-			Code:    code,
-			Message: message,
-		},
-	}
-
-	_ = json.NewEncoder(w).Encode(resp)
+	write(w, status, Response{Error: &ErrorInfo{Code: code, Message: message}})
 }
 
 // ValidationError writes a validation error response with cache-prevention headers
 func ValidationError(w http.ResponseWriter, errs validator.ValidationErrors) {
+	write(w, http.StatusBadRequest, Response{Error: &ErrorInfo{
+		Code:    ErrCodeValidation,
+		Message: "Invalid input data",
+		Details: errs,
+	}})
+}
+
+// Validate runs struct validation on v and, when it fails, writes the 400
+// response. It reports whether v is valid.
+func Validate(w http.ResponseWriter, v any) bool {
+	err := validator.Validate(v)
+	if err == nil {
+		return true
+	}
+	if errs, ok := err.(validator.ValidationErrors); ok {
+		ValidationError(w, errs)
+	} else {
+		Error(w, http.StatusBadRequest, ErrCodeValidation, err.Error())
+	}
+	return false
+}
+
+func write(w http.ResponseWriter, status int, resp Response) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
-	w.WriteHeader(http.StatusBadRequest)
-
-	resp := Response{
-		Success: false,
-		Error: &ErrorInfo{
-			Code:    "VALIDATION_ERROR",
-			Message: "Invalid input data",
-			Details: errs,
-		},
-	}
-
+	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(resp)
 }
 

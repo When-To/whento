@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
 
@@ -159,8 +158,6 @@ func newFixture(t *testing.T, mfa *models.UserMFA) *fixture {
 		repo:       store,
 		userRepo:   &fakeUserLookup{user: user},
 		issuer:     "WhenTo",
-		period:     30,
-		digits:     otp.DigitsSix,
 		bcryptCost: bcrypt.MinCost,
 		logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}

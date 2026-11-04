@@ -5,10 +5,13 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -87,10 +90,7 @@ func NewICSService(
 // The host parameter should be the host from the HTTP request (e.g., "192.168.1.10:8080" or "example.com")
 func (s *ICSService) GenerateFeed(ctx context.Context, icsToken string, host string) (string, error) {
 	// Use provided host if available, otherwise fall back to configured appDomain
-	domain := host
-	if domain == "" {
-		domain = s.appDomain
-	}
+	domain := cmp.Or(host, s.appDomain)
 
 	// Get calendar
 	calendar, err := s.calendarRepo.GetByICSToken(ctx, icsToken)
@@ -114,10 +114,7 @@ func (s *ICSService) GenerateFeed(ctx context.Context, icsToken string, host str
 	// Convert to calendar events
 	events := s.buildCalendarEvents(calendar, eventsByDate)
 
-	// Generate ICS
-	ics := s.generateICS(calendar, events, domain)
-
-	return ics, nil
+	return s.generateICSFromEvents(calendar.Name, calendar.Timezone, events, domain), nil
 }
 
 // buildCalendarEvents converts repository data to calendar events
@@ -127,13 +124,7 @@ func (s *ICSService) buildCalendarEvents(calendar *repository.Calendar, eventsBy
 	var events []models.CalendarEvent
 
 	// Sort dates
-	dates := make([]time.Time, 0, len(eventsByDate))
-	for date := range eventsByDate {
-		dates = append(dates, date)
-	}
-	sort.Slice(dates, func(i, j int) bool {
-		return dates[i].Before(dates[j])
-	})
+	dates := slices.SortedFunc(maps.Keys(eventsByDate), time.Time.Compare)
 
 	// Build events with sequential numbering
 	eventNumber := 0
@@ -219,11 +210,6 @@ func (s *ICSService) calculateEventDuration(event *models.CalendarEvent) float64
 	// Calculate duration in hours
 	duration := end.Sub(*start).Hours()
 	return duration
-}
-
-// generateICS generates the iCalendar string from events for a single calendar
-func (s *ICSService) generateICS(calendar *repository.Calendar, events []models.CalendarEvent, domain string) string {
-	return s.generateICSFromEvents(calendar.Name, calendar.Timezone, events, domain)
 }
 
 // generateICSFromEvents generates the iCalendar string from events with a custom name and timezone
@@ -378,10 +364,7 @@ func (s *ICSService) addAttendees(vevent *ics.VEvent, event models.CalendarEvent
 
 // GenerateUnifiedFeed generates an iCalendar feed combining events from multiple calendars
 func (s *ICSService) GenerateUnifiedFeed(ctx context.Context, unifiedToken string, host string) (string, error) {
-	domain := host
-	if domain == "" {
-		domain = s.appDomain
-	}
+	domain := cmp.Or(host, s.appDomain)
 
 	// Get feed owner info
 	displayName, userID, timezone, err := s.unifiedFeedRepo.GetFeedOwnerInfo(ctx, unifiedToken)
@@ -418,18 +401,8 @@ func (s *ICSService) GenerateUnifiedFeed(ctx context.Context, unifiedToken strin
 
 	// Collect events from all calendars
 	var allEvents []models.CalendarEvent
-	globalEventNumber := 0
-
 	for _, calendar := range calendars {
-		events := s.buildCalendarEvents(calendar, eventsByCalendar[calendar.ID])
-
-		// Re-number events with global sequence
-		for i := range events {
-			globalEventNumber++
-			events[i].EventNumber = globalEventNumber
-		}
-
-		allEvents = append(allEvents, events...)
+		allEvents = append(allEvents, s.buildCalendarEvents(calendar, eventsByCalendar[calendar.ID])...)
 	}
 
 	// Sort all events by date

@@ -345,7 +345,7 @@ func (s *ReminderScheduler) enqueueCalendar(ctx context.Context, calendar *calen
 		return
 	}
 
-	specs := s.planDelivery(calendar, &cfg)
+	specs := s.planDelivery(&cfg)
 	if len(specs) == 0 {
 		return
 	}
@@ -440,7 +440,7 @@ type jobSpec struct {
 	channel       string
 }
 
-func (s *ReminderScheduler) planDelivery(calendar *calendarModels.Calendar, cfg *models.NotifyConfig) []jobSpec {
+func (s *ReminderScheduler) planDelivery(cfg *models.NotifyConfig) []jobSpec {
 	var specs []jobSpec
 
 	if cfg.NotifyOwner {
@@ -462,14 +462,10 @@ func (s *ReminderScheduler) enabledChannels(cfg *models.NotifyConfig) []string {
 	if cfg.Channels.Email.Enabled {
 		channels = append(channels, "email")
 	}
-	if cfg.Channels.Discord.Enabled && cfg.Channels.Discord.WebhookURL != "" {
-		channels = append(channels, "discord")
-	}
-	if cfg.Channels.Slack.Enabled && cfg.Channels.Slack.WebhookURL != "" {
-		channels = append(channels, "slack")
-	}
-	if cfg.Channels.Telegram.Enabled && cfg.Channels.Telegram.BotToken != "" && cfg.Channels.Telegram.ChatID != "" {
-		channels = append(channels, "telegram")
+	for _, ch := range chatChannels(cfg.Channels) {
+		if ch.usable {
+			channels = append(channels, ch.name)
+		}
 	}
 	return channels
 }
@@ -668,7 +664,7 @@ func (s *ReminderScheduler) jobStillWanted(calendar *calendarModels.Calendar, cf
 	}
 
 	matched := false
-	for _, spec := range s.planDelivery(calendar, cfg) {
+	for _, spec := range s.planDelivery(cfg) {
 		if spec.recipientType == job.RecipientType && spec.channel == job.Channel {
 			matched = true
 			break
@@ -835,15 +831,7 @@ func (s *ReminderScheduler) sendOwnerChat(
 	}
 	defer cancel()
 
-	var sendErr error
-	switch channel {
-	case "discord":
-		sendErr = s.externalNotifier.SendDiscord(sendCtx, cfg.Channels.Discord.WebhookURL, text)
-	case "slack":
-		sendErr = s.externalNotifier.SendSlack(sendCtx, cfg.Channels.Slack.WebhookURL, text)
-	case "telegram":
-		sendErr = s.externalNotifier.SendTelegram(sendCtx, cfg.Channels.Telegram.BotToken, cfg.Channels.Telegram.ChatID, text)
-	}
+	sendErr := sendChat(sendCtx, s.externalNotifier, cfg.Channels, channel, text)
 	if sendErr != nil {
 		return &reminderProviderError{channel: channel, cause: sendErr}
 	}

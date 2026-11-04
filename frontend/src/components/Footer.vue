@@ -139,8 +139,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { useBuildType } from '@/composables/useBuildType';
 
 const { t } = useI18n();
-const { isCloud } = useBuildType();
+const isCloud = (import.meta.env.VITE_BUILD_TYPE || 'cloud') === 'cloud';
 </script>

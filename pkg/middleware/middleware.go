@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -238,15 +239,7 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 				return
 			}
 
-			hasRole := false
-			for _, role := range roles {
-				if userRole == role {
-					hasRole = true
-					break
-				}
-			}
-
-			if !hasRole {
+			if !slices.Contains(roles, userRole) {
 				httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "Forbidden")
 				return
 			}
@@ -264,23 +257,30 @@ func GetUserID(ctx context.Context) string {
 	return ""
 }
 
+// RequireUserUUID returns the authenticated user's ID as a UUID. When there is
+// none it writes 401, and when it does not parse it writes 400; either way the
+// caller must return.
+func RequireUserUUID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	userID := GetUserID(r.Context())
+	if userID == "" {
+		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
+		return uuid.Nil, false
+	}
+
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid user ID")
+		return uuid.Nil, false
+	}
+	return userUUID, true
+}
+
 // GetUserRole extracts user role from context
 func GetUserRole(ctx context.Context) string {
 	if role, ok := ctx.Value(UserRoleKey).(string); ok {
 		return role
 	}
 	return ""
-}
-
-// LimitRequestSize limits the maximum size of request bodies
-func LimitRequestSize(maxBytes int64) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Limit request body size to prevent DoS attacks
-			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
-			next.ServeHTTP(w, r)
-		})
-	}
 }
 
 // SecurityHeaders adds security headers to responses

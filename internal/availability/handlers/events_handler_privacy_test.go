@@ -85,7 +85,7 @@ func (f *failingRecorder) Write([]byte) (int, error) { return 0, f.err }
 // the token is in none of them.
 func TestStreamNeverLogsTheCalendarToken(t *testing.T) {
 	// Distinctive enough that a substring search cannot miss it, and shaped like
-	// the real thing: 64 hex characters, as generateToken produces.
+	// the real thing: 64 hex characters, as randomHex(32) produces.
 	const token = "9f3c0d7e2a4b6185c3d0f7e9a2b4c6d81f3e5a7c9b0d2e4f6a8c1b3d5e7f9012"
 
 	tests := []struct {

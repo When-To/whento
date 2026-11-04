@@ -16,7 +16,6 @@ import (
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
-	"github.com/whento/pkg/validator"
 	authModels "github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/calendar/models"
 	"github.com/whento/whento/internal/calendar/service"
@@ -72,9 +71,6 @@ type CalendarHandler struct {
 }
 
 // NewCalendarHandler creates a new calendar handler.
-//
-// quotaLock may be nil, in which case creation runs unserialised — the same escape
-// hatch the nil *pgxpool.Pool used to provide.
 func NewCalendarHandler(
 	calendarService CalendarService,
 	quotaService quota.QuotaService,
@@ -139,43 +135,28 @@ func (h *CalendarHandler) CreateCalendar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 
-	// Additional validation for participants
-	if len(req.Participants) > 0 {
-		// Check for duplicate participant names
-		participantNames := make(map[string]bool)
-		for _, name := range req.Participants {
-			if name == "" {
-				continue
-			}
-			if participantNames[name] {
-				httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, "Duplicate participant name: "+name)
-				return
-			}
-			participantNames[name] = true
+	// Check for duplicate participant names
+	participantNames := make(map[string]bool)
+	for _, name := range req.Participants {
+		if name == "" {
+			continue
 		}
+		if participantNames[name] {
+			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, "Duplicate participant name: "+name)
+			return
+		}
+		participantNames[name] = true
+	}
 
-		// Check that threshold doesn't exceed participant count (unless anonymous registration is enabled)
-		if !req.AllowAnonymousParticipants {
-			nonEmptyCount := 0
-			for _, name := range req.Participants {
-				if name != "" {
-					nonEmptyCount++
-				}
-			}
-			if req.Threshold > 0 && req.Threshold > nonEmptyCount {
-				httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, "Threshold cannot exceed the number of participants")
-				return
-			}
-		}
+	// Check that threshold doesn't exceed participant count (unless anonymous
+	// registration is enabled, or no participants were given at all)
+	if len(req.Participants) > 0 && !req.AllowAnonymousParticipants && req.Threshold > len(participantNames) {
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, "Threshold cannot exceed the number of participants")
+		return
 	}
 
 	// Parse user ID
@@ -203,11 +184,6 @@ func (h *CalendarHandler) CreateCalendar(w http.ResponseWriter, r *http.Request)
 	// Check the quota and create under a per-user (cloud) or server-wide
 	// (self-hosted) advisory lock, so that two concurrent requests cannot both
 	// read a count below the allowance and both create a calendar.
-	if h.quotaLock == nil {
-		h.createUnderQuota(r.Context(), w, userID, userUUID, &req)
-		return
-	}
-
 	lockKey := h.quotaService.QuotaLockKey(userUUID)
 	err = h.quotaLock.WithQuotaLock(r.Context(), lockKey, func(ctx context.Context) error {
 		h.createUnderQuota(ctx, w, userID, userUUID, &req)
@@ -354,12 +330,7 @@ func (h *CalendarHandler) UpdateCalendar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 
@@ -455,12 +426,7 @@ func (h *CalendarHandler) RegenerateToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 

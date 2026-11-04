@@ -7,9 +7,7 @@ package service
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -96,12 +94,7 @@ func (s *MagicLinkService) RequestMagicLink(ctx context.Context, email string) e
 	}
 
 	// Generate secure random token (32 bytes = 64 hex chars)
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		s.logger.Error("Failed to generate magic link token", "error", err)
-		return nil // Return nil to avoid revealing internal errors
-	}
-	token := hex.EncodeToString(tokenBytes)
+	token := randomHex(32)
 
 	// Set expiry (1 hour default)
 	expiresAt := time.Now().Add(s.cfg.Email.MagicLinkExpiry)

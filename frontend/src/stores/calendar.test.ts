@@ -356,19 +356,6 @@ describe('calendar store', () => {
 
       expect(store.currentPublicCalendar?.participants).toHaveLength(1);
     });
-
-    it('clears both current slots', async () => {
-      calendarsApi.getById.mockResolvedValue(calendar());
-      calendarsApi.getPublic.mockResolvedValue(publicCalendar());
-      const store = freshStore();
-      await store.fetchCalendar('c-1');
-      await store.fetchPublicCalendar('tok');
-
-      store.clearCurrentCalendar();
-
-      expect(store.currentCalendar).toBeNull();
-      expect(store.currentPublicCalendar).toBeNull();
-    });
   });
 
   describe('account-scoped cache', () => {
