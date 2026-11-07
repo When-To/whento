@@ -201,7 +201,7 @@
               v-if="hasCalendarHistory"
               class="relative rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
               :title="t('calendar.showCalendars')"
-              @click="toggleCalendarHistory"
+              @click="historyStore.toggle()"
             >
               <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -422,6 +422,7 @@
 
 <script setup lang="ts">
 import { computed, onErrorCaptured, onMounted, ref, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { SUPPORTED_LOCALES } from '@/i18n';
@@ -477,11 +478,8 @@ function goHome() {
   router.push('/').catch(() => window.location.assign('/'));
 }
 
-const isAuthenticated = computed(() => authStore.isAuthenticated);
-const isAdmin = computed(() => authStore.isAdmin);
-const user = computed(() => authStore.user);
-/** Whether the server currently accepts new registrations; hides the register CTA. */
-const registrationEnabled = computed(() => authStore.registrationEnabled);
+/** `registrationEnabled`: whether the server accepts new registrations; hides the register CTA. */
+const { isAuthenticated, isAdmin, user, registrationEnabled } = storeToRefs(authStore);
 const hasCalendarHistory = computed(() => historyStore.calendars.length > 0);
 const calendarHistoryCount = computed(() => historyStore.calendars.length);
 
@@ -503,10 +501,6 @@ function toggleMobileMenu() {
 
 function closeMobileMenu() {
   mobileMenuOpen.value = false;
-}
-
-function toggleCalendarHistory() {
-  historyStore.toggle();
 }
 
 async function handleLogout() {

@@ -71,7 +71,7 @@ dev-db:
 dev-app:
 	@echo "Starting WhenTo Application on :8080 ($(BUILD_TYPE) mode)..."
 	@echo "Note: In Dev Container, PostgreSQL and Redis are already running"
-	go run -tags $(BUILD_TYPE) ./cmd/main.go
+	go run -tags $(BUILD_TYPE) ./cmd/
 
 dev: dev-app
 
@@ -112,7 +112,7 @@ dev-frontend:
 #
 # go.work declares two modules, and `./...` only ever expands within the module it is
 # run from. Testing pkg/ therefore needs its own invocation from inside pkg/ — without
-# it, jwt, participanttoken, middleware, validator and httputil are never tested.
+# it, jwt, middleware, validator and httputil are never tested.
 # The two prerequisites are what a clean checkout is missing: the root module embeds
 # web/dist (frontend placeholder suffices) and imports the generated docs/swagger, and
 # without either, `go test ./...` will not even compile. CI manufactures both as

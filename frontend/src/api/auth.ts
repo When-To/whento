@@ -57,13 +57,6 @@ export const authApi = {
     return apiClient.patch<User>('/auth/me', data);
   },
 
-  async updatePassword(oldPassword: string, newPassword: string): Promise<void> {
-    return apiClient.patch<void>('/auth/me/password', {
-      old_password: oldPassword,
-      new_password: newPassword,
-    });
-  },
-
   async forgotPassword(email: string): Promise<{ message: string }> {
     return apiClient.post<{ message: string }>('/auth/forgot-password', { email });
   },

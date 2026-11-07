@@ -6,7 +6,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -181,19 +180,7 @@ func (h *ParticipantEmailHandler) participantAcceptingEmail(
 // open a channel the owner never opened. VerifyEmail deliberately skips this
 // gate so an already-sent verification link still works after settings change.
 func (h *ParticipantEmailHandler) participantEmailEnabled(calendar *models.Calendar) bool {
-	if calendar.NotifyConfig == nil || *calendar.NotifyConfig == "" {
-		return false
-	}
-
-	var cfg notifyModels.NotifyConfig
-	if err := json.Unmarshal([]byte(*calendar.NotifyConfig), &cfg); err != nil {
-		return false
-	}
-
-	return cfg.Enabled &&
-		cfg.NotifyParticipants &&
-		cfg.Channels.Email.Enabled &&
-		h.emailService.IsConfigured()
+	return notifyModels.ParticipantEmailOn(calendar.NotifyConfig) && h.emailService.IsConfigured()
 }
 
 // VerifyEmail verifies participant email with token

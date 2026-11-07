@@ -68,9 +68,8 @@ type PasswordResetMailer interface {
 // PasswordResetTokenIssuer mints the auto-login token pair after a reset, as
 // well as the pending-MFA token an MFA-protected account gets instead.
 type PasswordResetTokenIssuer interface {
-	GenerateAccessToken(userID, email, role string) (string, error)
-	IssueRefreshToken(userID, familyID string) (string, time.Time, string, error)
-	GenerateCustomToken(claims map[string]interface{}) (string, error)
+	sessionTokenIssuer
+	pendingCustomTokenIssuer
 }
 
 // AccessTokenRevoker withdraws the access tokens a user already holds.
@@ -134,12 +133,9 @@ func NewPasswordResetService(
 
 // RequestPasswordReset initiates password reset process
 // Always returns success to prevent email enumeration
-func (s *PasswordResetService) RequestPasswordReset(ctx context.Context, req *models.ForgotPasswordRequest) error {
+func (s *PasswordResetService) RequestPasswordReset(req *models.ForgotPasswordRequest) {
 	// Fire-and-forget goroutine to prevent timing attacks
 	go s.processPasswordReset(req.Email)
-
-	// Always return success immediately
-	return nil
 }
 
 // processPasswordReset handles the actual password reset logic in background.
@@ -167,7 +163,7 @@ func (s *PasswordResetService) processPasswordReset(email string) {
 	}
 
 	// Generate cryptographically secure token
-	token := randomHex(resetTokenLength)
+	token := RandomHex(resetTokenLength)
 
 	// Store token with expiry, configured via PASSWORD_RESET_EXPIRY. The expiry
 	// has to be *the* expiry in both places that mention it: stored here for the
@@ -254,7 +250,7 @@ func (s *PasswordResetService) ResetPassword(ctx context.Context, req *models.Re
 			"user_id", user.ID)
 		return &models.ResetPasswordResponse{
 			Message:    "Password updated. Complete the login with your second factor.",
-			User:       toUserResponse(user),
+			User:       user.ToResponse(),
 			RequireMFA: true,
 			TempToken:  tempToken,
 		}, nil
@@ -262,24 +258,10 @@ func (s *PasswordResetService) ResetPassword(ctx context.Context, req *models.Re
 
 	// No MFA: auto-login with a fresh session presenting the generation the
 	// atomic claim advanced.
-	accessToken, err := s.jwtManager.GenerateAccessToken(user.ID.String(), user.Email, user.Role)
+	accessToken, refreshToken, expiresAt, familyID, storedToken, err := issueSessionTokens(s.jwtManager, user)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate access token: %w", err)
+		return nil, err
 	}
-
-	refreshToken, expiresAt, familyID, err := s.jwtManager.IssueRefreshToken(user.ID.String(), "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
-	}
-
-	// Store refresh token hash
-	storedToken := &models.RefreshToken{
-		UserID:    user.ID,
-		TokenHash: repository.HashToken(refreshToken),
-		ExpiresAt: expiresAt,
-		FamilyID:  familyID,
-	}
-	storedToken.ID = uuid.New()
 
 	if err := s.tokenRepo.Create(ctx, storedToken, user.SecurityGeneration); err != nil {
 		return nil, fmt.Errorf("failed to store refresh token: %w", err)
@@ -294,7 +276,7 @@ func (s *PasswordResetService) ResetPassword(ctx context.Context, req *models.Re
 		RefreshToken:     refreshToken,
 		RefreshExpiresAt: expiresAt,
 		SessionID:        familyID,
-		User:             toUserResponse(user),
+		User:             user.ToResponse(),
 	}, nil
 }
 
@@ -344,18 +326,4 @@ func (s *PasswordResetService) sendPasswordResetEmail(user *models.User, resetUR
 
 	s.logger.Info("Password reset email sent", "user_id", user.ID, "locale", user.Locale)
 	return nil
-}
-
-// toUserResponse converts User to UserResponse
-func toUserResponse(user *models.User) *models.UserResponse {
-	return &models.UserResponse{
-		ID:            user.ID.String(),
-		Email:         user.Email,
-		DisplayName:   user.DisplayName,
-		Role:          user.Role,
-		Locale:        user.Locale,
-		Timezone:      user.Timezone,
-		EmailVerified: user.EmailVerified,
-		CreatedAt:     user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-	}
 }

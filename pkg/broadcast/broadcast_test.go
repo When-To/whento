@@ -168,15 +168,20 @@ func TestCancellingTheContextUnsubscribes(t *testing.T) {
 	broker := NewMemoryBroker()
 	t.Cleanup(func() { _ = broker.Close() })
 
-	local, ok := broker.(*memoryBroker)
+	local, ok := broker.(*hub)
 	if !ok {
 		t.Fatalf("unexpected broker type %T", broker)
+	}
+	subscribers := func() int {
+		local.mu.RLock()
+		defer local.mu.RUnlock()
+		return len(local.topics["calendar-a"])
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	notices, _ := broker.Subscribe(ctx, "calendar-a")
 
-	if got := local.hub.subscriberCount("calendar-a"); got != 1 {
+	if got := subscribers(); got != 1 {
 		t.Fatalf("subscriber count = %d, want 1", got)
 	}
 
@@ -188,13 +193,13 @@ func TestCancellingTheContextUnsubscribes(t *testing.T) {
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if local.hub.subscriberCount("calendar-a") == 0 {
+		if subscribers() == 0 {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Errorf("the subscription survived its context: %d still registered",
-		local.hub.subscriberCount("calendar-a"))
+		subscribers())
 }
 
 // TestTopicsAreForgotten guards against a slow leak that no functional test would show:
@@ -203,9 +208,9 @@ func TestTopicsAreForgotten(t *testing.T) {
 	broker := NewMemoryBroker()
 	t.Cleanup(func() { _ = broker.Close() })
 
-	local, ok := broker.(*memoryBroker)
+	local, ok := broker.(*hub)
 	if !ok {
-		t.Fatalf("NewMemoryBroker returned %T, want *memoryBroker", broker)
+		t.Fatalf("NewMemoryBroker returned %T, want *hub", broker)
 	}
 
 	for i := range 100 {
@@ -213,9 +218,9 @@ func TestTopicsAreForgotten(t *testing.T) {
 		stop()
 	}
 
-	local.hub.mu.RLock()
-	remaining := len(local.hub.topics)
-	local.hub.mu.RUnlock()
+	local.mu.RLock()
+	remaining := len(local.topics)
+	local.mu.RUnlock()
 
 	if remaining != 0 {
 		t.Errorf("%d topics kept after every subscriber left", remaining)

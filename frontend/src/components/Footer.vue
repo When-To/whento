@@ -141,5 +141,5 @@
 import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
-const isCloud = (import.meta.env.VITE_BUILD_TYPE || 'cloud') === 'cloud';
+const isCloud = import.meta.env.VITE_BUILD_TYPE === 'cloud';
 </script>

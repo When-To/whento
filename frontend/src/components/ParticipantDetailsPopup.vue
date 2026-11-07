@@ -239,10 +239,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, nextTick, onMounted, watch } from 'vue';
+import { useEventListener, useResizeObserver } from '@vueuse/core';
 import { useI18n } from 'vue-i18n';
 import { availabilitiesApi } from '@/api/availabilities';
 import TimeSelect from '@/components/TimeSelect.vue';
+import { formatDate } from '@/utils/date/intlFormatters';
 import { useFocusTrap } from '@/composables/useFocusTrap';
 import type { DateAvailabilitySummary } from '@/types';
 
@@ -283,17 +285,9 @@ const editedStartTime = ref('');
 const editedEndTime = ref('');
 const savingNote = ref(false);
 
-const formatSelectedDate = computed(() => {
-  if (!props.date) return '';
-  const date = new Date(props.date);
-  const localeCode = locale.value;
-  return date.toLocaleDateString(localeCode, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-});
+const formatSelectedDate = computed(() =>
+  props.date ? formatDate(new Date(props.date), locale.value, 'fullWithWeekdayYear') : ''
+);
 
 function isFullDayTime(startTime?: string, endTime?: string): boolean {
   if (!startTime || !endTime) return false;
@@ -443,8 +437,25 @@ useFocusTrap(() => true, {
   onEscape: () => emit('close'),
 });
 
-let attachTimer: number | null = null;
-let resizeObserver: ResizeObserver | null = null;
+// Entering edit mode adds two time pickers, a note field and two buttons, which can
+// push the popup off the bottom of the screen. Repositioning only after the initial
+// load left it hanging there, unreachable because scrolling the page does not move a
+// fixed element. Watching its own size covers every content change.
+useResizeObserver(tooltipRef, () => adjustTooltipPosition());
+
+// Armed 100 ms after the load so the opening pointer event doesn't immediately close it.
+let armed = false;
+useEventListener(document, ['click', 'touchstart'], (event: Event) => {
+  if (armed) handleClickOutside(event);
+});
+useEventListener(
+  window,
+  'scroll',
+  () => {
+    if (armed) handleScroll();
+  },
+  { capture: true }
+);
 
 onMounted(async () => {
   // Initial anchored position (below the row, clamped to viewport width)
@@ -454,33 +465,7 @@ onMounted(async () => {
   };
 
   await loadParticipantDetails();
-
-  // Entering edit mode adds two time pickers, a note field and two buttons, which can
-  // push the popup off the bottom of the screen. Repositioning only after the initial
-  // load left it hanging there, unreachable because scrolling the page does not move a
-  // fixed element. Watching its own size covers every content change.
-  if (tooltipRef.value && typeof ResizeObserver !== 'undefined') {
-    resizeObserver = new ResizeObserver(() => adjustTooltipPosition());
-    resizeObserver.observe(tooltipRef.value);
-  }
-
-  // Delay attaching so the opening pointer event doesn't immediately close
-  attachTimer = window.setTimeout(() => {
-    document.addEventListener('click', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
-    window.addEventListener('scroll', handleScroll, true);
-  }, 100);
-});
-
-onUnmounted(() => {
-  if (attachTimer !== null) {
-    window.clearTimeout(attachTimer);
-  }
-  resizeObserver?.disconnect();
-  resizeObserver = null;
-  document.removeEventListener('click', handleClickOutside);
-  document.removeEventListener('touchstart', handleClickOutside);
-  window.removeEventListener('scroll', handleScroll, true);
+  window.setTimeout(() => (armed = true), 100);
 });
 
 // Reload when the date prop changes (e.g., user long-presses a different row)

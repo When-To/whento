@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -20,6 +19,7 @@ import (
 	authRepo "github.com/whento/whento/internal/auth/repository"
 	"github.com/whento/whento/internal/calendar/models"
 	"github.com/whento/whento/internal/calendar/repository"
+	notifyModels "github.com/whento/whento/internal/notify/models"
 )
 
 var (
@@ -262,23 +262,7 @@ func buildPublicCalendarResponse(calendar *models.Calendar, participants []model
 	// requires the email channel. The SMTP capability of the instance is not
 	// decided here (that is the frontend's /auth/magic-link/available check), but
 	// the owner's declared channel preference is.
-	notifyParticipants := false
-	if calendar.NotifyConfig != nil && *calendar.NotifyConfig != "" {
-		var notifyConfig struct {
-			Enabled            bool `json:"enabled"`
-			NotifyParticipants bool `json:"notify_participants"`
-			Channels           struct {
-				Email struct {
-					Enabled bool `json:"enabled"`
-				} `json:"email"`
-			} `json:"channels"`
-		}
-		if err := json.Unmarshal([]byte(*calendar.NotifyConfig), &notifyConfig); err == nil {
-			notifyParticipants = notifyConfig.Enabled &&
-				notifyConfig.NotifyParticipants &&
-				notifyConfig.Channels.Email.Enabled
-		}
-	}
+	notifyParticipants := notifyModels.ParticipantEmailOn(calendar.NotifyConfig)
 
 	return &models.PublicCalendarResponse{
 		ID:                         calendar.ID,
@@ -561,8 +545,7 @@ func (s *CalendarService) UpdateCalendar(ctx context.Context, userID, userRole, 
 	calendar = updated
 
 	// Invalidate the public calendar cache
-	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-	_ = s.cache.Delete(ctx, cacheKey)
+	_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 
 	// Get participants
 	participants, err := s.participantRepo.GetByCalendarID(ctx, calendar.ID)
@@ -581,8 +564,7 @@ func (s *CalendarService) DeleteCalendar(ctx context.Context, userID, userRole, 
 	}
 
 	// Invalidate the public calendar cache before deletion
-	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-	_ = s.cache.Delete(ctx, cacheKey)
+	_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 
 	return s.calendarRepo.Delete(ctx, calendar.ID)
 }
@@ -600,8 +582,7 @@ func (s *CalendarService) RegenerateToken(ctx context.Context, userID, userRole,
 
 	// If regenerating public token, invalidate the old cache first
 	if tokenType == "public" {
-		oldCacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-		_ = s.cache.Delete(ctx, oldCacheKey)
+		_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 	}
 
 	// Generate new token
@@ -649,8 +630,7 @@ func (s *CalendarService) AddParticipant(ctx context.Context, userID, userRole, 
 	}
 
 	// Invalidate the public calendar cache since participants list changed
-	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-	_ = s.cache.Delete(ctx, cacheKey)
+	_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 
 	return participant, nil
 }
@@ -684,8 +664,7 @@ func (s *CalendarService) AddAnonymousParticipant(ctx context.Context, publicTok
 	}
 
 	// Invalidate the public calendar cache since participants list changed
-	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-	_ = s.cache.Delete(ctx, cacheKey)
+	_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 
 	return participant, nil
 }
@@ -724,8 +703,7 @@ func (s *CalendarService) UpdateParticipant(ctx context.Context, userID, userRol
 	}
 
 	// Invalidate the public calendar cache since participants list changed
-	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-	_ = s.cache.Delete(ctx, cacheKey)
+	_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 
 	// Get updated participant
 	participant, err = s.participantRepo.GetByID(ctx, partID)
@@ -781,8 +759,7 @@ func (s *CalendarService) RemoveParticipant(ctx context.Context, userID, userRol
 	}
 
 	// Invalidate the public calendar cache since participants list changed
-	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-	_ = s.cache.Delete(ctx, cacheKey)
+	_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 
 	return nil
 }

@@ -59,7 +59,7 @@ func TestJSON(t *testing.T) {
 				t.Errorf("JSON() Content-Type = %v, want application/json", contentType)
 			}
 
-			var resp Response
+			var resp response
 			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 				t.Fatalf("Failed to unmarshal response: %v", err)
 			}
@@ -107,7 +107,7 @@ func TestError(t *testing.T) {
 				t.Errorf("Error() status = %v, want %v", w.Code, tt.status)
 			}
 
-			var resp Response
+			var resp response
 			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 				t.Fatalf("Failed to unmarshal response: %v", err)
 			}
@@ -138,13 +138,13 @@ func TestValidationError(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	ValidationError(w, errs)
+	validationError(w, errs)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("ValidationError() status = %v, want %v", w.Code, http.StatusBadRequest)
 	}
 
-	var resp Response
+	var resp response
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestValidate(t *testing.T) {
 	if Validate(w, &input{}) {
 		t.Fatal("Validate() accepted an invalid input")
 	}
-	var resp Response
+	var resp response
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}

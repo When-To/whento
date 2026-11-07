@@ -46,10 +46,10 @@ type poolCollector struct {
 	metrics []poolMetric
 }
 
-// NewPoolCollector builds a collector over a snapshot function. None of the
+// newPoolCollector builds a collector over a snapshot function. None of the
 // metrics it publishes carries a label: there is one pool per process, and a
 // connection is not a person.
-func NewPoolCollector(stats func() PoolStats) prometheus.Collector {
+func newPoolCollector(stats func() PoolStats) prometheus.Collector {
 	m := func(name, help string, kind prometheus.ValueType, value func(PoolStats) float64) poolMetric {
 		desc := prometheus.NewDesc(prometheus.BuildFQName(namespace, "db_pool", name), help, nil, nil)
 		return poolMetric{desc: desc, kind: kind, value: value}
@@ -89,7 +89,7 @@ func NewPoolCollector(stats func() PoolStats) prometheus.Collector {
 // pool has already been registered, which the caller may treat as
 // non-fatal: metrics are worth less than the process staying up.
 func RegisterPool(stats func() PoolStats) error {
-	return registry.Register(NewPoolCollector(stats))
+	return registry.Register(newPoolCollector(stats))
 }
 
 func (c *poolCollector) Describe(ch chan<- *prometheus.Desc) {

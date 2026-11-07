@@ -6,7 +6,7 @@
   },
   "src/api/passkey.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 6
+      "count": 5
     }
   },
   "src/components/CalendarSidebar.vue": {
@@ -28,9 +28,6 @@
     }
   },
   "src/components/QuotaUsage.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
     "no-console": {
       "count": 1
     }
@@ -211,9 +208,6 @@
     }
   },
   "src/views/VerifyEmail.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
     "no-console": {
       "count": 1
     }

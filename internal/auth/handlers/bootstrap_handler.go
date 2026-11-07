@@ -83,12 +83,7 @@ func (h *BootstrapHandler) Status(w http.ResponseWriter, r *http.Request) {
 //	@Router			/api/v1/auth/bootstrap [post]
 func (h *BootstrapHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req models.BootstrapRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 

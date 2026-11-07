@@ -241,12 +241,6 @@ export type ParticipantAvailabilitiesResponse = Refine<
 
 export type CreateAvailabilityRequest = Schemas['models.CreateAvailabilityRequest'];
 
-// Recurrence Types
-export type Recurrence = AlwaysSent<
-  Schemas['models.Recurrence'],
-  'id' | 'participant_id' | 'day_of_week' | 'start_date' | 'created_at'
->;
-
 export type RecurrenceWithExceptions = Refine<
   AlwaysSent<
     Schemas['models.RecurrenceWithExceptions'],
@@ -296,8 +290,6 @@ export interface ApiResponse<T> {
 }
 
 export type ApiError = AlwaysSent<Schemas['httputil.ErrorInfo'], 'code' | 'message'>;
-
-export type ValidationError = AlwaysSent<Schemas['validator.ValidationError'], 'field' | 'message'>;
 
 // Notification Types
 export type EmailChannelConfig = AlwaysSent<Schemas['models.EmailChannelConfig'], 'enabled'>;

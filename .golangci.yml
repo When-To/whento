@@ -7,7 +7,7 @@
 # No `run.build-tags` is set on purpose. golangci-lint *appends* --build-tags to
 # the configured list rather than replacing it, so pinning a default here would
 # make `--build-tags cloud` load `cloud` and `selfhosted` together and fail on
-# `internal/quota.CalendarCounter` being declared twice. Always pass the tag:
+# `cmd.buildType` being declared twice. Always pass the tag:
 #
 #   golangci-lint run --build-tags selfhosted ./...
 #   golangci-lint run --build-tags cloud ./...
@@ -84,9 +84,6 @@ linters:
       - web/dist # embedded frontend build output
       - frontend/node_modules
       - node_modules
-      - \.go-cache
-      - ^path/ # stray local GOPATH-style directory, not project code
-      - migrations-build
     rules:
       # The only relaxation for tests, and a narrow one: `httptest.NewRequest` is the
       # idiomatic way to build a request in a test and noctx wants NewRequestWithContext

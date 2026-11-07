@@ -359,7 +359,7 @@ func (s *BootstrapService) ensureKeyLocked(ctx context.Context) error {
 		return nil
 	}
 
-	generated := randomHex(bootKeyBytes)
+	generated := RandomHex(bootKeyBytes)
 	s.key = generated
 	// The key is deliberately part of the message, not a field: this is the one
 	// secret the operator is meant to read out of the logs (Grist-style), and it
@@ -443,8 +443,9 @@ func runningInContainer() bool {
 	return false
 }
 
-// randomHex returns n cryptographically random bytes, hex-encoded.
-func randomHex(n int) string {
+// RandomHex returns n cryptographically random bytes, hex-encoded: the format
+// of every token the auth flows mail out or hand to the operator.
+func RandomHex(n int) string {
 	b := make([]byte, n)
 	// Since Go 1.24 rand.Read never returns an error: it crashes the program instead.
 	_, _ = rand.Read(b)

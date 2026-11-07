@@ -12,15 +12,16 @@ import (
 	"github.com/whento/pkg/models"
 )
 
-// Re-export shared enums for backward compatibility
+// User roles.
 const (
-	RoleUser  = models.RoleUser
-	RoleAdmin = models.RoleAdmin
+	RoleUser  = "user"
+	RoleAdmin = "admin"
 )
 
+// Supported locales.
 const (
-	LocaleFR = models.LocaleFR
-	LocaleEN = models.LocaleEN
+	LocaleFR = "fr"
+	LocaleEN = "en"
 )
 
 // User represents a user in the system

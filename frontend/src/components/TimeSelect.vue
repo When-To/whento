@@ -5,9 +5,10 @@
 -->
 
 <script setup lang="ts">
-import { computed, ref, useAttrs, watch } from 'vue';
+import { computed, ref, useAttrs } from 'vue';
 import { useEventListener } from '@vueuse/core';
 import { useI18n } from 'vue-i18n';
+import { minutesToTime } from '@/utils/date/timeRange';
 
 interface Props {
   modelValue?: string;
@@ -15,15 +16,16 @@ interface Props {
   min?: string;
   max?: string;
   placeholder?: string;
-  roundInterval?: 15 | 30 | 60; // Rounding interval in minutes (15, 30, or 60)
 }
 
 const props = withDefaults(defineProps<Props>(), {
   modelValue: '',
   disabled: false,
   placeholder: '--:--',
-  roundInterval: 15,
 });
+
+/** Suggestion step and typed-value rounding, in minutes. */
+const STEP = 15;
 
 const emit = defineEmits<{
   'update:modelValue': [value: string];
@@ -60,21 +62,15 @@ const dropdownStyle = ref({
   width: '0px',
 });
 
-// Generate time options based on roundInterval for suggestions
+// Suggestions every STEP minutes, filtered by min/max.
 const timeOptions = computed(() => {
   const options: string[] = [];
-  const interval = props.roundInterval;
-  for (let hour = 0; hour < 24; hour++) {
-    for (let minute = 0; minute < 60; minute += interval) {
-      const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-
-      // Filter based on min/max if provided
-      if (props.min && timeStr < props.min) continue;
-      // Treat "00:00" as end of day (24:00), so don't filter when max is "00:00"
-      if (props.max && props.max !== '00:00' && timeStr > props.max) continue;
-
-      options.push(timeStr);
-    }
+  for (let m = 0; m < 24 * 60; m += STEP) {
+    const timeStr = minutesToTime(m);
+    if (props.min && timeStr < props.min) continue;
+    // Treat "00:00" as end of day (24:00), so don't filter when max is "00:00"
+    if (props.max && props.max !== '00:00' && timeStr > props.max) continue;
+    options.push(timeStr);
   }
   return options;
 });
@@ -389,38 +385,15 @@ const handleScroll = (event: Event) => {
 };
 
 /**
- * Round the minutes of an H:MM / HH:MM value to the nearest roundInterval and
- * normalise to HH:MM (60 rolls over to the next hour). Null when not a valid time.
+ * Round an H:MM / HH:MM value to the nearest STEP and normalise to HH:MM
+ * (rounding past 23:59 wraps to 00:00). Null when not a valid time.
  */
 function roundTime(value: string): string | null {
   const match = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/.exec(value);
   if (!match) return null;
-  let hours = Number(match[1]);
-  let minutes = Math.round(Number(match[2]) / props.roundInterval) * props.roundInterval;
-  if (minutes >= 60) {
-    minutes = 0;
-    hours = (hours + 1) % 24;
-  }
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  const total = Number(match[1]) * 60 + Math.round(Number(match[2]) / STEP) * STEP;
+  return minutesToTime(total % (24 * 60));
 }
-
-// Apply rounding to current value based on roundInterval
-function applyRounding() {
-  const value = props.modelValue;
-  const normalized = value ? roundTime(value) : null;
-  // Only emit if value changed
-  if (normalized && normalized !== value) {
-    emit('update:modelValue', normalized);
-  }
-}
-
-// Re-apply rounding when roundInterval changes
-watch(
-  () => props.roundInterval,
-  () => {
-    applyRounding();
-  }
-);
 
 useEventListener(document, 'click', handleClickOutside);
 useEventListener(window, 'scroll', handleScroll, true);

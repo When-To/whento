@@ -86,6 +86,11 @@ func main() {
 	}
 }
 
+// pingFunc adapts a func to the readiness Probe interface.
+type pingFunc func(context.Context) error
+
+func (f pingFunc) Ping(ctx context.Context) error { return f(ctx) }
+
 // instanceID returns a stable-enough identifier for this process, used as the
 // reminder-job owner mark. The hostname is unique among the few instances a
 // self-hosted deployment runs and is readable in the database when an operator
@@ -275,12 +280,11 @@ func run() error {
 
 	// Readiness probes what the instance actually needs: PostgreSQL, which is
 	// fatal, and Redis, which is not. The Redis probe stays nil when no client
-	// was created — assigning a nil *RedisPinger to the interface would produce
-	// a non-nil interface holding nil, and readiness would report a hard "down"
-	// for a dependency the operator chose not to run.
+	// was created, so readiness does not report "down" for a dependency the
+	// operator chose not to run.
 	var cacheProbe authHandlers.Probe
-	if redisPinger := database.NewRedisPinger(redisClient); redisPinger != nil {
-		cacheProbe = redisPinger
+	if redisClient != nil {
+		cacheProbe = pingFunc(func(ctx context.Context) error { return redisClient.Ping(ctx).Err() })
 	}
 
 	d := &deps{
@@ -332,15 +336,10 @@ func run() error {
 	defer baseCancel()
 
 	// Join the worker on every exit path, before closing its database pool.
-	stopReminders := func() {}
-	if h.reminders != nil {
-		stopReminders = startReminderWorker(baseCtx, h.reminders.Run)
-	}
+	stopReminders := startReminderWorker(baseCtx, h.reminders.Run)
 	defer stopReminders()
 
-	if h.refreshTokens != nil {
-		go sweepExpiredRefreshTokens(baseCtx, h.refreshTokens, log)
-	}
+	go sweepExpiredRefreshTokens(baseCtx, h.refreshTokens, log)
 
 	// Create server
 	srv := &http.Server{

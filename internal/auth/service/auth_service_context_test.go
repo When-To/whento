@@ -225,12 +225,12 @@ func authEntryPoints() []authEntryPoint {
 				user := f.seedUser(t, "mfa@example.test", contextTestPassword)
 				f.mfa.mfa = &mfaModels.UserMFA{Enabled: true}
 
-				tempToken, err := f.service.generateTempToken(user.ID, user.SecurityGeneration)
+				tempToken, err := pendingMFAToken(f.service.jwtManager, user.ID, user.SecurityGeneration)
 				if err != nil {
 					t.Fatalf("generate temp token: %v", err)
 				}
 
-				_, err = f.service.VerifyMFAAndLogin(ctx, tempToken, "000000")
+				_, err = f.service.VerifyMFAAndLogin(ctx, tempToken)
 
 				return err
 			},

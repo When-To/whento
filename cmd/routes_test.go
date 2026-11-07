@@ -25,7 +25,7 @@ import (
 // from a unit test with no database, no Redis and no listener.
 
 // testDeps returns the wiring newRouter reads: the configuration it takes CORS
-// and trusted proxies from, the quota services the symmetric RegisterQuotaRoutes
+// and trusted proxies from, the quota services RegisterQuotaRoutes
 // needs, and the rate limiter under test.
 func testDeps(rateLimitEnabled bool) *deps {
 	return &deps{

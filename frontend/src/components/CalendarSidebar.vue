@@ -84,7 +84,7 @@
           class="w-full text-center text-xs text-gray-600 hover:text-danger-600 dark:text-gray-400 dark:hover:text-danger-400"
           @click="handleClearAll"
         >
-          {{ t('calendar.clearHistory', "Effacer l'historique") }}
+          {{ t('calendar.clearHistory') }}
         </button>
       </div>
     </div>
@@ -123,6 +123,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useCalendarHistoryStore, type CalendarHistoryItem } from '@/stores/calendarHistory';
@@ -136,8 +137,8 @@ const currentToken = computed(() => {
   return route.params.token as string;
 });
 
-const calendars = computed(() => historyStore.calendars);
-const isOpen = computed(() => historyStore.isOpen);
+const { calendars, isOpen } = storeToRefs(historyStore);
+const { toggle, close } = historyStore;
 
 const shouldShowButton = computed(() => {
   return calendars.value.length > 0;
@@ -148,14 +149,6 @@ function getCalendarLink(calendar: CalendarHistoryItem): string {
     return `/c/${calendar.token}/p/${calendar.participantId}`;
   }
   return `/c/${calendar.token}`;
-}
-
-function toggle() {
-  historyStore.toggle();
-}
-
-function close() {
-  historyStore.close();
 }
 
 async function handleRemove(token: string) {

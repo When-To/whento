@@ -16,7 +16,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// RedisCache marshals to JSON on the way in and unmarshals on the way out, which is
+// redisCache marshals to JSON on the way in and unmarshals on the way out, which is
 // exactly the part a stub cannot check: a struct that round-trips through a map is not
 // evidence that it round-trips through Redis. These skip when REDIS_URL is unset, the
 // same rule the database harness follows.
@@ -24,7 +24,7 @@ import (
 // Every key is namespaced with a fresh UUID, so nothing collides with a dev server or
 // with another test running at the same time, and each test cleans up after itself.
 
-func redisCache(t *testing.T) (Cache, *redis.Client) {
+func testRedisCache(t *testing.T) (Cache, *redis.Client) {
 	t.Helper()
 
 	url := os.Getenv("REDIS_URL")
@@ -66,7 +66,7 @@ func scopedKey(t *testing.T, client *redis.Client, name string) string {
 }
 
 func TestRedisCacheIsEnabled(t *testing.T) {
-	c, _ := redisCache(t)
+	c, _ := testRedisCache(t)
 
 	if !c.IsEnabled() {
 		t.Error("a Redis-backed cache reports itself disabled")
@@ -74,7 +74,7 @@ func TestRedisCacheIsEnabled(t *testing.T) {
 }
 
 func TestRedisCacheRoundTripsAStruct(t *testing.T) {
-	c, client := redisCache(t)
+	c, client := testRedisCache(t)
 	ctx := context.Background()
 	key := scopedKey(t, client, "struct")
 
@@ -102,7 +102,7 @@ func TestRedisCacheRoundTripsAStruct(t *testing.T) {
 }
 
 func TestRedisCacheMissIsRedisNil(t *testing.T) {
-	c, client := redisCache(t)
+	c, client := testRedisCache(t)
 	ctx := context.Background()
 	key := scopedKey(t, client, "absent")
 
@@ -117,7 +117,7 @@ func TestRedisCacheMissIsRedisNil(t *testing.T) {
 }
 
 func TestRedisCacheDelete(t *testing.T) {
-	c, client := redisCache(t)
+	c, client := testRedisCache(t)
 	ctx := context.Background()
 	first := scopedKey(t, client, "one")
 	second := scopedKey(t, client, "two")
@@ -143,7 +143,7 @@ func TestRedisCacheDelete(t *testing.T) {
 }
 
 func TestRedisCacheHonoursTheTTL(t *testing.T) {
-	c, client := redisCache(t)
+	c, client := testRedisCache(t)
 	ctx := context.Background()
 	key := scopedKey(t, client, "ttl")
 
@@ -172,7 +172,7 @@ func TestRedisCacheHonoursTheTTL(t *testing.T) {
 }
 
 func TestRedisCacheDeletingNothingIsFine(t *testing.T) {
-	c, client := redisCache(t)
+	c, client := testRedisCache(t)
 
 	if err := c.Delete(context.Background(), scopedKey(t, client, "never-written")); err != nil {
 		t.Errorf("deleting an absent key returned %v", err)

@@ -45,12 +45,7 @@ func (h *AvailabilityHandler) CreateAvailability(w http.ResponseWriter, r *http.
 	participantID := chi.URLParam(r, "pid")
 
 	var req models.CreateAvailabilityRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -115,12 +110,7 @@ func (h *AvailabilityHandler) UpdateAvailability(w http.ResponseWriter, r *http.
 	date := chi.URLParam(r, "date")
 
 	var req models.UpdateAvailabilityRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 

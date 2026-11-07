@@ -12,7 +12,7 @@
         {{ t('errors.notFound') }}
       </h2>
       <p class="mt-2 text-gray-600 dark:text-gray-400">
-        {{ t('common.notFoundMessage', "Sorry, we couldn't find the page you're looking for.") }}
+        {{ t('common.notFoundMessage') }}
       </p>
       <router-link to="/" class="btn btn-primary mt-6">
         {{ t('nav.home') }}

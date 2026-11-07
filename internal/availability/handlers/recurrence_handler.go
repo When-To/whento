@@ -46,12 +46,7 @@ func (h *RecurrenceHandler) CreateRecurrence(w http.ResponseWriter, r *http.Requ
 	participantID := chi.URLParam(r, "pid")
 
 	var req models.CreateRecurrenceRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -111,12 +106,7 @@ func (h *RecurrenceHandler) UpdateRecurrence(w http.ResponseWriter, r *http.Requ
 	recurrenceID := chi.URLParam(r, "rid")
 
 	var req models.UpdateRecurrenceRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -178,12 +168,7 @@ func (h *RecurrenceHandler) CreateException(w http.ResponseWriter, r *http.Reque
 	recurrenceID := chi.URLParam(r, "rid")
 
 	var req models.CreateExceptionRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 

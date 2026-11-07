@@ -643,10 +643,10 @@ func (r *UserRepository) GetByMagicLinkToken(ctx context.Context, token string) 
 // lock. It revalidates the proof and captured security generation, then clears
 // the proof and inserts the optional refresh session in the same transaction.
 // Any failure leaves the proof usable; concurrent finalizations have one winner.
-func (r *UserRepository) ConsumeMagicLinkToken(ctx context.Context, token string, securityGeneration int64, session *models.RefreshToken) (*models.User, error) {
+func (r *UserRepository) ConsumeMagicLinkToken(ctx context.Context, token string, securityGeneration int64, session *models.RefreshToken) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("begin magic link claim: %w", err)
+		return fmt.Errorf("begin magic link claim: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -655,12 +655,12 @@ func (r *UserRepository) ConsumeMagicLinkToken(ctx context.Context, token string
 	var userID uuid.UUID
 	if err := tx.QueryRow(ctx, `SELECT id FROM users WHERE magic_link_token = $1 AND magic_link_token_expires_at > NOW()`, token).Scan(&userID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrUserNotFound
+			return ErrUserNotFound
 		}
-		return nil, fmt.Errorf("resolve magic link owner: %w", err)
+		return fmt.Errorf("resolve magic link owner: %w", err)
 	}
 	if err := sessionlock.Acquire(ctx, tx, userID); err != nil {
-		return nil, err
+		return err
 	}
 
 	query := `
@@ -672,15 +672,15 @@ func (r *UserRepository) ConsumeMagicLinkToken(ctx context.Context, token string
 	user, err := scanUser(tx.QueryRow(ctx, query, token))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrUserNotFound
+			return ErrUserNotFound
 		}
-		return nil, fmt.Errorf("failed to claim user by magic link token: %w", err)
+		return fmt.Errorf("failed to claim user by magic link token: %w", err)
 	}
 	if user.SecurityGeneration != securityGeneration {
-		return nil, ErrStaleSecurityGeneration
+		return ErrStaleSecurityGeneration
 	}
 	if session != nil && session.UserID != user.ID {
-		return nil, ErrUserNotFound
+		return ErrUserNotFound
 	}
 
 	if _, err := tx.Exec(ctx, `
@@ -689,7 +689,7 @@ func (r *UserRepository) ConsumeMagicLinkToken(ctx context.Context, token string
 		    magic_link_token_expires_at = NULL,
 		    updated_at = NOW()
 		WHERE id = $1`, user.ID); err != nil {
-		return nil, fmt.Errorf("failed to clear claimed magic link token: %w", err)
+		return fmt.Errorf("failed to clear claimed magic link token: %w", err)
 	}
 
 	// Token signing and the MFA lookup happen before claiming the proof. The
@@ -698,15 +698,15 @@ func (r *UserRepository) ConsumeMagicLinkToken(ctx context.Context, token string
 	if session != nil {
 		if err := tx.QueryRow(ctx, `INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, family_id) VALUES ($1, $2, $3, $4, $5) RETURNING created_at`,
 			session.ID, session.UserID, session.TokenHash, session.ExpiresAt, session.FamilyID).Scan(&session.CreatedAt); err != nil {
-			return nil, fmt.Errorf("insert magic link session: %w", err)
+			return fmt.Errorf("insert magic link session: %w", err)
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("commit magic link claim: %w", err)
+		return fmt.Errorf("commit magic link claim: %w", err)
 	}
 
-	return user, nil
+	return nil
 }
 
 // ConsumePasswordResetToken claims a password-reset proof and applies the new

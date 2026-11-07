@@ -61,14 +61,11 @@ export interface UseDragSelectionOptions<T extends DragTarget> {
 
 /** The returned surface deals only in keys, so it needs no target type. */
 export interface DragSelection {
-  readonly isDragging: ComputedRef<boolean>;
   readonly mode: ComputedRef<DragMode>;
   /** Keys currently inside the rectangle. Empty when no gesture is running. */
   readonly selected: ComputedRef<ReadonlySet<string>>;
   /** Bind to `@pointerdown` on the container. */
   onPointerDown(event: PointerEvent): void;
-  /** Abort without committing. */
-  cancel(): void;
 }
 
 /**
@@ -221,10 +218,8 @@ export function useDragSelection<T extends DragTarget>(
   useEventListener(window, 'pointercancel', reset);
 
   return {
-    isDragging: computed(() => dragging.value),
     mode: computed(() => mode.value),
     selected,
     onPointerDown,
-    cancel: reset,
   };
 }

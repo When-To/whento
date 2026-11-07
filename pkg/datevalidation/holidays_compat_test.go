@@ -21,7 +21,7 @@ import (
 // blocked holiday is still blocked, but an unknown ordinary day is a normal
 // day.
 func TestUnsupportedCountryOrdinaryWednesdayAdmitted(t *testing.T) {
-	restore := SetNagerBaseURL("") // disable the network fallback: genuinely unavailable
+	restore := setNagerBaseURL("") // disable the network fallback: genuinely unavailable
 	defer restore()
 
 	// 2026-10-07 is a Wednesday.
@@ -55,7 +55,7 @@ func TestUnsupportedCountryOrdinaryWednesdayAdmitted(t *testing.T) {
 // known (offline-covered) holiday: FR's labour day still blocks under `block`
 // and is admitted under `allow` when the weekday would otherwise forbid it.
 func TestKnownHolidayStillBlocks(t *testing.T) {
-	restore := SetNagerBaseURL("")
+	restore := setNagerBaseURL("")
 	defer restore()
 
 	// 2026-05-01 is a Friday (weekday 5).
@@ -79,7 +79,7 @@ func TestKnownHolidayStillBlocks(t *testing.T) {
 // calendar refuses both — a calendar written against the holiday must not admit
 // the observed bank holiday.
 func TestUSObservedSubstituteDayBlocks(t *testing.T) {
-	restore := SetNagerBaseURL("")
+	restore := setNagerBaseURL("")
 	defer restore()
 
 	friday := time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC)   // observed
@@ -100,7 +100,7 @@ func TestUSObservedSubstituteDayBlocks(t *testing.T) {
 	}
 }
 
-func TestHolidaysForYearFallback(t *testing.T) {
+func TestNagerFetchFallback(t *testing.T) {
 	var hits int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits++
@@ -110,7 +110,7 @@ func TestHolidaysForYearFallback(t *testing.T) {
 	}))
 	defer server.Close()
 
-	restore := SetNagerBaseURL(server.URL + "/%d/%s")
+	restore := setNagerBaseURL(server.URL + "/%d/%s")
 	defer restore()
 
 	holidays, err := defaultNager.fetch(context.Background(), "KR", 2026)
@@ -131,7 +131,7 @@ func TestHolidaysForYearFallback(t *testing.T) {
 	}
 }
 
-func TestHolidaysForYearFallbackUnavailable(t *testing.T) {
+func TestNagerFetchFallbackUnavailable(t *testing.T) {
 	var hits int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		hits++
@@ -139,7 +139,7 @@ func TestHolidaysForYearFallbackUnavailable(t *testing.T) {
 	}))
 	defer server.Close()
 
-	restore := SetNagerBaseURL(server.URL + "/%d/%s")
+	restore := setNagerBaseURL(server.URL + "/%d/%s")
 	defer restore()
 
 	if _, err := defaultNager.fetch(context.Background(), "KR", 2026); err == nil {
@@ -151,13 +151,13 @@ func TestHolidaysForYearFallbackUnavailable(t *testing.T) {
 	}
 }
 
-func TestHolidaysForYearFallbackMalformedJSON(t *testing.T) {
+func TestNagerFetchFallbackMalformedJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("this is not json"))
 	}))
 	defer server.Close()
 
-	restore := SetNagerBaseURL(server.URL + "/%d/%s")
+	restore := setNagerBaseURL(server.URL + "/%d/%s")
 	defer restore()
 
 	if _, err := defaultNager.fetch(context.Background(), "KR", 2026); err == nil {
@@ -165,8 +165,8 @@ func TestHolidaysForYearFallbackMalformedJSON(t *testing.T) {
 	}
 }
 
-func TestHolidaysForYearFallbackRejectsInvalidParams(t *testing.T) {
-	restore := SetNagerBaseURL("http://127.0.0.1:9/unused/%d/%s")
+func TestNagerFetchFallbackRejectsInvalidParams(t *testing.T) {
+	restore := setNagerBaseURL("http://127.0.0.1:9/unused/%d/%s")
 	defer restore()
 
 	if _, err := defaultNager.fetch(context.Background(), "ZZZ", 2026); err == nil {
@@ -178,16 +178,16 @@ func TestHolidaysForYearFallbackRejectsInvalidParams(t *testing.T) {
 	}
 }
 
-// TestHolidaysForYearContextCancellation ensures a cancelled call does not
+// TestNagerFetchContextCancellation ensures a cancelled call does not
 // poison the (short) cache and the error is propagated.
-func TestHolidaysForYearContextCancellation(t *testing.T) {
+func TestNagerFetchContextCancellation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(50 * time.Millisecond)
 		_ = json.NewEncoder(w).Encode([]map[string]string{})
 	}))
 	defer server.Close()
 
-	restore := SetNagerBaseURL(server.URL + "/%d/%s")
+	restore := setNagerBaseURL(server.URL + "/%d/%s")
 	defer restore()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
@@ -201,7 +201,7 @@ func TestHolidaysForYearContextCancellation(t *testing.T) {
 // TestUncoveredCountryFailsOpenWithoutFallback proves KR (not offline) plus a
 // disabled fallback = the block policy still admits an ordinary weekday.
 func TestUncoveredCountryFailsOpenWithoutFallback(t *testing.T) {
-	restore := SetNagerBaseURL("")
+	restore := setNagerBaseURL("")
 	defer restore()
 
 	wednesday := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)

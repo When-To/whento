@@ -37,22 +37,13 @@ func NewUnifiedFeedConfigHandler(configService *service.UnifiedFeedConfigService
 //	@Failure		401	{string}	string	"Unauthorized"
 //	@Router			/api/v1/ics/unified-feed [get]
 func (h *UnifiedFeedConfigHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
-	log := logger.FromContext(r.Context())
-
 	userID, err := h.getUserID(r)
 	if err != nil {
 		httputil.Error(w, http.StatusUnauthorized, "unauthorized", "Unauthorized")
 		return
 	}
 
-	config, err := h.configService.GetConfig(r.Context(), userID)
-	if err != nil {
-		log.Error("Failed to get unified feed config", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, "internal_error", "Internal server error")
-		return
-	}
-
-	httputil.JSON(w, http.StatusOK, config)
+	httputil.JSON(w, http.StatusOK, h.configService.GetConfig(r.Context(), userID))
 }
 
 // Create handles POST /api/v1/ics/unified-feed

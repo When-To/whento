@@ -132,12 +132,7 @@ func NewAuthHandler(
 //	@Router			/api/v1/auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -179,7 +174,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	// Send verification email if email verification is enabled
 	if h.cfg.Email.VerificationEnabled && h.emailService.IsConfigured() {
-		token := randomHex(32)
+		token := service.RandomHex(32)
 		expiresAt := time.Now().Add(h.cfg.Email.VerificationExpiry)
 
 		// Save token to database
@@ -401,12 +396,7 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.UpdateProfileRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -444,12 +434,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.ChangePasswordRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -489,12 +474,7 @@ func (h *AuthHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	targetUserID := chi.URLParam(r, "id")
 
 	var req models.UpdateRoleRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 

@@ -195,10 +195,10 @@ func TestNagerFirstCallerCancellationDoesNotAbortOtherWaiters(t *testing.T) {
 		t.Fatal("shared fetch never started")
 	}
 	secondCtx := &holidayWaitContext{Context: context.Background(), waiting: make(chan struct{})}
-	second := make(chan nagerResult, 1)
+	second := make(chan nagerCacheEntry, 1)
 	go func() {
 		holidays, err := client.fetch(secondCtx, "KR", 2026)
-		second <- nagerResult{holidays: holidays, err: err}
+		second <- nagerCacheEntry{holidays: holidays, err: err}
 	}()
 	select {
 	case <-secondCtx.waiting:

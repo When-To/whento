@@ -45,7 +45,7 @@ export const useCalendarStore = defineStore('calendar', () => {
 
   // `loading` is derived from a counter of in-flight actions rather than being a
   // flag each action sets and clears. See stores/asyncAction.ts.
-  const { loading, error, run, clearError } = useAsyncActions();
+  const { loading, error, run } = useAsyncActions();
 
   /**
    * The load generation. `clearCalendars()` bumps it so that any `fetchCalendars` or
@@ -362,6 +362,5 @@ export const useCalendarStore = defineStore('calendar', () => {
     regenerateICSToken,
     /** Drops the account-owned calendars and current settings object (used on logout); keeps the current *public* calendar. */
     clearCalendars,
-    clearError,
   };
 });

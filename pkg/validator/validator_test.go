@@ -172,31 +172,3 @@ func TestValidateTimezone(t *testing.T) {
 		})
 	}
 }
-
-func TestValidateLocale(t *testing.T) {
-	type localeStruct struct {
-		Locale string `validate:"locale"`
-	}
-
-	tests := []struct {
-		name    string
-		locale  string
-		wantErr bool
-	}{
-		{"valid fr", "fr", false},
-		{"valid en", "en", false},
-		{"invalid de", "de", true},
-		{"invalid es", "es", true},
-		{"empty locale", "", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := localeStruct{Locale: tt.locale}
-			err := Validate(&s)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("locale validation error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}

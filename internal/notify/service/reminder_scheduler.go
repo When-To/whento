@@ -6,7 +6,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -330,7 +329,7 @@ func (s *ReminderScheduler) enqueueDue(ctx context.Context) {
 }
 
 func (s *ReminderScheduler) enqueueCalendar(ctx context.Context, calendar *calendarModels.Calendar, now time.Time) {
-	cfg, err := s.calendarConfig(calendar)
+	cfg, err := models.ParseNotifyConfig(calendar.NotifyConfig)
 	if err != nil {
 		s.logger.Error("Failed to parse notify config for reminder scan",
 			"calendar_id", calendar.ID, "error", err)
@@ -417,17 +416,6 @@ func (s *ReminderScheduler) timezoneOf(calendar *calendarModels.Calendar) *time.
 		return time.UTC
 	}
 	return loc
-}
-
-func (s *ReminderScheduler) calendarConfig(calendar *calendarModels.Calendar) (models.NotifyConfig, error) {
-	var cfg models.NotifyConfig
-	if calendar.NotifyConfig == nil || *calendar.NotifyConfig == "" {
-		return cfg, nil
-	}
-	if err := json.Unmarshal([]byte(*calendar.NotifyConfig), &cfg); err != nil {
-		return cfg, err
-	}
-	return cfg, nil
 }
 
 // planDelivery is the static half of the delivery plan: which (recipient class,
@@ -575,7 +563,7 @@ func (s *ReminderScheduler) deliverOne(ctx context.Context, job models.ReminderJ
 		return
 	}
 
-	cfg, err := s.calendarConfig(calendar)
+	cfg, err := models.ParseNotifyConfig(calendar.NotifyConfig)
 	if err != nil {
 		s.logger.Error("Failed to parse notify config for reminder delivery",
 			"calendar_id", job.CalendarID, "error", err)
@@ -600,7 +588,7 @@ func (s *ReminderScheduler) deliverOne(ctx context.Context, job models.ReminderJ
 		return
 	}
 
-	qualified, err := s.eventQualifies(ctx, calendar, job.EventDate)
+	qualified, err := s.eventQualifiesAt(ctx, calendar, job.EventDate, s.now())
 	if err != nil {
 		// Transient error checking the event: retry with backoff. A count query
 		// failing must not cancel the whole event.
@@ -683,10 +671,6 @@ func (s *ReminderScheduler) jobStillWanted(calendar *calendarModels.Calendar, cf
 
 	return job.ScheduledAt.Sub(scheduledAt) <= reminderTimeTolerance &&
 		scheduledAt.Sub(job.ScheduledAt) <= reminderTimeTolerance
-}
-
-func (s *ReminderScheduler) eventQualifies(ctx context.Context, calendar *calendarModels.Calendar, date time.Time) (bool, error) {
-	return s.eventQualifiesAt(ctx, calendar, date, s.now())
 }
 
 func (s *ReminderScheduler) eventQualifiesAt(ctx context.Context, calendar *calendarModels.Calendar, date, now time.Time) (bool, error) {

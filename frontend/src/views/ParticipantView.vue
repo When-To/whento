@@ -874,12 +874,7 @@ async function handleCalendarDaysSelect(dates: string[]) {
 
   // Show appropriate messages
   if (failed === 0) {
-    toastStore.success(
-      t('availability.multipleAdded', {
-        count: succeeded,
-        defaultValue: `${succeeded} availability(ies) added`,
-      })
-    );
+    toastStore.success(t('availability.multipleAdded', { count: succeeded }));
   } else if (succeeded === 0) {
     toastStore.error(t('errors.availabilityConflict'));
   } else {
@@ -919,12 +914,7 @@ async function handleCalendarDaysDeselect(dates: string[]) {
 
   // Show appropriate messages
   if (failed === 0) {
-    toastStore.success(
-      t('availability.multipleRemoved', {
-        count: succeeded,
-        defaultValue: `${succeeded} availability(ies) removed`,
-      })
-    );
+    toastStore.success(t('availability.multipleRemoved', { count: succeeded }));
   } else if (succeeded === 0) {
     toastStore.error(t('errors.deleteFailed'));
   } else {

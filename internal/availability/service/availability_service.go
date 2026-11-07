@@ -5,6 +5,7 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -1332,23 +1333,9 @@ func clampToRange(allowedRange repository.TimeRange, requestedStart, requestedEn
 // - Start time: MIN(holiday/holiday_eve start, weekday start)
 // - End time: MAX(holiday/holiday_eve end, weekday end)
 func getAllowedTimeRangeForDate(date time.Time, calendarInfo *repository.Calendar) repository.TimeRange {
-	// Get the weekday
 	weekday := int(date.Weekday())
-	weekdayStr := fmt.Sprintf("%d", weekday)
-
-	// Check if this weekday is allowed in the calendar
 	weekdayAllowed := datevalidation.IsWeekdayAllowed(weekday, calendarInfo.AllowedWeekdays)
-
-	// Get the weekday time range (if weekday is allowed)
-	var weekdayRange repository.TimeRange
-	if weekdayAllowed {
-		if tr, ok := calendarInfo.AllowedHours.Weekdays[weekdayStr]; ok {
-			weekdayRange = tr
-		} else {
-			// Weekday is allowed but no specific hours configured, use full day
-			weekdayRange = repository.TimeRange{Start: "00:00", End: "23:59"}
-		}
-	}
+	weekdayRange := getAllowedTimeRangeForWeekday(weekday, calendarInfo)
 
 	// Determine the country code for holiday checking
 	countryCode := datevalidation.GetCountryFromTimezone(calendarInfo.Timezone)
@@ -1423,31 +1410,10 @@ func compareTime(t1, t2 string) int {
 
 // recurrencesOverlap checks if two recurrences on the same day of week have overlapping date ranges.
 // Returns true if the date ranges overlap.
-// Rules:
-// - If both have no end_date (infinite): they always overlap
-// - If one has no end_date: overlap if its start_date <= the other's end_date
-// - If both have end_dates: overlap if start_A <= end_B AND start_B <= end_A
+// An empty end_date is open-ended; dates are YYYY-MM-DD, so they compare as strings.
 func recurrencesOverlap(startDateA, endDateA, startDateB, endDateB string) bool {
-	// Both have no end date (infinite) - they always overlap
-	if endDateA == "" && endDateB == "" {
-		return true
-	}
-
-	// A has no end date (infinite from startDateA)
-	if endDateA == "" {
-		// A overlaps with B if A starts before or when B ends
-		return startDateA <= endDateB
-	}
-
-	// B has no end date (infinite from startDateB)
-	if endDateB == "" {
-		// B overlaps with A if B starts before or when A ends
-		return startDateB <= endDateA
-	}
-
-	// Both have end dates - classic range overlap check
-	// Ranges [startA, endA] and [startB, endB] overlap if startA <= endB AND startB <= endA
-	return startDateA <= endDateB && startDateB <= endDateA
+	const forever = "9999-12-31"
+	return startDateA <= cmp.Or(endDateB, forever) && startDateB <= cmp.Or(endDateA, forever)
 }
 
 // getAllowedTimeRangeForWeekday gets the allowed time range for a specific weekday.

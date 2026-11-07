@@ -32,7 +32,7 @@ var (
 //	nagerDefaultBaseURL = "https://date.nager.at/api/v3/PublicHolidays/%d/%s"
 //
 // Production uses this fixed endpoint only after operator opt-in; tests use
-// SetNagerBaseURL to point it at an httptest server.
+// setNagerBaseURL to point it at an httptest server.
 const (
 	nagerDefaultBaseURL = "https://date.nager.at/api/v3/PublicHolidays/%d/%s"
 	nagerMinYear        = 1900
@@ -54,19 +54,13 @@ type nagerHoliday struct {
 	Date string `json:"date"`
 }
 
+// nagerCacheEntry is a cached load outcome, and also what the singleflight group
+// hands every caller sharing one upstream request: the error rides inside the value
+// so a failure is cached the same way as a success.
 type nagerCacheEntry struct {
 	holidays []time.Time
 	err      error
 	at       time.Time
-}
-
-// nagerResult is what the singleflight group hands back to every caller sharing
-// one upstream request. The error rides inside the value rather than in
-// singleflight's error slot so the load outcome is cached uniformly whether it
-// succeeded or failed.
-type nagerResult struct {
-	holidays []time.Time
-	err      error
 }
 
 // nagerClient is the bounded, cached Nager fallback.
@@ -100,21 +94,21 @@ func newNagerClient(baseURL string) *nagerClient {
 	}
 }
 
-// defaultNager is the process-wide fallback used by IsDateAllowed. SetNagerBaseURL replaces it for tests and mirrors.
+// defaultNager is the process-wide fallback used by IsDateAllowed. setNagerBaseURL replaces it for tests and mirrors.
 var defaultNager = newNagerClient("")
 
 // SetNagerFallbackEnabled configures the process-wide network fallback before
 // serving requests. It is disabled unless the operator explicitly enables it.
-// Like SetNagerBaseURL, this startup setting must not change during lookups.
+// Like setNagerBaseURL, this startup setting must not change during lookups.
 func SetNagerFallbackEnabled(enabled bool) (restore func()) {
 	baseURL := ""
 	if enabled {
 		baseURL = nagerDefaultBaseURL
 	}
-	return SetNagerBaseURL(baseURL)
+	return setNagerBaseURL(baseURL)
 }
 
-// SetNagerBaseURL points the built-in fallback provider at a different base URL
+// setNagerBaseURL points the built-in fallback provider at a different base URL
 // template and returns a function that restores the previous setting.
 //
 // The production endpoint is the fixed, trusted date.nager.at API; this hook
@@ -123,7 +117,7 @@ func SetNagerFallbackEnabled(enabled bool) (restore func()) {
 // entirely (every fetch reports errHolidayUnavailable without dialing anything).
 // Each URL gets its own cached client, so switching URLs starts a fresh cache.
 // It must not be called concurrently with lookups.
-func SetNagerBaseURL(url string) (restore func()) {
+func setNagerBaseURL(url string) (restore func()) {
 	old := defaultNager
 	defaultNager = newNagerClient(url)
 	return func() { defaultNager = old }
@@ -155,17 +149,16 @@ func (n *nagerClient) fetch(ctx context.Context, country string, year int) ([]ti
 		// Another fetch may have filled the cache between our first check
 		// and joining this group; do not issue an unnecessary second request.
 		if e, ok := n.cached(key); ok {
-			return nagerResult{holidays: e.holidays, err: e.err}, nil
+			return e, nil
 		}
 		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), nagerTimeout)
 		defer cancel()
-		holidays, err := n.load(fetchCtx, country, year)
-		return nagerResult{holidays: holidays, err: err}, nil
+		return n.load(fetchCtx, key, country, year), nil
 	})
 
 	select {
 	case res := <-ch:
-		r, ok := res.Val.(nagerResult)
+		r, ok := res.Val.(nagerCacheEntry)
 		if !ok {
 			return nil, fmt.Errorf("unexpected singleflight result type %T", res.Val)
 		}
@@ -195,15 +188,15 @@ func (n *nagerClient) valid(e nagerCacheEntry) bool {
 // load caches the shared request's outcome, including its own timeout as a
 // provider failure. Caller cancellation never reaches this context. A failure
 // is never cached as a successful empty list.
-func (n *nagerClient) load(ctx context.Context, country string, year int) ([]time.Time, error) {
+func (n *nagerClient) load(ctx context.Context, key, country string, year int) nagerCacheEntry {
 	holidays, err := n.dial(ctx, country, year)
-	key := country + ":" + strconv.Itoa(year)
+	entry := nagerCacheEntry{holidays: holidays, err: err, at: time.Now()}
 
 	n.mu.Lock()
 	if _, exists := n.cache[key]; !exists {
 		n.order = append(n.order, key)
 	}
-	n.cache[key] = nagerCacheEntry{holidays: holidays, err: err, at: time.Now()}
+	n.cache[key] = entry
 	for len(n.cache) > nagerCacheSize {
 		oldest := n.order[0]
 		n.order = n.order[1:]
@@ -211,7 +204,7 @@ func (n *nagerClient) load(ctx context.Context, country string, year int) ([]tim
 	}
 	n.mu.Unlock()
 
-	return holidays, err
+	return entry
 }
 
 // dial talks to the Nager API. Any provider, schema or HTTP error is reported

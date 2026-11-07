@@ -210,16 +210,6 @@ describe('calendar store', () => {
         i18n.global.locale.value = previous;
       }
     });
-
-    it('is cleared by clearError', async () => {
-      calendarsApi.getAll.mockRejectedValue(new Error('offline'));
-      const store = freshStore();
-      await expect(store.fetchCalendars()).rejects.toThrow();
-
-      store.clearError();
-
-      expect(store.error).toBeNull();
-    });
   });
 
   describe('state updates', () => {

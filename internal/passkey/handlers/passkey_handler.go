@@ -16,6 +16,7 @@ import (
 	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
 	authService "github.com/whento/whento/internal/auth/service"
+	"github.com/whento/whento/internal/auth/sessioncookie"
 	"github.com/whento/whento/internal/passkey/models"
 	"github.com/whento/whento/internal/passkey/service"
 )
@@ -168,12 +169,7 @@ func (h *PasskeyHandler) Rename(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.RenamePasskeyRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -312,15 +308,7 @@ func (h *PasskeyHandler) FinishAuthentication(w http.ResponseWriter, r *http.Req
 
 	// Set refresh token as httpOnly cookie
 	if authResponse.RefreshToken != "" {
-		http.SetCookie(w, &http.Cookie{
-			Name:     "refresh_token",
-			Value:    authResponse.RefreshToken,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
-			SameSite: http.SameSiteStrictMode,
-			MaxAge:   7 * 24 * 60 * 60, // 7 days
-		})
+		sessioncookie.SetRefreshToken(w, r, authResponse.RefreshToken, authResponse.RefreshExpiresAt)
 		authResponse.RefreshToken = ""
 	}
 

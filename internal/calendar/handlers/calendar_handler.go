@@ -123,19 +123,14 @@ func quotaMessage(limit int) string {
 }
 
 func (h *CalendarHandler) CreateCalendar(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
+	userUUID, ok := middleware.RequireUserUUID(w, r)
+	if !ok {
 		return
 	}
+	userID := userUUID.String()
 
 	var req models.CreateCalendarRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -159,13 +154,6 @@ func (h *CalendarHandler) CreateCalendar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Parse user ID
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid user ID")
-		return
-	}
-
 	// Check email verification if enabled
 	if h.cfg.Email.VerificationEnabled {
 		user, err := h.userRepo.GetByID(r.Context(), userUUID)
@@ -185,7 +173,7 @@ func (h *CalendarHandler) CreateCalendar(w http.ResponseWriter, r *http.Request)
 	// (self-hosted) advisory lock, so that two concurrent requests cannot both
 	// read a count below the allowance and both create a calendar.
 	lockKey := h.quotaService.QuotaLockKey(userUUID)
-	err = h.quotaLock.WithQuotaLock(r.Context(), lockKey, func(ctx context.Context) error {
+	err := h.quotaLock.WithQuotaLock(r.Context(), lockKey, func(ctx context.Context) error {
 		h.createUnderQuota(ctx, w, userID, userUUID, &req)
 		return nil
 	})
@@ -257,15 +245,7 @@ func (h *CalendarHandler) GetCalendar(w http.ResponseWriter, r *http.Request) {
 
 	calendar, err := h.calendarService.GetCalendar(r.Context(), userID, userRole, calendarID)
 	if err != nil {
-		if errors.Is(err, service.ErrCalendarNotFound) {
-			httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
-			return
-		}
-		if errors.Is(err, service.ErrUnauthorized) {
-			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "You don't have permission to access this calendar")
-			return
-		}
-		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to get calendar")
+		writeCalendarError(w, err, "You don't have permission to access this calendar", "Failed to get calendar")
 		return
 	}
 
@@ -325,29 +305,13 @@ func (h *CalendarHandler) UpdateCalendar(w http.ResponseWriter, r *http.Request)
 	calendarID := chi.URLParam(r, "id")
 
 	var req models.UpdateCalendarRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
 	calendar, err := h.calendarService.UpdateCalendar(r.Context(), userID, userRole, calendarID, &req)
 	if err != nil {
-		if errors.Is(err, service.ErrCalendarNotFound) {
-			httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
-			return
-		}
-		if errors.Is(err, service.ErrUnauthorized) {
-			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "You don't have permission to modify this calendar")
-			return
-		}
-		if writeDateError(w, err) {
-			return
-		}
-		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to update calendar")
+		writeCalendarError(w, err, "You don't have permission to modify this calendar", "Failed to update calendar")
 		return
 	}
 
@@ -379,15 +343,7 @@ func (h *CalendarHandler) DeleteCalendar(w http.ResponseWriter, r *http.Request)
 
 	err := h.calendarService.DeleteCalendar(r.Context(), userID, userRole, calendarID)
 	if err != nil {
-		if errors.Is(err, service.ErrCalendarNotFound) {
-			httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
-			return
-		}
-		if errors.Is(err, service.ErrUnauthorized) {
-			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "You don't have permission to delete this calendar")
-			return
-		}
-		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to delete calendar")
+		writeCalendarError(w, err, "You don't have permission to delete this calendar", "Failed to delete calendar")
 		return
 	}
 
@@ -421,30 +377,13 @@ func (h *CalendarHandler) RegenerateToken(w http.ResponseWriter, r *http.Request
 	calendarID := chi.URLParam(r, "id")
 
 	var req models.RegenerateTokenRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
 	calendar, err := h.calendarService.RegenerateToken(r.Context(), userID, userRole, calendarID, req.TokenType)
 	if err != nil {
-		if errors.Is(err, service.ErrCalendarNotFound) {
-			httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
-			return
-		}
-		if errors.Is(err, service.ErrUnauthorized) {
-			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "You don't have permission to modify this calendar")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidTokenType) {
-			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid token type")
-			return
-		}
-		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to regenerate token")
+		writeCalendarError(w, err, "You don't have permission to modify this calendar", "Failed to regenerate token")
 		return
 	}
 
@@ -502,6 +441,25 @@ func (h *CalendarHandler) ListUserCalendars(w http.ResponseWriter, r *http.Reque
 	}
 
 	httputil.JSON(w, http.StatusOK, calendars)
+}
+
+// writeCalendarError maps the calendar service's sentinel errors to their HTTP
+// answer: forbidden is the 403 message, fallback the 500 one.
+func writeCalendarError(w http.ResponseWriter, err error, forbidden, fallback string) {
+	switch {
+	case errors.Is(err, service.ErrCalendarNotFound):
+		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
+	case errors.Is(err, service.ErrParticipantNotFound):
+		httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Participant not found")
+	case errors.Is(err, service.ErrUnauthorized):
+		httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, forbidden)
+	case errors.Is(err, service.ErrParticipantExists):
+		httputil.Error(w, http.StatusConflict, httputil.ErrCodeConflict, "Participant with this name already exists")
+	case errors.Is(err, service.ErrInvalidTokenType):
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid token type")
+	case !writeDateError(w, err):
+		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, fallback)
+	}
 }
 
 // writeDateError answers a malformed or inverted start_date/end_date with a 400.

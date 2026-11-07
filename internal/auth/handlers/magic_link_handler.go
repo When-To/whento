@@ -28,7 +28,7 @@ import (
 // that constructor touches. Go interfaces are structural, so the concrete
 // service satisfies it and no call site changes.
 type MagicLinkService interface {
-	RequestMagicLink(ctx context.Context, email string) error
+	RequestMagicLink(ctx context.Context, email string)
 	VerifyMagicLink(ctx context.Context, token string) (*models.AuthResponse, error)
 }
 
@@ -82,18 +82,12 @@ func (h *MagicLinkHandler) RequestMagicLink(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 
 	var req models.MagicLinkRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	// Validate request
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
 	// Request magic link (always returns nil for anti-enumeration)
-	_ = h.magicLinkService.RequestMagicLink(ctx, req.Email)
+	h.magicLinkService.RequestMagicLink(ctx, req.Email)
 
 	// ALWAYS return 200 OK with generic message (anti-enumeration)
 	httputil.JSON(w, http.StatusOK, models.MagicLinkResponse{
@@ -156,12 +150,7 @@ func (h *MagicLinkHandler) VerifyMagicLink(w http.ResponseWriter, r *http.Reques
 	r.Body = http.MaxBytesReader(w, r.Body, 2048)
 
 	var req models.MagicLinkVerifyRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 

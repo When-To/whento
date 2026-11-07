@@ -279,12 +279,6 @@ export const useAuthStore = defineStore('auth', () => {
     });
   }
 
-  async function updatePassword(oldPassword: string, newPassword: string) {
-    return run('settings.passwordChangeFailed', () =>
-      authApi.updatePassword(oldPassword, newPassword)
-    );
-  }
-
   async function forgotPassword(email: string) {
     // Always returns success to prevent email enumeration
     return run('auth.forgotPassword.error', () => authApi.forgotPassword(email));
@@ -453,16 +447,13 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     fetchUser,
     updateProfile,
-    updatePassword,
     forgotPassword,
     resetPassword,
     setTokens,
     setTempToken,
     clearTempToken,
     resetSession,
-    loadAuthStatus,
     initializeAuth,
     whenReady,
-    clearError,
   };
 });

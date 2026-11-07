@@ -159,12 +159,7 @@ func (h *MFAHandler) FinishSetup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.FinishSetupRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -285,12 +280,7 @@ func (h *MFAHandler) RegenerateBackupCodes(w http.ResponseWriter, r *http.Reques
 // @Router			/api/v1/auth/mfa/verify [post]
 func (h *MFAHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 	var req models.VerifyMFARequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if !httputil.Validate(w, &req) {
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -348,7 +338,7 @@ func (h *MFAHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 	h.clearMFAAttempts(r, userID)
 
 	// Complete login by generating full auth tokens.
-	authResponse, err := h.authService.VerifyMFAAndLogin(r.Context(), req.TempToken, req.Code)
+	authResponse, err := h.authService.VerifyMFAAndLogin(r.Context(), req.TempToken)
 	if err != nil {
 		// Expected invalid-credential outcomes — an already-consumed pending token,
 		// a stale security generation, or a user who vanished mid-finalization —

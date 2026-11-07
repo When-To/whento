@@ -4,40 +4,21 @@
  * SPDX-License-Identifier: BSL-1.1
  */
 
+import type { AuthResponse } from '@/types';
 import { apiClient } from './client';
 
-// Helper to convert ArrayBuffer to Base64URL (RFC 4648 base64url encoding)
+// RFC 4648 base64url, unpadded, as WebAuthn expects.
 function arrayBufferToBase64url(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  // Convert to base64url (replace + with -, / with _, remove padding =)
-  return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
 }
 
-// Helper to convert Base64 (URL-safe) to ArrayBuffer
+// atob is forgiving-base64: it accepts unpadded input and throws on a malformed length.
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  // Convert URL-safe base64 to standard base64
-  // Replace - with + and _ with /, and add padding if needed
-  let standardBase64 = base64.replace(/-/g, '+').replace(/_/g, '/');
-
-  // Add padding if needed
-  const pad = standardBase64.length % 4;
-  if (pad) {
-    if (pad === 1) {
-      throw new Error('Invalid base64 string');
-    }
-    standardBase64 += new Array(5 - pad).join('=');
-  }
-
-  const binary = window.atob(standardBase64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
+  const binary = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(binary, c => c.charCodeAt(0)).buffer;
 }
 
 export interface Passkey {
@@ -182,14 +163,7 @@ export const passkeyApi = {
   async finishAuthentication(
     credential: PublicKeyCredential,
     challengeId: string
-  ): Promise<{
-    access_token?: string;
-    expires_in?: number;
-    session_id?: string;
-    user: any;
-    require_mfa?: boolean;
-    temp_token?: string;
-  }> {
+  ): Promise<AuthResponse> {
     const response = credential.response as AuthenticatorAssertionResponse;
 
     const body = {
@@ -205,7 +179,7 @@ export const passkeyApi = {
     };
 
     // Pass challengeId in header to avoid polluting WebAuthn body format
-    return apiClient.post('/auth/passkey/login/finish', body, {
+    return apiClient.post<AuthResponse>('/auth/passkey/login/finish', body, {
       headers: {
         'X-Challenge-ID': challengeId,
       },

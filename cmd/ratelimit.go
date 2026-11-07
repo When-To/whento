@@ -5,26 +5,12 @@
 package main
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/whento/pkg/middleware"
 )
-
-// rateLimitRule is one bucket: how many requests, over what window, counted
-// against whom. It is pkg/middleware's RateLimitConfig minus the question of
-// whether rate limiting is switched on at all, which is the routeLimiter's.
-type rateLimitRule struct {
-	// bucket names the budget, and is what keeps one route's traffic from
-	// spending another's. Two rules sharing a name share a counter — which is
-	// occasionally what you want, and must always be deliberate.
-	bucket   string
-	requests int
-	window   time.Duration
-	keyFunc  func(r *http.Request) string
-}
 
 // perIP buckets by client address. Proxy headers are honoured only for
 // connections coming from a configured trusted proxy; see middleware.IPKeyFunc.
@@ -34,21 +20,21 @@ type rateLimitRule struct {
 // one compared that shared total against its own limit: loading a calendar page
 // spent four of the five an email address was allowed per quarter hour, and the
 // next attempt to add one got a 429 it had done nothing to earn.
-func perIP(bucket string, requests int, window time.Duration) rateLimitRule {
-	return rateLimitRule{bucket: bucket, requests: requests, window: window, keyFunc: middleware.IPKeyFunc}
+func perIP(bucket string, requests int, window time.Duration) middleware.RateLimitConfig {
+	return middleware.RateLimitConfig{Bucket: bucket, Requests: requests, Window: window, KeyFunc: middleware.IPKeyFunc}
 }
 
 // perUser buckets by authenticated user id, and therefore only means anything
 // below middleware.Auth: without it the key is empty and the limiter lets the
 // request through.
-func perUser(bucket string, requests int, window time.Duration) rateLimitRule {
-	return rateLimitRule{bucket: bucket, requests: requests, window: window, keyFunc: middleware.UserKeyFunc}
+func perUser(bucket string, requests int, window time.Duration) middleware.RateLimitConfig {
+	return middleware.RateLimitConfig{Bucket: bucket, Requests: requests, Window: window, KeyFunc: middleware.UserKeyFunc}
 }
 
 // perPathIP buckets by exact request path *and* client address, so two
 // calendars — or two participants of one calendar — never share a budget.
-func perPathIP(bucket string, requests int, window time.Duration) rateLimitRule {
-	return rateLimitRule{bucket: bucket, requests: requests, window: window, keyFunc: middleware.CombinedKeyFunc}
+func perPathIP(bucket string, requests int, window time.Duration) middleware.RateLimitConfig {
+	return middleware.RateLimitConfig{Bucket: bucket, Requests: requests, Window: window, KeyFunc: middleware.CombinedKeyFunc}
 }
 
 // routeLimiter decides once whether rate limiting applies, so that no route has
@@ -79,17 +65,12 @@ func newRouteLimiter(limiter *middleware.RateLimiter, enabled bool) *routeLimite
 // old `else` branch produced. A pass-through would sit in the chain and show up
 // in Walk, which is a difference — small, but a difference this refactor has no
 // reason to introduce.
-func (l *routeLimiter) middlewares(rule rateLimitRule) chi.Middlewares {
+func (l *routeLimiter) middlewares(rule middleware.RateLimitConfig) chi.Middlewares {
 	if !l.enabled {
 		return nil
 	}
 
-	return chi.Middlewares{l.limiter.Limit(middleware.RateLimitConfig{
-		Bucket:   rule.bucket,
-		Requests: rule.requests,
-		Window:   rule.window,
-		KeyFunc:  rule.keyFunc,
-	})}
+	return chi.Middlewares{l.limiter.Limit(rule)}
 }
 
 // on returns the router the next single route should be registered on: r itself
@@ -97,7 +78,7 @@ func (l *routeLimiter) middlewares(rule rateLimitRule) chi.Middlewares {
 // inline sub-router carrying the bucket when it is on.
 //
 //	l.on(r, perIP(60, time.Minute)).Get("/public/{token}", h.calendar.GetPublicCalendar)
-func (l *routeLimiter) on(r chi.Router, rule rateLimitRule) chi.Router {
+func (l *routeLimiter) on(r chi.Router, rule middleware.RateLimitConfig) chi.Router {
 	mws := l.middlewares(rule)
 	if len(mws) == 0 {
 		return r
@@ -110,6 +91,6 @@ func (l *routeLimiter) on(r chi.Router, rule rateLimitRule) chi.Router {
 // nothing when rate limiting is off.
 //
 // Like any chi Use it has to come before the first route on that router.
-func (l *routeLimiter) use(r chi.Router, rule rateLimitRule) {
+func (l *routeLimiter) use(r chi.Router, rule middleware.RateLimitConfig) {
 	r.Use(l.middlewares(rule)...)
 }

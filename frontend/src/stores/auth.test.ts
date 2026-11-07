@@ -19,7 +19,6 @@ const authApi = {
   logout: vi.fn(),
   getMe: vi.fn(),
   updateProfile: vi.fn(),
-  updatePassword: vi.fn(),
   forgotPassword: vi.fn(),
   completeAccountRecovery: vi.fn(),
 };
@@ -529,14 +528,6 @@ describe('auth store', () => {
       // B's account is untouched.
       expect(store.user?.id).toBe('u-9');
       expect(store.user?.display_name).toBe('Bee');
-    });
-
-    it('translates a password change failure', async () => {
-      authApi.updatePassword.mockRejectedValue({ code: 'UNAUTHORIZED' });
-      const store = freshStore();
-
-      await expect(store.updatePassword('old', 'new')).rejects.toBeDefined();
-      expect(store.error).toBe(i18n.global.t('errors.unauthorized'));
     });
 
     it('signs the user in after a password reset', async () => {

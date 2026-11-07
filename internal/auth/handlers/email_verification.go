@@ -6,9 +6,7 @@ package handlers
 
 import (
 	"bytes"
-	"crypto/rand"
 	_ "embed"
-	"encoding/hex"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -21,6 +19,7 @@ import (
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
+	"github.com/whento/whento/internal/auth/service"
 )
 
 // SendVerificationEmail sends a verification email to the authenticated user
@@ -66,7 +65,7 @@ func (h *AuthHandler) SendVerificationEmail(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Generate verification token (32 bytes = 64 hex chars)
-	token := randomHex(32)
+	token := service.RandomHex(32)
 
 	// Set token expiry (from config)
 	expiresAt := time.Now().Add(h.cfg.Email.VerificationExpiry)
@@ -210,12 +209,4 @@ func (h *AuthHandler) sendVerificationEmail(to, displayName, locale, token strin
 
 	h.logger.Info("Verification email sent", "recipient_ref", logger.Fingerprint(to), "locale", locale)
 	return nil
-}
-
-// randomHex returns n cryptographically random bytes, hex-encoded.
-func randomHex(n int) string {
-	b := make([]byte, n)
-	// Since Go 1.24 rand.Read never returns an error: it crashes the program instead.
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
 }

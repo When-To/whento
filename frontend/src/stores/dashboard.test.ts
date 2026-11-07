@@ -18,7 +18,6 @@ const authApi = {
   bootstrapStatus: vi.fn(),
   getMe: vi.fn(),
   updateProfile: vi.fn(),
-  updatePassword: vi.fn(),
   logout: vi.fn(),
   forgotPassword: vi.fn(),
   completeAccountRecovery: vi.fn(),

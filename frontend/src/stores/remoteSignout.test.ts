@@ -27,7 +27,6 @@ const authApi = {
   getAuthStatus: vi.fn(),
   getMe: vi.fn(),
   updateProfile: vi.fn(),
-  updatePassword: vi.fn(),
   logout: vi.fn(),
   forgotPassword: vi.fn(),
   completeAccountRecovery: vi.fn(),
@@ -191,13 +190,11 @@ describe('remote session restored', () => {
     expect(feedStore.config).toBeNull();
   });
 
-  it('never reloads the document once identity is confirmed (replaces the fork reload loop)', async () => {
+  it('hydrates the confirmed identity with a single /auth/me call', async () => {
     (apiClient.getFamilyId as ReturnType<typeof vi.fn>).mockReturnValue(ACCEPTED_FAMILY);
     authApi.getMe.mockResolvedValue(USER_B);
 
-    const reload = vi.fn();
-    await handleRemoteSessionRestored(ACCEPTED_FAMILY, { reload });
-    expect(reload).not.toHaveBeenCalled();
+    await handleRemoteSessionRestored(ACCEPTED_FAMILY);
     expect(authApi.getMe).toHaveBeenCalledTimes(1);
   });
 
