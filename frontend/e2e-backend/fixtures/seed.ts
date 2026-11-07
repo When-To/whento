@@ -136,7 +136,7 @@ export async function seedCalendar(options: SeedOptions = {}): Promise<SeededCal
     participants: { id: string; name: string }[];
   }>('/calendars', {
     method: 'POST',
-    token: ownerToken(),
+    token: await ownerToken(),
     body: {
       name: `E2E ${unique}`,
       threshold: options.threshold ?? 2,

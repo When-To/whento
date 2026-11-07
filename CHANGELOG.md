@@ -347,6 +347,8 @@ Existing sessions survive: nobody is signed out.
 
 - A passkey login's refresh cookie now lasts as long as the refresh token
   (`JWT_REFRESH_EXPIRY`) instead of a fixed 7 days.
+- A tab opened while another tab was refreshing the session no longer lands on
+  the login page while still signed in.
 - Registered the bcrypt byte-limit validator used by reset requests, restoring
   the reset endpoint and rejecting passwords over 72 UTF-8 bytes without a panic.
 - Mailbox endpoints distinguish invalid proofs from logged server failures

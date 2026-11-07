@@ -74,7 +74,12 @@ function stripComments(text: string): string {
 
 const FILES = sourceFiles();
 const SOURCES = FILES.map(
-  file => [path.relative(SRC, file), stripComments(fs.readFileSync(file, 'utf8'))] as const
+  // POSIX separators, so the path checks below hold on Windows too.
+  file =>
+    [
+      path.relative(SRC, file).split(path.sep).join('/'),
+      stripComments(fs.readFileSync(file, 'utf8')),
+    ] as const
 );
 const ALL_SOURCE = SOURCES.map(([, text]) => text).join('\n');
 

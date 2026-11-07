@@ -12,7 +12,9 @@ export default defineConfig({
   // Single-file components are compiled here too, so component tests can mount them.
   // Without this, importing a `.vue` file from a test fails in the import analysis
   // pass, long before any assertion runs.
-  plugins: [vue()],
+  // Root-relative asset URLs (`/logo.png`, served from public/) stay plain strings:
+  // imported, they resolve to `file:///logo.png`, which Node rejects on Windows.
+  plugins: [vue({ template: { transformAssetUrls: { includeAbsolute: false } } })],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
