@@ -65,7 +65,12 @@ migrations (016 to 023) apply on the first start.
    `POST /api/v1/auth/magic-link/verify`; the `GET` now answers 405.
 7. `DB_MAX_CONNS`, `DB_MIN_CONNS`, `DB_MAX_CONN_LIFETIME` and
    `DB_MAX_CONN_IDLE_TIME` were ignored by v2.0.0 and now take effect: check
-   any value you had set.
+   any value you had set. The bundled `docker-compose.yml` does not forward
+   them, so a Compose install only sees them if you add them to the `app`
+   service's `environment`.
+9. Passwords are now measured in characters, not bytes: a new password needs
+   12 characters, so a short accented password v2.0.0 accepted is refused at
+   the next change or reset. Existing passwords keep working.
 8. The activity journal has no automatic retention; schedule your own purge if
    you want one ([logging and privacy](docs/logging-and-privacy.md)).
 
@@ -75,10 +80,13 @@ Existing sessions survive: nobody is signed out.
 
 - One-time operator bootstrap at `/bootstrap` and `POST /api/v1/auth/bootstrap`,
   with a generated startup key or a pinned `BOOTSTRAP_KEY` / `BOOTSTRAP_KEY_FILE`,
-  public capability status, and a durable first-user marker (migration 019).
-  Production and devcontainer Compose forward both settings; secret files must
-  be mounted separately. Wrong-key attempts and committed administrator creation
-  are audited without logging submitted credentials.
+  public capability status at `GET /api/v1/auth/status`, and a durable
+  first-user marker (migration 019). Until bootstrap completes, registration
+  answers 403 `BOOTSTRAP_REQUIRED`. Production and devcontainer Compose forward
+  both settings; secret files must be mounted separately. Wrong-key attempts and
+  committed administrator creation are audited with the request id and without
+  logging submitted credentials, and the startup message names the key's source
+  (`BOOTSTRAP_KEY` or `BOOTSTRAP_KEY_FILE`).
 - `validate-compose` CI check: every supported Compose file (`docker-compose.yml`,
   `docker-compose.dev.yml`, `.devcontainer/docker-compose.yml`) must parse and
   interpolate with `docker compose config -q`.
@@ -108,12 +116,9 @@ Existing sessions survive: nobody is signed out.
   event dates in the calendar's own IANA timezone (never a fixed UTC window), so
   a calendar east of UTC does not lose the day its event lands on, and DST
   shifts cannot move a scheduled instant onto the wrong date.
-- **Transient errors never cancel an event.** A failed count/availability query
-  while verifying a claimed job retries that job with backoff; only an
-  authoritatively confirmed non-qualifying event cancels the worker's own
-  claim. Each other delivery rechecks eligibility without an unfenced event-wide
-  cancellation. No longer does one bad read silently kill every reminder for an
-  event.
+- **Transient errors never cancel a reminder.** A failed database read while
+  checking whether an event still qualifies retries the job with backoff; only
+  an event confirmed as no longer qualifying cancels its reminder.
 - **Email is gated on real SMTP, re-read at delivery.** With no mailer
   configured the scheduler enqueues no email jobs (chat channels are
   unaffected), and a job whose SMTP vanished before delivery is suppressed
@@ -128,30 +133,21 @@ Existing sessions survive: nobody is signed out.
   changes that preference. Capability still gates delivery and new enablement.
   Saved consent can be explicitly disabled even while SMTP is unavailable, and
   stale capability responses cannot overwrite a newer probe result.
-- **Reminder timing and shutdown are bounded.** Rescheduling later cannot retain
-  an earlier claim time; elapsed calendar-local events are not reminded. Retry
-  delays saturate before arithmetic overflow and use each job's stored attempt
-  limit. Invalid operator tunables fail startup instead of silently falling back.
-  Every provider send renews the claim and honors a shorter context deadline,
-  including each recipient in a slow fanout. Lost claims/shutdown stop further
-  sends; chat delivery ledger failures are retried rather than ignored.
-- **Reminder transport errors do not persist provider credentials.** Webhook
-  URLs, bot tokens and recipient addresses embedded in provider errors are not
-  copied into reminder logs or the queue's `last_error`; wrapped error identity
-  remains available for cancellation handling.
-- **Reminder retries retain per-recipient completion for the entire event.**
-  A bouncing participant no longer makes successful recipients receive another
-  reminder after the threshold ledger's one-hour anti-spam window. Lease renewal
-  cannot shorten a live claim. Successful delivery clears previous error metadata.
-  Bounded cleanup also scrubs legacy free-form provider errors in retained rows.
-- **Reminder state has bounded retention and missed-window visibility.** Jobs and
-  recipient completion are cleaned in bounded batches after the event and state
-  are more than 30 days old. Missed windows are recorded and warned once per
-  delivery. Participant emails include localized participation-cancellation links.
-- **Reminder workers are joined before database shutdown.** Canceled SMTP sockets
-  close promptly, while confirmed sends get bounded completion writes before the
-  pool closes. Migration 020 checks valid delivery states and channels, and scans
-  only notification/reminder-enabled calendars through a matching partial index.
+- **Reminder scheduling is robust.** Events whose date has passed in the
+  calendar's timezone are not reminded, and invalid `REMINDER_*` values stop
+  startup instead of falling back silently. A panic in the scheduler is logged
+  instead of stopping the server. On shutdown, sends in progress stop, completed
+  ones are recorded before the database closes, and a scan stops at once.
+- **Reminder errors do not store credentials.** Webhook URLs, bot tokens and
+  recipient addresses found in provider errors are kept out of the logs and of
+  the queue's `last_error`.
+- **Each recipient gets one reminder per event.** When one participant's
+  delivery fails and is retried, the recipients already reached are not sent
+  another reminder.
+- **Reminder data is cleaned up.** Jobs and per-recipient records are deleted
+  30 days after the event. A reminder whose send window was missed is recorded
+  and logged once. Participant emails include a localized link to cancel
+  participation.
 - **Participant email status survives capability-probe failures.** Existing verified
   or pending addresses remain visible with a warning and retry; sending actions
   wait for available SMTP and owner consent. The no-op SMTP config adapter is gone.
@@ -271,6 +267,8 @@ Existing sessions survive: nobody is signed out.
 - `make test` now primes the two artifacts a clean checkout is missing (`web/dist`
   placeholder and generated Swagger docs) before running the root and shared-module
   Go suites.
+- The 12-character password minimum counts characters, not bytes, so a short
+  password made of multibyte characters is no longer accepted.
 - **Partial profile and calendar updates are field-preserving.** `PATCH
   /api/v1/auth/me` and the calendar settings PATCH write only the supplied
   fields, so two tabs saving unrelated fields no longer clobber each other.
@@ -292,6 +290,46 @@ Existing sessions survive: nobody is signed out.
 - `TOTP_PERIOD` and `TOTP_DIGITS`. Only setup honoured them, so any non-default
   value made 2FA enrollment impossible; codes are now always 6 digits every 30s.
 - `WEBAUTHN_TIMEOUT`, which was validated but never applied.
+- The `docker-build-multiarch`, `docker-test-build`, `docs-serve`,
+  `docs-validate` and `migrate-build` Makefile targets.
+
+### Fixed
+
+- A passkey login's refresh cookie now lasts as long as the refresh token
+  (`JWT_REFRESH_EXPIRY`) instead of a fixed 7 days.
+- `make dev` starts the server again: it ran `go run ./cmd/main.go`, which does
+  not compile on its own.
+- Magic-link and password-reset endpoints no longer expose database errors in
+  their responses; server failures are logged instead.
+- Creating or updating a calendar with a malformed `start_date`/`end_date`, or
+  an end before the start, answers 400 instead of 500.
+- Registration, password changes and password resets enforce the 72-byte
+  bcrypt ceiling: a multibyte password of 72 characters or fewer but more than
+  72 bytes is refused with 400 instead of failing with 500 at hashing.
+- An email the SMTP server had already accepted is no longer reported as
+  failed when the connection drops before the `QUIT` reply.
+- Threshold-notification rows in `notification_log` are deleted after 30 days.
+  The cleanup existed but nothing called it, so the table grew forever although
+  the rows only serve a one-hour anti-spam check.
+- `DB_MAX_CONNS`, `DB_MIN_CONNS`, `DB_MAX_CONN_LIFETIME` and
+  `DB_MAX_CONN_IDLE_TIME` reach the connection pool; v2.0.0 read and ignored
+  them (#200).
+- The cloud image and local `docker build .` / `make docker-build` builds work
+  again: their migrate-builder stage was truncated, so the v2.0.0 cloud image
+  never built (#124).
+- Dark-theme users get a dark first paint: the pre-paint theme script was inline
+  and the CSP refused it (#208).
+- The timezone selector offers zones tzdata folded into another country, such
+  as Copenhagen, Oslo, Stockholm and Amsterdam (#207).
+- Long calendar descriptions stay inside dashboard cards (#199).
+- The footer's documentation and contributing links point at real files (#125).
+- An admin page left open while another tab signs in as a non-admin redirects
+  to the dashboard instead of keeping the previous administrator's user list on
+  screen.
+- Cancelling an HTTP request no longer opens the shared Redis circuit breaker
+  or briefly blocks other users' session checks; cancelled probes do not mark
+  an unhealthy dependency as recovered. Transport outages still fail closed.
+- Deleting a user that does not exist answers 404 instead of 500.
 
 ### Security
 
@@ -323,15 +361,14 @@ Existing sessions survive: nobody is signed out.
   instructions to reopen the email link. Missing MFA challenges fail closed.
 - Failed Discord, Slack and Telegram calls no longer put the request URL in
   their error: Go's transport error prints it, and it carries the Telegram bot
-  token or the webhook secret, which then reached the logs.
+  token or the webhook secret, which then reached the logs. Discord and Slack
+  sends no longer log the first 20 characters of the webhook URL either.
 - **Revoking sessions now withdraws access tokens too.** A password reset, MFA
   activation, role change or account deletion used to delete the refresh
   sessions only, leaving issued access tokens valid until `JWT_ACCESS_EXPIRY`
   (a demoted administrator kept admin access for that long). They are now
   revoked at once, like a password change. Without Redis, access tokens still
   live out their expiry.
-- Threshold emails name the person who joined or withdrew to the calendar owner
-  only: participants received the name of whoever had just withdrawn.
 - Images build with Go 1.27.3, clearing CVE-2026-78667, CVE-2026-78669,
   CVE-2026-97031 (#187) and CVE-2026-111943 (#209).
 - The root module requires chi v5.5.0 for GHSA-j6qf-3m9c-vwj3 (#216). WhenTo
@@ -342,58 +379,6 @@ Existing sessions survive: nobody is signed out.
   accepting it unrecorded. TOTP codes gain replay protection: the last accepted
   time step is stored per user (migration 023, `user_mfa.totp_last_step`) and a
   code whose step is at or before it is refused.
-
-### Fixed
-
-- A passkey login's refresh cookie now lasts as long as the refresh token
-  (`JWT_REFRESH_EXPIRY`) instead of a fixed 7 days.
-- A tab opened while another tab was refreshing the session no longer lands on
-  the login page while still signed in.
-- Registered the bcrypt byte-limit validator used by reset requests, restoring
-  the reset endpoint and rejecting passwords over 72 UTF-8 bytes without a panic.
-- Mailbox endpoints distinguish invalid proofs from logged server failures
-  without exposing database errors. Magic links remain retryable after transient
-  MFA lookup or session insertion failures. Trusted origins normalize both
-  scheme and hostname; legacy verification uses the correct 405 error code.
-- Creating or updating a calendar with a malformed `start_date`/`end_date`, or
-  an end before the start, answers 400 instead of 500.
-- Registration and password changes also enforce the 72-byte bcrypt ceiling:
-  a multibyte password of 72 characters or fewer but more than 72 bytes is
-  refused with 400 instead of failing with 500 at hashing.
-- An `APP_URL` with a path no longer drops the application origin from the
-  magic-link trusted origins, which made every confirmation fail with 403.
-- Bootstrap audit lines ("Bootstrap key rejected", "Bootstrap administrator
-  created") carry the request id, and the startup message names
-  `BOOTSTRAP_KEY_FILE` as well as `BOOTSTRAP_KEY` as the key's source.
-- An email the SMTP server had already accepted is no longer reported as
-  failed when the connection drops before the `QUIT` reply (for example a
-  shutdown canceling the send), which made reminders go out twice.
-- Threshold-notification rows in `notification_log` are deleted after 30 days.
-  The cleanup existed but nothing called it, so the table grew forever although
-  the rows only serve a one-hour anti-spam check.
-- `DB_MAX_CONNS`, `DB_MIN_CONNS`, `DB_MAX_CONN_LIFETIME` and
-  `DB_MAX_CONN_IDLE_TIME` reach the connection pool; v2.0.0 read and ignored
-  them (#200).
-- The cloud image builds again: its migrate-builder stage was truncated, so the
-  v2.0.0 cloud image never built (#124).
-- Dark-theme users get a dark first paint: the pre-paint theme script was inline
-  and the CSP refused it (#208).
-- The timezone selector offers zones tzdata folded into another country, such
-  as Copenhagen, Oslo, Stockholm and Amsterdam (#207).
-- Long calendar descriptions stay inside dashboard cards (#199).
-- The footer's documentation and contributing links point at real files (#125).
-- An admin page left open while another tab signs in as a non-admin redirects
-  to the dashboard instead of keeping the previous administrator's user list on
-  screen.
-- Dropping a dashboard card onto the next one moves it there, and the last slot
-  of a group is reachable by drag and drop.
-- The activity endpoint answers 500, not 404, when the calendar cannot be read.
-- A panic in the reminder scheduler is logged instead of stopping the server,
-  and a shutdown during a scan stops it at once.
-- Cancelling an HTTP request no longer opens the shared Redis circuit breaker
-  or briefly blocks other users' session checks; cancelled probes do not mark
-  an unhealthy dependency as recovered. Transport outages still fail closed.
-- Deleting a user that does not exist answers 404 instead of 500.
 
 ## [v2.0.0] — 2026-08-18
 
