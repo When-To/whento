@@ -50,8 +50,12 @@ migrations (016 to 023) apply on the first start.
 1. **Back up first.** The migrations apply automatically. Going back to the v2.0.0
    image afterwards means reverting them with the new image first
    ([migration rollback](docs/migration-rollback.md#4-going-back-to-an-older-release)).
-2. `docker-compose.yml` follows `:latest`, so a plain `docker compose pull` moves
-   to this release. Pin a tag if you want to choose when.
+2. **Replace `docker-compose.yml` with this release's file** and keep your
+   `.env`. Docker Compose 2.20+ refuses the v2.0.0 file (its `pids_limit`
+   disagrees with `deploy.resources.limits.pids`), so even `docker compose pull`
+   fails with it. The new file also forwards the `BOOTSTRAP_*` and `REMINDER_*`
+   settings. It follows `:latest`, so `docker compose pull && docker compose up -d`
+   then moves to this release; pin a tag if you want to choose when.
 3. **Empty database:** create the administrator at `/bootstrap` with the key from
    `docker compose logs app`, or pin `BOOTSTRAP_KEY` / `BOOTSTRAP_KEY_FILE` (a
    secret file needs its own mount). **Users but no administrator:** promote one
@@ -330,6 +334,10 @@ Existing sessions survive: nobody is signed out.
   or briefly blocks other users' session checks; cancelled probes do not mark
   an unhealthy dependency as recovered. Transport outages still fail closed.
 - Deleting a user that does not exist answers 404 instead of 500.
+- The API documentation gives the real route and response for an administrator
+  disabling a user's 2FA: `POST /api/v1/auth/admin/users/{id}/disable-2fa`,
+  answering `totp_disabled` and `backup_codes_removed`. It listed a
+  `DELETE …/mfa/totp` route that never existed.
 
 ### Security
 
