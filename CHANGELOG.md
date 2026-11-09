@@ -50,12 +50,17 @@ migrations (016 to 023) apply on the first start.
 1. **Back up first.** The migrations apply automatically. Going back to the v2.0.0
    image afterwards means reverting them with the new image first
    ([migration rollback](docs/migration-rollback.md#4-going-back-to-an-older-release)).
-2. **Replace `docker-compose.yml` with this release's file** and keep your
-   `.env`. Docker Compose 2.20+ refuses the v2.0.0 file (its `pids_limit`
-   disagrees with `deploy.resources.limits.pids`), so even `docker compose pull`
-   fails with it. The new file also forwards the `BOOTSTRAP_*` and `REMINDER_*`
-   settings. It follows `:latest`, so `docker compose pull && docker compose up -d`
-   then moves to this release; pin a tag if you want to choose when.
+2. **Update `docker-compose.yml` first.** Docker Compose 2.20+ refuses the
+   v2.0.0 file (its `pids_limit` disagrees with `deploy.resources.limits.pids`),
+   so even `docker compose pull` fails with it. If you never edited the file,
+   take this release's one and keep your `.env`. Otherwise, under
+   `deploy.resources.limits`, add `pids: 256` to `app`, `pids: 512` to
+   `postgres` and `pids: 128` to `redis` (the same values as their
+   `pids_limit`). The new `BOOTSTRAP_*` and `REMINDER_*` settings reach the
+   container only if you also copy their `environment` lines from this
+   release's file. Without them the defaults apply. The file follows `:latest`,
+   so `docker compose pull && docker compose up -d` then moves to this release.
+   Pin a tag if you want to choose when.
 3. **Empty database:** create the administrator at `/bootstrap` with the key from
    `docker compose logs app`, or pin `BOOTSTRAP_KEY` / `BOOTSTRAP_KEY_FILE` (a
    secret file needs its own mount). **Users but no administrator:** promote one
