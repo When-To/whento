@@ -297,7 +297,8 @@ Existing sessions survive: nobody is signed out.
   accumulate.
 - The images ship `THIRD-PARTY-LICENSES.md` in `/app`.
 - Dependency updates (#132, #136–#144, #147, #149–#152, #155–#159, #162, #164,
-  #165, #167–#169, #174, #175, #181, #182, #194–#198, #202–#205, #212–#215, #220–#223).
+  #165, #167–#169, #174, #175, #181, #182, #194–#198, #202–#205, #212–#215,
+  #220–#223, #225–#230).
 
 ### Removed
 
