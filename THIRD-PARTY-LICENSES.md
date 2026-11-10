@@ -34,7 +34,7 @@ single binary, so the tables below are the union of the two `go.mod` files.
 | [github.com/arran4/golang-ical](https://github.com/arran4/golang-ical) | v0.3.5 | Apache-2.0 |
 | [github.com/go-chi/chi/v5](https://github.com/go-chi/chi) | v5.5.0 | MIT |
 | [github.com/go-playground/tz](https://github.com/go-playground/tz) | v0.0.1 | MIT |
-| [github.com/go-playground/validator/v10](https://github.com/go-playground/validator) | v10.30.5 | MIT |
+| [github.com/go-playground/validator/v10](https://github.com/go-playground/validator) | v10.30.6 | MIT |
 | [github.com/go-webauthn/webauthn](https://github.com/go-webauthn/webauthn) | v0.17.4 | BSD-3-Clause |
 | [github.com/golang-jwt/jwt/v5](https://github.com/golang-jwt/jwt) | v5.3.1 | MIT |
 | [github.com/google/uuid](https://github.com/google/uuid) | v1.6.0 | BSD-3-Clause |
@@ -82,9 +82,10 @@ single binary, so the tables below are the union of the two `go.mod` files.
 | github.com/kylelemons/godebug | v1.1.0 | Apache-2.0 |
 | github.com/leodido/go-urn | v1.5.0 | MIT |
 | github.com/munnerz/goautoneg | v0.0.0-20191010083416 | BSD-3-Clause |
+| github.com/pandatix/go-abnf | v0.5.3 | MIT |
 | github.com/philhofer/fwd | v1.2.0 | MIT |
 | github.com/prometheus/client_model | v0.6.3 | Apache-2.0 |
-| github.com/prometheus/common | v0.72.1 | Apache-2.0 |
+| github.com/prometheus/common | v0.73.1 | Apache-2.0 |
 | github.com/prometheus/procfs | v0.23.0 | Apache-2.0 |
 | github.com/swaggo/files/v2 | v2.0.2 | MIT |
 | github.com/tinylib/msgp | v1.6.4 | MIT |
@@ -109,9 +110,9 @@ single binary, so the tables below are the union of the two `go.mod` files.
 |---------|---------|---------|
 | [@fontsource-variable/inter](https://www.npmjs.com/package/@fontsource-variable/inter) | 5.3.0 | OFL-1.1† |
 | [@vueuse/core](https://www.npmjs.com/package/@vueuse/core) | 15.0.0 | MIT |
-| [axios](https://www.npmjs.com/package/axios) | 1.20.0 | MIT |
+| [axios](https://www.npmjs.com/package/axios) | 1.21.0 | MIT |
 | [countries-and-timezones](https://www.npmjs.com/package/countries-and-timezones) | 3.11.0 | MIT |
-| [date-holidays](https://www.npmjs.com/package/date-holidays) | 3.37.0 | ISC* |
+| [date-holidays](https://www.npmjs.com/package/date-holidays) | 3.38.0 | ISC* |
 | [pinia](https://www.npmjs.com/package/pinia) | 4.1.0 | MIT |
 | [vue](https://www.npmjs.com/package/vue) | 3.5.44 | MIT |
 | [vue-i18n](https://www.npmjs.com/package/vue-i18n) | 11.4.16 | MIT |
@@ -133,9 +134,9 @@ single binary, so the tables below are the union of the two `go.mod` files.
 | [@vitejs/plugin-vue](https://www.npmjs.com/package/@vitejs/plugin-vue) | 6.0.10 | MIT |
 | [@vitest/coverage-v8](https://www.npmjs.com/package/@vitest/coverage-v8) | 5.0.5 | MIT |
 | [@vue/test-utils](https://www.npmjs.com/package/@vue/test-utils) | 2.5.1 | MIT |
-| [eslint](https://www.npmjs.com/package/eslint) | 10.13.0 | MIT |
+| [eslint](https://www.npmjs.com/package/eslint) | 10.14.0 | MIT |
 | [eslint-config-prettier](https://www.npmjs.com/package/eslint-config-prettier) | 10.1.8 | MIT |
-| [eslint-plugin-vue](https://www.npmjs.com/package/eslint-plugin-vue) | 10.11.1 | MIT |
+| [eslint-plugin-vue](https://www.npmjs.com/package/eslint-plugin-vue) | 10.12.0 | MIT |
 | [eslint-plugin-vuejs-accessibility](https://www.npmjs.com/package/eslint-plugin-vuejs-accessibility) | 2.6.3 | MIT |
 | [globals](https://www.npmjs.com/package/globals) | 17.13.0 | MIT |
 | [jsdom](https://www.npmjs.com/package/jsdom) | 30.1.3 | MIT |
@@ -144,10 +145,10 @@ single binary, so the tables below are the union of the two `go.mod` files.
 | [prettier](https://www.npmjs.com/package/prettier) | 3.9.10 | MIT |
 | [swagger2openapi](https://www.npmjs.com/package/swagger2openapi) | 7.0.8 | BSD-3-Clause |
 | [typescript](https://www.npmjs.com/package/typescript) | 6.0.3 | Apache-2.0 |
-| [typescript-eslint](https://www.npmjs.com/package/typescript-eslint) | 8.72.0 | MIT |
+| [typescript-eslint](https://www.npmjs.com/package/typescript-eslint) | 8.72.1 | MIT |
 | [vite](https://www.npmjs.com/package/vite) | 8.3.5 | MIT |
 | [vitest](https://www.npmjs.com/package/vitest) | 5.0.5 | MIT |
-| [vue-tsc](https://www.npmjs.com/package/vue-tsc) | 3.3.13 | MIT |
+| [vue-tsc](https://www.npmjs.com/package/vue-tsc) | 3.3.14 | MIT |
 
 ---
 

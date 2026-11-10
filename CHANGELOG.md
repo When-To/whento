@@ -40,6 +40,8 @@ line per release rather than listed individually.
 
 ## [Unreleased]
 
+## [v3.0.0] — 2026-11-10
+
 A major version: the first administrator is now created through an operator-key
 bootstrap rather than by the first public registration, the legacy magic-link `GET`
 is gone, and the holiday lookup no longer reaches the network by default. Nine
@@ -295,7 +297,7 @@ Existing sessions survive: nobody is signed out.
   accumulate.
 - The images ship `THIRD-PARTY-LICENSES.md` in `/app`.
 - Dependency updates (#132, #136–#144, #147, #149–#152, #155–#159, #162, #164,
-  #165, #167–#169, #174, #175, #181, #182, #194–#198, #202–#205, #212–#215).
+  #165, #167–#169, #174, #175, #181, #182, #194–#198, #202–#205, #212–#215, #220–#223).
 
 ### Removed
 
@@ -902,7 +904,8 @@ community templates landed with it.
 
 _Note: this tag is not an ancestor of `main` — see the caveats at the top._
 
-[unreleased]: https://github.com/When-To/whento/compare/v2.0.0...HEAD
+[unreleased]: https://github.com/When-To/whento/compare/v3.0.0...HEAD
+[v3.0.0]: https://github.com/When-To/whento/releases/tag/v3.0.0
 [v2.0.0]: https://github.com/When-To/whento/releases/tag/v2.0.0
 [v1.6.3]: https://github.com/When-To/whento/releases/tag/v1.6.3
 [v1.6.2]: https://github.com/When-To/whento/releases/tag/v1.6.2
