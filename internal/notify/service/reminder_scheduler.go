@@ -72,6 +72,8 @@ type ReminderTunables struct {
 type ReminderJobStore interface {
 	Enqueue(ctx context.Context, job *models.ReminderJob) error
 	RecordMissed(ctx context.Context, job *models.ReminderJob) (bool, error)
+	// MarkScanned records a scan at now and returns the one before it, zero if none.
+	MarkScanned(ctx context.Context, now time.Time) (time.Time, error)
 	Cleanup(ctx context.Context, before time.Time, limit int) (int64, error)
 	ClaimDue(ctx context.Context, instanceID string, now time.Time, leaseTTL time.Duration, limit int) ([]models.ReminderJob, error)
 	RenewLease(ctx context.Context, id, token uuid.UUID, now time.Time, ttl time.Duration) error
@@ -171,9 +173,13 @@ type ReminderScheduler struct {
 	lastCleanup      time.Time
 	now              func() time.Time
 	logger           *slog.Logger
-	// watchingSince is when this process first scanned. A send window that
-	// opened after it was observed by a live scan, so an event qualifying past
-	// the catch-up window qualified late rather than during an outage.
+	// A send window that opened between previousScan (the last scan any
+	// process recorded before this one started; zero if none) and
+	// watchingSince (this process's first scan) opened while nothing was
+	// scanning: an outage, bounded by the catch-up window. Any other window was
+	// observed by a live scan, so an event qualifying past the catch-up window
+	// qualified late and still gets its reminder.
+	previousScan  time.Time
 	watchingSince time.Time
 }
 
@@ -315,8 +321,12 @@ func (s *ReminderScheduler) enqueueDue(ctx context.Context) {
 	}
 
 	now := s.now()
+	lastScan, err := s.jobs.MarkScanned(ctx, now)
+	if err != nil {
+		s.logger.Error("Failed to record reminder scan", "error", err)
+	}
 	if s.watchingSince.IsZero() {
-		s.watchingSince = now
+		s.watchingSince, s.previousScan = now, lastScan
 	}
 	for _, calendar := range calendars {
 		// A shutdown mid-scan would otherwise run, and log, a failing count
@@ -372,10 +382,10 @@ func (s *ReminderScheduler) enqueueCalendar(ctx context.Context, calendar *calen
 				NextAttemptAt: scheduledAt,
 			}
 			// The catch-up window bounds what an outage may deliver late. A window
-			// that opened while this process was scanning was not missed: the
-			// event qualified afterwards (someone joined the day before), and
-			// it is delivered now while the event is still ahead.
-			if now.Sub(scheduledAt) > s.catchUp && scheduledAt.Before(s.watchingSince) {
+			// that a live scan saw open, in this process or the previous one, was
+			// not missed: the event qualified afterwards (someone joined the day
+			// before), and it is delivered now while the event is still ahead.
+			if now.Sub(scheduledAt) > s.catchUp && scheduledAt.After(s.previousScan) && scheduledAt.Before(s.watchingSince) {
 				recorded, err := s.jobs.RecordMissed(ctx, job)
 				if err != nil {
 					s.logger.Error("Failed to record missed reminder", "calendar_id", calendar.ID, "error", err)

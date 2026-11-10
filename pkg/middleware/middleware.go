@@ -188,7 +188,8 @@ func Auth(jwtManager *jwt.Manager, c cache.Cache) func(http.Handler) http.Handle
 				return
 			}
 
-			// Check whether the token was issued before a password change. This
+			// Check whether the token was issued before a revocation (password or
+			// role change, reset, account deletion, MFA enabled). This
 			// is the only revocation mechanism the system has: access tokens are
 			// self-contained and cannot otherwise be withdrawn. A cache we cannot
 			// read therefore has to fail closed — treating an unreadable cache as
@@ -199,8 +200,13 @@ func Auth(jwtManager *jwt.Manager, c cache.Cache) func(http.Handler) http.Handle
 				key := cache.UserPasswordChangedKey(claims.UserID)
 				switch err := c.Get(r.Context(), key, &changedAt); {
 				case err == nil:
-					if claims.IssuedAt != nil && claims.IssuedAt.Unix() < changedAt {
-						httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Token invalidated by password change")
+					// ponytail: v2.0.0 wrote seconds; drop this once every marker
+					// from before the upgrade has expired (one JWT_ACCESS_EXPIRY).
+					if changedAt < 1e12 {
+						changedAt *= 1000
+					}
+					if claims.IssuedAt != nil && claims.IssuedAt.UnixMilli() < changedAt {
+						httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Token has been revoked")
 						return
 					}
 				case errors.Is(err, redis.Nil):

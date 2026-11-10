@@ -33,9 +33,6 @@
     }
   },
   "src/components/calendar/CalendarInfoFields.vue": {
-    "vuejs-accessibility/form-control-has-label": {
-      "count": 2
-    },
     "vuejs-accessibility/label-has-for": {
       "count": 2
     }
@@ -51,17 +48,11 @@
     }
   },
   "src/components/calendar/CalendarScheduleFields.vue": {
-    "vuejs-accessibility/form-control-has-label": {
-      "count": 2
-    },
     "vuejs-accessibility/label-has-for": {
-      "count": 7
+      "count": 2
     }
   },
   "src/components/calendar/CalendarThresholdFields.vue": {
-    "vuejs-accessibility/form-control-has-label": {
-      "count": 2
-    },
     "vuejs-accessibility/label-has-for": {
       "count": 2
     }

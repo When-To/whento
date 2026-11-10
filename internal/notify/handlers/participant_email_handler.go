@@ -6,6 +6,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/calendar/models"
 	notifyModels "github.com/whento/whento/internal/notify/models"
+	"github.com/whento/whento/internal/notify/service"
 )
 
 // ParticipantEmailService is what this handler asks of the notification domain.
@@ -204,8 +206,13 @@ func (h *ParticipantEmailHandler) VerifyEmail(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := h.emailService.VerifyEmail(ctx, token); err != nil {
+		if errors.Is(err, service.ErrInvalidVerificationToken) {
+			h.logger.Warn("Participant email verification refused", "error", err)
+			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, err.Error())
+			return
+		}
 		h.logger.Error("Failed to verify participant email", "error", err)
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to verify email")
 		return
 	}
 

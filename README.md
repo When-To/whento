@@ -403,9 +403,9 @@ of 1–168 hours before the event date's midnight in the calendar's timezone.
 Only dates meeting the availability threshold qualify. Migration 020 persists
 delivery jobs, so pending work survives restarts. A send time that passed while
 the scheduler was down is only caught up within the configured catch-up window;
-a date that reaches its threshold after its send time while the scheduler is
-running (someone joins the day before) is reminded at once, as long as the event
-is still ahead. Pending retries stop when the event's local day begins or its
+a date that reaches its threshold after a send time the scheduler saw pass
+(someone joins the day before) is reminded at once, as long as the event is
+still ahead, even if the server restarted in between. Pending retries stop when the event's local day begins or its
 current settings/availability no longer qualify. Reminders were stored but never
 sent before v3.0.0, so calendars that already had them enabled start sending
 after the upgrade.

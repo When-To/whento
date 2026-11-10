@@ -6,10 +6,10 @@
 
 <template>
   <!-- Date Range -->
-  <div>
-    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+  <fieldset class="min-w-0">
+    <legend class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
       {{ t('calendar.calendarDateRange') }}
-    </label>
+    </legend>
     <div class="grid grid-cols-2 gap-4">
       <div>
         <input
@@ -17,6 +17,7 @@
           type="date"
           class="input"
           :placeholder="t('calendar.calendarStartDatePlaceholder')"
+          :aria-label="t('calendar.calendarStartDatePlaceholder')"
         />
       </div>
       <div>
@@ -25,30 +26,32 @@
           type="date"
           class="input"
           :placeholder="t('calendar.calendarEndDatePlaceholder')"
+          :aria-label="t('calendar.calendarEndDatePlaceholder')"
         />
       </div>
     </div>
     <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
       {{ t('calendar.calendarDateRangeHelp') }}
     </p>
-  </div>
+  </fieldset>
 
   <!-- Allowed Weekdays -->
-  <div>
-    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+  <fieldset class="min-w-0">
+    <legend class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
       {{ t('calendar.allowedWeekdays') }}
-    </label>
+    </legend>
 
     <!-- Grid layout: 8 columns (1 for labels + 7 for days) -->
     <div class="grid grid-cols-[auto_repeat(7,minmax(0,1fr))] gap-2 items-center overflow-x-auto">
       <!-- Row 1: day label + day buttons -->
-      <label class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap pr-2">
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap pr-2">
         {{ t('calendar.day') }}
-      </label>
+      </span>
       <button
         v-for="day in weekdays"
         :key="day.value"
         type="button"
+        :aria-pressed="allowedWeekdays.includes(day.value)"
         class="rounded-lg border-2 px-2 py-2 text-sm font-medium transition-colors"
         :class="{
           'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300':
@@ -62,13 +65,14 @@
       </button>
 
       <!-- Row 2: Label + Start times -->
-      <label class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap pr-2">
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap pr-2">
         {{ t('availability.startTime') }}
-      </label>
+      </span>
       <TimeSelect
         v-for="day in weekdays"
         :key="`min-${day.value}`"
         v-model="weekdayTimes[day.value].min_time"
+        :aria-label="`${day.short} – ${t('availability.startTime')}`"
         :disabled="!allowedWeekdays.includes(day.value)"
         class="text-sm min-w-0"
         :class="{
@@ -78,13 +82,14 @@
       />
 
       <!-- Row 3: Label + End times -->
-      <label class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap pr-2">
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap pr-2">
         {{ t('availability.endTime') }}
-      </label>
+      </span>
       <TimeSelect
         v-for="day in weekdays"
         :key="`max-${day.value}`"
         v-model="weekdayTimes[day.value].max_time"
+        :aria-label="`${day.short} – ${t('availability.endTime')}`"
         :disabled="!allowedWeekdays.includes(day.value)"
         class="text-sm min-w-0"
         :class="{
@@ -97,7 +102,7 @@
     <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
       {{ t('calendar.allowedWeekdaysHelp') }}
     </p>
-  </div>
+  </fieldset>
 
   <!-- Holidays Policy -->
   <div>

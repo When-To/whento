@@ -42,8 +42,8 @@ line per release rather than listed individually.
 
 A major version: the first administrator is now created through an operator-key
 bootstrap rather than by the first public registration, the legacy magic-link `GET`
-is gone, and the holiday lookup no longer reaches the network by default. Eight
-migrations (016 to 023) apply on the first start.
+is gone, and the holiday lookup no longer reaches the network by default. Nine
+migrations (016 to 024) apply on the first start.
 
 ### Upgrading from v2.0.0
 
@@ -111,6 +111,9 @@ Existing sessions survive: nobody is signed out.
   `REMINDER_RETRY_BACKOFF`. The catch-up window bounds what an outage may
   deliver late; a date that reaches its threshold after its send time while the
   scheduler is running is reminded at once, as long as the event is still ahead.
+  A restart does not count as an outage: the last scan time is kept in
+  `app_state` (migration 024), so only a send time that passed while no
+  instance was scanning is bounded by the catch-up window.
 - **Reminder delivery is a durable, fenced queue.** Reminders are persisted in
   a `reminder_jobs` table (migration `020`) and delivered by a scheduler loop:
   each job is claimed atomically under a per-acquisition UUID claim token and a
@@ -343,6 +346,12 @@ Existing sessions survive: nobody is signed out.
   disabling a user's 2FA: `POST /api/v1/auth/admin/users/{id}/disable-2fa`,
   answering `totp_disabled` and `backup_codes_removed`. It listed a
   `DELETE …/mfa/totp` route that never existed.
+- Verifying a participant's email no longer puts a database error in the
+  response. An unknown or expired link still answers 400, now logged as a
+  warning; a server failure answers 500 with a generic message.
+- In the calendar form, the name, description, threshold and minimum-duration
+  labels are tied to their fields, and screen readers name the date-range,
+  weekday and per-day time controls.
 
 ### Security
 
@@ -382,6 +391,11 @@ Existing sessions survive: nobody is signed out.
   (a demoted administrator kept admin access for that long). They are now
   revoked at once, like a password change. Without Redis, access tokens still
   live out their expiry.
+- **An access token issued in the same second as a revocation is revoked too.**
+  Token times and the revocation marker were whole seconds, so such a token
+  stayed valid until `JWT_ACCESS_EXPIRY`. They are now milliseconds; markers
+  written by v2.0.0 are still honoured. The refusal reads "Token has been
+  revoked", since a password change is not the only cause.
 - Images build with Go 1.27.3, clearing CVE-2026-78667, CVE-2026-78669,
   CVE-2026-97031 (#187) and CVE-2026-111943 (#209).
 - The root module requires chi v5.5.0 for GHSA-j6qf-3m9c-vwj3 (#216). WhenTo

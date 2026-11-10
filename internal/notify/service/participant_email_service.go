@@ -11,6 +11,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -114,6 +115,9 @@ func (s *ParticipantEmailService) AddEmail(
 	return nil
 }
 
+// ErrInvalidVerificationToken is a verification link that is unknown or expired.
+var ErrInvalidVerificationToken = errors.New("invalid or expired verification token")
+
 // VerifyEmail verifies participant email with token
 func (s *ParticipantEmailService) VerifyEmail(
 	ctx context.Context,
@@ -122,7 +126,7 @@ func (s *ParticipantEmailService) VerifyEmail(
 	// Get participant by token (includes expiry check in SQL)
 	participant, err := s.participantRepo.GetByVerificationToken(ctx, token)
 	if err != nil {
-		return fmt.Errorf("invalid or expired verification token")
+		return ErrInvalidVerificationToken
 	}
 
 	// Check if email already verified

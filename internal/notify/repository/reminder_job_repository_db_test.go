@@ -41,6 +41,27 @@ func newReminderJob(t *testing.T, pool *pgxpool.Pool) *models.ReminderJob {
 	}
 }
 
+// MarkScanned hands back the scan before it: a restarted scheduler uses that to
+// tell an outage from a window a live scan already saw.
+func TestReminderMarkScannedReturnsThePreviousScan(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewReminderJobRepository(pool)
+	ctx := dbtest.Context(t)
+
+	first := time.Date(2027, 4, 9, 0, 5, 0, 0, time.UTC)
+	second := first.Add(5 * time.Minute)
+	if _, err := repo.MarkScanned(ctx, first); err != nil {
+		t.Fatalf("MarkScanned: %v", err)
+	}
+	previous, err := repo.MarkScanned(ctx, second)
+	if err != nil {
+		t.Fatalf("MarkScanned: %v", err)
+	}
+	if !previous.Equal(first) {
+		t.Fatalf("previous scan = %v, want %v", previous, first)
+	}
+}
+
 func TestReminderJobEnqueueIsIdempotent(t *testing.T) {
 	pool := dbtest.Pool(t)
 	repo := repository.NewReminderJobRepository(pool)

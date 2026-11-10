@@ -751,6 +751,11 @@ func TestAuthHonoursAPasswordChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateAccessToken: %v", err)
 	}
+	claims, err := manager.ValidateAccessToken(token)
+	if err != nil {
+		t.Fatalf("ValidateAccessToken: %v", err)
+	}
+	issuedMs := claims.IssuedAt.UnixMilli()
 
 	tests := []struct {
 		name        string
@@ -759,13 +764,24 @@ func TestAuthHonoursAPasswordChange(t *testing.T) {
 		wantStatus  int
 	}{
 		{
+			// Whole-second timestamps let this token through.
+			name:       "the password changed a millisecond after the token was issued",
+			cache:      &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): issuedMs + 1}},
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "a v2.0.0 marker, in seconds, still revokes",
+			cache:      &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).Unix()}},
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
 			name:        "no cache at all",
 			cache:       nil,
 			wantReached: true,
 		},
 		{
 			name:        "a disabled cache is not consulted",
-			cache:       &stubCache{enabled: false, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).Unix()}},
+			cache:       &stubCache{enabled: false, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).UnixMilli()}},
 			wantReached: true,
 		},
 		{
@@ -775,17 +791,17 @@ func TestAuthHonoursAPasswordChange(t *testing.T) {
 		},
 		{
 			name:        "the password changed before the token was issued",
-			cache:       &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(-time.Hour).Unix()}},
+			cache:       &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(-time.Hour).UnixMilli()}},
 			wantReached: true,
 		},
 		{
 			name:       "the password changed after the token was issued",
-			cache:      &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).Unix()}},
+			cache:      &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).UnixMilli()}},
 			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			name:        "somebody else changed their password",
-			cache:       &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-2"): time.Now().Add(time.Hour).Unix()}},
+			cache:       &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-2"): time.Now().Add(time.Hour).UnixMilli()}},
 			wantReached: true,
 		},
 		{
@@ -821,6 +837,29 @@ func TestAuthHonoursAPasswordChange(t *testing.T) {
 				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
 			}
 		})
+	}
+}
+
+// TestAuthAcceptsATokenIssuedJustAfterARevocation needs sub-second iat: with whole
+// seconds, the new token reads as issued before the revocation and is refused.
+func TestAuthAcceptsATokenIssuedJustAfterARevocation(t *testing.T) {
+	manager := newManager(t)
+	revokedAt := time.Now().UnixMilli()
+	time.Sleep(2 * time.Millisecond)
+	token, err := manager.GenerateAccessToken("user-1", "ada@example.test", "user")
+	if err != nil {
+		t.Fatalf("GenerateAccessToken: %v", err)
+	}
+
+	var reached bool
+	c := &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): revokedAt}}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	Auth(manager, c)(okHandler(&reached)).ServeHTTP(rec, req)
+
+	if !reached {
+		t.Errorf("a token issued after the revocation was refused (status %d)", rec.Code)
 	}
 }
 
@@ -985,7 +1024,7 @@ func TestErrorResponsesUseTheStandardEnvelope(t *testing.T) {
 			name: "a token killed by a password change",
 			handler: Auth(manager, &stubCache{
 				enabled: true,
-				values:  map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).Unix()},
+				values:  map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).UnixMilli()},
 			})(okHandler(new(bool))),
 			request:    authed(),
 			wantStatus: http.StatusUnauthorized,

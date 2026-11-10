@@ -60,6 +60,15 @@ type fakeReminderJobStore struct {
 	claimErr   error
 	missed     []models.ReminderJob
 	cleanups   int
+	lastScan   time.Time
+}
+
+func (f *fakeReminderJobStore) MarkScanned(_ context.Context, now time.Time) (time.Time, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	previous := f.lastScan
+	f.lastScan = now
+	return previous, nil
 }
 
 func (f *fakeReminderJobStore) RecordMissed(_ context.Context, job *models.ReminderJob) (bool, error) {

@@ -468,7 +468,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID string, req *mo
 func (s *AuthService) RevokeAccessTokens(ctx context.Context, userID string) {
 	if s.cache != nil && s.cache.IsEnabled() {
 		pwdKey := cache.UserPasswordChangedKey(userID)
-		_ = s.cache.Set(ctx, pwdKey, time.Now().Unix(), s.jwtManager.AccessExpiry())
+		_ = s.cache.Set(ctx, pwdKey, time.Now().UnixMilli(), s.jwtManager.AccessExpiry())
 	}
 }
 
