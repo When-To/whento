@@ -79,10 +79,10 @@ migrations (016 to 024) apply on the first start.
    any value you had set. The bundled `docker-compose.yml` does not forward
    them, so a Compose install only sees them if you add them to the `app`
    service's `environment`.
-9. Passwords are now measured in characters, not bytes: a new password needs
+8. Passwords are now measured in characters, not bytes: a new password needs
    12 characters, so a short accented password v2.0.0 accepted is refused at
    the next change or reset. Existing passwords keep working.
-8. The activity journal has no automatic retention; schedule your own purge if
+9. The activity journal has no automatic retention; schedule your own purge if
    you want one ([logging and privacy](docs/logging-and-privacy.md)).
 
 Existing sessions survive: nobody is signed out.
