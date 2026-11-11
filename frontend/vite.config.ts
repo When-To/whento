@@ -2,8 +2,8 @@ import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { fileURLToPath, URL } from 'node:url';
 
-export default defineConfig(({ mode: _mode }) => {
-  // Get build type from environment variable (default: cloud)
+export default defineConfig(() => {
+  // Build type from the environment, defaulting to selfhosted.
   const buildType = process.env.VITE_BUILD_TYPE || 'selfhosted';
 
   return {
@@ -80,9 +80,9 @@ export default defineConfig(({ mode: _mode }) => {
            *   vendor-date           the timezone tables.
            *
            * axios and @vueuse are deliberately absent: axios is always loaded and
-           * folds into the entry, and @vueuse is only reachable from ParticipantView,
-           * so it already travels with it. Declaring groups for them would just
-           * recreate the dead branches this replaces.
+           * folds into the entry, and @vueuse is small and travels with the views
+           * that import it. Declaring groups for them would just recreate the dead
+           * branches this replaces.
            */
           codeSplitting: {
             groups: [

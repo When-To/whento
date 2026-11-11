@@ -241,12 +241,6 @@ export type ParticipantAvailabilitiesResponse = Refine<
 
 export type CreateAvailabilityRequest = Schemas['models.CreateAvailabilityRequest'];
 
-// Recurrence Types
-export type Recurrence = AlwaysSent<
-  Schemas['models.Recurrence'],
-  'id' | 'participant_id' | 'day_of_week' | 'start_date' | 'created_at'
->;
-
 export type RecurrenceWithExceptions = Refine<
   AlwaysSent<
     Schemas['models.RecurrenceWithExceptions'],
@@ -297,8 +291,6 @@ export interface ApiResponse<T> {
 
 export type ApiError = AlwaysSent<Schemas['httputil.ErrorInfo'], 'code' | 'message'>;
 
-export type ValidationError = AlwaysSent<Schemas['validator.ValidationError'], 'field' | 'message'>;
-
 // Notification Types
 export type EmailChannelConfig = AlwaysSent<Schemas['models.EmailChannelConfig'], 'enabled'>;
 
@@ -337,12 +329,10 @@ export type NotifyConfigResponse = Refine<
 >;
 
 /*
- * Participant email. These three were hand-written for as long as the endpoints
+ * Participant email. These were hand-written for as long as the endpoints
  * declared their body inline in the handler and swaggo had no named model to emit;
  * they now derive from the schema like everything else.
  */
-export type AddParticipantEmailRequest = Schemas['models.AddParticipantEmailRequest'];
-
 export type ParticipantEmailResponse = AlwaysSent<
   Schemas['models.ParticipantEmailResponse'],
   'participant_id' | 'email' | 'verified' | 'message'

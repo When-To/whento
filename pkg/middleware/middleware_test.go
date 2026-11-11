@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -24,6 +23,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/whento/pkg/cache"
@@ -751,6 +751,11 @@ func TestAuthHonoursAPasswordChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateAccessToken: %v", err)
 	}
+	claims, err := manager.ValidateAccessToken(token)
+	if err != nil {
+		t.Fatalf("ValidateAccessToken: %v", err)
+	}
+	issuedMs := claims.IssuedAt.UnixMilli()
 
 	tests := []struct {
 		name        string
@@ -759,13 +764,24 @@ func TestAuthHonoursAPasswordChange(t *testing.T) {
 		wantStatus  int
 	}{
 		{
+			// Whole-second timestamps let this token through.
+			name:       "the password changed a millisecond after the token was issued",
+			cache:      &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): issuedMs + 1}},
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "a v2.0.0 marker, in seconds, still revokes",
+			cache:      &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).Unix()}},
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
 			name:        "no cache at all",
 			cache:       nil,
 			wantReached: true,
 		},
 		{
 			name:        "a disabled cache is not consulted",
-			cache:       &stubCache{enabled: false, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).Unix()}},
+			cache:       &stubCache{enabled: false, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).UnixMilli()}},
 			wantReached: true,
 		},
 		{
@@ -775,17 +791,17 @@ func TestAuthHonoursAPasswordChange(t *testing.T) {
 		},
 		{
 			name:        "the password changed before the token was issued",
-			cache:       &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(-time.Hour).Unix()}},
+			cache:       &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(-time.Hour).UnixMilli()}},
 			wantReached: true,
 		},
 		{
 			name:       "the password changed after the token was issued",
-			cache:      &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).Unix()}},
+			cache:      &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).UnixMilli()}},
 			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			name:        "somebody else changed their password",
-			cache:       &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-2"): time.Now().Add(time.Hour).Unix()}},
+			cache:       &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-2"): time.Now().Add(time.Hour).UnixMilli()}},
 			wantReached: true,
 		},
 		{
@@ -821,6 +837,29 @@ func TestAuthHonoursAPasswordChange(t *testing.T) {
 				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
 			}
 		})
+	}
+}
+
+// TestAuthAcceptsATokenIssuedJustAfterARevocation needs sub-second iat: with whole
+// seconds, the new token reads as issued before the revocation and is refused.
+func TestAuthAcceptsATokenIssuedJustAfterARevocation(t *testing.T) {
+	manager := newManager(t)
+	revokedAt := time.Now().UnixMilli()
+	time.Sleep(2 * time.Millisecond)
+	token, err := manager.GenerateAccessToken("user-1", "ada@example.test", "user")
+	if err != nil {
+		t.Fatalf("GenerateAccessToken: %v", err)
+	}
+
+	var reached bool
+	c := &stubCache{enabled: true, values: map[string]int64{cache.UserPasswordChangedKey("user-1"): revokedAt}}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	Auth(manager, c)(okHandler(&reached)).ServeHTTP(rec, req)
+
+	if !reached {
+		t.Errorf("a token issued after the revocation was refused (status %d)", rec.Code)
 	}
 }
 
@@ -877,6 +916,35 @@ func TestContextGettersOnAnEmptyContext(t *testing.T) {
 	wrong := context.WithValue(ctx, UserIDKey, 42)
 	if GetUserID(wrong) != "" {
 		t.Error("a non-string user id was returned as if it were a string")
+	}
+}
+
+func TestRequireUserUUID(t *testing.T) {
+	id := uuid.New()
+	tests := []struct {
+		name   string
+		userID any
+		status int
+	}{
+		{"no user", nil, http.StatusUnauthorized},
+		{"malformed id", "not-a-uuid", http.StatusBadRequest},
+		{"valid id", id.String(), http.StatusOK},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			if tt.userID != nil {
+				req = req.WithContext(context.WithValue(req.Context(), UserIDKey, tt.userID))
+			}
+			rec := httptest.NewRecorder()
+			got, ok := RequireUserUUID(rec, req)
+			if rec.Code != tt.status || ok != (tt.status == http.StatusOK) {
+				t.Fatalf("status = %d, ok = %v, want %d", rec.Code, ok, tt.status)
+			}
+			if ok && got != id {
+				t.Errorf("id = %v, want %v", got, id)
+			}
+		})
 	}
 }
 
@@ -956,7 +1024,7 @@ func TestErrorResponsesUseTheStandardEnvelope(t *testing.T) {
 			name: "a token killed by a password change",
 			handler: Auth(manager, &stubCache{
 				enabled: true,
-				values:  map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).Unix()},
+				values:  map[string]int64{cache.UserPasswordChangedKey("user-1"): time.Now().Add(time.Hour).UnixMilli()},
 			})(okHandler(new(bool))),
 			request:    authed(),
 			wantStatus: http.StatusUnauthorized,
@@ -1031,41 +1099,6 @@ func TestErrorResponsesUseTheStandardEnvelope(t *testing.T) {
 			}
 			if body.Error.Message == "" {
 				t.Error("the error carries no message")
-			}
-		})
-	}
-}
-
-func TestLimitRequestSize(t *testing.T) {
-	const maxBytes = 32
-
-	tests := []struct {
-		name    string
-		body    string
-		wantErr bool
-	}{
-		{name: "under the limit", body: strings.Repeat("a", maxBytes-1)},
-		{name: "exactly at the limit", body: strings.Repeat("a", maxBytes)},
-		{name: "over the limit", body: strings.Repeat("a", maxBytes+1), wantErr: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var readErr error
-			handler := LimitRequestSize(maxBytes)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-				_, readErr = io.ReadAll(r.Body)
-			}))
-
-			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
-			handler.ServeHTTP(httptest.NewRecorder(), req)
-
-			// The limit is what stops an unauthenticated request allocating gigabytes;
-			// the handler learns about it as a read error rather than a short body.
-			if tt.wantErr && readErr == nil {
-				t.Error("an oversized body was read in full")
-			}
-			if !tt.wantErr && readErr != nil {
-				t.Errorf("a body within the limit failed to read: %v", readErr)
 			}
 		})
 	}

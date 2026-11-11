@@ -26,7 +26,7 @@ func TestValidateDatabaseURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateDatabaseURL(tt.in)
+			err := validateURL(tt.in, []string{"postgres", "postgresql"}, "postgres://user:password@host:port/dbname")
 			if tt.wantError && err == nil {
 				t.Fatalf("expected error, got nil")
 			}
@@ -56,7 +56,7 @@ func TestValidateRedisURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateRedisURL(tt.in)
+			err := validateURL(tt.in, []string{"redis", "rediss"}, "redis://[:password@]host:port[/db]")
 			if tt.wantError && err == nil {
 				t.Fatalf("expected error, got nil")
 			}
@@ -101,7 +101,7 @@ func TestBuildDatabaseURLEscapesPassword(t *testing.T) {
 
 	l := &loader{}
 	got := l.buildDatabaseURL()
-	if err := validateDatabaseURL(got); err != nil {
+	if err := validateURL(got, []string{"postgres", "postgresql"}, "postgres://user:password@host:port/dbname"); err != nil {
 		t.Fatalf("built URL fails validation: %v (url=%s)", err, MaskURL(got))
 	}
 	// Spot-check that the literal special characters are not present unescaped.
@@ -118,7 +118,7 @@ func TestBuildRedisURLEscapesPassword(t *testing.T) {
 
 	l := &loader{}
 	got := l.buildRedisURL()
-	if err := validateRedisURL(got); err != nil {
+	if err := validateURL(got, []string{"redis", "rediss"}, "redis://[:password@]host:port[/db]"); err != nil {
 		t.Fatalf("built URL fails validation: %v (url=%s)", err, MaskURL(got))
 	}
 	if strings.Contains(got, "p@ss:w/ord?x") {
@@ -127,8 +127,7 @@ func TestBuildRedisURLEscapesPassword(t *testing.T) {
 }
 
 // TestValidateAcceptsAndRefuses walks the settings whose value is only ever wrong at
-// startup: a bcrypt cost too cheap to matter, a TOTP period no authenticator can follow,
-// a pool that cannot hand out a connection. Each one is checked in both directions,
+// startup: a bcrypt cost too cheap to matter, a pool that cannot hand out a connection. Each one is checked in both directions,
 // because a rule that refuses everything is as much of an outage as no rule at all.
 //
 // Every case starts from the shipped defaults and breaks exactly one thing, so the error
@@ -151,14 +150,6 @@ func TestValidateAcceptsAndRefuses(t *testing.T) {
 		{name: "bcrypt above the ceiling", mutate: func(c *Config) { c.BcryptCost = 16 }, wantError: "BCRYPT_COST"},
 		{name: "bcrypt at zero", mutate: func(c *Config) { c.BcryptCost = 0 }, wantError: "BCRYPT_COST"},
 
-		// TOTP.
-		{name: "totp with eight digits", mutate: func(c *Config) { c.TOTPDigits = 8 }},
-		{name: "totp with five digits", mutate: func(c *Config) { c.TOTPDigits = 5 }, wantError: "TOTP_DIGITS"},
-		{name: "totp with nine digits", mutate: func(c *Config) { c.TOTPDigits = 9 }, wantError: "TOTP_DIGITS"},
-		{name: "totp over a minute", mutate: func(c *Config) { c.TOTPPeriod = 60 }},
-		{name: "totp under clock drift", mutate: func(c *Config) { c.TOTPPeriod = 5 }, wantError: "TOTP_PERIOD"},
-		{name: "totp over five minutes", mutate: func(c *Config) { c.TOTPPeriod = 600 }, wantError: "TOTP_PERIOD"},
-
 		// Expiries. A zero access expiry mints tokens that are already expired,
 		// which downstream looks like every login being refused.
 		{name: "a short access token", mutate: func(c *Config) { c.JWTAccessExpiry = time.Minute }},
@@ -171,7 +162,6 @@ func TestValidateAcceptsAndRefuses(t *testing.T) {
 			wantError: "JWT_REFRESH_EXPIRY",
 		},
 		{name: "a zero magic link expiry", mutate: func(c *Config) { c.Email.MagicLinkExpiry = 0 }, wantError: "MAGIC_LINK_EXPIRY"},
-		{name: "a zero webauthn timeout", mutate: func(c *Config) { c.WebAuthnTimeout = 0 }, wantError: "WEBAUTHN_TIMEOUT"},
 
 		// Ports.
 		{name: "a port on the high end", mutate: func(c *Config) { c.Port = "65535" }},

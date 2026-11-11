@@ -12,7 +12,9 @@ export default defineConfig({
   // Single-file components are compiled here too, so component tests can mount them.
   // Without this, importing a `.vue` file from a test fails in the import analysis
   // pass, long before any assertion runs.
-  plugins: [vue()],
+  // Root-relative asset URLs (`/logo.png`, served from public/) stay plain strings:
+  // imported, they resolve to `file:///logo.png`, which Node rejects on Windows.
+  plugins: [vue({ template: { transformAssetUrls: { includeAbsolute: false } } })],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -34,14 +36,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text-summary', 'html', 'lcov'],
       include: ['src/**/*.ts'],
-      exclude: [
-        'src/**/*.test.ts',
-        'src/test/**',
-        'src/types/**',
-        'src/locales/**',
-        'src/main.ts',
-        'src/vite-env.d.ts',
-      ],
+      exclude: ['src/**/*.test.ts', 'src/test/**', 'src/types/**', 'src/locales/**', 'src/main.ts'],
       // A ratchet, not a target. Set just under what the suite currently reaches so
       // that `npm run test:coverage` fails if coverage falls, without failing on the
       // noise of a line or two. Raise it when the next batch of tests lands.

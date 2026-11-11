@@ -231,10 +231,7 @@ func (b *redisBackend) Allow(ctx context.Context, key string, limit int, window 
 	}
 
 	count := countCmd.Val()
-	remaining := limit - int(count)
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(0, limit-int(count))
 	resetAt := now.Add(window).Unix()
 	return count <= int64(limit), remaining, resetAt, nil
 }
@@ -288,10 +285,7 @@ func (b *memoryBackend) Allow(_ context.Context, key string, limit int, window t
 
 	allowed := lim.AllowN(now, 1)
 	tokens := lim.TokensAt(now)
-	remaining := int(tokens)
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(0, int(tokens))
 	resetAt := now.Add(window).Unix()
 	return allowed, remaining, resetAt, nil
 }
@@ -333,11 +327,9 @@ var rateLimitKeySalt = newRateLimitKeySalt()
 
 func newRateLimitKeySalt() []byte {
 	salt := make([]byte, 32)
-	if _, err := rand.Read(salt); err != nil {
-		// crypto/rand does not fail on any platform Go supports. Refusing to
-		// start beats silently limiting with a predictable all-zero salt.
-		panic("middleware: cannot generate the rate limit key salt: " + err.Error())
-	}
+	// Since Go 1.24 rand.Read never returns an error: it crashes the program
+	// instead, so a predictable all-zero salt cannot happen.
+	_, _ = rand.Read(salt)
 	return salt
 }
 

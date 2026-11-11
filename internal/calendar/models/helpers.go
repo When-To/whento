@@ -135,29 +135,7 @@ func ParseAllowedHoursJSON(allowedHoursJSON *string) (
 // NormalizeTimeRange ensures MinTime is always before MaxTime by swapping if necessary
 // Returns a new TimeRange with normalized values
 func NormalizeTimeRange(tr TimeRange) TimeRange {
-	// If either is empty, return as-is
-	if tr.MinTime == "" || tr.MaxTime == "" {
-		return tr
-	}
-
-	// Parse times
-	minT, err1 := time.Parse("15:04", tr.MinTime)
-	maxT, err2 := time.Parse("15:04", tr.MaxTime)
-
-	// If parsing fails, return as-is (validation will catch this later)
-	if err1 != nil || err2 != nil {
-		return tr
-	}
-
-	// If min is after max, swap them
-	if minT.After(maxT) {
-		return TimeRange{
-			MinTime: tr.MaxTime,
-			MaxTime: tr.MinTime,
-		}
-	}
-
-	// Otherwise return as-is
+	tr.MinTime, tr.MaxTime = NormalizeHolidayTimes(tr.MinTime, tr.MaxTime)
 	return tr
 }
 

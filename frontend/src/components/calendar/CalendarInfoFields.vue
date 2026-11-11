@@ -7,11 +7,15 @@
 <template>
   <!-- Name -->
   <div>
-    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+    <label
+      for="calendar-name"
+      class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+    >
       {{ t('calendar.calendarName') }}
       <span class="text-danger-600">*</span>
     </label>
     <input
+      id="calendar-name"
       v-model="name"
       type="text"
       class="input"
@@ -26,10 +30,14 @@
 
   <!-- Description -->
   <div>
-    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+    <label
+      for="calendar-description"
+      class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+    >
       {{ t('calendar.description') }}
     </label>
     <textarea
+      id="calendar-description"
       v-model="description"
       rows="3"
       class="input"

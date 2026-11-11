@@ -6,16 +6,13 @@ package handlers
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/middleware"
-	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/calendar/models"
-	"github.com/whento/whento/internal/calendar/service"
 )
 
 // ParticipantService is the participant half of the calendar domain, and all this
@@ -67,35 +64,13 @@ func (h *ParticipantHandler) AddParticipant(w http.ResponseWriter, r *http.Reque
 	calendarID := chi.URLParam(r, "id")
 
 	var req models.AddParticipantRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
 	participant, err := h.calendarService.AddParticipant(r.Context(), userID, userRole, calendarID, &req)
 	if err != nil {
-		if errors.Is(err, service.ErrCalendarNotFound) {
-			httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
-			return
-		}
-		if errors.Is(err, service.ErrUnauthorized) {
-			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "You don't have permission to modify this calendar")
-			return
-		}
-		if errors.Is(err, service.ErrParticipantExists) {
-			httputil.Error(w, http.StatusConflict, httputil.ErrCodeConflict, "Participant with this name already exists")
-			return
-		}
-		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to add participant")
+		writeCalendarError(w, err, "You don't have permission to modify this calendar", "Failed to add participant")
 		return
 	}
 
@@ -121,35 +96,13 @@ func (h *ParticipantHandler) AddAnonymousParticipant(w http.ResponseWriter, r *h
 	token := chi.URLParam(r, "token")
 
 	var req models.AddParticipantRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
 	participant, err := h.calendarService.AddAnonymousParticipant(r.Context(), token, &req)
 	if err != nil {
-		if errors.Is(err, service.ErrCalendarNotFound) {
-			httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
-			return
-		}
-		if errors.Is(err, service.ErrUnauthorized) {
-			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "Anonymous participant registration is not allowed for this calendar")
-			return
-		}
-		if errors.Is(err, service.ErrParticipantExists) {
-			httputil.Error(w, http.StatusConflict, httputil.ErrCodeConflict, "Participant with this name already exists")
-			return
-		}
-		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to add participant")
+		writeCalendarError(w, err, "Anonymous participant registration is not allowed for this calendar", "Failed to add participant")
 		return
 	}
 
@@ -193,39 +146,13 @@ func (h *ParticipantHandler) UpdateParticipant(w http.ResponseWriter, r *http.Re
 	participantID := chi.URLParam(r, "pid")
 
 	var req models.UpdateParticipantRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
 	participant, err := h.calendarService.UpdateParticipant(r.Context(), userID, userRole, calendarID, participantID, &req)
 	if err != nil {
-		if errors.Is(err, service.ErrCalendarNotFound) {
-			httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
-			return
-		}
-		if errors.Is(err, service.ErrParticipantNotFound) {
-			httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Participant not found")
-			return
-		}
-		if errors.Is(err, service.ErrUnauthorized) {
-			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "You don't have permission to modify this calendar")
-			return
-		}
-		if errors.Is(err, service.ErrParticipantExists) {
-			httputil.Error(w, http.StatusConflict, httputil.ErrCodeConflict, "Participant with this name already exists")
-			return
-		}
-		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to update participant")
+		writeCalendarError(w, err, "You don't have permission to modify this calendar", "Failed to update participant")
 		return
 	}
 
@@ -259,19 +186,7 @@ func (h *ParticipantHandler) RemoveParticipant(w http.ResponseWriter, r *http.Re
 
 	err := h.calendarService.RemoveParticipant(r.Context(), userID, userRole, calendarID, participantID)
 	if err != nil {
-		if errors.Is(err, service.ErrCalendarNotFound) {
-			httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Calendar not found")
-			return
-		}
-		if errors.Is(err, service.ErrParticipantNotFound) {
-			httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "Participant not found")
-			return
-		}
-		if errors.Is(err, service.ErrUnauthorized) {
-			httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "You don't have permission to modify this calendar")
-			return
-		}
-		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to remove participant")
+		writeCalendarError(w, err, "You don't have permission to modify this calendar", "Failed to remove participant")
 		return
 	}
 

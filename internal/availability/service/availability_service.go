@@ -5,6 +5,7 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -245,6 +246,30 @@ func (s *AvailabilityService) notifyThresholdAsync(
 	}()
 }
 
+// participantOn parses participantID and loads that participant, provided it belongs to
+// calendarID. A participant of another calendar is reported as missing, exactly like one
+// that does not exist: the holder of the link learns nothing about what the ID names.
+func (s *AvailabilityService) participantOn(ctx context.Context, calendarID uuid.UUID, participantID string) (*repository.Participant, uuid.UUID, error) {
+	partID, err := uuid.Parse(participantID)
+	if err != nil {
+		return nil, uuid.Nil, fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
+	}
+
+	participant, err := s.participantRepo.GetByID(ctx, partID)
+	if err != nil {
+		if errors.Is(err, repository.ErrParticipantNotFound) {
+			return nil, uuid.Nil, ErrParticipantNotFound
+		}
+		return nil, uuid.Nil, err
+	}
+
+	if participant.CalendarID != calendarID {
+		return nil, uuid.Nil, ErrParticipantNotFound
+	}
+
+	return participant, partID, nil
+}
+
 // CreateAvailability creates a new availability for a participant
 func (s *AvailabilityService) CreateAvailability(ctx context.Context, token, participantID string, req *models.CreateAvailabilityRequest) (*models.AvailabilityResponse, error) {
 	// Validate calendar token and get calendar info
@@ -257,23 +282,10 @@ func (s *AvailabilityService) CreateAvailability(ctx context.Context, token, par
 	}
 	calendarID := calendarInfo.ID
 
-	// Parse and validate participant ID
-	partID, err := uuid.Parse(participantID)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
-	}
-
 	// Verify participant exists and belongs to this calendar
-	participant, err := s.participantRepo.GetByID(ctx, partID)
+	participant, partID, err := s.participantOn(ctx, calendarID, participantID)
 	if err != nil {
-		if errors.Is(err, repository.ErrParticipantNotFound) {
-			return nil, ErrParticipantNotFound
-		}
 		return nil, err
-	}
-
-	if participant.CalendarID != calendarID {
-		return nil, ErrParticipantNotFound
 	}
 
 	// Parse date
@@ -387,23 +399,10 @@ func (s *AvailabilityService) GetParticipantAvailabilities(ctx context.Context, 
 		return nil, err
 	}
 
-	// Parse participant ID
-	partID, err := uuid.Parse(participantID)
+	// Verify participant exists and belongs to this calendar
+	participant, partID, err := s.participantOn(ctx, calendarID, participantID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
-	}
-
-	// Verify participant belongs to this calendar
-	participant, err := s.participantRepo.GetByID(ctx, partID)
-	if err != nil {
-		if errors.Is(err, repository.ErrParticipantNotFound) {
-			return nil, ErrParticipantNotFound
-		}
 		return nil, err
-	}
-
-	if participant.CalendarID != calendarID {
-		return nil, ErrParticipantNotFound
 	}
 
 	// Parse optional date range
@@ -466,23 +465,10 @@ func (s *AvailabilityService) UpdateAvailability(ctx context.Context, token, par
 	}
 	calendarID := calendarInfo.ID
 
-	// Parse participant ID
-	partID, err := uuid.Parse(participantID)
+	// Verify participant exists and belongs to this calendar
+	participant, partID, err := s.participantOn(ctx, calendarID, participantID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
-	}
-
-	// Verify participant belongs to this calendar
-	participant, err := s.participantRepo.GetByID(ctx, partID)
-	if err != nil {
-		if errors.Is(err, repository.ErrParticipantNotFound) {
-			return nil, ErrParticipantNotFound
-		}
 		return nil, err
-	}
-
-	if participant.CalendarID != calendarID {
-		return nil, ErrParticipantNotFound
 	}
 
 	// Parse date
@@ -543,8 +529,7 @@ func (s *AvailabilityService) UpdateAvailability(ctx context.Context, token, par
 		}
 
 		// Validate duration against calendar's min_duration_hours
-		calendarInfo, err := s.calendarRepo.GetCalendarInfoByPublicToken(ctx, token)
-		if err == nil && calendarInfo.MinDurationHours > 0 {
+		if calendarInfo.MinDurationHours > 0 {
 			duration := calculateDuration(*availability.StartTime, *availability.EndTime)
 			if duration < float64(calendarInfo.MinDurationHours) {
 				return nil, ErrDurationTooShort
@@ -593,23 +578,10 @@ func (s *AvailabilityService) DeleteAvailability(ctx context.Context, token, par
 	}
 	calendarID := calendarInfo.ID
 
-	// Parse participant ID
-	partID, err := uuid.Parse(participantID)
+	// Verify participant exists and belongs to this calendar
+	_, partID, err := s.participantOn(ctx, calendarID, participantID)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
-	}
-
-	// Verify participant belongs to this calendar
-	participant, err := s.participantRepo.GetByID(ctx, partID)
-	if err != nil {
-		if errors.Is(err, repository.ErrParticipantNotFound) {
-			return ErrParticipantNotFound
-		}
 		return err
-	}
-
-	if participant.CalendarID != calendarID {
-		return ErrParticipantNotFound
 	}
 
 	// Parse date
@@ -744,33 +716,15 @@ func filterParticipantSummaries(lockParticipants bool, participantID string, sum
 	}
 
 	for i, summary := range summaries {
-		if !lockParticipants {
-			// Return all participants with their IDs visible
-			publicSummaries[i] = models.PublicParticipantAvailabilitySummary{
-				ParticipantID:   &summary.ParticipantID,
-				ParticipantName: summary.ParticipantName,
-				StartTime:       summary.StartTime,
-				EndTime:         summary.EndTime,
-				Note:            summary.Note,
-			}
-		} else if participantID != "" && summary.ParticipantID == parsedID {
-			// Keep this participant with their ID
-			publicSummaries[i] = models.PublicParticipantAvailabilitySummary{
-				ParticipantID:   &summary.ParticipantID,
-				ParticipantName: summary.ParticipantName,
-				StartTime:       summary.StartTime,
-				EndTime:         summary.EndTime,
-				Note:            summary.Note,
-			}
-		} else {
-			// Mask the ID
-			publicSummaries[i] = models.PublicParticipantAvailabilitySummary{
-				ParticipantID:   nil,
-				ParticipantName: summary.ParticipantName,
-				StartTime:       summary.StartTime,
-				EndTime:         summary.EndTime,
-				Note:            summary.Note,
-			}
+		// The ID is masked unless the calendar is unlocked or this is the caller's own row
+		publicSummaries[i] = models.PublicParticipantAvailabilitySummary{
+			ParticipantName: summary.ParticipantName,
+			StartTime:       summary.StartTime,
+			EndTime:         summary.EndTime,
+			Note:            summary.Note,
+		}
+		if !lockParticipants || (participantID != "" && summary.ParticipantID == parsedID) {
+			publicSummaries[i].ParticipantID = &summary.ParticipantID
 		}
 	}
 
@@ -837,11 +791,7 @@ func (s *AvailabilityService) GetRangeSummary(ctx context.Context, token, startD
 // Helper functions
 
 func parseDate(dateStr string) (time.Time, error) {
-	date, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		return time.Time{}, err
-	}
-	return date, nil
+	return time.Parse(time.DateOnly, dateStr)
 }
 
 func formatDate(date time.Time) string {
@@ -934,84 +884,14 @@ func (s *AvailabilityService) CreateRecurrence(ctx context.Context, token, parti
 	}
 	calendarID := calendarInfo.ID
 
-	// Parse participant ID
-	partID, err := uuid.Parse(participantID)
+	// Verify participant exists and belongs to this calendar
+	_, partID, err := s.participantOn(ctx, calendarID, participantID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
-	}
-
-	// Verify participant belongs to this calendar
-	participant, err := s.participantRepo.GetByID(ctx, partID)
-	if err != nil {
-		if errors.Is(err, repository.ErrParticipantNotFound) {
-			return nil, ErrParticipantNotFound
-		}
 		return nil, err
 	}
 
-	if participant.CalendarID != calendarID {
-		return nil, ErrParticipantNotFound
-	}
-
-	// Validate day of week (already validated by struct tags, but double-check)
-	if req.DayOfWeek == nil || *req.DayOfWeek < 0 || *req.DayOfWeek > 6 {
-		return nil, ErrInvalidDayOfWeek
-	}
-
-	// Validate that this weekday is allowed for this calendar
-	if !datevalidation.IsWeekdayAllowed(*req.DayOfWeek, calendarInfo.AllowedWeekdays) {
-		return nil, ErrWeekdayNotAllowed
-	}
-
-	// Validate times if provided
-	if req.StartTime != nil && !isValidTime(*req.StartTime) {
-		return nil, ErrInvalidTime
-	}
-	if req.EndTime != nil && !isValidTime(*req.EndTime) {
-		return nil, ErrInvalidTime
-	}
-
-	// Normalize time range (swap if start > end)
-	normalizedStart, normalizedEnd := normalizeTimeRange(req.StartTime, req.EndTime)
-
-	// Parse start date for validation
-	startDate, err := parseDate(req.StartDate)
+	adjustedStartTime, adjustedEndTime, err := s.validateRecurrence(ctx, calendarInfo, partID, req, nil)
 	if err != nil {
-		return nil, ErrInvalidDate
-	}
-
-	// Parse end date if provided (for validation)
-	if req.EndDate != nil {
-		endDate, err := parseDate(*req.EndDate)
-		if err != nil {
-			return nil, ErrInvalidDate
-		}
-		if endDate.Before(startDate) {
-			return nil, fmt.Errorf("%w (%s..%s)", ErrInvalidDateRange, req.StartDate, *req.EndDate)
-		}
-	}
-
-	// Adjust times based on allowed hours for this day of week
-	adjustedStartTime, adjustedEndTime := adjustTimesByAllowedHoursForWeekday(*req.DayOfWeek, normalizedStart, normalizedEnd, calendarInfo)
-
-	// Validate time range if both times are provided (end must be after start)
-	// After normalization and adjustment, an invalid range means the time doesn't fit within allowed hours
-	if adjustedStartTime != nil && adjustedEndTime != nil {
-		if !isValidTimeRange(*adjustedStartTime, *adjustedEndTime) {
-			return nil, ErrTimeOutsideAllowedHours
-		}
-	}
-
-	// Validate duration against calendar's min_duration_hours (after adjustment)
-	if adjustedStartTime != nil && adjustedEndTime != nil && calendarInfo.MinDurationHours > 0 {
-		duration := calculateDuration(*adjustedStartTime, *adjustedEndTime)
-		if duration < float64(calendarInfo.MinDurationHours) {
-			return nil, ErrDurationTooShort
-		}
-	}
-
-	// Check for overlapping recurrences on the same day of week
-	if err := s.checkRecurrenceOverlap(ctx, partID, *req.DayOfWeek, req.StartDate, req.EndDate, nil); err != nil {
 		return nil, err
 	}
 
@@ -1035,6 +915,82 @@ func (s *AvailabilityService) CreateRecurrence(ctx context.Context, token, parti
 	return recurrence, nil
 }
 
+// validateRecurrence checks a recurrence request against the calendar and the
+// participant's other recurrences, and returns its times once normalised and clamped to
+// the weekday's allowed hours. excludeID is the recurrence being updated, nil on create.
+func (s *AvailabilityService) validateRecurrence(
+	ctx context.Context,
+	calendarInfo *repository.Calendar,
+	partID uuid.UUID,
+	req *models.CreateRecurrenceRequest,
+	excludeID *uuid.UUID,
+) (*string, *string, error) {
+	// Validate day of week (already validated by struct tags, but double-check)
+	if req.DayOfWeek == nil || *req.DayOfWeek < 0 || *req.DayOfWeek > 6 {
+		return nil, nil, ErrInvalidDayOfWeek
+	}
+
+	// Validate that this weekday is allowed for this calendar
+	if !datevalidation.IsWeekdayAllowed(*req.DayOfWeek, calendarInfo.AllowedWeekdays) {
+		return nil, nil, ErrWeekdayNotAllowed
+	}
+
+	// Validate times if provided
+	if req.StartTime != nil && !isValidTime(*req.StartTime) {
+		return nil, nil, ErrInvalidTime
+	}
+	if req.EndTime != nil && !isValidTime(*req.EndTime) {
+		return nil, nil, ErrInvalidTime
+	}
+
+	// Normalize time range (swap if start > end)
+	normalizedStart, normalizedEnd := normalizeTimeRange(req.StartTime, req.EndTime)
+
+	// Parse start date for validation
+	startDate, err := parseDate(req.StartDate)
+	if err != nil {
+		return nil, nil, ErrInvalidDate
+	}
+
+	// Parse end date if provided (for validation)
+	if req.EndDate != nil {
+		endDate, err := parseDate(*req.EndDate)
+		if err != nil {
+			return nil, nil, ErrInvalidDate
+		}
+		if endDate.Before(startDate) {
+			return nil, nil, fmt.Errorf("%w (%s..%s)", ErrInvalidDateRange, req.StartDate, *req.EndDate)
+		}
+	}
+
+	// Adjust times based on allowed hours for this day of week
+	adjustedStartTime, adjustedEndTime := adjustTimesByAllowedHoursForWeekday(*req.DayOfWeek, normalizedStart, normalizedEnd, calendarInfo)
+
+	// Validate time range if both times are provided (end must be after start)
+	// After normalization and adjustment, an invalid range means the time doesn't fit within allowed hours
+	if adjustedStartTime != nil && adjustedEndTime != nil {
+		if !isValidTimeRange(*adjustedStartTime, *adjustedEndTime) {
+			return nil, nil, ErrTimeOutsideAllowedHours
+		}
+	}
+
+	// Validate duration against calendar's min_duration_hours (after adjustment)
+	if adjustedStartTime != nil && adjustedEndTime != nil && calendarInfo.MinDurationHours > 0 {
+		duration := calculateDuration(*adjustedStartTime, *adjustedEndTime)
+		if duration < float64(calendarInfo.MinDurationHours) {
+			return nil, nil, ErrDurationTooShort
+		}
+	}
+
+	// Check for overlapping recurrences on the same day of week (excluding excludeID, the
+	// one being updated, if any)
+	if err := s.checkRecurrenceOverlap(ctx, partID, *req.DayOfWeek, req.StartDate, req.EndDate, excludeID); err != nil {
+		return nil, nil, err
+	}
+
+	return adjustedStartTime, adjustedEndTime, nil
+}
+
 // GetParticipantRecurrences retrieves all recurrences for a participant
 func (s *AvailabilityService) GetParticipantRecurrences(ctx context.Context, token, participantID string) ([]models.RecurrenceWithExceptions, error) {
 	// Validate calendar token
@@ -1046,23 +1002,10 @@ func (s *AvailabilityService) GetParticipantRecurrences(ctx context.Context, tok
 		return nil, err
 	}
 
-	// Parse participant ID
-	partID, err := uuid.Parse(participantID)
+	// Verify participant exists and belongs to this calendar
+	_, partID, err := s.participantOn(ctx, calendarID, participantID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
-	}
-
-	// Verify participant belongs to this calendar
-	participant, err := s.participantRepo.GetByID(ctx, partID)
-	if err != nil {
-		if errors.Is(err, repository.ErrParticipantNotFound) {
-			return nil, ErrParticipantNotFound
-		}
 		return nil, err
-	}
-
-	if participant.CalendarID != calendarID {
-		return nil, ErrParticipantNotFound
 	}
 
 	// Get recurrences
@@ -1136,65 +1079,10 @@ func (s *AvailabilityService) UpdateRecurrence(ctx context.Context, token, parti
 		return nil, ErrRecurrenceNotFound
 	}
 
-	// Validate day of week
-	if req.DayOfWeek == nil || *req.DayOfWeek < 0 || *req.DayOfWeek > 6 {
-		return nil, ErrInvalidDayOfWeek
-	}
-
-	// Validate that this weekday is allowed for this calendar
-	if !datevalidation.IsWeekdayAllowed(*req.DayOfWeek, calendarInfo.AllowedWeekdays) {
-		return nil, ErrWeekdayNotAllowed
-	}
-
-	// Validate times if provided
-	if req.StartTime != nil && !isValidTime(*req.StartTime) {
-		return nil, ErrInvalidTime
-	}
-	if req.EndTime != nil && !isValidTime(*req.EndTime) {
-		return nil, ErrInvalidTime
-	}
-
-	// Normalize time range (swap if start > end)
-	normalizedStart, normalizedEnd := normalizeTimeRange(req.StartTime, req.EndTime)
-
-	// Parse start date for validation
-	startDate, err := parseDate(req.StartDate)
+	// The two request types are field-for-field identical, so the update is validated
+	// exactly as a create would be, minus a clash with itself.
+	adjustedStartTime, adjustedEndTime, err := s.validateRecurrence(ctx, calendarInfo, partID, (*models.CreateRecurrenceRequest)(req), &recID)
 	if err != nil {
-		return nil, ErrInvalidDate
-	}
-
-	// Parse end date if provided (for validation)
-	if req.EndDate != nil {
-		endDate, err := parseDate(*req.EndDate)
-		if err != nil {
-			return nil, ErrInvalidDate
-		}
-		if endDate.Before(startDate) {
-			return nil, fmt.Errorf("%w (%s..%s)", ErrInvalidDateRange, req.StartDate, *req.EndDate)
-		}
-	}
-
-	// Adjust times based on allowed hours for this day of week
-	adjustedStartTime, adjustedEndTime := adjustTimesByAllowedHoursForWeekday(*req.DayOfWeek, normalizedStart, normalizedEnd, calendarInfo)
-
-	// Validate time range if both times are provided (end must be after start)
-	// After normalization and adjustment, an invalid range means the time doesn't fit within allowed hours
-	if adjustedStartTime != nil && adjustedEndTime != nil {
-		if !isValidTimeRange(*adjustedStartTime, *adjustedEndTime) {
-			return nil, ErrTimeOutsideAllowedHours
-		}
-	}
-
-	// Validate duration against calendar's min_duration_hours (after adjustment)
-	if adjustedStartTime != nil && adjustedEndTime != nil && calendarInfo.MinDurationHours > 0 {
-		duration := calculateDuration(*adjustedStartTime, *adjustedEndTime)
-		if duration < float64(calendarInfo.MinDurationHours) {
-			return nil, ErrDurationTooShort
-		}
-	}
-
-	// Check for overlapping recurrences on the same day of week (excluding the current one)
-	if err := s.checkRecurrenceOverlap(ctx, partID, *req.DayOfWeek, req.StartDate, req.EndDate, &recID); err != nil {
 		return nil, err
 	}
 
@@ -1232,23 +1120,10 @@ func (s *AvailabilityService) DeleteRecurrence(ctx context.Context, token, parti
 		return err
 	}
 
-	// Parse participant ID
-	partID, err := uuid.Parse(participantID)
+	// Verify participant exists and belongs to this calendar
+	_, partID, err := s.participantOn(ctx, calendarID, participantID)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
-	}
-
-	// Verify participant belongs to this calendar
-	participant, err := s.participantRepo.GetByID(ctx, partID)
-	if err != nil {
-		if errors.Is(err, repository.ErrParticipantNotFound) {
-			return ErrParticipantNotFound
-		}
 		return err
-	}
-
-	if participant.CalendarID != calendarID {
-		return ErrParticipantNotFound
 	}
 
 	// Parse recurrence ID
@@ -1289,23 +1164,10 @@ func (s *AvailabilityService) CreateException(ctx context.Context, token, partic
 		return nil, err
 	}
 
-	// Parse participant ID
-	partID, err := uuid.Parse(participantID)
+	// Verify participant exists and belongs to this calendar
+	_, partID, err := s.participantOn(ctx, calendarID, participantID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
-	}
-
-	// Verify participant belongs to this calendar
-	participant, err := s.participantRepo.GetByID(ctx, partID)
-	if err != nil {
-		if errors.Is(err, repository.ErrParticipantNotFound) {
-			return nil, ErrParticipantNotFound
-		}
 		return nil, err
-	}
-
-	if participant.CalendarID != calendarID {
-		return nil, ErrParticipantNotFound
 	}
 
 	// Parse recurrence ID
@@ -1356,23 +1218,10 @@ func (s *AvailabilityService) DeleteException(ctx context.Context, token, partic
 		return err
 	}
 
-	// Parse participant ID
-	partID, err := uuid.Parse(participantID)
+	// Verify participant exists and belongs to this calendar
+	_, partID, err := s.participantOn(ctx, calendarID, participantID)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrInvalidParticipantID, err)
-	}
-
-	// Verify participant belongs to this calendar
-	participant, err := s.participantRepo.GetByID(ctx, partID)
-	if err != nil {
-		if errors.Is(err, repository.ErrParticipantNotFound) {
-			return ErrParticipantNotFound
-		}
 		return err
-	}
-
-	if participant.CalendarID != calendarID {
-		return ErrParticipantNotFound
 	}
 
 	// Parse recurrence ID
@@ -1410,9 +1259,12 @@ func (s *AvailabilityService) DeleteException(ctx context.Context, token, partic
 
 // adjustTimesByAllowedHours adjusts the start and end times based on the calendar's allowed hours configuration
 func adjustTimesByAllowedHours(date time.Time, requestedStart, requestedEnd *string, calendarInfo *repository.Calendar) (*string, *string) {
-	// Get the appropriate time range for this date
-	allowedRange := getAllowedTimeRangeForDate(date, calendarInfo)
+	return clampToRange(getAllowedTimeRangeForDate(date, calendarInfo), requestedStart, requestedEnd)
+}
 
+// clampToRange fits the requested times inside allowedRange, the one rule shared by
+// one-off availabilities and recurrences.
+func clampToRange(allowedRange repository.TimeRange, requestedStart, requestedEnd *string) (*string, *string) {
 	// If no allowed range is configured at all, return the requested times as-is
 	if allowedRange.Start == "" && allowedRange.End == "" {
 		return requestedStart, requestedEnd
@@ -1481,23 +1333,9 @@ func adjustTimesByAllowedHours(date time.Time, requestedStart, requestedEnd *str
 // - Start time: MIN(holiday/holiday_eve start, weekday start)
 // - End time: MAX(holiday/holiday_eve end, weekday end)
 func getAllowedTimeRangeForDate(date time.Time, calendarInfo *repository.Calendar) repository.TimeRange {
-	// Get the weekday
 	weekday := int(date.Weekday())
-	weekdayStr := fmt.Sprintf("%d", weekday)
-
-	// Check if this weekday is allowed in the calendar
 	weekdayAllowed := datevalidation.IsWeekdayAllowed(weekday, calendarInfo.AllowedWeekdays)
-
-	// Get the weekday time range (if weekday is allowed)
-	var weekdayRange repository.TimeRange
-	if weekdayAllowed {
-		if tr, ok := calendarInfo.AllowedHours.Weekdays[weekdayStr]; ok {
-			weekdayRange = tr
-		} else {
-			// Weekday is allowed but no specific hours configured, use full day
-			weekdayRange = repository.TimeRange{Start: "00:00", End: "23:59"}
-		}
-	}
+	weekdayRange := getAllowedTimeRangeForWeekday(weekday, calendarInfo)
 
 	// Determine the country code for holiday checking
 	countryCode := datevalidation.GetCountryFromTimezone(calendarInfo.Timezone)
@@ -1567,41 +1405,15 @@ func compareTime(t1, t2 string) int {
 		return 0
 	}
 
-	if time1.Before(time2) {
-		return -1
-	} else if time1.After(time2) {
-		return 1
-	}
-	return 0
+	return time1.Compare(time2)
 }
 
 // recurrencesOverlap checks if two recurrences on the same day of week have overlapping date ranges.
 // Returns true if the date ranges overlap.
-// Rules:
-// - If both have no end_date (infinite): they always overlap
-// - If one has no end_date: overlap if its start_date <= the other's end_date
-// - If both have end_dates: overlap if start_A <= end_B AND start_B <= end_A
+// An empty end_date is open-ended; dates are YYYY-MM-DD, so they compare as strings.
 func recurrencesOverlap(startDateA, endDateA, startDateB, endDateB string) bool {
-	// Both have no end date (infinite) - they always overlap
-	if endDateA == "" && endDateB == "" {
-		return true
-	}
-
-	// A has no end date (infinite from startDateA)
-	if endDateA == "" {
-		// A overlaps with B if A starts before or when B ends
-		return startDateA <= endDateB
-	}
-
-	// B has no end date (infinite from startDateB)
-	if endDateB == "" {
-		// B overlaps with A if B starts before or when A ends
-		return startDateB <= endDateA
-	}
-
-	// Both have end dates - classic range overlap check
-	// Ranges [startA, endA] and [startB, endB] overlap if startA <= endB AND startB <= endA
-	return startDateA <= endDateB && startDateB <= endDateA
+	const forever = "9999-12-31"
+	return startDateA <= cmp.Or(endDateB, forever) && startDateB <= cmp.Or(endDateA, forever)
 }
 
 // getAllowedTimeRangeForWeekday gets the allowed time range for a specific weekday.
@@ -1633,48 +1445,7 @@ func getAllowedTimeRangeForWeekday(dayOfWeek int, calendarInfo *repository.Calen
 // adjustTimesByAllowedHoursForWeekday adjusts times based on the calendar's allowed hours for a specific weekday.
 // This is used for recurrences where we know the day of week directly.
 func adjustTimesByAllowedHoursForWeekday(dayOfWeek int, requestedStart, requestedEnd *string, calendarInfo *repository.Calendar) (*string, *string) {
-	allowedRange := getAllowedTimeRangeForWeekday(dayOfWeek, calendarInfo)
-
-	// If no allowed range is configured, return the requested times as-is
-	if allowedRange.Start == "" && allowedRange.End == "" {
-		return requestedStart, requestedEnd
-	}
-
-	// Adjust start time
-	var adjustedStart *string
-	if allowedRange.Start != "" {
-		if requestedStart == nil || *requestedStart == "" {
-			adjustedStart = &allowedRange.Start
-		} else if compareTime(*requestedStart, allowedRange.Start) < 0 {
-			adjustedStart = &allowedRange.Start
-		} else {
-			adjustedStart = requestedStart
-		}
-	} else if allowedRange.End != "" && (requestedStart == nil || *requestedStart == "") {
-		defaultStart := "00:00"
-		adjustedStart = &defaultStart
-	} else {
-		adjustedStart = requestedStart
-	}
-
-	// Adjust end time
-	var adjustedEnd *string
-	if allowedRange.End != "" {
-		if requestedEnd == nil || *requestedEnd == "" {
-			adjustedEnd = &allowedRange.End
-		} else if compareTime(*requestedEnd, allowedRange.End) > 0 {
-			adjustedEnd = &allowedRange.End
-		} else {
-			adjustedEnd = requestedEnd
-		}
-	} else if allowedRange.Start != "" && (requestedEnd == nil || *requestedEnd == "") {
-		defaultEnd := "23:59"
-		adjustedEnd = &defaultEnd
-	} else {
-		adjustedEnd = requestedEnd
-	}
-
-	return adjustedStart, adjustedEnd
+	return clampToRange(getAllowedTimeRangeForWeekday(dayOfWeek, calendarInfo), requestedStart, requestedEnd)
 }
 
 // checkRecurrenceOverlap checks if a new/updated recurrence overlaps with existing recurrences

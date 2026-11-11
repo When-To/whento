@@ -6,10 +6,12 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/whento/whento/internal/notify/models"
@@ -235,6 +237,27 @@ func (r *ReminderJobRepository) RecordMissed(ctx context.Context, job *models.Re
 		return false, fmt.Errorf("failed to record missed reminder: %w", err)
 	}
 	return tag.RowsAffected() > 0, nil
+}
+
+// MarkScanned stores now as the last reminder scan and returns the previous one,
+// zero when none was recorded. The FROM subquery reads the row before the update.
+func (r *ReminderJobRepository) MarkScanned(ctx context.Context, now time.Time) (time.Time, error) {
+	var previous *time.Time
+	err := r.pool.QueryRow(ctx, `
+		UPDATE app_state SET reminder_last_scan_at = $1, updated_at = now()
+		FROM (SELECT reminder_last_scan_at AS previous FROM app_state WHERE id = 1) old
+		WHERE app_state.id = 1
+		RETURNING old.previous`, now).Scan(&previous)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to record reminder scan: %w", err)
+	}
+	if previous == nil {
+		return time.Time{}, nil
+	}
+	return *previous, nil
 }
 
 // Cleanup scrubs legacy provider error strings and bounds queue retention without

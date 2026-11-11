@@ -12,15 +12,16 @@ import (
 	"github.com/whento/pkg/models"
 )
 
-// Re-export shared enums for backward compatibility
+// User roles.
 const (
-	RoleUser  = models.RoleUser
-	RoleAdmin = models.RoleAdmin
+	RoleUser  = "user"
+	RoleAdmin = "admin"
 )
 
+// Supported locales.
 const (
-	LocaleFR = models.LocaleFR
-	LocaleEN = models.LocaleEN
+	LocaleFR = "fr"
+	LocaleEN = "en"
 )
 
 // User represents a user in the system
@@ -58,11 +59,6 @@ type RefreshToken struct {
 	// replaced it. A consumed token is not simply gone: presented again inside the
 	// grace window it is a racing client, and outside it, a replay.
 	ConsumedAt *time.Time `json:"-"`
-}
-
-// IsAdmin checks if user has admin role
-func (u *User) IsAdmin() bool {
-	return u.Role == RoleAdmin
 }
 
 // MFAStatus contains MFA/authentication status for a user

@@ -132,14 +132,8 @@ jobs:
           done
           echo "✓ All Compose files are valid"
 
-      - name: Check bootstrap settings reach the backend
-        run: python3 scripts/check-bootstrap-compose.py
-
-      - name: Check reminder settings reach the backend
-        run: python3 scripts/check-reminder-compose.py
-
-      - name: Check holiday fallback is opt-in and reaches the backend
-        run: python3 scripts/check-holiday-compose.py
+      - name: Check bootstrap, reminder and holiday settings reach only the backend
+        run: python3 scripts/check-compose-env.py
 
   # `make format-check` existed but was never called anywhere: Go formatting was enforced
   # only by the opt-in .githooks/pre-commit, which `git commit --no-verify` walks past.
@@ -605,8 +599,7 @@ jobs:
       # nothing creates them and the server exits on "failed to load private key".
       # The same script is used here, so there is one source of truth.
       #
-      # A fresh pair per run is correct: pkg/participanttoken seeds its HMAC from this
-      # key, and no token outlives the job.
+      # A fresh pair per run is correct: no JWT outlives the job.
       - name: Generate JWT keys
         run: ./scripts/generate-keys.sh
 

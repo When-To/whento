@@ -14,7 +14,7 @@ import (
 
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/middleware"
-	"github.com/whento/whento/internal/availability/models"
+	"github.com/whento/whento/internal/availability/service"
 	calendarModels "github.com/whento/whento/internal/calendar/models"
 	calendarRepository "github.com/whento/whento/internal/calendar/repository"
 )
@@ -28,16 +28,6 @@ type ActivityCalendarStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*calendarModels.Calendar, error)
 }
 
-// ActivityService is the read the handler serves.
-type ActivityService interface {
-	GetDateActivity(
-		ctx context.Context,
-		calendarID uuid.UUID,
-		threshold, minDurationHours int,
-		startDateStr, endDateStr string,
-	) (*models.DateActivityResponse, error)
-}
-
 // ActivityHandler serves the per-date activity journal to the calendar owner.
 //
 // There is deliberately no public and no token-addressed counterpart. A participant
@@ -46,11 +36,11 @@ type ActivityService interface {
 // everybody else.
 type ActivityHandler struct {
 	calendarRepo    ActivityCalendarStore
-	activityService ActivityService
+	activityService *service.AvailabilityService
 }
 
 // NewActivityHandler creates a new activity handler
-func NewActivityHandler(calendarRepo ActivityCalendarStore, activityService ActivityService) *ActivityHandler {
+func NewActivityHandler(calendarRepo ActivityCalendarStore, activityService *service.AvailabilityService) *ActivityHandler {
 	return &ActivityHandler{calendarRepo: calendarRepo, activityService: activityService}
 }
 

@@ -100,19 +100,9 @@ func (h *NotifyConfigHandler) GetConfig(w http.ResponseWriter, r *http.Request) 
 	} else {
 		// Return default config
 		config = models.NotifyConfig{
-			Enabled:            false,
-			NotifyOwner:        true,
-			NotifyParticipants: false,
-			Channels: models.ChannelConfig{
-				Email:    models.EmailChannelConfig{Enabled: true},
-				Discord:  models.DiscordChannelConfig{Enabled: false},
-				Slack:    models.SlackChannelConfig{Enabled: false},
-				Telegram: models.TelegramChannelConfig{Enabled: false},
-			},
-			Reminders: models.ReminderConfig{
-				Enabled:     false,
-				HoursBefore: 24,
-			},
+			NotifyOwner: true,
+			Channels:    models.ChannelConfig{Email: models.EmailChannelConfig{Enabled: true}},
+			Reminders:   models.ReminderConfig{HoursBefore: 24},
 		}
 	}
 

@@ -18,8 +18,11 @@ export type DateStyle =
   | 'weekdayShort'
   | 'weekdayLong'
   | 'dayMonthShort'
+  | 'dayMonthYearShort'
+  | 'weekdayDayMonthYearShort'
   | 'fullDate'
   | 'fullWithWeekday'
+  | 'fullWithWeekdayYear'
   | 'monthYear'
   | 'monthLong';
 
@@ -27,8 +30,11 @@ const OPTIONS: Record<DateStyle, Intl.DateTimeFormatOptions> = {
   weekdayShort: { weekday: 'short' },
   weekdayLong: { weekday: 'long' },
   dayMonthShort: { day: 'numeric', month: 'short' },
+  dayMonthYearShort: { day: 'numeric', month: 'short', year: 'numeric' },
+  weekdayDayMonthYearShort: { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' },
   fullDate: { day: 'numeric', month: 'long', year: 'numeric' },
   fullWithWeekday: { weekday: 'long', day: 'numeric', month: 'long' },
+  fullWithWeekdayYear: { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' },
   monthYear: { month: 'long', year: 'numeric' },
   monthLong: { month: 'long' },
 };

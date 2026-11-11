@@ -66,15 +66,7 @@ function isStringArray(value: unknown): value is string[] {
  * discarded here rather than surviving into the ordering and the rendered cards.
  */
 function normalizeIds(ids: readonly unknown[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const id of ids) {
-    if (typeof id !== 'string' || id === '') continue;
-    if (seen.has(id)) continue;
-    seen.add(id);
-    result.push(id);
-  }
-  return result;
+  return [...new Set(ids.filter((id): id is string => typeof id === 'string' && id !== ''))];
 }
 
 function loadPrefs(prefsKey: string): StoredDashboardPrefs | null {
@@ -213,10 +205,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
     });
   }
 
-  function isPinned(id: string): boolean {
-    return pinnedIds.value.includes(id);
-  }
-
   function setCustomOrder(ids: readonly string[]) {
     mutatePrefs(() => {
       customOrder.value = normalizeIds(ids);
@@ -262,7 +250,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
     setSortDirection,
     setViewMode,
     togglePin,
-    isPinned,
     setCustomOrder,
     appendToCustomOrder,
     pruneCustomOrder,

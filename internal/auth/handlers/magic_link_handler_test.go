@@ -30,9 +30,8 @@ type stubMagicLinkService struct {
 	called    bool
 }
 
-func (s *stubMagicLinkService) RequestMagicLink(_ context.Context, email string) error {
+func (s *stubMagicLinkService) RequestMagicLink(_ context.Context, email string) {
 	s.requested = append(s.requested, email)
-	return nil
 }
 
 func (s *stubMagicLinkService) VerifyMagicLink(_ context.Context, _ string) (*models.AuthResponse, error) {

@@ -210,16 +210,6 @@ describe('calendar store', () => {
         i18n.global.locale.value = previous;
       }
     });
-
-    it('is cleared by clearError', async () => {
-      calendarsApi.getAll.mockRejectedValue(new Error('offline'));
-      const store = freshStore();
-      await expect(store.fetchCalendars()).rejects.toThrow();
-
-      store.clearError();
-
-      expect(store.error).toBeNull();
-    });
   });
 
   describe('state updates', () => {
@@ -355,19 +345,6 @@ describe('calendar store', () => {
       await store.addAnonymousParticipant('tok', { name: 'Ada' });
 
       expect(store.currentPublicCalendar?.participants).toHaveLength(1);
-    });
-
-    it('clears both current slots', async () => {
-      calendarsApi.getById.mockResolvedValue(calendar());
-      calendarsApi.getPublic.mockResolvedValue(publicCalendar());
-      const store = freshStore();
-      await store.fetchCalendar('c-1');
-      await store.fetchPublicCalendar('tok');
-
-      store.clearCurrentCalendar();
-
-      expect(store.currentCalendar).toBeNull();
-      expect(store.currentPublicCalendar).toBeNull();
     });
   });
 

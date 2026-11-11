@@ -74,7 +74,12 @@ function stripComments(text: string): string {
 
 const FILES = sourceFiles();
 const SOURCES = FILES.map(
-  file => [path.relative(SRC, file), stripComments(fs.readFileSync(file, 'utf8'))] as const
+  // POSIX separators, so the path checks below hold on Windows too.
+  file =>
+    [
+      path.relative(SRC, file).split(path.sep).join('/'),
+      stripComments(fs.readFileSync(file, 'utf8')),
+    ] as const
 );
 const ALL_SOURCE = SOURCES.map(([, text]) => text).join('\n');
 
@@ -357,9 +362,11 @@ describe('translation keys used by the app', () => {
   });
 
   it('cover every key the locale files define', () => {
+    // Match the key as a whole quoted string: a bare substring check let
+    // `auth.orLoginWith` survive on the back of `auth.orLoginWithEmail`.
+    const quoted = new Set(ALL_SOURCE.match(/(?<=['"`])[a-zA-Z][\w.]*(?=['"`])/g));
     const orphans = Object.keys(en).filter(
-      key =>
-        !ALL_SOURCE.includes(key) && !DYNAMIC_KEY_PREFIXES.some(prefix => key.startsWith(prefix))
+      key => !quoted.has(key) && !DYNAMIC_KEY_PREFIXES.some(prefix => key.startsWith(prefix))
     );
     expect(
       orphans,
@@ -374,7 +381,7 @@ describe('translation keys used by the app', () => {
     const offenders: string[] = [];
     for (const [file, text] of SOURCES) {
       for (const match of text.matchAll(
-        /(?<![A-Za-z0-9_$.])\$?t\(\s*'[^']+'\s*,\s*'(?:[^'\\]|\\.)*'\s*\)/g
+        /(?<![A-Za-z0-9_$.])\$?t\(\s*'[^']+'\s*,\s*(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")\s*\)/g
       )) {
         offenders.push(`${file}: ${match[0].replace(/\s+/g, ' ')}`);
       }

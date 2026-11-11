@@ -316,6 +316,12 @@ func (r *AvailabilityRepository) GetAvailableParticipantsForDate(
 		return nil, err
 	}
 
+	return availableFrom(occurrences), nil
+}
+
+// availableFrom is who the occurrences name, each participant once and in the order
+// they first appear: one participant answering twice on a day is one available person.
+func availableFrom(occurrences []models.Occurrence) []models.AvailableParticipant {
 	seen := make(map[uuid.UUID]struct{}, len(occurrences))
 	participants := make([]models.AvailableParticipant, 0, len(occurrences))
 	for _, occurrence := range occurrences {
@@ -329,7 +335,7 @@ func (r *AvailabilityRepository) GetAvailableParticipantsForDate(
 		})
 	}
 
-	return participants, nil
+	return participants
 }
 
 // GetParticipantCountForDate returns how many participants are available at once.
@@ -405,28 +411,15 @@ func (r *AvailabilityRepository) GetDateStatsForRange(
 
 	stats := make(map[string]models.DateStats, len(grouped))
 	for key, dayOccurrences := range grouped {
-		seen := make(map[uuid.UUID]struct{}, len(dayOccurrences))
-		available := make([]models.AvailableParticipant, 0, len(dayOccurrences))
 		windows := make([]models.TimeWindow, 0, len(dayOccurrences))
-
 		for _, occurrence := range dayOccurrences {
 			windows = append(windows, occurrence.Window())
-
-			// Deduplicated exactly as GetAvailableParticipantsForDate does it: one
-			// participant answering twice on a day is one available person, but both
-			// of their windows still count towards the overlap.
-			if _, ok := seen[occurrence.ParticipantID]; ok {
-				continue
-			}
-			seen[occurrence.ParticipantID] = struct{}{}
-			available = append(available, models.AvailableParticipant{
-				ID:   occurrence.ParticipantID,
-				Name: occurrence.ParticipantName,
-			})
 		}
 
+		// Deduplicated exactly as GetAvailableParticipantsForDate does it, but every
+		// window still counts towards the overlap.
 		stats[key] = models.DateStats{
-			Available: available,
+			Available: availableFrom(dayOccurrences),
 			Count:     models.MaxSimultaneousFor(windows, minDurationHours*60),
 		}
 	}

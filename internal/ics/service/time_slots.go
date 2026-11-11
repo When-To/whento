@@ -5,7 +5,8 @@
 package service
 
 import (
-	"sort"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/whento/whento/internal/ics/models"
@@ -88,11 +89,7 @@ func computeTimeSlots(availabilities []repository.DateAvailability, threshold in
 	}
 
 	// Sort boundaries
-	boundaries := make([]int, 0, len(boundarySet))
-	for b := range boundarySet {
-		boundaries = append(boundaries, b)
-	}
-	sort.Ints(boundaries)
+	boundaries := slices.Sorted(maps.Keys(boundarySet))
 
 	// Analyze each segment between consecutive boundaries
 	type segment struct {
@@ -169,9 +166,4 @@ func computeTimeSlots(availabilities []repository.DateAvailability, threshold in
 	}
 
 	return result
-}
-
-// isAllDaySlot checks if a time slot covers the entire day
-func isAllDaySlot(slot *TimeSlot) bool {
-	return slot.StartTime == "00:00" && slot.EndTime == "23:59"
 }

@@ -181,8 +181,6 @@ type mockParticipantRepo struct {
 	createErr    error
 	updateErr    error
 	deleteErr    error
-	verifiedFor  uuid.UUID
-	verifiedMail string
 }
 
 var _ ParticipantRepository = (*mockParticipantRepo)(nil)
@@ -204,13 +202,6 @@ func (m *mockParticipantRepo) Update(context.Context, uuid.UUID, string) error {
 }
 
 func (m *mockParticipantRepo) Delete(context.Context, uuid.UUID) error { return m.deleteErr }
-
-func (m *mockParticipantRepo) SetEmailAsVerified(_ context.Context, id uuid.UUID, email string) error {
-	m.verifiedFor = id
-	m.verifiedMail = email
-
-	return nil
-}
 
 // newService wires the service with a nil user repository. That is a supported
 // configuration — every use of it is nil-guarded — and it keeps these tests off the
@@ -643,33 +634,16 @@ func TestFilterParticipantsPrivacy(t *testing.T) {
 	})
 }
 
-func TestConditionalEmail(t *testing.T) {
-	email := "someone@example.com"
-
-	if got := conditionalEmail(true, &email); got == nil || *got != email {
-		t.Errorf("conditionalEmail(true) = %v, want the email", got)
-	}
-	if got := conditionalEmail(false, &email); got != nil {
-		t.Errorf("conditionalEmail(false) = %v, want nil", *got)
-	}
-	if got := conditionalEmail(true, nil); got != nil {
-		t.Errorf("conditionalEmail(true, nil) = %v, want nil", got)
-	}
-}
-
-func TestGenerateToken(t *testing.T) {
+func TestRandomHex(t *testing.T) {
 	seen := make(map[string]bool)
 
 	for range 50 {
-		token, err := generateToken()
-		if err != nil {
-			t.Fatalf("generateToken: %v", err)
-		}
+		token := randomHex(32)
 		if len(token) != 64 {
 			t.Fatalf("token length = %d, want 64", len(token))
 		}
 		if seen[token] {
-			t.Fatalf("generateToken produced a duplicate: %s", token)
+			t.Fatalf("randomHex produced a duplicate: %s", token)
 		}
 		seen[token] = true
 	}

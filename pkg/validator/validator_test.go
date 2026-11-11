@@ -98,61 +98,6 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-func TestValidateVar(t *testing.T) {
-	tests := []struct {
-		name    string
-		field   interface{}
-		tag     string
-		wantErr bool
-	}{
-		{
-			name:    "valid email",
-			field:   "test@example.com",
-			tag:     "email",
-			wantErr: false,
-		},
-		{
-			name:    "invalid email",
-			field:   "not-an-email",
-			tag:     "email",
-			wantErr: true,
-		},
-		{
-			name:    "valid uuid",
-			field:   "550e8400-e29b-41d4-a716-446655440000",
-			tag:     "uuid",
-			wantErr: false,
-		},
-		{
-			name:    "invalid uuid",
-			field:   "not-a-uuid",
-			tag:     "uuid",
-			wantErr: true,
-		},
-		{
-			name:    "min length valid",
-			field:   "hello",
-			tag:     "min=3",
-			wantErr: false,
-		},
-		{
-			name:    "min length invalid",
-			field:   "hi",
-			tag:     "min=3",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateVar(tt.field, tt.tag)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateVar() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestValidationErrors_Error(t *testing.T) {
 	errs := ValidationErrors{
 		{Field: "email", Message: "this field is required"},
@@ -192,9 +137,9 @@ func TestValidateMaxBytes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateVar(tt.value, "maxbytes=72")
+			err := validate.Var(tt.value, "maxbytes=72")
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateVar() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("validate.Var() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -223,34 +168,6 @@ func TestValidateTimezone(t *testing.T) {
 			err := Validate(&s)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("timezone validation error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestValidateLocale(t *testing.T) {
-	type localeStruct struct {
-		Locale string `validate:"locale"`
-	}
-
-	tests := []struct {
-		name    string
-		locale  string
-		wantErr bool
-	}{
-		{"valid fr", "fr", false},
-		{"valid en", "en", false},
-		{"invalid de", "de", true},
-		{"invalid es", "es", true},
-		{"empty locale", "", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := localeStruct{Locale: tt.locale}
-			err := Validate(&s)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("locale validation error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

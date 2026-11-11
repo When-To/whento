@@ -23,18 +23,16 @@ type stubCounter struct {
 	count int
 	err   error
 
-	calls          int
-	lastCalendarID uuid.UUID
-	lastDate       time.Time
+	calls    int
+	lastDate time.Time
 }
 
 var _ ParticipantCounter = (*stubCounter)(nil)
 
 func (s *stubCounter) GetParticipantCountForDate(
-	_ context.Context, calendarID uuid.UUID, date time.Time,
+	_ context.Context, _ uuid.UUID, date time.Time,
 ) (int, error) {
 	s.calls++
-	s.lastCalendarID = calendarID
 	s.lastDate = date
 
 	return s.count, s.err
@@ -182,33 +180,4 @@ func TestDetectTransitionPropagatesCountFailure(t *testing.T) {
 	if got != nil {
 		t.Errorf("transition = %+v, want nil on failure", got)
 	}
-}
-
-func TestGetCurrentCount(t *testing.T) {
-	t.Run("returns the repository count", func(t *testing.T) {
-		counter := &stubCounter{count: 7}
-		detector := NewThresholdDetector(counter, quietLogger())
-
-		calendarID := uuid.New()
-		date := time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC)
-
-		got, err := detector.GetCurrentCount(context.Background(), calendarID, date)
-		if err != nil {
-			t.Fatalf("GetCurrentCount: %v", err)
-		}
-		if got != 7 {
-			t.Errorf("count = %d, want 7", got)
-		}
-		if counter.lastCalendarID != calendarID {
-			t.Errorf("queried calendar %v, want %v", counter.lastCalendarID, calendarID)
-		}
-	})
-
-	t.Run("propagates a failure", func(t *testing.T) {
-		detector := NewThresholdDetector(&stubCounter{err: errCount}, quietLogger())
-
-		if _, err := detector.GetCurrentCount(context.Background(), uuid.New(), time.Now()); !errors.Is(err, errCount) {
-			t.Errorf("error = %v, want the counting failure", err)
-		}
-	})
 }

@@ -6,7 +6,7 @@
   },
   "src/api/passkey.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 6
+      "count": 5
     }
   },
   "src/components/CalendarSidebar.vue": {
@@ -28,17 +28,11 @@
     }
   },
   "src/components/QuotaUsage.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
     "no-console": {
       "count": 1
     }
   },
   "src/components/calendar/CalendarInfoFields.vue": {
-    "vuejs-accessibility/form-control-has-label": {
-      "count": 2
-    },
     "vuejs-accessibility/label-has-for": {
       "count": 2
     }
@@ -54,17 +48,11 @@
     }
   },
   "src/components/calendar/CalendarScheduleFields.vue": {
-    "vuejs-accessibility/form-control-has-label": {
-      "count": 2
-    },
     "vuejs-accessibility/label-has-for": {
-      "count": 7
+      "count": 2
     }
   },
   "src/components/calendar/CalendarThresholdFields.vue": {
-    "vuejs-accessibility/form-control-has-label": {
-      "count": 2
-    },
     "vuejs-accessibility/label-has-for": {
       "count": 2
     }
@@ -211,9 +199,6 @@
     }
   },
   "src/views/VerifyEmail.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
     "no-console": {
       "count": 1
     }

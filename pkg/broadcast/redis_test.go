@@ -249,8 +249,8 @@ func TestNewRedisBrokerWithoutAClientFallsBackToMemory(t *testing.T) {
 	broker := NewRedisBroker(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	t.Cleanup(func() { _ = broker.Close() })
 
-	if _, ok := broker.(*memoryBroker); !ok {
-		t.Fatalf("NewRedisBroker(nil) returned %T, want *memoryBroker", broker)
+	if _, ok := broker.(*hub); !ok {
+		t.Fatalf("NewRedisBroker(nil) returned %T, want *hub", broker)
 	}
 
 	notices, stop := broker.Subscribe(context.Background(), "calendar-a")

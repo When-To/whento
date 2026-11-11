@@ -158,7 +158,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/auth/admin/users/{id}/mfa/totp': {
+  '/api/v1/auth/admin/users/{id}/disable-2fa': {
     parameters: {
       query?: never;
       header?: never;
@@ -167,12 +167,11 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    post?: never;
     /**
      * Disable user 2FA (admin)
      * @description Disables TOTP two-factor authentication for a specific user. Admin only. Cannot disable own 2FA.
      */
-    delete: {
+    post: {
       parameters: {
         query?: never;
         header?: never;
@@ -191,9 +190,8 @@ export interface paths {
           };
           content: {
             'application/json': {
-              disabled_by_admin?: string;
-              disabled_for_user?: string;
-              message?: string;
+              backup_codes_removed?: number;
+              totp_disabled?: boolean;
             };
           };
         };
@@ -244,6 +242,7 @@ export interface paths {
         };
       };
     };
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;

@@ -89,7 +89,6 @@ type UserRepository interface {
 // TokenRepository defines the interface for token repository operations
 type TokenRepository interface {
 	Create(ctx context.Context, token *models.RefreshToken, securityGeneration int64) error
-	GetByHash(ctx context.Context, tokenHash string) (*models.RefreshToken, error)
 	// CreatePendingMFASession finalizes a pending-MFA login atomically: claims the
 	// temp token's JTI digest as a one-time nonce, verifies the captured security
 	// generation, and inserts the refresh token in one transaction. A failed
@@ -266,28 +265,7 @@ func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (*mod
 		_ = s.cache.Delete(ctx, lockoutKey)
 	}
 
-	// Check if user has 2FA enabled
-	mfa, err := s.mfaRepo.GetByUserID(ctx, user.ID)
-	if err != nil && !errors.Is(err, mfaRepo.ErrMFANotFound) {
-		return nil, fmt.Errorf("failed to check MFA status: %w", err)
-	}
-
-	// If MFA is enabled, return temporary token
-	if mfa != nil && mfa.Enabled {
-		tempToken, err := s.generateTempToken(user.ID, user.SecurityGeneration)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate temp token: %w", err)
-		}
-
-		return &models.AuthResponse{
-			RequireMFA: true,
-			TempToken:  tempToken,
-			User:       user,
-		}, nil
-	}
-
-	// No MFA - generate full tokens
-	return s.generateAuthResponse(ctx, user)
+	return s.completeLogin(ctx, user)
 }
 
 // incrementLoginAttempts increments the failed login counter for the given key
@@ -490,7 +468,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID string, req *mo
 func (s *AuthService) RevokeAccessTokens(ctx context.Context, userID string) {
 	if s.cache != nil && s.cache.IsEnabled() {
 		pwdKey := cache.UserPasswordChangedKey(userID)
-		_ = s.cache.Set(ctx, pwdKey, time.Now().Unix(), s.jwtManager.AccessExpiry())
+		_ = s.cache.Set(ctx, pwdKey, time.Now().UnixMilli(), s.jwtManager.AccessExpiry())
 	}
 }
 
@@ -544,6 +522,9 @@ func (s *AuthService) DeleteUser(ctx context.Context, currentUserID, targetUserI
 		if errors.Is(err, repository.ErrLastAdmin) {
 			return ErrLastAdmin
 		}
+		if errors.Is(err, repository.ErrUserNotFound) {
+			return ErrUserNotFound
+		}
 		return err
 	}
 
@@ -560,11 +541,7 @@ func (s *AuthService) DeleteUser(ctx context.Context, currentUserID, targetUserI
 // the caller's context: a client disconnect, a request deadline or a server
 // shutdown must be able to cancel it.
 func (s *AuthService) IssueSession(ctx context.Context, user *models.User) (*models.AuthResponse, error) {
-	return s.generateAuthResponse(ctx, user)
-}
-
-func (s *AuthService) generateAuthResponse(ctx context.Context, user *models.User) (*models.AuthResponse, error) {
-	accessToken, refreshToken, expiresAt, familyID, storedToken, err := s.issueSessionTokens(user)
+	accessToken, refreshToken, expiresAt, familyID, storedToken, err := issueSessionTokens(s.jwtManager, user)
 	if err != nil {
 		return nil, err
 	}
@@ -579,11 +556,18 @@ func (s *AuthService) generateAuthResponse(ctx context.Context, user *models.Use
 	return s.buildAuthResponse(user, accessToken, refreshToken, expiresAt, familyID)
 }
 
+// sessionTokenIssuer is what signing a session needs of the JWT manager.
+type sessionTokenIssuer interface {
+	GenerateAccessToken(userID, email, role string) (string, error)
+	IssueRefreshToken(userID, familyID string) (string, time.Time, string, error)
+}
+
 // issueSessionTokens signs a fresh access/refresh pair and builds the refresh
 // token model ready for persistence. It is deliberately pure — no database
 // writes — so callers that must persist atomically (pending-MFA finalization)
-// can sign before entering the transaction.
-func (s *AuthService) issueSessionTokens(user *models.User) (
+// can sign before entering the transaction. The magic-link and password-reset
+// flows share it, each persisting the token in its own atomic step.
+func issueSessionTokens(jwtManager sessionTokenIssuer, user *models.User) (
 	accessToken, refreshToken string,
 	expiresAt time.Time,
 	familyID string,
@@ -591,13 +575,13 @@ func (s *AuthService) issueSessionTokens(user *models.User) (
 	err error,
 ) {
 	// Generate access token
-	accessToken, err = s.jwtManager.GenerateAccessToken(user.ID.String(), user.Email, user.Role)
+	accessToken, err = jwtManager.GenerateAccessToken(user.ID.String(), user.Email, user.Role)
 	if err != nil {
 		return "", "", time.Time{}, "", nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
 	// Generate refresh token in a new server-issued session family.
-	refreshToken, expiresAt, familyID, err = s.jwtManager.IssueRefreshToken(user.ID.String(), "")
+	refreshToken, expiresAt, familyID, err = jwtManager.IssueRefreshToken(user.ID.String(), "")
 	if err != nil {
 		return "", "", time.Time{}, "", nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
@@ -634,25 +618,23 @@ func (s *AuthService) buildAuthResponse(
 	}, nil
 }
 
-// generateTempToken generates a temporary token for 2FA verification (5-minute expiry).
-// securityGeneration is the value observed when the password or passkey was accepted.
-// Finalization must present that same value; a later security transition invalidates it.
-func (s *AuthService) generateTempToken(userID uuid.UUID, securityGeneration int64) (string, error) {
-	return pendingMFAToken(s.jwtManager, userID, securityGeneration)
-}
-
 // PasskeyLogin authenticates a user via passkey
 // If the user has TOTP MFA enabled, returns a temp token requiring MFA verification
 func (s *AuthService) PasskeyLogin(ctx context.Context, user *models.User) (*models.AuthResponse, error) {
-	// Check if user has TOTP MFA enabled
+	return s.completeLogin(ctx, user)
+}
+
+// completeLogin ends an accepted first factor (password or passkey). An account
+// with TOTP enabled gets a pending-MFA temp token bound to the security
+// generation observed now; any other account gets a session.
+func (s *AuthService) completeLogin(ctx context.Context, user *models.User) (*models.AuthResponse, error) {
 	mfa, err := s.mfaRepo.GetByUserID(ctx, user.ID)
 	if err != nil && !errors.Is(err, mfaRepo.ErrMFANotFound) {
 		return nil, fmt.Errorf("failed to check MFA status: %w", err)
 	}
 
-	// If MFA is enabled, require TOTP verification even after passkey auth
 	if mfa != nil && mfa.Enabled {
-		tempToken, err := s.generateTempToken(user.ID, user.SecurityGeneration)
+		tempToken, err := pendingMFAToken(s.jwtManager, user.ID, user.SecurityGeneration)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate temp token: %w", err)
 		}
@@ -664,12 +646,12 @@ func (s *AuthService) PasskeyLogin(ctx context.Context, user *models.User) (*mod
 		}, nil
 	}
 
-	// No MFA - generate full tokens directly
-	return s.generateAuthResponse(ctx, user)
+	return s.IssueSession(ctx, user)
 }
 
-// VerifyMFAAndLogin verifies the MFA code and completes login
-func (s *AuthService) VerifyMFAAndLogin(ctx context.Context, tempToken string, mfaCode string) (*models.AuthResponse, error) {
+// VerifyMFAAndLogin completes a login whose second factor the caller has
+// already checked, redeeming the pending-MFA temp token for a session.
+func (s *AuthService) VerifyMFAAndLogin(ctx context.Context, tempToken string) (*models.AuthResponse, error) {
 	// Validate temp token
 	claims, err := s.jwtManager.ValidateCustomToken(tempToken)
 	if err != nil {
@@ -729,7 +711,7 @@ func (s *AuthService) VerifyMFAAndLogin(ctx context.Context, tempToken string, m
 
 	// Sign the access/refresh pair before the transaction, so nothing in the
 	// atomic session commit depends on a signing failure happening partway.
-	accessToken, refreshToken, refreshExpiresAt, familyID, storedToken, err := s.issueSessionTokens(user)
+	accessToken, refreshToken, refreshExpiresAt, familyID, storedToken, err := issueSessionTokens(s.jwtManager, user)
 	if err != nil {
 		return nil, err
 	}

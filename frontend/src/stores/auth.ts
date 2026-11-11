@@ -182,8 +182,11 @@ export const useAuthStore = defineStore('auth', () => {
    *                       answer (or failure) is committed only while the client still
    *                       belongs to that family.
    */
+  /** The latest /auth/me hydration, so a voided cold restore can wait on its successor. */
+  let latestFetch: Promise<unknown> = Promise.resolve();
+
   async function fetchUser(expectedFamily?: string | null): Promise<User | null> {
-    return run('auth.fetchUserError', async () => {
+    const fetching = run('auth.fetchUserError', async () => {
       const boundary = currentAccountGeneration();
       try {
         const me = await authApi.getMe();
@@ -220,6 +223,8 @@ export const useAuthStore = defineStore('auth', () => {
         throw err;
       }
     });
+    latestFetch = fetching;
+    return fetching;
   }
 
   /**
@@ -277,12 +282,6 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = updated;
       return updated;
     });
-  }
-
-  async function updatePassword(oldPassword: string, newPassword: string) {
-    return run('settings.passwordChangeFailed', () =>
-      authApi.updatePassword(oldPassword, newPassword)
-    );
   }
 
   async function forgotPassword(email: string) {
@@ -414,6 +413,11 @@ export const useAuthStore = defineStore('auth', () => {
             }
           } else {
             clearError();
+            // Overtaken by a replacement session. A cold tab that adopted another
+            // tab's fresh token started hydrating it (remoteSignout); wait for that
+            // /auth/me, or the guard reads "signed out" and sends a signed-in tab to
+            // /login.
+            await latestFetch.catch(() => clearError());
           }
         }
       }
@@ -453,16 +457,13 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     fetchUser,
     updateProfile,
-    updatePassword,
     forgotPassword,
     resetPassword,
     setTokens,
     setTempToken,
     clearTempToken,
     resetSession,
-    loadAuthStatus,
     initializeAuth,
     whenReady,
-    clearError,
   };
 });

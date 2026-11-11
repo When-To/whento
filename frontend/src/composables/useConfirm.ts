@@ -63,16 +63,9 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
   // dropping it: its awaiting caller must not be left hanging forever.
   pending.value?.settle(false);
 
+  // A Promise settles once; later settle() calls are no-ops.
   return new Promise<boolean>(resolve => {
-    let settled = false;
-    pending.value = {
-      options,
-      settle(confirmed: boolean) {
-        if (settled) return;
-        settled = true;
-        resolve(confirmed);
-      },
-    };
+    pending.value = { options, settle: resolve };
   });
 }
 

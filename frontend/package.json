@@ -10,7 +10,6 @@
     "build": "npm run type-check && VITE_BUILD_TYPE=selfhosted vite build",
     "build:cloud": "npm run type-check && VITE_BUILD_TYPE=cloud vite build",
     "build:selfhosted": "npm run type-check && VITE_BUILD_TYPE=selfhosted vite build",
-    "build:docker": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",

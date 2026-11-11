@@ -7,11 +7,15 @@
 <template>
   <!-- Threshold -->
   <div>
-    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+    <label
+      for="calendar-threshold"
+      class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+    >
       {{ t('calendar.threshold') }}
       <span class="text-danger-600">*</span>
     </label>
     <input
+      id="calendar-threshold"
       v-model.number="threshold"
       type="number"
       min="1"
@@ -33,10 +37,19 @@
 
   <!-- Minimum Duration -->
   <div>
-    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+    <label
+      for="calendar-min-duration"
+      class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+    >
       {{ t('calendar.minDurationHours') }}
     </label>
-    <input v-model.number="minDurationHours" type="number" min="0" class="input" />
+    <input
+      id="calendar-min-duration"
+      v-model.number="minDurationHours"
+      type="number"
+      min="0"
+      class="input"
+    />
     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
       {{ t('calendar.minDurationHelp') }}
     </p>

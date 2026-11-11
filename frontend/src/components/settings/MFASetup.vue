@@ -53,7 +53,6 @@
       :is-open="showQRModal"
       :secret="setupData.secret"
       :qr-code-u-r-l="setupData.qr_code_url"
-      :backup-codes="setupData.backup_codes"
       @verify="verifySetup"
       @close="closeSetupModal"
     />

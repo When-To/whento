@@ -32,17 +32,6 @@ const (
 	// drop the cost to keep their runtime sane.
 	minProductionBcryptCost = 10
 
-	// RFC 4226 allows 6 to 8 digits; authenticator apps in practice support 6
-	// and sometimes 8, and anything outside that range produces codes no app
-	// can display.
-	minTOTPDigits = 6
-	maxTOTPDigits = 8
-	// The RFC 6238 default is 30s. Below 15s ordinary clock drift between the
-	// phone and the server invalidates codes; above 5 minutes a stolen code
-	// stays usable long enough to matter.
-	minTOTPPeriod = 15
-	maxTOTPPeriod = 300
-
 	minPort = 1
 	maxPort = 65535
 )
@@ -79,10 +68,10 @@ func (c *Config) Validate() error {
 }
 
 func (c *Config) validateURLs() error {
-	if err := validateDatabaseURL(c.DatabaseURL); err != nil {
+	if err := validateURL(c.DatabaseURL, []string{"postgres", "postgresql"}, "postgres://user:password@host:port/dbname"); err != nil {
 		return fmt.Errorf("invalid DATABASE_URL (or DB_* vars): %w", err)
 	}
-	if err := validateRedisURL(c.RedisURL); err != nil {
+	if err := validateURL(c.RedisURL, []string{"redis", "rediss"}, "redis://[:password@]host:port[/db]"); err != nil {
 		return fmt.Errorf("invalid REDIS_URL (or REDIS_* vars): %w", err)
 	}
 	if err := validateAppURL(c.AppURL); err != nil {
@@ -147,14 +136,6 @@ func (c *Config) validateCrypto() error {
 		return fmt.Errorf("BCRYPT_COST=%d is out of range (expected %d-%d; bcrypt refuses anything below %d, and above %d every login costs about a second of CPU)",
 			c.BcryptCost, minBcryptCost, maxBcryptCost, minBcryptCost, maxBcryptCost)
 	}
-	if c.TOTPDigits < minTOTPDigits || c.TOTPDigits > maxTOTPDigits {
-		return fmt.Errorf("TOTP_DIGITS=%d is out of range (expected %d-%d; authenticator apps cannot display anything else)",
-			c.TOTPDigits, minTOTPDigits, maxTOTPDigits)
-	}
-	if c.TOTPPeriod < minTOTPPeriod || c.TOTPPeriod > maxTOTPPeriod {
-		return fmt.Errorf("TOTP_PERIOD=%d seconds is out of range (expected %d-%d; the standard value is 30)",
-			c.TOTPPeriod, minTOTPPeriod, maxTOTPPeriod)
-	}
 	return nil
 }
 
@@ -172,7 +153,6 @@ func (c *Config) validateExpiries() error {
 		{"EMAIL_VERIFICATION_EXPIRY", c.Email.VerificationExpiry},
 		{"PASSWORD_RESET_EXPIRY", c.Email.PasswordResetExpiry},
 		{"MAGIC_LINK_EXPIRY", c.Email.MagicLinkExpiry},
-		{"WEBAUTHN_TIMEOUT", c.WebAuthnTimeout},
 	}
 	for _, expiry := range positive {
 		if expiry.value <= 0 {
@@ -349,7 +329,9 @@ func (c *Config) Warnings() []string {
 	return warnings
 }
 
-func validateDatabaseURL(raw string) error {
+// validateURL checks a connection URL that may carry a password, so every
+// error shows it through MaskURL.
+func validateURL(raw string, schemes []string, example string) error {
 	if raw == "" {
 		return fmt.Errorf("value is empty")
 	}
@@ -357,28 +339,11 @@ func validateDatabaseURL(raw string) error {
 	if err != nil {
 		return fmt.Errorf("malformed URL %q: %w", MaskURL(raw), err)
 	}
-	if u.Scheme != "postgres" && u.Scheme != "postgresql" {
-		return fmt.Errorf("scheme must be postgres:// or postgresql:// (got %q in %q)", u.Scheme, MaskURL(raw))
+	if !slices.Contains(schemes, u.Scheme) {
+		return fmt.Errorf("scheme must be %s:// (got %q in %q)", strings.Join(schemes, ":// or "), u.Scheme, MaskURL(raw))
 	}
 	if u.Host == "" {
-		return fmt.Errorf("missing host in %q (expected postgres://user:password@host:port/dbname)", MaskURL(raw))
-	}
-	return nil
-}
-
-func validateRedisURL(raw string) error {
-	if raw == "" {
-		return fmt.Errorf("value is empty")
-	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		return fmt.Errorf("malformed URL %q: %w", MaskURL(raw), err)
-	}
-	if u.Scheme != "redis" && u.Scheme != "rediss" {
-		return fmt.Errorf("scheme must be redis:// or rediss:// (got %q in %q)", u.Scheme, MaskURL(raw))
-	}
-	if u.Host == "" {
-		return fmt.Errorf("missing host in %q (expected redis://[:password@]host:port[/db])", MaskURL(raw))
+		return fmt.Errorf("missing host in %q (expected %s)", MaskURL(raw), example)
 	}
 	return nil
 }

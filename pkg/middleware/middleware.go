@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -187,7 +188,8 @@ func Auth(jwtManager *jwt.Manager, c cache.Cache) func(http.Handler) http.Handle
 				return
 			}
 
-			// Check whether the token was issued before a password change. This
+			// Check whether the token was issued before a revocation (password or
+			// role change, reset, account deletion, MFA enabled). This
 			// is the only revocation mechanism the system has: access tokens are
 			// self-contained and cannot otherwise be withdrawn. A cache we cannot
 			// read therefore has to fail closed — treating an unreadable cache as
@@ -198,8 +200,13 @@ func Auth(jwtManager *jwt.Manager, c cache.Cache) func(http.Handler) http.Handle
 				key := cache.UserPasswordChangedKey(claims.UserID)
 				switch err := c.Get(r.Context(), key, &changedAt); {
 				case err == nil:
-					if claims.IssuedAt != nil && claims.IssuedAt.Unix() < changedAt {
-						httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Token invalidated by password change")
+					// ponytail: v2.0.0 wrote seconds; drop this once every marker
+					// from before the upgrade has expired (one JWT_ACCESS_EXPIRY).
+					if changedAt < 1e12 {
+						changedAt *= 1000
+					}
+					if claims.IssuedAt != nil && claims.IssuedAt.UnixMilli() < changedAt {
+						httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Token has been revoked")
 						return
 					}
 				case errors.Is(err, redis.Nil):
@@ -238,15 +245,7 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 				return
 			}
 
-			hasRole := false
-			for _, role := range roles {
-				if userRole == role {
-					hasRole = true
-					break
-				}
-			}
-
-			if !hasRole {
+			if !slices.Contains(roles, userRole) {
 				httputil.Error(w, http.StatusForbidden, httputil.ErrCodeForbidden, "Forbidden")
 				return
 			}
@@ -264,23 +263,30 @@ func GetUserID(ctx context.Context) string {
 	return ""
 }
 
+// RequireUserUUID returns the authenticated user's ID as a UUID. When there is
+// none it writes 401, and when it does not parse it writes 400; either way the
+// caller must return.
+func RequireUserUUID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	userID := GetUserID(r.Context())
+	if userID == "" {
+		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
+		return uuid.Nil, false
+	}
+
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid user ID")
+		return uuid.Nil, false
+	}
+	return userUUID, true
+}
+
 // GetUserRole extracts user role from context
 func GetUserRole(ctx context.Context) string {
 	if role, ok := ctx.Value(UserRoleKey).(string); ok {
 		return role
 	}
 	return ""
-}
-
-// LimitRequestSize limits the maximum size of request bodies
-func LimitRequestSize(maxBytes int64) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Limit request body size to prevent DoS attacks
-			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
-			next.ServeHTTP(w, r)
-		})
-	}
 }
 
 // SecurityHeaders adds security headers to responses

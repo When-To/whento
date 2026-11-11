@@ -15,8 +15,8 @@ import (
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
-	"github.com/whento/pkg/validator"
 	authService "github.com/whento/whento/internal/auth/service"
+	"github.com/whento/whento/internal/auth/sessioncookie"
 	"github.com/whento/whento/internal/passkey/models"
 	"github.com/whento/whento/internal/passkey/service"
 )
@@ -49,15 +49,8 @@ func NewPasskeyHandler(service *service.PasskeyService, authSvc *authService.Aut
 // @Failure		500	{object}	httputil.ErrorResponse				"Internal server error"
 // @Router			/api/v1/passkey/register/begin [post]
 func (h *PasskeyHandler) BeginRegistration(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
-		return
-	}
-
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid user ID")
+	userUUID, ok := middleware.RequireUserUUID(w, r)
+	if !ok {
 		return
 	}
 
@@ -67,7 +60,7 @@ func (h *PasskeyHandler) BeginRegistration(w http.ResponseWriter, r *http.Reques
 			httputil.Error(w, http.StatusNotFound, httputil.ErrCodeNotFound, "User not found")
 			return
 		}
-		h.logger.Error("Failed to begin registration", "error", err, "user_id", userID)
+		h.logger.Error("Failed to begin registration", "error", err, "user_id", userUUID)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to begin registration")
 		return
 	}
@@ -90,15 +83,8 @@ func (h *PasskeyHandler) BeginRegistration(w http.ResponseWriter, r *http.Reques
 // @Failure		500			{object}	httputil.ErrorResponse		"Internal server error"
 // @Router			/api/v1/passkey/register/finish [post]
 func (h *PasskeyHandler) FinishRegistration(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
-		return
-	}
-
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid user ID")
+	userUUID, ok := middleware.RequireUserUUID(w, r)
+	if !ok {
 		return
 	}
 
@@ -116,7 +102,7 @@ func (h *PasskeyHandler) FinishRegistration(w http.ResponseWriter, r *http.Reque
 			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid or expired challenge")
 			return
 		}
-		h.logger.Error("Failed to finish registration", "error", err, "user_id", userID)
+		h.logger.Error("Failed to finish registration", "error", err, "user_id", userUUID)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to complete registration")
 		return
 	}
@@ -134,21 +120,14 @@ func (h *PasskeyHandler) FinishRegistration(w http.ResponseWriter, r *http.Reque
 // @Failure		500	{object}	httputil.ErrorResponse	"Internal server error"
 // @Router			/api/v1/passkey/list [get]
 func (h *PasskeyHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
-		return
-	}
-
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid user ID")
+	userUUID, ok := middleware.RequireUserUUID(w, r)
+	if !ok {
 		return
 	}
 
 	passkeys, err := h.service.List(r.Context(), userUUID)
 	if err != nil {
-		h.logger.Error("Failed to list passkeys", "error", err, "user_id", userID)
+		h.logger.Error("Failed to list passkeys", "error", err, "user_id", userUUID)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to list passkeys")
 		return
 	}
@@ -177,15 +156,8 @@ func (h *PasskeyHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Failure		500		{object}	httputil.ErrorResponse		"Internal server error"
 // @Router			/api/v1/passkey/{id}/name [patch]
 func (h *PasskeyHandler) Rename(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
-		return
-	}
-
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid user ID")
+	userUUID, ok := middleware.RequireUserUUID(w, r)
+	if !ok {
 		return
 	}
 
@@ -197,17 +169,7 @@ func (h *PasskeyHandler) Rename(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.RenamePasskeyRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -242,15 +204,8 @@ func (h *PasskeyHandler) Rename(w http.ResponseWriter, r *http.Request) {
 // @Failure		500	{object}	httputil.ErrorResponse	"Internal server error"
 // @Router			/api/v1/passkey/{id} [delete]
 func (h *PasskeyHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
-		return
-	}
-
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid user ID")
+	userUUID, ok := middleware.RequireUserUUID(w, r)
+	if !ok {
 		return
 	}
 
@@ -353,15 +308,7 @@ func (h *PasskeyHandler) FinishAuthentication(w http.ResponseWriter, r *http.Req
 
 	// Set refresh token as httpOnly cookie
 	if authResponse.RefreshToken != "" {
-		http.SetCookie(w, &http.Cookie{
-			Name:     "refresh_token",
-			Value:    authResponse.RefreshToken,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
-			SameSite: http.SameSiteStrictMode,
-			MaxAge:   7 * 24 * 60 * 60, // 7 days
-		})
+		sessioncookie.SetRefreshToken(w, r, authResponse.RefreshToken, authResponse.RefreshExpiresAt)
 		authResponse.RefreshToken = ""
 	}
 

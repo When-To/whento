@@ -6,9 +6,7 @@ package handlers
 
 import (
 	"context"
-	"crypto/rand"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"html/template"
@@ -23,7 +21,6 @@ import (
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
-	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/auth/service"
 	"github.com/whento/whento/internal/auth/sessioncookie"
@@ -135,17 +132,7 @@ func NewAuthHandler(
 //	@Router			/api/v1/auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -187,28 +174,22 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	// Send verification email if email verification is enabled
 	if h.cfg.Email.VerificationEnabled && h.emailService.IsConfigured() {
-		// Generate verification token
-		tokenBytes := make([]byte, 32)
-		if _, err := rand.Read(tokenBytes); err != nil {
-			h.logger.Error("Failed to generate verification token", "error", err)
-		} else {
-			token := hex.EncodeToString(tokenBytes)
-			expiresAt := time.Now().Add(h.cfg.Email.VerificationExpiry)
+		token := service.RandomHex(32)
+		expiresAt := time.Now().Add(h.cfg.Email.VerificationExpiry)
 
-			// Save token to database
-			if err := h.userRepo.SetVerificationToken(r.Context(), resp.User.ID, token, expiresAt); err != nil {
-				h.logger.Error("Failed to save verification token", "error", err)
-			} else {
-				// Send verification email (async, don't block registration).
-				// The closure exists to swallow the error deliberately rather than by
-				// having nowhere to put it: the response has already been decided, and
-				// sendVerificationEmail has logged the failure with a recipient
-				// fingerprint by the time this runs.
-				user := resp.User
-				go func() {
-					_ = h.sendVerificationEmail(user.Email, user.DisplayName, user.Locale, token)
-				}()
-			}
+		// Save token to database
+		if err := h.userRepo.SetVerificationToken(r.Context(), resp.User.ID, token, expiresAt); err != nil {
+			h.logger.Error("Failed to save verification token", "error", err)
+		} else {
+			// Send verification email (async, don't block registration).
+			// The closure exists to swallow the error deliberately rather than by
+			// having nowhere to put it: the response has already been decided, and
+			// sendVerificationEmail has logged the failure with a recipient
+			// fingerprint by the time this runs.
+			user := resp.User
+			go func() {
+				_ = h.sendVerificationEmail(user.Email, user.DisplayName, user.Locale, token)
+			}()
 		}
 	}
 
@@ -244,12 +225,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.Validate(w, &req) {
 		return
 	}
 
@@ -420,17 +396,7 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.UpdateProfileRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -468,17 +434,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.ChangePasswordRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -495,8 +451,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "Password changed successfully"})
 }
 
-// ListUsers is now implemented in list_users_cloud.go and list_users_selfhosted.go
-// using build tags for conditional compilation
+// ListUsers is implemented in list_users.go.
 
 // UpdateUserRole updates a user's role (admin only)
 //
@@ -519,17 +474,7 @@ func (h *AuthHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	targetUserID := chi.URLParam(r, "id")
 
 	var req models.UpdateRoleRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 

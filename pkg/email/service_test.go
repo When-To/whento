@@ -318,11 +318,11 @@ func TestNewServiceAppliesDefaultTimeouts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			service := NewService(tt.cfg, discardLogger())
 
-			if service.dialTimeout != tt.wantDialTimeout {
-				t.Errorf("dialTimeout = %v, want %v", service.dialTimeout, tt.wantDialTimeout)
+			if service.cfg.DialTimeout != tt.wantDialTimeout {
+				t.Errorf("dialTimeout = %v, want %v", service.cfg.DialTimeout, tt.wantDialTimeout)
 			}
-			if service.timeout != tt.wantTimeout {
-				t.Errorf("timeout = %v, want %v", service.timeout, tt.wantTimeout)
+			if service.cfg.Timeout != tt.wantTimeout {
+				t.Errorf("timeout = %v, want %v", service.cfg.Timeout, tt.wantTimeout)
 			}
 		})
 	}

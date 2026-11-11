@@ -19,9 +19,6 @@ export type WeekStartDay = 0 | 1 | 5 | 6;
  */
 export const DEFAULT_WEEK_START: WeekStartDay = 1;
 
-/** localStorage key holding an explicit user override (no UI writes it yet). */
-const STORAGE_KEY = 'week-start-day';
-
 /**
  * First day of the week per region, from Unicode CLDR supplemental weekData
  * (`firstDay`), CLDR 48 / Unicode 16.0.0.
@@ -136,18 +133,6 @@ export function getWeekStartForTimezone(timezone?: string | null): WeekStartDay 
   }
 }
 
-/** Reads the explicit override, tolerating unavailable/blocked storage. */
-function getStoredOverride(): WeekStartDay | undefined {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw === null) return undefined;
-    const day = Number(raw);
-    return day === 0 || day === 1 || day === 5 || day === 6 ? day : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /** Region the browser is configured for, expanded via CLDR likely subtags. */
 function getBrowserRegion(): string | undefined {
   const tag = typeof navigator !== 'undefined' ? navigator.language : undefined;
@@ -162,19 +147,17 @@ function getBrowserRegion(): string | undefined {
 
 /**
  * Resolves the first day of the week, most specific source first:
- *   1. explicit user override in localStorage
- *   2. the calendar's timezone (shared by every participant, so everyone
+ *   1. the calendar's timezone (shared by every participant, so everyone
  *      sees the same grid — and it works for anonymous participants, who
  *      have no user account to carry a preference)
- *   3. the browser's region, when no calendar is in context
- *   4. the application locale
+ *   2. the browser's region, when no calendar is in context
+ *   3. the application locale
  *
  * @param calendarTimezone IANA timezone of the calendar being displayed, if any
  * @param appLocale        active application locale, used as the last resort
  */
 export function resolveWeekStart(calendarTimezone?: string | null, appLocale?: string): number {
   return (
-    getStoredOverride() ??
     getWeekStartForTimezone(calendarTimezone) ??
     getWeekStartForRegion(getBrowserRegion()) ??
     getWeekStartDay(appLocale ?? '')

@@ -132,17 +132,6 @@ func (m *mockTokenRepository) Create(ctx context.Context, token *models.RefreshT
 	return m.err
 }
 
-func (m *mockTokenRepository) GetByHash(ctx context.Context, tokenHash string) (*models.RefreshToken, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	token := &models.RefreshToken{
-		UserID: uuid.New(),
-	}
-	token.ID = uuid.New()
-	return token, nil
-}
-
 func (m *mockTokenRepository) CreatePendingMFASession(context.Context, string, time.Time, *models.RefreshToken, int64) (bool, error) {
 	return m.err == nil, m.err
 }

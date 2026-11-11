@@ -5,6 +5,7 @@
 package seo
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -33,50 +34,44 @@ func NewHandler(appURL string, disableRobots bool, buildType string) *Handler {
 //	@Success		200	{string}	string	"robots.txt content"
 //	@Router			/robots.txt [get]
 func (h *Handler) HandleRobotsTxt(w http.ResponseWriter, r *http.Request) {
-	var content strings.Builder
-
-	content.WriteString("# WhenTo - Robots.txt\n")
-	content.WriteString("# Generated dynamically based on deployment configuration\n\n")
+	content := "# WhenTo - Robots.txt\n# Generated dynamically based on deployment configuration\n\n"
 
 	// SEO only enabled for cloud builds, unless explicitly disabled
 	if h.disableRobots || h.buildType != "cloud" {
 		// Disallow all robots for self-hosted or when explicitly disabled
-		content.WriteString("User-agent: *\n")
-		content.WriteString("Disallow: /\n")
+		content += "User-agent: *\nDisallow: /\n"
 		if h.buildType == "selfhosted" {
-			content.WriteString("\n# Self-hosted instance - SEO disabled for privacy\n")
+			content += "\n# Self-hosted instance - SEO disabled for privacy\n"
 		}
 	} else {
-		content.WriteString("User-agent: *\n")
-		content.WriteString("Allow: /\n")
-
-		// Cloud-specific public routes
-		if h.buildType == "cloud" {
-			content.WriteString("Allow: /why-whento\n")
-			content.WriteString("Allow: /privacy\n")
-			content.WriteString("Allow: /terms\n")
-			content.WriteString("Allow: /login\n")
-			content.WriteString("Allow: /register\n")
-			content.WriteString("\n")
-		}
-
-		// Block private/authenticated routes
-		content.WriteString("# Block private and user-specific routes\n")
-		content.WriteString("Disallow: /c/\n")
-		content.WriteString("Disallow: /dashboard\n")
-		content.WriteString("Disallow: /calendars/\n")
-		content.WriteString("Disallow: /settings\n")
-		content.WriteString("Disallow: /admin/\n")
-		content.WriteString("Disallow: /api/\n")
-
-		content.WriteString("\n# Sitemap\n")
-		content.WriteString("Sitemap: " + h.appURL + "/sitemap.xml\n")
+		content += cloudRobots + h.appURL + "/sitemap.xml\n"
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(content.String()))
+	w.Write([]byte(content))
 }
+
+// cloudRobots allows the public cloud pages and blocks the private routes; the
+// sitemap URL completes its last line.
+const cloudRobots = `User-agent: *
+Allow: /
+Allow: /why-whento
+Allow: /privacy
+Allow: /terms
+Allow: /login
+Allow: /register
+
+# Block private and user-specific routes
+Disallow: /c/
+Disallow: /dashboard
+Disallow: /calendars/
+Disallow: /settings
+Disallow: /admin/
+Disallow: /api/
+
+# Sitemap
+Sitemap: `
 
 // HandleSitemapXML serves a dynamic sitemap.xml file
 //
@@ -100,52 +95,21 @@ func (h *Handler) HandleSitemapXML(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var content strings.Builder
+	content.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
 
-	content.WriteString(`<?xml version="1.0" encoding="UTF-8"?>`)
-	content.WriteString("\n")
-	content.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"`)
-	content.WriteString("\n")
-	content.WriteString(`        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"`)
-	content.WriteString("\n")
-	content.WriteString(`        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9`)
-	content.WriteString("\n")
-	content.WriteString(`        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">`)
-	content.WriteString("\n\n")
+`)
 
 	today := time.Now().Format("2006-01-02")
-
-	// Always include home page
-	content.WriteString("  <!-- Public marketing pages -->\n")
-	content.WriteString("  <url>\n")
-	content.WriteString("    <loc>" + h.appURL + "/</loc>\n")
-	content.WriteString("    <changefreq>monthly</changefreq>\n")
-	content.WriteString("    <priority>1.0</priority>\n")
-	content.WriteString("    <lastmod>" + today + "</lastmod>\n")
-	content.WriteString("  </url>\n\n")
-
-	// Cloud-specific pages
-	if h.buildType == "cloud" {
-		content.WriteString("  <url>\n")
-		content.WriteString("    <loc>" + h.appURL + "/why-whento</loc>\n")
-		content.WriteString("    <changefreq>monthly</changefreq>\n")
-		content.WriteString("    <priority>0.8</priority>\n")
-		content.WriteString("    <lastmod>" + today + "</lastmod>\n")
-		content.WriteString("  </url>\n\n")
-
-		content.WriteString("  <!-- Legal pages -->\n")
-		content.WriteString("  <url>\n")
-		content.WriteString("    <loc>" + h.appURL + "/privacy</loc>\n")
-		content.WriteString("    <changefreq>yearly</changefreq>\n")
-		content.WriteString("    <priority>0.3</priority>\n")
-		content.WriteString("    <lastmod>" + today + "</lastmod>\n")
-		content.WriteString("  </url>\n\n")
-
-		content.WriteString("  <url>\n")
-		content.WriteString("    <loc>" + h.appURL + "/terms</loc>\n")
-		content.WriteString("    <changefreq>yearly</changefreq>\n")
-		content.WriteString("    <priority>0.3</priority>\n")
-		content.WriteString("    <lastmod>" + today + "</lastmod>\n")
-		content.WriteString("  </url>\n\n")
+	for _, page := range sitemapPages {
+		if page.comment != "" {
+			fmt.Fprintf(&content, "  <!-- %s -->\n", page.comment)
+		}
+		fmt.Fprintf(&content, "  <url>\n    <loc>%s%s</loc>\n    <changefreq>%s</changefreq>\n    <priority>%s</priority>\n    <lastmod>%s</lastmod>\n  </url>\n\n",
+			h.appURL, page.path, page.changefreq, page.priority, today)
 	}
 
 	content.WriteString("  <!-- Note: User calendars (/c/*) are intentionally excluded for privacy -->\n\n")
@@ -154,4 +118,13 @@ func (h *Handler) HandleSitemapXML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(content.String()))
+}
+
+// sitemapPages are the public pages of a cloud sitemap; a comment, when set,
+// is written just before its entry.
+var sitemapPages = []struct{ comment, path, changefreq, priority string }{
+	{"Public marketing pages", "/", "monthly", "1.0"},
+	{"", "/why-whento", "monthly", "0.8"},
+	{"Legal pages", "/privacy", "yearly", "0.3"},
+	{"", "/terms", "yearly", "0.3"},
 }

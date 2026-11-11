@@ -7,7 +7,6 @@ package validator
 import (
 	"errors"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -30,7 +29,6 @@ func init() {
 	})
 
 	// Register custom validations
-	_ = validate.RegisterValidation("locale", validateLocale)
 	_ = validate.RegisterValidation("strongpassword", validateStrongPassword)
 	_ = validate.RegisterValidation("maxbytes", validateMaxBytes)
 }
@@ -75,11 +73,6 @@ func Validate(s interface{}) error {
 	return errs
 }
 
-// ValidateVar validates a single variable
-func ValidateVar(field interface{}, tag string) error {
-	return validate.Var(field, tag)
-}
-
 func getErrorMessage(e validator.FieldError) string {
 	switch e.Tag() {
 	case "required":
@@ -100,20 +93,11 @@ func getErrorMessage(e validator.FieldError) string {
 		return "must be one of: " + e.Param()
 	case "timezone":
 		return "must be a valid IANA timezone"
-	case "locale":
-		return "must be one of: fr, en"
-	case "uuid":
-		return "must be a valid UUID"
 	case "strongpassword":
 		return "must be at least 12 characters with uppercase, lowercase, number, and special character"
 	default:
 		return "failed validation: " + e.Tag()
 	}
-}
-
-func validateLocale(fl validator.FieldLevel) bool {
-	locale := fl.Field().String()
-	return locale == "fr" || locale == "en"
 }
 
 // validateMaxBytes enforces a ceiling on the *byte* length of a string, the unit
@@ -149,25 +133,9 @@ func validateStrongPassword(fl validator.FieldLevel) bool {
 		return false
 	}
 
-	// At least 1 uppercase letter
-	hasUpper := regexp.MustCompile(`[A-Z]`).MatchString(password)
-	if !hasUpper {
-		return false
-	}
-
-	// At least 1 lowercase letter
-	hasLower := regexp.MustCompile(`[a-z]`).MatchString(password)
-	if !hasLower {
-		return false
-	}
-
-	// At least 1 digit
-	hasDigit := regexp.MustCompile(`[0-9]`).MatchString(password)
-	if !hasDigit {
-		return false
-	}
-
-	// At least 1 special character
-	hasSpecial := regexp.MustCompile(`[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/;'~` + "`" + `]`).MatchString(password)
-	return hasSpecial
+	// ASCII classes, mirrored by frontend/src/utils/password.ts.
+	return strings.ContainsAny(password, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") &&
+		strings.ContainsAny(password, "abcdefghijklmnopqrstuvwxyz") &&
+		strings.ContainsAny(password, "0123456789") &&
+		strings.ContainsAny(password, `!@#$%^&*(),.?":{}|<>_-+=[]\/;'~`+"`")
 }

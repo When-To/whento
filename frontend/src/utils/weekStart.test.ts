@@ -74,16 +74,6 @@ describe('getWeekStartForTimezone', () => {
 });
 
 describe('resolveWeekStart', () => {
-  it('prefers an explicit override over everything else', () => {
-    localStorage.setItem('week-start-day', '6');
-    expect(resolveWeekStart('Europe/Berlin', 'en')).toBe(6);
-  });
-
-  it('ignores an override that is not a valid first day', () => {
-    localStorage.setItem('week-start-day', '3');
-    expect(resolveWeekStart('Europe/Berlin', 'en')).toBe(1);
-  });
-
   it('uses the calendar timezone ahead of the browser and the locale', () => {
     withBrowserLanguage('en-US');
     // Timezone says Monday, browser and locale would both say Sunday

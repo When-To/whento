@@ -194,44 +194,6 @@ func TestComputeTimeSlots_EmptyAvailabilities(t *testing.T) {
 	}
 }
 
-func TestIsAllDaySlot(t *testing.T) {
-	tests := []struct {
-		name     string
-		slot     TimeSlot
-		expected bool
-	}{
-		{
-			name:     "full day",
-			slot:     TimeSlot{StartTime: "00:00", EndTime: "23:59"},
-			expected: true,
-		},
-		{
-			name:     "partial day",
-			slot:     TimeSlot{StartTime: "09:00", EndTime: "18:00"},
-			expected: false,
-		},
-		{
-			name:     "starts at midnight",
-			slot:     TimeSlot{StartTime: "00:00", EndTime: "12:00"},
-			expected: false,
-		},
-		{
-			name:     "ends at 23:59",
-			slot:     TimeSlot{StartTime: "12:00", EndTime: "23:59"},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isAllDaySlot(&tt.slot)
-			if result != tt.expected {
-				t.Errorf("isAllDaySlot(%v) = %v, want %v", tt.slot, result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestParseTimeToMinutes(t *testing.T) {
 	tests := []struct {
 		input    string

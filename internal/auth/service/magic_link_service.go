@@ -7,17 +7,13 @@ package service
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
 	"time"
-
-	"github.com/google/uuid"
 
 	"github.com/whento/pkg/email"
 	"github.com/whento/pkg/jwt"
@@ -80,28 +76,24 @@ func NewMagicLinkService(
 	}
 }
 
-// RequestMagicLink generates and sends a magic link (always returns nil for anti-enumeration)
-func (s *MagicLinkService) RequestMagicLink(ctx context.Context, email string) error {
+// RequestMagicLink generates and sends a magic link. It reports nothing back, so
+// the caller cannot tell whether the address has an account (anti-enumeration).
+func (s *MagicLinkService) RequestMagicLink(ctx context.Context, email string) {
 	// Get verified user (returns ErrUserNotFound if not verified or doesn't exist)
 	user, err := s.userRepo.GetByEmailVerified(ctx, email)
 	if err != nil {
-		// CRITICAL: Return nil even if user not found (anti-enumeration)
+		// CRITICAL: say nothing when the user is not found (anti-enumeration)
 		//
 		// Logging the address would defeat that from the other side: the response
 		// says nothing, and the log file would say everything — including which
 		// addresses do not have an account here.
 		s.logger.Info("Magic link requested for non-existent or unverified email",
 			"account_ref", pkglog.Fingerprint(email))
-		return nil
+		return
 	}
 
 	// Generate secure random token (32 bytes = 64 hex chars)
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		s.logger.Error("Failed to generate magic link token", "error", err)
-		return nil // Return nil to avoid revealing internal errors
-	}
-	token := hex.EncodeToString(tokenBytes)
+	token := RandomHex(32)
 
 	// Set expiry (1 hour default)
 	expiresAt := time.Now().Add(s.cfg.Email.MagicLinkExpiry)
@@ -109,7 +101,7 @@ func (s *MagicLinkService) RequestMagicLink(ctx context.Context, email string) e
 	// Save token to database (uses magic_link_token columns)
 	if err := s.userRepo.SetMagicLinkToken(ctx, user.ID, token, expiresAt); err != nil {
 		s.logger.Error("Failed to save magic link token", "error", err)
-		return nil // Return nil to avoid revealing internal errors
+		return // internal errors are not revealed either
 	}
 
 	// Send email asynchronously (fire and forget). The email is deliberately not
@@ -118,8 +110,6 @@ func (s *MagicLinkService) RequestMagicLink(ctx context.Context, email string) e
 	//
 	//nolint:contextcheck // detached on purpose; see RequestMagicLink.
 	go s.sendMagicLinkEmail(user.Email, user.DisplayName, user.Locale, token)
-
-	return nil // Always return nil (anti-enumeration)
 }
 
 // VerifyMagicLink verifies token and generates JWT auth response.
@@ -153,7 +143,7 @@ func (s *MagicLinkService) VerifyMagicLink(ctx context.Context, token string) (*
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate temp token: %w", err)
 		}
-		if _, err := s.userRepo.ConsumeMagicLinkToken(ctx, token, user.SecurityGeneration, nil); err != nil {
+		if err := s.userRepo.ConsumeMagicLinkToken(ctx, token, user.SecurityGeneration, nil); err != nil {
 			if errors.Is(err, repository.ErrUserNotFound) {
 				return nil, ErrInvalidToken
 			}
@@ -166,27 +156,12 @@ func (s *MagicLinkService) VerifyMagicLink(ctx context.Context, token string) (*
 		}, nil
 	}
 
-	// Generate JWT tokens
-	accessToken, err := s.jwtManager.GenerateAccessToken(user.ID.String(), user.Email, user.Role)
+	accessToken, refreshToken, refreshExpiresAt, familyID, storedToken, err := issueSessionTokens(s.jwtManager, user)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate access token: %w", err)
+		return nil, err
 	}
 
-	refreshToken, refreshExpiresAt, familyID, err := s.jwtManager.IssueRefreshToken(user.ID.String(), "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
-	}
-
-	// Store refresh token in database
-	storedToken := &models.RefreshToken{
-		UserID:    user.ID,
-		TokenHash: repository.HashToken(refreshToken),
-		ExpiresAt: refreshExpiresAt,
-		FamilyID:  familyID,
-	}
-	storedToken.ID = uuid.New()
-
-	if _, err := s.userRepo.ConsumeMagicLinkToken(ctx, token, user.SecurityGeneration, storedToken); err != nil {
+	if err := s.userRepo.ConsumeMagicLinkToken(ctx, token, user.SecurityGeneration, storedToken); err != nil {
 		if errors.Is(err, repository.ErrUserNotFound) {
 			return nil, ErrInvalidToken
 		}

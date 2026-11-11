@@ -42,15 +42,8 @@ const (
 
 // Service handles email sending via SMTP
 type Service struct {
-	host        string
-	port        int
-	username    string
-	password    string
-	fromAddress string
-	fromName    string
-	dialTimeout time.Duration
-	timeout     time.Duration
-	logger      *slog.Logger
+	cfg    Config // timeouts already defaulted
+	logger *slog.Logger
 }
 
 // Config holds email service configuration
@@ -70,27 +63,14 @@ type Config struct {
 
 // NewService creates a new email service
 func NewService(cfg Config, logger *slog.Logger) *Service {
-	dialTimeout := cfg.DialTimeout
-	if dialTimeout <= 0 {
-		dialTimeout = defaultDialTimeout
+	if cfg.DialTimeout <= 0 {
+		cfg.DialTimeout = defaultDialTimeout
+	}
+	if cfg.Timeout <= 0 {
+		cfg.Timeout = defaultTimeout
 	}
 
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = defaultTimeout
-	}
-
-	return &Service{
-		host:        cfg.Host,
-		port:        cfg.Port,
-		username:    cfg.Username,
-		password:    cfg.Password,
-		fromAddress: cfg.FromAddress,
-		fromName:    cfg.FromName,
-		dialTimeout: dialTimeout,
-		timeout:     timeout,
-		logger:      logger,
-	}
+	return &Service{cfg: cfg, logger: logger}
 }
 
 // Email represents an email message
@@ -112,7 +92,7 @@ func (s *Service) Send(email Email) error {
 // timeout, so no send can outlive it.
 func (s *Service) SendContext(ctx context.Context, email Email) error {
 	// Validate configuration
-	if s.host == "" {
+	if s.cfg.Host == "" {
 		return fmt.Errorf("SMTP host not configured")
 	}
 
@@ -124,17 +104,17 @@ func (s *Service) SendContext(ctx context.Context, email Email) error {
 
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, s.timeout)
+		ctx, cancel = context.WithTimeout(ctx, s.cfg.Timeout)
 		defer cancel()
 	}
 
 	// Connect to SMTP server
-	addr := net.JoinHostPort(s.host, strconv.Itoa(s.port))
+	addr := net.JoinHostPort(s.cfg.Host, strconv.Itoa(s.cfg.Port))
 
 	// Setup authentication
 	var auth smtp.Auth
-	if s.username != "" && s.password != "" {
-		auth = smtp.PlainAuth("", s.username, s.password, s.host)
+	if s.cfg.Username != "" && s.cfg.Password != "" {
+		auth = smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)
 	}
 
 	// Try to send with TLS first (port 465 or explicit STARTTLS)
@@ -146,7 +126,7 @@ func (s *Service) SendContext(ctx context.Context, email Email) error {
 	// count still says whether a failure hit one person or a batch.
 	recipients := pkglog.Fingerprint(to)
 
-	if err := s.sendWithTLS(ctx, addr, auth, s.fromAddress, email.To, message); err != nil {
+	if err := s.sendWithTLS(ctx, addr, auth, s.cfg.FromAddress, email.To, message); err != nil {
 		s.logger.Error("Failed to send email",
 			slog.String("error_category", "smtp_delivery_failed"),
 			slog.String("recipient_ref", recipients),
@@ -184,7 +164,7 @@ func (s *Service) sendWithTLS(ctx context.Context, addr string, auth smtp.Auth, 
 	}
 
 	// Create SMTP client
-	client, err := smtp.NewClient(conn, s.host)
+	client, err := smtp.NewClient(conn, s.cfg.Host)
 	if err != nil {
 		return err
 	}
@@ -192,9 +172,9 @@ func (s *Service) sendWithTLS(ctx context.Context, addr string, auth smtp.Auth, 
 
 	// For anything but implicit TLS, upgrade the plain connection when the server
 	// offers it — this is what port 587 expects.
-	if s.port != implicitTLSPort {
+	if s.cfg.Port != implicitTLSPort {
 		if ok, _ := client.Extension("STARTTLS"); ok {
-			if err := client.StartTLS(&tls.Config{ServerName: s.host}); err != nil {
+			if err := client.StartTLS(&tls.Config{ServerName: s.cfg.Host}); err != nil {
 				return err
 			}
 		}
@@ -244,12 +224,12 @@ func (s *Service) sendWithTLS(ctx context.Context, addr string, auth smtp.Auth, 
 // dial opens the connection, in TLS from the first byte on port 465 and in the clear
 // elsewhere. Both paths carry a timeout: the dialer's, and the context's on top of it.
 func (s *Service) dial(ctx context.Context, addr string) (net.Conn, error) {
-	dialer := &net.Dialer{Timeout: s.dialTimeout}
+	dialer := &net.Dialer{Timeout: s.cfg.DialTimeout}
 
-	if s.port == implicitTLSPort {
+	if s.cfg.Port == implicitTLSPort {
 		tlsDialer := &tls.Dialer{
 			NetDialer: dialer,
-			Config:    &tls.Config{ServerName: s.host},
+			Config:    &tls.Config{ServerName: s.cfg.Host},
 		}
 
 		return tlsDialer.DialContext(ctx, "tcp", addr)
@@ -346,23 +326,23 @@ func encodeHeaderValue(value string) (string, error) {
 // fmt.Sprintf did not: a display name holding a comma, a quote or an accent used to
 // produce a malformed From header.
 func (s *Service) buildFromHeader() (string, error) {
-	address, err := mail.ParseAddress(s.fromAddress)
+	address, err := mail.ParseAddress(s.cfg.FromAddress)
 	if err != nil {
 		return "", fmt.Errorf("smtp: invalid from address: %w", err)
 	}
 
-	if s.fromName == "" {
+	if s.cfg.FromName == "" {
 		return address.String(), nil
 	}
 
-	if strings.ContainsAny(s.fromName, "\r\n") {
+	if strings.ContainsAny(s.cfg.FromName, "\r\n") {
 		return "", fmt.Errorf("smtp: from name must not contain CR or LF")
 	}
 
-	return (&mail.Address{Name: s.fromName, Address: address.Address}).String(), nil
+	return (&mail.Address{Name: s.cfg.FromName, Address: address.Address}).String(), nil
 }
 
 // IsConfigured returns true if SMTP is configured
 func (s *Service) IsConfigured() bool {
-	return s.host != ""
+	return s.cfg.Host != ""
 }

@@ -17,7 +17,6 @@ import (
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/jwt"
 	"github.com/whento/pkg/middleware"
-	"github.com/whento/pkg/validator"
 	authService "github.com/whento/whento/internal/auth/service"
 	"github.com/whento/whento/internal/auth/sessioncookie"
 	"github.com/whento/whento/internal/mfa/models"
@@ -118,15 +117,8 @@ func (h *MFAHandler) clearMFAAttempts(r *http.Request, userID uuid.UUID) {
 // @Failure		500	{object}	httputil.ErrorResponse		"Internal server error"
 // @Router			/api/v1/mfa/setup/begin [post]
 func (h *MFAHandler) BeginSetup(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
-		return
-	}
-
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid user ID")
+	userUUID, ok := middleware.RequireUserUUID(w, r)
+	if !ok {
 		return
 	}
 
@@ -140,7 +132,7 @@ func (h *MFAHandler) BeginSetup(w http.ResponseWriter, r *http.Request) {
 			httputil.Error(w, http.StatusConflict, httputil.ErrCodeConflict, "MFA is already enabled")
 			return
 		}
-		h.logger.Error("Failed to begin MFA setup", "error", err, "user_id", userID)
+		h.logger.Error("Failed to begin MFA setup", "error", err, "user_id", userUUID)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to begin MFA setup")
 		return
 	}
@@ -161,30 +153,13 @@ func (h *MFAHandler) BeginSetup(w http.ResponseWriter, r *http.Request) {
 // @Failure		500		{object}	httputil.ErrorResponse		"Internal server error"
 // @Router			/api/v1/mfa/setup/finish [post]
 func (h *MFAHandler) FinishSetup(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
-		return
-	}
-
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid user ID")
+	userUUID, ok := middleware.RequireUserUUID(w, r)
+	if !ok {
 		return
 	}
 
 	var req models.FinishSetupRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -193,7 +168,7 @@ func (h *MFAHandler) FinishSetup(w http.ResponseWriter, r *http.Request) {
 			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid verification code")
 			return
 		}
-		h.logger.Error("Failed to finish MFA setup", "error", err, "user_id", userID)
+		h.logger.Error("Failed to finish MFA setup", "error", err, "user_id", userUUID)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to enable MFA")
 		return
 	}
@@ -216,15 +191,8 @@ func (h *MFAHandler) FinishSetup(w http.ResponseWriter, r *http.Request) {
 // @Failure		500	{object}	httputil.ErrorResponse	"Internal server error"
 // @Router			/api/v1/mfa/disable [post]
 func (h *MFAHandler) Disable(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
-		return
-	}
-
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid user ID")
+	userUUID, ok := middleware.RequireUserUUID(w, r)
+	if !ok {
 		return
 	}
 
@@ -233,7 +201,7 @@ func (h *MFAHandler) Disable(w http.ResponseWriter, r *http.Request) {
 			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "MFA is not enabled")
 			return
 		}
-		h.logger.Error("Failed to disable MFA", "error", err, "user_id", userID)
+		h.logger.Error("Failed to disable MFA", "error", err, "user_id", userUUID)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to disable MFA")
 		return
 	}
@@ -251,21 +219,14 @@ func (h *MFAHandler) Disable(w http.ResponseWriter, r *http.Request) {
 // @Failure		500	{object}	httputil.ErrorResponse		"Internal server error"
 // @Router			/api/v1/mfa/status [get]
 func (h *MFAHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
-		return
-	}
-
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid user ID")
+	userUUID, ok := middleware.RequireUserUUID(w, r)
+	if !ok {
 		return
 	}
 
 	status, err := h.service.GetStatus(r.Context(), userUUID)
 	if err != nil {
-		h.logger.Error("Failed to get MFA status", "error", err, "user_id", userID)
+		h.logger.Error("Failed to get MFA status", "error", err, "user_id", userUUID)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to get MFA status")
 		return
 	}
@@ -285,15 +246,8 @@ func (h *MFAHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 // @Failure		500	{object}	httputil.ErrorResponse		"Internal server error"
 // @Router			/api/v1/mfa/backup-codes/regenerate [post]
 func (h *MFAHandler) RegenerateBackupCodes(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
-		return
-	}
-
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid user ID")
+	userUUID, ok := middleware.RequireUserUUID(w, r)
+	if !ok {
 		return
 	}
 
@@ -303,7 +257,7 @@ func (h *MFAHandler) RegenerateBackupCodes(w http.ResponseWriter, r *http.Reques
 			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "MFA is not enabled")
 			return
 		}
-		h.logger.Error("Failed to regenerate backup codes", "error", err, "user_id", userID)
+		h.logger.Error("Failed to regenerate backup codes", "error", err, "user_id", userUUID)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to regenerate backup codes")
 		return
 	}
@@ -326,17 +280,7 @@ func (h *MFAHandler) RegenerateBackupCodes(w http.ResponseWriter, r *http.Reques
 // @Router			/api/v1/auth/mfa/verify [post]
 func (h *MFAHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 	var req models.VerifyMFARequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -394,7 +338,7 @@ func (h *MFAHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 	h.clearMFAAttempts(r, userID)
 
 	// Complete login by generating full auth tokens.
-	authResponse, err := h.authService.VerifyMFAAndLogin(r.Context(), req.TempToken, req.Code)
+	authResponse, err := h.authService.VerifyMFAAndLogin(r.Context(), req.TempToken)
 	if err != nil {
 		// Expected invalid-credential outcomes — an already-consumed pending token,
 		// a stale security generation, or a user who vanished mid-finalization —

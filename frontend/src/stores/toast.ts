@@ -11,25 +11,18 @@ export interface Toast {
   id: string;
   message: string;
   type: 'success' | 'error' | 'warning' | 'info';
-  duration?: number;
 }
+
+const TOAST_DURATION_MS = 5000;
 
 export const useToastStore = defineStore('toast', () => {
   const toasts = ref<Toast[]>([]);
   let idCounter = 0;
 
-  function addToast(message: string, type: Toast['type'] = 'info', duration = 5000) {
+  function addToast(message: string, type: Toast['type']) {
     const id = `toast-${Date.now()}-${idCounter++}`;
-    const toast: Toast = { id, message, type, duration };
-
-    toasts.value.push(toast);
-
-    if (duration > 0) {
-      setTimeout(() => {
-        removeToast(id);
-      }, duration);
-    }
-
+    toasts.value.push({ id, message, type });
+    setTimeout(() => removeToast(id), TOAST_DURATION_MS);
     return id;
   }
 
@@ -40,34 +33,12 @@ export const useToastStore = defineStore('toast', () => {
     }
   }
 
-  function success(message: string, duration?: number) {
-    return addToast(message, 'success', duration);
-  }
-
-  function error(message: string, duration?: number) {
-    return addToast(message, 'error', duration);
-  }
-
-  function warning(message: string, duration?: number) {
-    return addToast(message, 'warning', duration);
-  }
-
-  function info(message: string, duration?: number) {
-    return addToast(message, 'info', duration);
-  }
-
-  function clear() {
-    toasts.value = [];
-  }
-
   return {
     toasts,
-    addToast,
     removeToast,
-    success,
-    error,
-    warning,
-    info,
-    clear,
+    success: (message: string) => addToast(message, 'success'),
+    error: (message: string) => addToast(message, 'error'),
+    warning: (message: string) => addToast(message, 'warning'),
+    info: (message: string) => addToast(message, 'info'),
   };
 });

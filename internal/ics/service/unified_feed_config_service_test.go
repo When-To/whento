@@ -75,10 +75,7 @@ func (f *fakeConfigRepo) ValidateCalendarOwnership(context.Context, uuid.UUID, [
 func TestGetConfigWhenNoFeedExists(t *testing.T) {
 	service := NewUnifiedFeedConfigService(&fakeConfigRepo{getErr: errors.New("no rows")})
 
-	config, err := service.GetConfig(context.Background(), uuid.New())
-	if err != nil {
-		t.Fatalf("GetConfig: %v", err)
-	}
+	config := service.GetConfig(context.Background(), uuid.New())
 
 	// A user who has never created a feed is not an error case; the settings page has to
 	// render an "enable this" state rather than a failure.
@@ -102,10 +99,7 @@ func TestGetConfigReturnsTheFeed(t *testing.T) {
 		calendarIDs: []uuid.UUID{first, second},
 	})
 
-	config, err := service.GetConfig(context.Background(), uuid.New())
-	if err != nil {
-		t.Fatalf("GetConfig: %v", err)
-	}
+	config := service.GetConfig(context.Background(), uuid.New())
 
 	if !config.Configured || config.ICSToken != "abc123" {
 		t.Errorf("got %+v, want a configured feed with the token", config)

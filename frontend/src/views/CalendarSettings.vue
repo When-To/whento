@@ -601,7 +601,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
+import { useEventListener } from '@vueuse/core';
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useCalendarStore } from '@/stores/calendar';
@@ -1172,12 +1173,7 @@ onMounted(() => {
   // Email options follow the instance's actual SMTP configuration. On failure
   // the probe goes to 'error' (retryable), preserving saved email.enabled.
   probeSmtp();
-  // Add beforeunload listener
-  window.addEventListener('beforeunload', handleBeforeUnload);
 });
 
-onBeforeUnmount(() => {
-  // Remove beforeunload listener
-  window.removeEventListener('beforeunload', handleBeforeUnload);
-});
+useEventListener(window, 'beforeunload', handleBeforeUnload);
 </script>
