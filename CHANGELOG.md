@@ -40,7 +40,7 @@ line per release rather than listed individually.
 
 ## [Unreleased]
 
-## [v3.0.0] — 2026-11-10
+## [v3.0.0] — 2026-11-16
 
 A major version: the first administrator is now created through an operator-key
 bootstrap rather than by the first public registration, the legacy magic-link `GET`
