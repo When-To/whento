@@ -167,7 +167,10 @@ describe('getName', () => {
     // The previous getHolidayName defaulted to French and every caller omitted the
     // argument, so English users saw French holiday names.
     expect(getHolidayIndex('Europe/Paris', 'fr').getName('2026-01-01')).toBe('Nouvel An');
-    expect(getHolidayIndex('Europe/Paris', 'en').getName('2026-01-01')).toBe("New Year's Day");
+    // date-holidays 3.39 switched to a typographic apostrophe; either is English.
+    expect(getHolidayIndex('Europe/Paris', 'en').getName('2026-01-01')).toMatch(
+      /^New Year['’]s Day$/
+    );
   });
 
   it('returns null for ordinary days', () => {
