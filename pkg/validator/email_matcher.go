@@ -51,31 +51,12 @@ func EmailMatches(email string, allowedPatterns []string) bool {
 
 // matchWildcardEmail matches email against a pattern with wildcard
 func matchWildcardEmail(email, pattern string) bool {
-	// Split email into local and domain parts
-	emailParts := strings.Split(email, "@")
-	if len(emailParts) != 2 {
+	emailLocal, emailDomain, okEmail := strings.Cut(email, "@")
+	patternLocal, patternDomain, okPattern := strings.Cut(pattern, "@")
+	// Exactly one @ on each side.
+	if !okEmail || !okPattern || strings.Contains(emailDomain, "@") || strings.Contains(patternDomain, "@") {
 		return false
 	}
-	emailLocal := emailParts[0]
-	emailDomain := emailParts[1]
-
-	// Split pattern
-	patternParts := strings.Split(pattern, "@")
-	if len(patternParts) != 2 {
-		return false
-	}
-	patternLocal := patternParts[0]
-	patternDomain := patternParts[1]
-
-	// Check local part
-	if patternLocal != "*" && patternLocal != emailLocal {
-		return false
-	}
-
-	// Check domain part
-	if patternDomain != "*" && patternDomain != emailDomain {
-		return false
-	}
-
-	return true
+	return (patternLocal == "*" || patternLocal == emailLocal) &&
+		(patternDomain == "*" || patternDomain == emailDomain)
 }

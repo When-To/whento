@@ -25,12 +25,9 @@ var fingerprintSalt = newFingerprintSalt()
 
 func newFingerprintSalt() []byte {
 	salt := make([]byte, 32)
-	if _, err := rand.Read(salt); err != nil {
-		// crypto/rand does not fail on any platform Go supports. Refusing to
-		// start beats logging under a predictable all-zero salt.
-		panic("logger: cannot generate the fingerprint salt: " + err.Error())
-	}
-
+	// Since Go 1.24 rand.Read never returns an error: it crashes the program
+	// instead, so a predictable all-zero salt cannot happen.
+	_, _ = rand.Read(salt)
 	return salt
 }
 

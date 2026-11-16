@@ -189,7 +189,7 @@ func TestPendingMFATokenRefusedAfterPasswordChange(t *testing.T) {
 		t.Fatalf("ChangePassword: %v", err)
 	}
 
-	if _, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken, "000000"); !errors.Is(err, ErrInvalidCredentials) {
+	if _, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken); !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("VerifyMFAAndLogin after password change = %v, want ErrInvalidCredentials", err)
 	}
 	if tokens.stored != 0 {
@@ -218,7 +218,7 @@ func TestPendingMFATokenRefusedAfterPasskeyTransition(t *testing.T) {
 		t.Fatalf("DeleteByUserID: %v", err)
 	}
 
-	if _, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken, "000000"); !errors.Is(err, ErrInvalidCredentials) {
+	if _, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken); !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("VerifyMFAAndLogin after transition = %v, want ErrInvalidCredentials", err)
 	}
 	if tokens.stored != 0 {
@@ -244,7 +244,7 @@ func TestPendingMFATokenWithoutGenerationClaimIsRefused(t *testing.T) {
 		t.Fatalf("GenerateCustomToken: %v", err)
 	}
 
-	if _, err := svc.VerifyMFAAndLogin(context.Background(), tempToken, "000000"); !errors.Is(err, ErrInvalidToken) {
+	if _, err := svc.VerifyMFAAndLogin(context.Background(), tempToken); !errors.Is(err, ErrInvalidToken) {
 		t.Fatalf("VerifyMFAAndLogin without sec_gen = %v, want ErrInvalidToken", err)
 	}
 	if tokens.stored != 0 {
@@ -271,7 +271,7 @@ func TestPendingMFATokenWithStaleGenerationClaimIsRefused(t *testing.T) {
 		t.Fatalf("GenerateCustomToken: %v", err)
 	}
 
-	if _, err := svc.VerifyMFAAndLogin(context.Background(), tempToken, "000000"); !errors.Is(err, ErrInvalidCredentials) {
+	if _, err := svc.VerifyMFAAndLogin(context.Background(), tempToken); !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("VerifyMFAAndLogin with stale sec_gen = %v, want ErrInvalidCredentials", err)
 	}
 	if tokens.stored != 0 {
@@ -292,7 +292,7 @@ func TestPendingMFATokenFinalizesAtTheCapturedGeneration(t *testing.T) {
 		t.Fatalf("Login: %v", err)
 	}
 
-	response, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken, "000000")
+	response, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken)
 	if err != nil {
 		t.Fatalf("VerifyMFAAndLogin: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestPendingMFATokenCannotFinalizeTwiceWithoutRedis(t *testing.T) {
 		t.Fatalf("Login: %v", err)
 	}
 
-	first, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken, "000000")
+	first, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken)
 	if err != nil {
 		t.Fatalf("first finalization: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestPendingMFATokenCannotFinalizeTwiceWithoutRedis(t *testing.T) {
 		t.Fatal("the first finalization did not mint an access token")
 	}
 
-	if _, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken, "000000"); !errors.Is(err, ErrInvalidToken) {
+	if _, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken); !errors.Is(err, ErrInvalidToken) {
 		t.Fatalf("second finalization of the same pending token = %v, want ErrInvalidToken", err)
 	}
 	if tokens.stored != 1 {
@@ -360,7 +360,7 @@ func TestPendingMFATokenRacingFinalizationMintsOneSession(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		go func() {
 			<-start
-			_, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken, "000000")
+			_, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken)
 			results <- err
 		}()
 	}
@@ -403,7 +403,7 @@ func TestPendingMFATokenCanBeRetriedAfterASessionInsertFailure(t *testing.T) {
 		t.Fatalf("Login: %v", err)
 	}
 
-	if _, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken, "000000"); !errors.Is(err, transient) {
+	if _, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken); !errors.Is(err, transient) {
 		t.Fatalf("finalization after an injected session failure = %v, want the injected error", err)
 	}
 	if tokens.stored != 0 {
@@ -412,7 +412,7 @@ func TestPendingMFATokenCanBeRetriedAfterASessionInsertFailure(t *testing.T) {
 
 	// The nonce claim was rolled back, so the same pending token (still within
 	// its five-minute lifetime, same security generation) now finalizes.
-	response, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken, "000000")
+	response, err := svc.VerifyMFAAndLogin(context.Background(), login.TempToken)
 	if err != nil {
 		t.Fatalf("retry of the same pending token = %v, want success", err)
 	}
@@ -443,7 +443,7 @@ func TestVerifyMFAAndLoginSurfacesUserLookupInfrastructureErrors(t *testing.T) {
 		t.Fatalf("Login: %v", err)
 	}
 
-	_, err = svc.VerifyMFAAndLogin(context.Background(), login.TempToken, "000000")
+	_, err = svc.VerifyMFAAndLogin(context.Background(), login.TempToken)
 	if !errors.Is(err, lookupErr) {
 		t.Fatalf("VerifyMFAAndLogin with a failing lookup = %v, want the injected error (%v)", err, lookupErr)
 	}

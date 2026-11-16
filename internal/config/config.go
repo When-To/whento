@@ -100,12 +100,9 @@ type Config struct {
 	WebAuthnRPName   string
 	WebAuthnRPID     string
 	WebAuthnRPOrigin string
-	WebAuthnTimeout  time.Duration
 
 	// TOTP (for 2FA/OTP)
 	TOTPIssuer string
-	TOTPPeriod uint
-	TOTPDigits uint
 
 	// loadErrors holds the variables that were set but could not be parsed.
 	// Load cannot return an error without changing its signature at every call
@@ -253,12 +250,9 @@ func Load() *Config {
 		WebAuthnRPName:   getEnv("WEBAUTHN_RP_NAME", "WhenTo"),
 		WebAuthnRPID:     getEnv("WEBAUTHN_RP_ID", extractDomain(appURL)),
 		WebAuthnRPOrigin: getEnv("WEBAUTHN_RP_ORIGIN", appURL),
-		WebAuthnTimeout:  l.duration("WEBAUTHN_TIMEOUT", 60*time.Second),
 
 		// TOTP (for 2FA/OTP)
 		TOTPIssuer: getEnv("TOTP_ISSUER", "WhenTo"),
-		TOTPPeriod: l.unsigned("TOTP_PERIOD", 30),
-		TOTPDigits: l.unsigned("TOTP_DIGITS", 6),
 	}
 
 	cfg.loadErrors = l.errs
@@ -311,17 +305,24 @@ func (l *loader) warnf(format string, args ...any) {
 	l.warnings = append(l.warnings, fmt.Sprintf(format, args...))
 }
 
-func (l *loader) duration(key string, defaultValue time.Duration) time.Duration {
+// parseEnv reads key with parse. Unset takes defaultValue; a value parse
+// refuses is recorded as "KEY=value <problem>" and also takes defaultValue.
+func parseEnv[T any](l *loader, key string, defaultValue T, parse func(string) (T, error), problem string) T {
 	value := os.Getenv(key)
 	if value == "" {
 		return defaultValue
 	}
-	parsed, err := time.ParseDuration(value)
+	parsed, err := parse(value)
 	if err != nil {
-		l.failf("%s=%q is not a duration: expected a Go duration such as 15m, 24h or 90s", key, value)
+		l.failf("%s=%q %s", key, value, problem)
 		return defaultValue
 	}
 	return parsed
+}
+
+func (l *loader) duration(key string, defaultValue time.Duration) time.Duration {
+	return parseEnv(l, key, defaultValue, time.ParseDuration,
+		"is not a duration: expected a Go duration such as 15m, 24h or 90s")
 }
 
 func (l *loader) boolean(key string, defaultValue bool) bool {
@@ -363,46 +364,16 @@ func parseBool(value string) (bool, bool) {
 }
 
 func (l *loader) integer(key string, defaultValue int) int {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	parsed, err := strconv.Atoi(value)
-	if err != nil {
-		l.failf("%s=%q is not a whole number", key, value)
-		return defaultValue
-	}
-	return parsed
+	return parseEnv(l, key, defaultValue, strconv.Atoi, "is not a whole number")
 }
 
 // integer32 reads a value the pgx pool stores as an int32; a count that does
 // not fit is a mistake worth naming rather than silently truncating.
 func (l *loader) integer32(key string, defaultValue int32) int32 {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	parsed, err := strconv.ParseInt(value, 10, 32)
-	if err != nil {
-		l.failf("%s=%q is not a whole number that fits in 32 bits", key, value)
-		return defaultValue
-	}
-	return int32(parsed)
-}
-
-// unsigned reads a count that cannot be negative. Parsing it as unsigned keeps
-// TOTP_PERIOD=-30 from wrapping around into a nonsensical positive value.
-func (l *loader) unsigned(key string, defaultValue uint) uint {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	parsed, err := strconv.ParseUint(value, 10, 32)
-	if err != nil {
-		l.failf("%s=%q is not a positive whole number", key, value)
-		return defaultValue
-	}
-	return uint(parsed)
+	return parseEnv(l, key, defaultValue, func(value string) (int32, error) {
+		parsed, err := strconv.ParseInt(value, 10, 32)
+		return int32(parsed), err
+	}, "is not a whole number that fits in 32 bits")
 }
 
 // secret resolves a value that is sensitive enough to deserve file indirection.

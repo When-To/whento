@@ -6,7 +6,6 @@ package datevalidation
 
 import (
 	"errors"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -63,8 +62,8 @@ import (
 
 // errHolidayUnavailable reports a country the offline library has no rules for.
 // The block policy used to turn this into a fail-closed refusal; it now fails
-// open to the normal weekday decision, and the caller-facing API reports the
-// unavailability explicitly through CoverageUnavailable instead.
+// open to the normal weekday decision; the error-aware lookup still reports
+// the unavailability explicitly.
 var errHolidayUnavailable = errors.New("holiday data unavailable for country")
 
 // offlineHolidayCalendars is a compiled table of ISO 3166-1 alpha-2 country
@@ -76,7 +75,6 @@ var errHolidayUnavailable = errors.New("holiday data unavailable for country")
 var (
 	offlineOnce      sync.Once
 	offlineCalendars map[string]*cal.Calendar
-	offlineCountries []string
 )
 
 func buildOfflineCalendars() {
@@ -142,12 +140,6 @@ func buildOfflineCalendars() {
 		"US": calendarFrom(us.Holidays),
 		"ZA": calendarFrom(za.Holidays),
 	}
-
-	offlineCountries = make([]string, 0, len(offlineCalendars))
-	for code := range offlineCalendars {
-		offlineCountries = append(offlineCountries, code)
-	}
-	sort.Strings(offlineCountries)
 }
 
 // calendarFrom compiles a country's national holiday definitions into a
@@ -195,67 +187,4 @@ func offlineIsHoliday(date time.Time, countryCode string) (bool, error) {
 	}
 	actual, observed, _ := calendar.IsHoliday(date)
 	return actual || observed, nil
-}
-
-// offlineHolidaysForYear returns the public holidays of a country for a year,
-// computed locally: both the actual civil dates and any observed substitute
-// dates, deduplicated when a date is both. The second return reports whether
-// the offline table has national data for the country at all.
-func offlineHolidaysForYear(countryCode string, year int) ([]Holiday, bool) {
-	calendar, ok := offlineHolidays()[strings.ToUpper(strings.TrimSpace(countryCode))]
-	if !ok {
-		return nil, false
-	}
-
-	// date→name, deduplicating a date that is both an actual and an observed
-	// day of a holiday (and, across holidays, a shared date).
-	seen := make(map[string]string)
-	add := func(d time.Time, name string) {
-		if d.IsZero() || d.Year() != year {
-			return
-		}
-		key := d.Format("2006-01-02")
-		if _, dup := seen[key]; !dup {
-			seen[key] = name
-		}
-	}
-
-	for _, h := range calendar.Holidays {
-		actual, observed := h.Calc(year)
-		add(actual, h.Name)
-		add(observed, h.Name)
-
-		// Holidays that wrap the year boundary: a New Year's Day observed on
-		// the previous 31 December, or a December civil date observed on the
-		// following 1 January, land outside the year the holiday is calculated
-		// for. Mirror what cal.Calendar.IsHoliday does so the year list and the
-		// per-date lookup can never disagree.
-		if h.Observed != nil {
-			actualMonth := time.Month(0)
-			if !actual.IsZero() {
-				actualMonth = actual.Month()
-			}
-			switch actualMonth {
-			case time.January:
-				_, wrapped := h.Calc(year + 1)
-				add(wrapped, h.Name)
-			case time.December:
-				_, wrapped := h.Calc(year - 1)
-				add(wrapped, h.Name)
-			}
-		}
-	}
-
-	out := make([]Holiday, 0, len(seen))
-	for key, name := range seen {
-		d, err := time.Parse("2006-01-02", key)
-		if err != nil {
-			continue
-		}
-		out = append(out, Holiday{Date: d, Name: name, LocalName: name, Source: "offline"})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].Date.Before(out[j].Date)
-	})
-	return out, true
 }

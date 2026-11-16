@@ -17,6 +17,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// Millisecond iat/exp: middleware.Auth compares iat with the revocation time,
+// and whole seconds let a token issued in the same second survive revocation.
+func init() { jwt.TimePrecision = time.Millisecond }
+
 var (
 	ErrInvalidToken    = errors.New("invalid token")
 	ErrExpiredToken    = errors.New("token has expired")

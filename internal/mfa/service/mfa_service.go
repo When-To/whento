@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -60,33 +61,8 @@ type MFAService struct {
 	repo       MFAStore
 	userRepo   UserLookup
 	issuer     string
-	period     uint
-	digits     otp.Digits
 	bcryptCost int
 	logger     *slog.Logger
-}
-
-// defaultTOTPDigits matches the config default and RFC 4226's usual choice.
-const defaultTOTPDigits = otp.DigitsSix
-
-// totpDigits converts the configured digit count into otp.Digits, which is an
-// int, from a uint that config parses with strconv.ParseUint.
-//
-// Config validation already bounds TOTP_DIGITS to 6-8, so in a process that
-// booted normally this can only ever see a valid value. The check is here
-// anyway because that validation lives in a different package and nothing in
-// the type system makes NewMFAService unreachable without it: a test, a future
-// caller, or a reordering of startup would silently hand this an unbounded
-// value, and converting a large uint to int wraps it negative rather than
-// failing. Falling back to six digits keeps a working authenticator instead of
-// generating codes nobody's app can read.
-// The bounds match internal/config's minTOTPDigits/maxTOTPDigits; 7 is legal
-// and must survive, so this clamps the range rather than enumerating values.
-func totpDigits(configured uint) otp.Digits {
-	if configured < 6 || configured > 8 {
-		return defaultTOTPDigits
-	}
-	return otp.Digits(configured)
 }
 
 // NewMFAService creates a new MFA service
@@ -100,8 +76,6 @@ func NewMFAService(
 		repo:       repo,
 		userRepo:   userRepo,
 		issuer:     cfg.TOTPIssuer,
-		period:     cfg.TOTPPeriod,
-		digits:     totpDigits(cfg.TOTPDigits),
 		bcryptCost: cfg.BcryptCost,
 		logger:     logger,
 	}
@@ -125,12 +99,13 @@ func (s *MFAService) BeginSetup(ctx context.Context, userID uuid.UUID) (*models.
 		return nil, ErrMFAAlreadyEnabled
 	}
 
-	// Generate TOTP secret
+	// Generate TOTP secret (totpPeriod seconds, six digits: the values
+	// FinishSetup and VerifyCode check against)
 	key, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      s.issuer,
 		AccountName: user.Email,
-		Period:      s.period,
-		Digits:      s.digits,
+		Period:      totpPeriod,
+		Digits:      otp.DigitsSix,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate TOTP key: %w", err)
@@ -147,19 +122,9 @@ func (s *MFAService) BeginSetup(ctx context.Context, userID uuid.UUID) (*models.
 	qrCodeDataURL := fmt.Sprintf("data:image/png;base64,%s", base64.StdEncoding.EncodeToString(png))
 
 	// Generate backup codes
-	backupCodes, err := s.generateBackupCodes(10)
+	backupCodes, hashedBackupCodes, err := s.generateBackupCodes(10)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate backup codes: %w", err)
-	}
-
-	// Hash backup codes before storing
-	hashedBackupCodes := make([]string, len(backupCodes))
-	for i, code := range backupCodes {
-		hash, err := bcrypt.GenerateFromPassword([]byte(code), s.bcryptCost)
-		if err != nil {
-			return nil, fmt.Errorf("failed to hash backup code: %w", err)
-		}
-		hashedBackupCodes[i] = string(hash)
+		return nil, err
 	}
 
 	// Create or update MFA configuration (not enabled yet)
@@ -284,14 +249,7 @@ func (s *MFAService) verifyBackupCode(ctx context.Context, userID uuid.UUID, mfa
 	// Check each backup code
 	for _, hashedCode := range mfa.BackupCodes {
 		// Skip if already used
-		alreadyUsed := false
-		for _, usedCode := range mfa.BackupCodesUsed {
-			if usedCode == hashedCode {
-				alreadyUsed = true
-				break
-			}
-		}
-		if alreadyUsed {
+		if slices.Contains(mfa.BackupCodesUsed, hashedCode) {
 			continue
 		}
 
@@ -346,19 +304,9 @@ func (s *MFAService) RegenerateBackupCodes(ctx context.Context, userID uuid.UUID
 	}
 
 	// Generate new backup codes
-	backupCodes, err := s.generateBackupCodes(10)
+	backupCodes, hashedBackupCodes, err := s.generateBackupCodes(10)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate backup codes: %w", err)
-	}
-
-	// Hash backup codes
-	hashedBackupCodes := make([]string, len(backupCodes))
-	for i, code := range backupCodes {
-		hash, err := bcrypt.GenerateFromPassword([]byte(code), s.bcryptCost)
-		if err != nil {
-			return nil, fmt.Errorf("failed to hash backup code: %w", err)
-		}
-		hashedBackupCodes[i] = string(hash)
+		return nil, err
 	}
 
 	// Update MFA configuration
@@ -385,25 +333,32 @@ func (s *MFAService) GetStatus(ctx context.Context, userID uuid.UUID) (*models.M
 	return &models.MFAStatusResponse{Enabled: mfa.Enabled}, nil
 }
 
-// generateBackupCodes generates random alphanumeric backup codes
-func (s *MFAService) generateBackupCodes(count int) ([]string, error) {
+// generateBackupCodes generates random alphanumeric backup codes, returning
+// them in plain text (shown once to the user) and bcrypt-hashed (stored).
+func (s *MFAService) generateBackupCodes(count int) (plain, hashed []string, err error) {
 	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // Removed ambiguous characters
 	const codeLength = 8
 
-	codes := make([]string, count)
+	plain = make([]string, count)
+	hashed = make([]string, count)
 	for i := 0; i < count; i++ {
 		code := make([]byte, codeLength)
 		for j := 0; j < codeLength; j++ {
 			num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
 			if err != nil {
-				return nil, fmt.Errorf("failed to generate random number: %w", err)
+				return nil, nil, fmt.Errorf("failed to generate backup codes: %w", err)
 			}
 			code[j] = charset[num.Int64()]
 		}
-		codes[i] = string(code)
+		plain[i] = string(code)
+		hash, err := bcrypt.GenerateFromPassword(code, s.bcryptCost)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to hash backup code: %w", err)
+		}
+		hashed[i] = string(hash)
 	}
 
-	return codes, nil
+	return plain, hashed, nil
 }
 
 // AdminDisable2FA disables TOTP for a user (admin action, no password required)

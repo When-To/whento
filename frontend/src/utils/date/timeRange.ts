@@ -8,8 +8,7 @@
  * Time-of-day arithmetic for availabilities.
  *
  * An availability carries optional `start_time` / `end_time` as `HH:MM`. Absent times
- * mean "all day", but the *replacement value* for an absent end differs by use case,
- * and that difference is load-bearing — see {@link toInterval} and {@link coversTime}.
+ * mean "all day"; see {@link coversTime} for how an absent end is treated.
  */
 
 /** A time of day, `HH:MM`, 24-hour. */
@@ -64,31 +63,10 @@ export function isFullDay(startTime?: string | null, endTime?: string | null): b
 }
 
 /**
- * Convert an availability's times to a minute interval, for overlap and coverage maths.
- *
- * An absent end maps to {@link DAY_END_MIN} (1440), so an all-day availability
- * genuinely spans to midnight when counting participant coverage.
- *
- * TODO: this deliberately differs from {@link coversTime}, which maps an absent end to
- * `23:59` (1439). Both behaviours are ported verbatim from the previous implementation
- * because they decide which trailing slot gets painted; unifying them is a visual
- * change and must be done as its own reviewed step, not silently.
- */
-export function toInterval(range: {
-  start_time?: string | null;
-  end_time?: string | null;
-}): Interval {
-  return {
-    startMin: range.start_time ? timeToMinutes(range.start_time) : 0,
-    endMin: range.end_time ? timeToMinutes(range.end_time) : DAY_END_MIN,
-  };
-}
-
-/**
  * Whether an availability covers the given time slot start.
  *
  * Uses string comparison on `HH:MM`, which is lexicographically ordered, and treats an
- * absent end as `23:59` — see the TODO on {@link toInterval}.
+ * absent end as `23:59`, so the trailing 23:59 slot is never painted.
  */
 export function coversTime(
   range: { start_time?: string | null; end_time?: string | null },
@@ -98,16 +76,6 @@ export function coversTime(
   const start = range.start_time || '00:00';
   const end = range.end_time || '23:59';
   return time >= start && time < end;
-}
-
-/** Whether two half-open intervals overlap on a non-empty span. */
-export function overlaps(a: Interval, b: Interval): boolean {
-  return a.startMin < b.endMin && a.endMin > b.startMin;
-}
-
-/** Whether `inner` is fully contained in `outer`. */
-export function contains(outer: Interval, inner: Interval): boolean {
-  return outer.startMin <= inner.startMin && outer.endMin >= inner.endMin;
 }
 
 /**

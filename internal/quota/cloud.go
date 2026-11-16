@@ -9,7 +9,6 @@ package quota
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -24,18 +23,12 @@ const CloudCalendarLimit = 3
 // CloudQuotaService implements QuotaService for the cloud version.
 // Limits are per user; there is no server-wide cap.
 type CloudQuotaService struct {
-	calendarRepo CalendarCounter
-}
-
-// CalendarCounter is an interface for counting calendars
-type CalendarCounter interface {
-	CountByUser(ctx context.Context, userID uuid.UUID) (int, error)
-	CountAll(ctx context.Context) (int, error)
+	usage
 }
 
 // NewCloudService creates a new cloud quota service
 func NewCloudService(calendarRepo CalendarCounter) *CloudQuotaService {
-	return &CloudQuotaService{calendarRepo: calendarRepo}
+	return &CloudQuotaService{usage{calendarRepo}}
 }
 
 // CanCreateCalendar reports whether the user is below their calendar allowance
@@ -56,26 +49,6 @@ func (s *CloudQuotaService) GetUserLimit(_ context.Context, _ uuid.UUID) (int, e
 // GetServerLimit returns -1 as cloud version doesn't have server-wide limits
 func (s *CloudQuotaService) GetServerLimit(_ context.Context) (int, error) {
 	return -1, nil // Not applicable for cloud
-}
-
-// GetCurrentUsage returns the current calendar count for a user
-func (s *CloudQuotaService) GetCurrentUsage(ctx context.Context, userID uuid.UUID) (int, error) {
-	count, err := s.calendarRepo.CountByUser(ctx, userID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count calendars: %w", err)
-	}
-
-	return count, nil
-}
-
-// GetServerUsage returns the total calendar count across all users
-func (s *CloudQuotaService) GetServerUsage(ctx context.Context) (int, error) {
-	count, err := s.calendarRepo.CountAll(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count all calendars: %w", err)
-	}
-
-	return count, nil
 }
 
 // QuotaLockKey returns a per-user advisory lock key derived from the user's UUID

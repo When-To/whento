@@ -43,8 +43,8 @@ type Broker interface {
 	Close() error
 }
 
-// hub is the process-local delivery mechanism, shared by both implementations: the
-// Redis broker uses it to deliver what arrives from Redis.
+// hub is the process-local Broker. The Redis broker also uses it to deliver what
+// arrives from Redis.
 type hub struct {
 	mu     sync.RWMutex
 	topics map[string]map[*subscriber]struct{}
@@ -77,7 +77,7 @@ func (h *hub) publish(topic string) {
 	}
 }
 
-func (h *hub) subscribe(ctx context.Context, topic string) (<-chan struct{}, func()) {
+func (h *hub) Subscribe(ctx context.Context, topic string) (<-chan struct{}, func()) {
 	sub := &subscriber{ch: make(chan struct{}, 1)}
 
 	h.mu.Lock()
@@ -120,12 +120,12 @@ func (h *hub) subscribe(ctx context.Context, topic string) (<-chan struct{}, fun
 	return sub.ch, stop
 }
 
-func (h *hub) close() {
+func (h *hub) Close() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	if h.closed {
-		return
+		return nil
 	}
 	h.closed = true
 
@@ -135,39 +135,19 @@ func (h *hub) close() {
 		}
 		delete(h.topics, topic)
 	}
+
+	return nil
 }
 
-// subscriberCount reports how many subscriptions a topic has. Used by the tests, and by
-// nothing else — the brokers do not branch on it.
-func (h *hub) subscriberCount(topic string) int {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+func (h *hub) Publish(_ context.Context, topic string) error {
+	h.publish(topic)
 
-	return len(h.topics[topic])
+	return nil
 }
-
-// memoryBroker delivers within one process.
-type memoryBroker struct{ hub *hub }
 
 // NewMemoryBroker returns a broker that reaches the subscribers of this process only.
 // That is the whole of a single-instance deployment, which is how self-hosted WhenTo
 // normally runs.
 func NewMemoryBroker() Broker {
-	return &memoryBroker{hub: newHub()}
-}
-
-func (b *memoryBroker) Publish(_ context.Context, topic string) error {
-	b.hub.publish(topic)
-
-	return nil
-}
-
-func (b *memoryBroker) Subscribe(ctx context.Context, topic string) (<-chan struct{}, func()) {
-	return b.hub.subscribe(ctx, topic)
-}
-
-func (b *memoryBroker) Close() error {
-	b.hub.close()
-
-	return nil
+	return newHub()
 }

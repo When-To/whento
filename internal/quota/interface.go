@@ -6,6 +6,7 @@ package quota
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -39,6 +40,38 @@ type QuotaService interface {
 	// QuotaLockKey returns the advisory lock key to use for quota enforcement.
 	// Cloud: per-user key derived from userID. Self-hosted: fixed server-wide key.
 	QuotaLockKey(userID uuid.UUID) int64
+}
+
+// CalendarCounter is an interface for counting calendars
+type CalendarCounter interface {
+	CountByUser(ctx context.Context, userID uuid.UUID) (int, error)
+	CountAll(ctx context.Context) (int, error)
+}
+
+// usage counts calendars the same way for both build variants; each
+// QuotaService implementation embeds it.
+type usage struct {
+	calendarRepo CalendarCounter
+}
+
+// GetCurrentUsage returns the current calendar count for a user
+func (s usage) GetCurrentUsage(ctx context.Context, userID uuid.UUID) (int, error) {
+	count, err := s.calendarRepo.CountByUser(ctx, userID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count calendars: %w", err)
+	}
+
+	return count, nil
+}
+
+// GetServerUsage returns the total calendar count across all users
+func (s usage) GetServerUsage(ctx context.Context) (int, error) {
+	count, err := s.calendarRepo.CountAll(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count all calendars: %w", err)
+	}
+
+	return count, nil
 }
 
 // LimitInfo contains detailed information about limits and usage

@@ -49,7 +49,7 @@ expose the same symbols:
 | Pair | Symbols |
 | --- | --- |
 | [`cmd/init_cloud.go`](../cmd/init_cloud.go) / [`cmd/init_selfhosted.go`](../cmd/init_selfhosted.go) | `InitServices`, `RegisterQuotaRoutes`, `buildType` |
-| [`internal/quota/cloud.go`](../internal/quota/cloud.go) / [`internal/quota/selfhosted.go`](../internal/quota/selfhosted.go) | `CalendarCounter`, the quota service constructor and its methods |
+| [`internal/quota/cloud.go`](../internal/quota/cloud.go) / [`internal/quota/selfhosted.go`](../internal/quota/selfhosted.go) | the calendar limit constant, the quota service type, its constructor and its methods |
 
 CI builds, lints and vulnerability-scans both. Adding a cloud-only feature without
 its self-hosted counterpart breaks the build. See
@@ -163,7 +163,7 @@ hand-written mocks and no mocking library.
 Global middleware, in registration order, from `newRouter`:
 
 ```
-RequestID → Logger → Metrics → Recoverer → SecurityHeaders → LimitRequestSize(1MB) → CORS
+RequestID → Logger → Metrics → Recoverer → SecurityHeaders → RequestSize(1MB) → CORS
 ```
 
 Two orderings there are load-bearing rather than cosmetic:
@@ -245,7 +245,7 @@ what a calendar is, it belongs in `internal/`.
 | `jwt` | RS256 access/refresh tokens. The signing method is pinned, with a test guarding against algorithm confusion. |
 | `logger` | `log/slog` setup, `Fingerprint` for correlating without identifying, and the AST guard described below. |
 | `metrics` | Prometheus collectors and the exposition handler. Labels are method, chi route *pattern*, status, build variant — nothing else. |
-| `middleware` | `RequestID`, `Logger`, `Metrics`, `Recoverer`, `SecurityHeaders`, `LimitRequestSize`, `CORS`, `Auth`, `RequireRole`, the rate limiter and its key functions, `SetTrustedProxies`. |
+| `middleware` | `RequestID`, `Logger`, `Metrics`, `Recoverer`, `SecurityHeaders`, `CORS`, `Auth`, `RequireRole`, the rate limiter and its key functions, `SetTrustedProxies`. |
 | `models` | Shared entity scaffolding, enums, list/pagination types. |
 | `validator` | Request validation and the email matcher. |
 
@@ -302,8 +302,8 @@ the point: a backend response that changes shape shows up as a reviewable diff i
 the pull request that causes it. Regenerate with `make types`; `make types-check`
 fails if it is stale, and CI runs it.
 
-The variant guard is `isCloud` / `isSelfHosted` from
-`src/composables/useBuildType.ts` — see `src/router/index.ts` for the pattern.
+The variant guard is an inline `import.meta.env.VITE_BUILD_TYPE === 'cloud'`,
+replaced at build time — see `src/router/index.ts` for the pattern.
 
 ## 10. What the tests enforce, beyond correctness
 

@@ -39,13 +39,13 @@ func NewAdminMFAHandler(mfaService *service.MFAService, logger *slog.Logger) *Ad
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			id	path		string	true	"User ID"
-//	@Success		200	{object}	object{message=string,disabled_for_user=string,disabled_by_admin=string}
+//	@Success		200	{object}	object{totp_disabled=bool,backup_codes_removed=int}
 //	@Failure		400	{object}	httputil.ErrorResponse	"Invalid user ID, cannot disable own 2FA, or user does not have TOTP enabled"
 //	@Failure		401	{object}	httputil.ErrorResponse	"Unauthorized"
 //	@Failure		403	{object}	httputil.ErrorResponse	"Forbidden (requires admin role)"
 //	@Failure		404	{object}	httputil.ErrorResponse	"User not found"
 //	@Failure		500	{object}	httputil.ErrorResponse	"Failed to disable 2FA"
-//	@Router			/api/v1/auth/admin/users/{id}/mfa/totp [delete]
+//	@Router			/api/v1/auth/admin/users/{id}/disable-2fa [post]
 func (h *AdminMFAHandler) AdminDisable2FA(w http.ResponseWriter, r *http.Request) {
 	// Get admin user ID from context
 	adminUserIDStr := middleware.GetUserID(r.Context())

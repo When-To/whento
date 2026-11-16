@@ -11,7 +11,6 @@ import (
 	"net/http"
 
 	"github.com/whento/pkg/httputil"
-	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/auth/service"
 	"github.com/whento/whento/internal/auth/sessioncookie"
@@ -84,17 +83,7 @@ func (h *BootstrapHandler) Status(w http.ResponseWriter, r *http.Request) {
 //	@Router			/api/v1/auth/bootstrap [post]
 func (h *BootstrapHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req models.BootstrapRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 

@@ -41,7 +41,6 @@ const authApi = {
   logout: vi.fn(),
   getMe: vi.fn(),
   updateProfile: vi.fn(),
-  updatePassword: vi.fn(),
   forgotPassword: vi.fn(),
   completeAccountRecovery: vi.fn(),
 };

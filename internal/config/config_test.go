@@ -43,8 +43,8 @@ func clearEnv(t *testing.T) {
 		"EMAIL_VERIFICATION_ENABLED", "EMAIL_VERIFICATION_EXPIRY", "PASSWORD_RESET_EXPIRY", "MAGIC_LINK_EXPIRY",
 		"SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_FROM_NAME",
 		"REMINDER_HOURS_BEFORE", "REMINDER_INTERVAL", "REMINDER_CATCH_UP_WINDOW", "REMINDER_MAX_ATTEMPTS", "REMINDER_RETRY_BACKOFF",
-		"WEBAUTHN_RP_NAME", "WEBAUTHN_RP_ID", "WEBAUTHN_RP_ORIGIN", "WEBAUTHN_TIMEOUT",
-		"TOTP_ISSUER", "TOTP_PERIOD", "TOTP_DIGITS",
+		"WEBAUTHN_RP_NAME", "WEBAUTHN_RP_ID", "WEBAUTHN_RP_ORIGIN",
+		"TOTP_ISSUER",
 		// The file indirection has to be cleared as well, or a developer with
 		// Docker secrets exported locally would see a different configuration
 		// than CI does.
@@ -175,10 +175,7 @@ func TestLoadDefaults(t *testing.T) {
 		{"FromAddress", cfg.Email.FromAddress, "contact@whento.be"},
 		{"WebAuthnRPName", cfg.WebAuthnRPName, "WhenTo"},
 		{"WebAuthnRPOrigin", cfg.WebAuthnRPOrigin, "http://localhost:8080"},
-		{"WebAuthnTimeout", cfg.WebAuthnTimeout, 60 * time.Second},
 		{"TOTPIssuer", cfg.TOTPIssuer, "WhenTo"},
-		{"TOTPPeriod", cfg.TOTPPeriod, uint(30)},
-		{"TOTPDigits", cfg.TOTPDigits, uint(6)},
 		// The pool defaults have to stay equal to the ones pkg/database would
 		// have applied on its own, or wiring the config through changes the
 		// behaviour of every existing deployment.
@@ -238,7 +235,6 @@ func TestLoadReadsTheEnvironment(t *testing.T) {
 	t.Setenv("BOOTSTRAP_KEY", "bootstrap-secret-key-0123456789abcdef")
 	t.Setenv("DISABLE_ROBOTS", "true")
 	t.Setenv("SMTP_PORT", "2525")
-	t.Setenv("TOTP_DIGITS", "8")
 	t.Setenv("DB_MAX_CONNS", "50")
 	t.Setenv("DB_MIN_CONNS", "10")
 	t.Setenv("DB_MAX_CONN_LIFETIME", "30m")
@@ -263,8 +259,8 @@ func TestLoadReadsTheEnvironment(t *testing.T) {
 	if !cfg.DisableRobots {
 		t.Error("DISABLE_ROBOTS=true was not applied")
 	}
-	if cfg.BcryptCost != 14 || cfg.Email.SMTPPort != 2525 || cfg.TOTPDigits != 8 {
-		t.Errorf("integers = %d/%d/%d", cfg.BcryptCost, cfg.Email.SMTPPort, cfg.TOTPDigits)
+	if cfg.BcryptCost != 14 || cfg.Email.SMTPPort != 2525 {
+		t.Errorf("integers = %d/%d", cfg.BcryptCost, cfg.Email.SMTPPort)
 	}
 	// The pool is the whole point of exposing DB_*_CONNS: before this it could
 	// only be changed by recompiling.
@@ -305,7 +301,6 @@ func TestMalformedValuesAreFatal(t *testing.T) {
 	t.Setenv("JWT_ACCESS_EXPIRY", "fifteen minutes")
 	t.Setenv("RATE_LIMIT_ENABLED", "yes please")
 	t.Setenv("SMTP_PORT", "587.5")
-	t.Setenv("TOTP_PERIOD", "-30")
 	t.Setenv("DB_MAX_CONNS", "lots")
 
 	cfg := Load()
@@ -325,7 +320,7 @@ func TestMalformedValuesAreFatal(t *testing.T) {
 	// a time is exactly the experience this replaces.
 	for _, key := range []string{
 		"BCRYPT_COST", "JWT_ACCESS_EXPIRY", "RATE_LIMIT_ENABLED", "SMTP_PORT",
-		"TOTP_PERIOD", "DB_MAX_CONNS",
+		"DB_MAX_CONNS",
 	} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("the error does not mention %s: %v", key, err)
@@ -417,11 +412,6 @@ func TestNumericParsersRecordTheirFailures(t *testing.T) {
 			read: func(l *loader) any { return l.integer32("SOME_VALUE", 25) }, want: int32(50)},
 		{name: "integer32 rejects an overflow", value: "5000000000",
 			read: func(l *loader) any { return l.integer32("SOME_VALUE", 25) }, want: int32(25), wantError: true},
-		{name: "unsigned accepts a count", value: "60",
-			read: func(l *loader) any { return l.unsigned("SOME_VALUE", 30) }, want: uint(60)},
-		// Without ParseUint this would wrap around to an enormous positive value.
-		{name: "unsigned rejects a negative", value: "-30",
-			read: func(l *loader) any { return l.unsigned("SOME_VALUE", 30) }, want: uint(30), wantError: true},
 	}
 
 	for _, tt := range tests {
@@ -450,9 +440,6 @@ func TestNumericParsersRecordTheirFailures(t *testing.T) {
 		}
 		if got := l.duration("SOME_VALUE", time.Minute); got != time.Minute || len(l.errs) != 0 {
 			t.Errorf("got %v with %v", got, l.errs)
-		}
-		if got := l.unsigned("SOME_VALUE", 30); got != 30 || len(l.errs) != 0 {
-			t.Errorf("got %d with %v", got, l.errs)
 		}
 		if got := l.integer32("SOME_VALUE", 25); got != 25 || len(l.errs) != 0 {
 			t.Errorf("got %d with %v", got, l.errs)

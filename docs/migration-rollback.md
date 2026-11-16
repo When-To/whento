@@ -174,8 +174,8 @@ top of this page), so its migrations have to be reverted first, using the
 cd /opt/whento
 docker compose stop app
 # Back up (§1), then count the migrations the older release does not ship. From
-# v3.0.0 back to v2.0.0 that is 016 to 023: eight.
-docker compose run --rm --no-deps --entrypoint sh app -c   'migrate -path /app/migrations -database "$DATABASE_URL" down 8'
+# v3.0.0 back to v2.0.0 that is 016 to 024: nine.
+docker compose run --rm --no-deps --entrypoint sh app -c   'migrate -path /app/migrations -database "$DATABASE_URL" down 9'
 # Pin the older image in docker-compose.yml, then start it.
 docker compose up -d app
 ```
@@ -184,7 +184,8 @@ Read [the limits](#the-limits-a-down-migration-is-not-an-undo) first: from v3.0.
 to v2.0.0 this discards the refresh-session families (sessions themselves
 survive), the reminder queue (a reminder still inside its send window can go out twice
 after a later upgrade), the per-date activity journal (gone for good), the TOTP
-replay record and the first-user marker (recomputed on the next upgrade).
+replay record, the time of the last reminder scan and the first-user marker
+(recomputed on the next upgrade).
 
 ---
 

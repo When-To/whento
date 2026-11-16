@@ -41,7 +41,7 @@ function getVisitedCalendars(): CalendarHistoryItem[] {
 
     // JSON.parse succeeding says nothing about the shape. A stored `42` or `{}` parses
     // fine and then breaks the store on first access, because `sortedCalendars` spreads
-    // the value and `[...42]` throws — and `init()` runs when the store is created, so
+    // the value and `[...42]` throws — and this runs when the store is created, so
     // the failure takes the page down rather than degrading. Anything that is not an
     // array of entries carrying a token is discarded.
     const parsed: unknown = JSON.parse(data);
@@ -70,23 +70,12 @@ function saveVisitedCalendars(calendars: CalendarHistoryItem[]): void {
 }
 
 export const useCalendarHistoryStore = defineStore('calendarHistory', () => {
-  const calendars = ref<CalendarHistoryItem[]>([]);
+  const calendars = ref<CalendarHistoryItem[]>(getVisitedCalendars());
   const isOpen = ref(false);
-  const initialized = ref(false);
 
   const sortedCalendars = computed(() => {
     return [...calendars.value].sort((a, b) => b.lastVisited - a.lastVisited);
   });
-
-  function init() {
-    if (initialized.value) return;
-
-    calendars.value = getVisitedCalendars();
-    initialized.value = true;
-  }
-
-  // Auto-initialize when store is first accessed
-  init();
 
   function addCalendar(token: string, name: string, participantId?: string) {
     // Find existing entry to preserve all settings
@@ -98,21 +87,12 @@ export const useCalendarHistoryStore = defineStore('calendarHistory', () => {
     // Add new entry at the beginning, preserving all existing settings
     const updated = [
       {
+        ...existing,
         token,
         name,
         lastVisited: Date.now(),
-        // Preserve all display settings from existing entry
-        ...(existing?.displayMode !== undefined && { displayMode: existing.displayMode }),
-        ...(existing?.periodCount !== undefined && { periodCount: existing.periodCount }),
-        ...(existing?.monthCount !== undefined && { monthCount: existing.monthCount }),
-        ...(existing?.startHour !== undefined && { startHour: existing.startHour }),
-        ...(existing?.endHour !== undefined && { endHour: existing.endHour }),
-        ...(existing?.slotDuration !== undefined && { slotDuration: existing.slotDuration }),
-        ...(existing?.viewStyle !== undefined && { viewStyle: existing.viewStyle }),
         // Update participantId if provided, otherwise preserve existing
-        ...(participantId !== undefined
-          ? { participantId }
-          : existing?.participantId !== undefined && { participantId: existing.participantId }),
+        ...(participantId !== undefined && { participantId }),
       },
       ...filtered,
     ];
@@ -142,19 +122,6 @@ export const useCalendarHistoryStore = defineStore('calendarHistory', () => {
 
   function close() {
     isOpen.value = false;
-  }
-
-  function updateMonthCount(token: string, monthCount: number) {
-    const calendar = calendars.value.find(c => c.token === token);
-    if (calendar) {
-      calendar.monthCount = monthCount;
-      saveVisitedCalendars(calendars.value);
-    }
-  }
-
-  function getMonthCount(token: string): number | undefined {
-    const calendar = calendars.value.find(c => c.token === token);
-    return calendar?.monthCount;
   }
 
   function updateParticipantId(token: string, participantId: string | undefined) {
@@ -215,14 +182,11 @@ export const useCalendarHistoryStore = defineStore('calendarHistory', () => {
   return {
     calendars: sortedCalendars,
     isOpen,
-    init,
     addCalendar,
     removeCalendar,
     clearHistory,
     toggle,
     close,
-    updateMonthCount,
-    getMonthCount,
     updateParticipantId,
     getParticipantId,
     updateDisplaySettings,

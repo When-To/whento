@@ -31,6 +31,33 @@ func NewPasskeyRepository(pool *pgxpool.Pool) *PasskeyRepository {
 	return &PasskeyRepository{pool: pool}
 }
 
+// passkeyColumns is the full passkeys projection, in the order scanPasskey reads it.
+const passkeyColumns = `id, user_id, name, credential_id, public_key, aaguid, sign_count, transports, backup_eligible, backup_state, created_at, last_used_at`
+
+// scanPasskey scans the passkeyColumns projection into a new model. pgx.Rows
+// satisfies pgx.Row, so it serves both single-row and list queries.
+func scanPasskey(row pgx.Row) (*models.Passkey, error) {
+	var passkey models.Passkey
+	err := row.Scan(
+		&passkey.ID,
+		&passkey.UserID,
+		&passkey.Name,
+		&passkey.CredentialID,
+		&passkey.PublicKey,
+		&passkey.AAGUID,
+		&passkey.SignCount,
+		&passkey.Transports,
+		&passkey.BackupEligible,
+		&passkey.BackupState,
+		&passkey.CreatedAt,
+		&passkey.LastUsedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &passkey, nil
+}
+
 // Create creates a new passkey
 func (r *PasskeyRepository) Create(ctx context.Context, passkey *models.Passkey) error {
 	query := `
@@ -66,26 +93,12 @@ func (r *PasskeyRepository) Create(ctx context.Context, passkey *models.Passkey)
 // GetByID retrieves a passkey by ID
 func (r *PasskeyRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Passkey, error) {
 	query := `
-		SELECT id, user_id, name, credential_id, public_key, aaguid, sign_count, transports, backup_eligible, backup_state, created_at, last_used_at
+		SELECT ` + passkeyColumns + `
 		FROM passkeys
 		WHERE id = $1
 	`
 
-	var passkey models.Passkey
-	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&passkey.ID,
-		&passkey.UserID,
-		&passkey.Name,
-		&passkey.CredentialID,
-		&passkey.PublicKey,
-		&passkey.AAGUID,
-		&passkey.SignCount,
-		&passkey.Transports,
-		&passkey.BackupEligible,
-		&passkey.BackupState,
-		&passkey.CreatedAt,
-		&passkey.LastUsedAt,
-	)
+	passkey, err := scanPasskey(r.pool.QueryRow(ctx, query, id))
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -94,32 +107,18 @@ func (r *PasskeyRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.
 		return nil, fmt.Errorf("failed to get passkey: %w", err)
 	}
 
-	return &passkey, nil
+	return passkey, nil
 }
 
 // GetByCredentialID retrieves a passkey by credential ID
 func (r *PasskeyRepository) GetByCredentialID(ctx context.Context, credentialID []byte) (*models.Passkey, error) {
 	query := `
-		SELECT id, user_id, name, credential_id, public_key, aaguid, sign_count, transports, backup_eligible, backup_state, created_at, last_used_at
+		SELECT ` + passkeyColumns + `
 		FROM passkeys
 		WHERE credential_id = $1
 	`
 
-	var passkey models.Passkey
-	err := r.pool.QueryRow(ctx, query, credentialID).Scan(
-		&passkey.ID,
-		&passkey.UserID,
-		&passkey.Name,
-		&passkey.CredentialID,
-		&passkey.PublicKey,
-		&passkey.AAGUID,
-		&passkey.SignCount,
-		&passkey.Transports,
-		&passkey.BackupEligible,
-		&passkey.BackupState,
-		&passkey.CreatedAt,
-		&passkey.LastUsedAt,
-	)
+	passkey, err := scanPasskey(r.pool.QueryRow(ctx, query, credentialID))
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -128,13 +127,13 @@ func (r *PasskeyRepository) GetByCredentialID(ctx context.Context, credentialID 
 		return nil, fmt.Errorf("failed to get passkey by credential ID: %w", err)
 	}
 
-	return &passkey, nil
+	return passkey, nil
 }
 
 // ListByUserID retrieves all passkeys for a user
 func (r *PasskeyRepository) ListByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Passkey, error) {
 	query := `
-		SELECT id, user_id, name, credential_id, public_key, aaguid, sign_count, transports, backup_eligible, backup_state, created_at, last_used_at
+		SELECT ` + passkeyColumns + `
 		FROM passkeys
 		WHERE user_id = $1
 		ORDER BY created_at DESC
@@ -148,25 +147,11 @@ func (r *PasskeyRepository) ListByUserID(ctx context.Context, userID uuid.UUID) 
 
 	var passkeys []*models.Passkey
 	for rows.Next() {
-		var passkey models.Passkey
-		err := rows.Scan(
-			&passkey.ID,
-			&passkey.UserID,
-			&passkey.Name,
-			&passkey.CredentialID,
-			&passkey.PublicKey,
-			&passkey.AAGUID,
-			&passkey.SignCount,
-			&passkey.Transports,
-			&passkey.BackupEligible,
-			&passkey.BackupState,
-			&passkey.CreatedAt,
-			&passkey.LastUsedAt,
-		)
+		passkey, err := scanPasskey(rows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan passkey: %w", err)
 		}
-		passkeys = append(passkeys, &passkey)
+		passkeys = append(passkeys, passkey)
 	}
 
 	if err = rows.Err(); err != nil {

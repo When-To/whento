@@ -2268,7 +2268,6 @@ describe('apiClient', () => {
 
       expect(close).toHaveBeenCalled();
       expect(api.hasSession()).toBe(false);
-      expect(api.isDisposed).toBe(true);
     });
 
     it('removes its storage listener', () => {

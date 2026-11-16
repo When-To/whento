@@ -158,14 +158,14 @@ func TestMagicLinkSessionInsertFailureDoesNotSpendTheProof(t *testing.T) {
 	existing := insertRefresh(ctx, t, tokens, user.ID, "existing")
 	session := pendingSession(user.ID)
 	session.TokenHash = existing.TokenHash // force a unique-constraint failure
-	if _, err := users.ConsumeMagicLinkToken(ctx, proof, user.SecurityGeneration, session); err == nil {
+	if err := users.ConsumeMagicLinkToken(ctx, proof, user.SecurityGeneration, session); err == nil {
 		t.Fatal("duplicate session insert succeeded")
 	}
 	if _, err := users.GetByMagicLinkToken(ctx, proof); err != nil {
 		t.Fatalf("failed insert burned link: %v", err)
 	}
 	session.TokenHash = repository.HashToken(uuid.NewString())
-	if _, err := users.ConsumeMagicLinkToken(ctx, proof, user.SecurityGeneration, session); err != nil {
+	if err := users.ConsumeMagicLinkToken(ctx, proof, user.SecurityGeneration, session); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
 	if _, err := tokens.GetByHash(ctx, session.TokenHash); err != nil {

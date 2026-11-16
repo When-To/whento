@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: BSL-1.1
 
 //	@title						WhenTo API
-//	@version					2.0.0
+//	@version					3.0.0
 //	@description				WhenTo is a self-hosted web application for organizing events among friends through collaborative calendars.
 //	@description				Each calendar answers a simple question: **when can we meet?** Participants indicate their availability, and time slots reaching a defined threshold become events accessible via an **iCalendar subscription URL** — automatic synchronization in Google Calendar, Apple Calendar, Outlook, etc.
 //	@description
@@ -85,6 +85,11 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// pingFunc adapts a func to the readiness Probe interface.
+type pingFunc func(context.Context) error
+
+func (f pingFunc) Ping(ctx context.Context) error { return f(ctx) }
 
 // instanceID returns a stable-enough identifier for this process, used as the
 // reminder-job owner mark. The hostname is unique among the few instances a
@@ -170,7 +175,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("connect to database: %w", err)
 	}
-	defer database.Close(pool)
+	defer pool.Close()
 	log.Info("Connected to PostgreSQL")
 
 	// Pool saturation is the first thing to look at when latency rises, and the
@@ -182,15 +187,12 @@ func run() error {
 	}
 
 	// Connect to Redis (shared by all modules) - Optional
-	redisConfig := &database.RedisConfig{
-		URL: cfg.RedisURL,
-	}
-	redisClient, err := database.NewRedisClient(ctx, redisConfig)
+	redisClient, err := database.NewRedisClient(ctx, cfg.RedisURL)
 	if err != nil {
 		log.Warn("Failed to connect to Redis - running without cache", "error", err)
 		redisClient = nil
 	} else {
-		defer func() { _ = database.CloseRedis(redisClient) }()
+		defer func() { _ = redisClient.Close() }()
 		log.Info("Connected to Redis - cache enabled")
 	}
 
@@ -278,12 +280,11 @@ func run() error {
 
 	// Readiness probes what the instance actually needs: PostgreSQL, which is
 	// fatal, and Redis, which is not. The Redis probe stays nil when no client
-	// was created — assigning a nil *RedisPinger to the interface would produce
-	// a non-nil interface holding nil, and readiness would report a hard "down"
-	// for a dependency the operator chose not to run.
+	// was created, so readiness does not report "down" for a dependency the
+	// operator chose not to run.
 	var cacheProbe authHandlers.Probe
-	if redisPinger := database.NewRedisPinger(redisClient); redisPinger != nil {
-		cacheProbe = redisPinger
+	if redisClient != nil {
+		cacheProbe = pingFunc(func(ctx context.Context) error { return redisClient.Ping(ctx).Err() })
 	}
 
 	d := &deps{
@@ -335,15 +336,10 @@ func run() error {
 	defer baseCancel()
 
 	// Join the worker on every exit path, before closing its database pool.
-	stopReminders := func() {}
-	if h.reminders != nil {
-		stopReminders = startReminderWorker(baseCtx, h.reminders.Run)
-	}
+	stopReminders := startReminderWorker(baseCtx, h.reminders.Run)
 	defer stopReminders()
 
-	if h.refreshTokens != nil {
-		go sweepExpiredRefreshTokens(baseCtx, h.refreshTokens, log)
-	}
+	go sweepExpiredRefreshTokens(baseCtx, h.refreshTokens, log)
 
 	// Create server
 	srv := &http.Server{

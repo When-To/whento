@@ -15,7 +15,7 @@ import (
 )
 
 // Probe reports whether a dependency answers. *pgxpool.Pool satisfies it as
-// is; database.NewRedisPinger adapts the Redis client.
+// is; cmd/main.go adapts the Redis client with a pingFunc.
 type Probe interface {
 	Ping(ctx context.Context) error
 }

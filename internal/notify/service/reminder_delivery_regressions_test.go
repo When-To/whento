@@ -343,6 +343,39 @@ func TestReminderLateQualificationIsDeliveredWhileWatching(t *testing.T) {
 	}
 }
 
+// After a restart, only a send window that opened while nothing was scanning is
+// an outage. One the previous process saw open still gets a late qualifier its
+// reminder, exactly as if the process had never restarted.
+func TestReminderLateQualificationAcrossARestart(t *testing.T) {
+	tests := []struct {
+		name         string
+		lastScan     time.Time // the previous process's last scan
+		wantEnqueued int
+		wantMissed   int
+	}{
+		{"the previous process saw the window open", time.Date(2026, 4, 1, 0, 30, 0, 0, time.UTC), 5, 0},
+		{"the window opened while nothing was scanning", time.Date(2026, 3, 31, 23, 0, 0, 0, time.UTC), 0, 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newReminderFixture(t, reminderConfig())
+			f.scheduler.catchUp = time.Minute
+			f.jobs.lastScan = tt.lastScan
+
+			// 2026-04-02 qualifies at 01:02, an hour after its 00:00 send window,
+			// in the first scan of a freshly started process.
+			f.slots.count = f.calendar.Threshold
+			f.scheduler.now = func() time.Time { return time.Date(2026, 4, 1, 1, 2, 0, 0, time.UTC) }
+			f.scheduler.enqueueDue(t.Context())
+
+			if len(f.jobs.enqueued) != tt.wantEnqueued || len(f.jobs.missed) != tt.wantMissed {
+				t.Fatalf("enqueued=%d missed=%d, want %d and %d",
+					len(f.jobs.enqueued), len(f.jobs.missed), tt.wantEnqueued, tt.wantMissed)
+			}
+		})
+	}
+}
+
 type panickingReminderJobStore struct{ *fakeReminderJobStore }
 
 func (panickingReminderJobStore) Cleanup(context.Context, time.Time, int) (int64, error) {

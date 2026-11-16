@@ -199,6 +199,7 @@ jobs:
             VERSION=${{ steps.version.outputs.version }}
           platforms: linux/amd64
           cache-from: type=gha
+          no-cache-filters: runtime
           cache-to: type=gha,mode=max
 
       # ignore-unfixed, because an advisory with no released fix is not something this
@@ -230,6 +231,7 @@ jobs:
           sbom: true
           provenance: mode=max
           cache-from: type=gha
+          no-cache-filters: runtime
           cache-to: type=gha,mode=max
 
       # The signed, GitHub-issued attestation — `gh attestation verify oci://…` proves

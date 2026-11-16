@@ -15,6 +15,8 @@
  */
 
 import { useI18n } from 'vue-i18n';
+import { formatDate as formatIntlDate } from '@/utils/date/intlFormatters';
+import { isFullDay } from '@/utils/date/timeRange';
 
 const WEEKDAY_KEYS = [
   'availability.sunday',
@@ -57,33 +59,14 @@ export function useAvailabilityLabels(): AvailabilityLabels {
    * change with its own test.
    */
   function formatDate(dateStr: string): string {
-    const date = new Date(dateStr);
-    const localeCode = locale.value;
-    return new Intl.DateTimeFormat(localeCode, {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }).format(date);
+    return formatIntlDate(new Date(dateStr), locale.value, 'weekdayDayMonthYearShort');
   }
 
   function formatTimeRange(startTime?: string, endTime?: string): string {
-    // Check if it's a full day range (00:00-23:59 or no times)
-    const start = startTime || '00:00';
-    const end = endTime || '23:59';
-
-    if (start === '00:00' && end === '23:59') {
-      return t('availability.allDay');
-    }
-
-    if (startTime && endTime) {
-      return `${startTime} - ${endTime}`;
-    } else if (startTime) {
-      return `${t('availability.startTime')}: ${startTime}`;
-    } else if (endTime) {
-      return `${t('availability.endTime')}: ${endTime}`;
-    }
-    return t('availability.allDay');
+    if (isFullDay(startTime, endTime)) return t('availability.allDay');
+    if (startTime && endTime) return `${startTime} - ${endTime}`;
+    if (startTime) return `${t('availability.startTime')}: ${startTime}`;
+    return `${t('availability.endTime')}: ${endTime}`;
   }
 
   function getDayName(dayOfWeek: number): string {

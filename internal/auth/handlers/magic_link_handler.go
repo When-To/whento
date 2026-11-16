@@ -15,7 +15,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/whento/pkg/httputil"
-	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/auth/service"
 	"github.com/whento/whento/internal/auth/sessioncookie"
@@ -29,7 +28,7 @@ import (
 // that constructor touches. Go interfaces are structural, so the concrete
 // service satisfies it and no call site changes.
 type MagicLinkService interface {
-	RequestMagicLink(ctx context.Context, email string) error
+	RequestMagicLink(ctx context.Context, email string)
 	VerifyMagicLink(ctx context.Context, token string) (*models.AuthResponse, error)
 }
 
@@ -83,23 +82,12 @@ func (h *MagicLinkHandler) RequestMagicLink(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 
 	var req models.MagicLinkRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	// Validate request
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
 	// Request magic link (always returns nil for anti-enumeration)
-	_ = h.magicLinkService.RequestMagicLink(ctx, req.Email)
+	h.magicLinkService.RequestMagicLink(ctx, req.Email)
 
 	// ALWAYS return 200 OK with generic message (anti-enumeration)
 	httputil.JSON(w, http.StatusOK, models.MagicLinkResponse{
@@ -162,17 +150,7 @@ func (h *MagicLinkHandler) VerifyMagicLink(w http.ResponseWriter, r *http.Reques
 	r.Body = http.MaxBytesReader(w, r.Body, 2048)
 
 	var req models.MagicLinkVerifyRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 

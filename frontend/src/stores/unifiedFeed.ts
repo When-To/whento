@@ -296,12 +296,10 @@ export const useUnifiedFeedStore = defineStore('unifiedFeed', () => {
     error,
     fetchConfig,
     createFeed,
-    updateCalendars,
     toggleCalendar,
     regenerateToken,
     isCalendarIncluded,
     /** Drops every account-scoped feed state from memory (used on account reset). */
     clearConfig,
-    clearError,
   };
 });

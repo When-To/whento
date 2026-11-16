@@ -28,8 +28,8 @@ wrong artefact hard to build by accident, not merely discouraged.
 
 Select the variant with a Go build tag, `cloud` or `selfhosted`, chosen at
 compile time. `BUILD_TYPE ?= selfhosted` in the Makefile; the frontend equivalent
-is `VITE_BUILD_TYPE`, read through `isCloud` / `isSelfHosted` in
-`frontend/src/composables/useBuildType.ts`.
+is `VITE_BUILD_TYPE`, which Vite replaces at build time and components compare
+inline (`import.meta.env.VITE_BUILD_TYPE === 'cloud'`).
 
 Three rules make it workable:
 
@@ -37,7 +37,7 @@ Three rules make it workable:
    *file pairs* inside otherwise shared packages, each pair exposing the same
    symbols:
    - `cmd/init_cloud.go` / `cmd/init_selfhosted.go` — `InitServices`,
-     `RegisterQuotaRoutes`, `buildType`;
+     `buildType`;
    - `internal/quota/cloud.go` / `internal/quota/selfhosted.go`.
 2. **Both variants must compile, and CI proves it** — `go build`, `golangci-lint`
    and `govulncheck` all run twice, under each tag.

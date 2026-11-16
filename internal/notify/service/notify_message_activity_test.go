@@ -5,6 +5,9 @@
 package service
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -228,5 +231,52 @@ func TestBuildHTMLNotificationMessageWithoutAnEntry(t *testing.T) {
 				t.Errorf("an empty entry left a separator behind:\n%s", got)
 			}
 		})
+	}
+}
+
+// TestBuildHTMLNotificationMessageGolden pins the whole body, byte for byte, for every
+// locale and transition. The substring tests above say what is in it; this one says
+// nothing else moved. Regenerate the digests only for an intended change to the mail.
+func TestBuildHTMLNotificationMessageGolden(t *testing.T) {
+	want := map[string]string{
+		"en/threshold_reached/false":    "418bf55c3b385ea507be3088899699ac1f74a37deb9e8da3202cece2a7f1ab5c",
+		"en/threshold_reached/true":     "84477a138c381f5df9ccd3f731ca666ca32daa329a9a048ca0da7655734cbc17",
+		"en/threshold_lost/false":       "9732214964b805d2bd39a4184656ee70289b883db152edacc5543e0851215dad",
+		"en/threshold_lost/true":        "b456301b829df7c0a5001ae91e6be58d86b93f1172cdd00046a004ff266f32e7",
+		"en/availability_changed/false": "5c522df2aa1734a5d2765ff510ac3f4aee5aaf6503cf28e3ef92eaec92062b5f",
+		"en/availability_changed/true":  "027a5989edf0418efdbe232ce1f5a163ab9a0e9b3e70603869cc7341350a5231",
+		"fr/threshold_reached/false":    "14190c823059d35dd5158885cb7e5f04fb16157c516fe00b13d5222c3a9e23a5",
+		"fr/threshold_reached/true":     "d882543803eb2ea9ee205c506cde7a66bdddd4d99f7d036235680c6ca19ebbe0",
+		"fr/threshold_lost/false":       "24d8d79c04724a40c9808f10bca55d04c11aa1d8ae78181fdee6d8d13aab2801",
+		"fr/threshold_lost/true":        "ef84d20b2f4850a1876fecb32ba2cedc91e129a4efa7edd1e615492dd2c8f0d5",
+		"fr/availability_changed/false": "1512d58f1bd2d64ec0dab5d358cf3627fb79e3b48d8ba0ec4e6765436b8c186a",
+		"fr/availability_changed/true":  "b23427b42d6dde6b65ebc6b1ebbd5bde4e2c52350d55583b76cd1a86fecbbb78",
+		"de/threshold_reached/false":    "418bf55c3b385ea507be3088899699ac1f74a37deb9e8da3202cece2a7f1ab5c",
+		"de/threshold_reached/true":     "84477a138c381f5df9ccd3f731ca666ca32daa329a9a048ca0da7655734cbc17",
+		"de/threshold_lost/false":       "9732214964b805d2bd39a4184656ee70289b883db152edacc5543e0851215dad",
+		"de/threshold_lost/true":        "b456301b829df7c0a5001ae91e6be58d86b93f1172cdd00046a004ff266f32e7",
+		"de/availability_changed/false": "5c522df2aa1734a5d2765ff510ac3f4aee5aaf6503cf28e3ef92eaec92062b5f",
+		"de/availability_changed/true":  "027a5989edf0418efdbe232ce1f5a163ab9a0e9b3e70603869cc7341350a5231",
+	}
+
+	service := &NotifyService{}
+	for _, locale := range []string{"en", "fr", "de"} {
+		for _, kind := range []string{"threshold_reached", "threshold_lost", "availability_changed"} {
+			for _, withParticipant := range []bool{false, true} {
+				key := fmt.Sprintf("%s/%s/%t", locale, kind, withParticipant)
+				got := service.buildHTMLNotificationMessage(
+					messageCalendar(),
+					transitionOf(kind, refTo("Ada"), refTo("Grace & <Co>")),
+					"https://whento.test/c/token/p/pid",
+					withParticipant,
+					locale,
+					[]string{"Ada", "Grace & <Co>"},
+				)
+				sum := sha256.Sum256([]byte(got))
+				if digest := hex.EncodeToString(sum[:]); digest != want[key] {
+					t.Errorf("%s: body digest %s, want %s", key, digest, want[key])
+				}
+			}
+		}
 	}
 }

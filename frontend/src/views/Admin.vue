@@ -172,7 +172,7 @@
 
                 <!-- Created At -->
                 <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                  {{ formatDate(user.created_at) }}
+                  {{ formatCreatedAt(user.created_at) }}
                 </td>
 
                 <!-- Actions -->
@@ -280,6 +280,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date/intlFormatters';
 import { ref, onMounted, reactive } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
@@ -423,13 +424,8 @@ function viewUserCalendars(user: User) {
   });
 }
 
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString(authStore.user?.locale || 'fr', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+function formatCreatedAt(dateString: string): string {
+  return formatDate(new Date(dateString), authStore.user?.locale || 'fr', 'dayMonthYearShort');
 }
 </script>
 

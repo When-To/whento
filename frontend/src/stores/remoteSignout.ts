@@ -58,10 +58,7 @@ export function registerRemoteSignoutListener(): () => void {
  * lists) watch to clear and reload only their own data once the new identity confirms.
  * Protected-route auth checks are unchanged.
  */
-export async function handleRemoteSessionRestored(
-  family: string | null,
-  _options: { reload?: () => void } = {}
-): Promise<void> {
+export async function handleRemoteSessionRestored(family: string | null): Promise<void> {
   resetAccountScopedState();
   await useAuthStore()
     .fetchUser(family)

@@ -11,7 +11,8 @@ import type { Availability } from '@/types';
 import type { AvailabilityOperation } from '@/types/calendar';
 import type { SlotCell, WeekModel } from '@/utils/calendar/weekModel';
 import { addRange, removeRange, toggleFullDay, toggleSlot } from '@/utils/calendar/availabilityOps';
-import { addMinutesCapped } from '@/utils/date/timeRange';
+import { addDaysISO } from '@/utils/date/isoDate';
+import { addMinutesCapped, minutesToTime } from '@/utils/date/timeRange';
 import { useDragSelection, type DragTarget } from '@/composables/calendar/useDragSelection';
 
 interface Props {
@@ -48,8 +49,7 @@ const slotCount = computed(() => props.model.slots.length);
 const endLabel = computed(() => {
   const last = props.model.slots[props.model.slots.length - 1];
   if (!last) return '';
-  const end = last.startMin + props.slotDurationMin;
-  return `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
+  return minutesToTime(last.startMin + props.slotDurationMin);
 });
 
 /** Spacing of the hour separators, expressed in slot heights. */
@@ -209,15 +209,7 @@ function isDetailsControl(element: Element): boolean {
 }
 
 function shiftWeek(days: number) {
-  const date = new Date(
-    Number(props.model.startISO.slice(0, 4)),
-    Number(props.model.startISO.slice(5, 7)) - 1,
-    Number(props.model.startISO.slice(8, 10)) + days
-  );
-  const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-    date.getDate()
-  ).padStart(2, '0')}`;
-  emit('week-change', iso);
+  emit('week-change', addDaysISO(props.model.startISO, days));
 }
 </script>
 

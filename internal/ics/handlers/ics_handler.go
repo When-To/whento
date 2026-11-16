@@ -5,11 +5,11 @@
 package handlers
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -18,12 +18,12 @@ import (
 	"github.com/whento/whento/internal/ics/service"
 )
 
-// crlfRegexp matches CR, LF, and CRLF sequences
-var crlfRegexp = regexp.MustCompile(`[\r\n]+`)
+// crlfStripper removes CR and LF characters.
+var crlfStripper = strings.NewReplacer("\r", "", "\n", "")
 
 // sanitizeICSValue strips CR/LF characters to prevent CRLF injection into ICS properties
 func sanitizeICSValue(s string) string {
-	return crlfRegexp.ReplaceAllString(s, "")
+	return crlfStripper.Replace(s)
 }
 
 type ICSHandler struct {
@@ -52,14 +52,7 @@ type icsFeedEndpoint struct {
 func extractTokenAndHost(r *http.Request) (token, host string) {
 	token = strings.TrimSuffix(chi.URLParam(r, "token"), ".ics")
 
-	host = r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Header.Get("X-Real-Host")
-	}
-	if host == "" {
-		host = r.Host
-	}
-	host = sanitizeICSValue(host)
+	host = sanitizeICSValue(cmp.Or(r.Header.Get("X-Forwarded-Host"), r.Header.Get("X-Real-Host"), r.Host))
 	return token, host
 }
 

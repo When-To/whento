@@ -6,7 +6,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -73,6 +72,8 @@ type ReminderTunables struct {
 type ReminderJobStore interface {
 	Enqueue(ctx context.Context, job *models.ReminderJob) error
 	RecordMissed(ctx context.Context, job *models.ReminderJob) (bool, error)
+	// MarkScanned records a scan at now and returns the one before it, zero if none.
+	MarkScanned(ctx context.Context, now time.Time) (time.Time, error)
 	Cleanup(ctx context.Context, before time.Time, limit int) (int64, error)
 	ClaimDue(ctx context.Context, instanceID string, now time.Time, leaseTTL time.Duration, limit int) ([]models.ReminderJob, error)
 	RenewLease(ctx context.Context, id, token uuid.UUID, now time.Time, ttl time.Duration) error
@@ -172,9 +173,13 @@ type ReminderScheduler struct {
 	lastCleanup      time.Time
 	now              func() time.Time
 	logger           *slog.Logger
-	// watchingSince is when this process first scanned. A send window that
-	// opened after it was observed by a live scan, so an event qualifying past
-	// the catch-up window qualified late rather than during an outage.
+	// A send window that opened between previousScan (the last scan any
+	// process recorded before this one started; zero if none) and
+	// watchingSince (this process's first scan) opened while nothing was
+	// scanning: an outage, bounded by the catch-up window. Any other window was
+	// observed by a live scan, so an event qualifying past the catch-up window
+	// qualified late and still gets its reminder.
+	previousScan  time.Time
 	watchingSince time.Time
 }
 
@@ -316,8 +321,12 @@ func (s *ReminderScheduler) enqueueDue(ctx context.Context) {
 	}
 
 	now := s.now()
+	lastScan, err := s.jobs.MarkScanned(ctx, now)
+	if err != nil {
+		s.logger.Error("Failed to record reminder scan", "error", err)
+	}
 	if s.watchingSince.IsZero() {
-		s.watchingSince = now
+		s.watchingSince, s.previousScan = now, lastScan
 	}
 	for _, calendar := range calendars {
 		// A shutdown mid-scan would otherwise run, and log, a failing count
@@ -330,7 +339,7 @@ func (s *ReminderScheduler) enqueueDue(ctx context.Context) {
 }
 
 func (s *ReminderScheduler) enqueueCalendar(ctx context.Context, calendar *calendarModels.Calendar, now time.Time) {
-	cfg, err := s.calendarConfig(calendar)
+	cfg, err := models.ParseNotifyConfig(calendar.NotifyConfig)
 	if err != nil {
 		s.logger.Error("Failed to parse notify config for reminder scan",
 			"calendar_id", calendar.ID, "error", err)
@@ -345,7 +354,7 @@ func (s *ReminderScheduler) enqueueCalendar(ctx context.Context, calendar *calen
 		return
 	}
 
-	specs := s.planDelivery(calendar, &cfg)
+	specs := s.planDelivery(&cfg)
 	if len(specs) == 0 {
 		return
 	}
@@ -373,10 +382,10 @@ func (s *ReminderScheduler) enqueueCalendar(ctx context.Context, calendar *calen
 				NextAttemptAt: scheduledAt,
 			}
 			// The catch-up window bounds what an outage may deliver late. A window
-			// that opened while this process was scanning was not missed: the
-			// event qualified afterwards (someone joined the day before), and
-			// it is delivered now while the event is still ahead.
-			if now.Sub(scheduledAt) > s.catchUp && scheduledAt.Before(s.watchingSince) {
+			// that a live scan saw open, in this process or the previous one, was
+			// not missed: the event qualified afterwards (someone joined the day
+			// before), and it is delivered now while the event is still ahead.
+			if now.Sub(scheduledAt) > s.catchUp && scheduledAt.After(s.previousScan) && scheduledAt.Before(s.watchingSince) {
 				recorded, err := s.jobs.RecordMissed(ctx, job)
 				if err != nil {
 					s.logger.Error("Failed to record missed reminder", "calendar_id", calendar.ID, "error", err)
@@ -419,17 +428,6 @@ func (s *ReminderScheduler) timezoneOf(calendar *calendarModels.Calendar) *time.
 	return loc
 }
 
-func (s *ReminderScheduler) calendarConfig(calendar *calendarModels.Calendar) (models.NotifyConfig, error) {
-	var cfg models.NotifyConfig
-	if calendar.NotifyConfig == nil || *calendar.NotifyConfig == "" {
-		return cfg, nil
-	}
-	if err := json.Unmarshal([]byte(*calendar.NotifyConfig), &cfg); err != nil {
-		return cfg, err
-	}
-	return cfg, nil
-}
-
 // planDelivery is the static half of the delivery plan: which (recipient class,
 // channel) pairs a reminder opens, derived from the notify config. The dynamic
 // half — who among participants is available — is resolved at send time.
@@ -440,7 +438,7 @@ type jobSpec struct {
 	channel       string
 }
 
-func (s *ReminderScheduler) planDelivery(calendar *calendarModels.Calendar, cfg *models.NotifyConfig) []jobSpec {
+func (s *ReminderScheduler) planDelivery(cfg *models.NotifyConfig) []jobSpec {
 	var specs []jobSpec
 
 	if cfg.NotifyOwner {
@@ -462,14 +460,10 @@ func (s *ReminderScheduler) enabledChannels(cfg *models.NotifyConfig) []string {
 	if cfg.Channels.Email.Enabled {
 		channels = append(channels, "email")
 	}
-	if cfg.Channels.Discord.Enabled && cfg.Channels.Discord.WebhookURL != "" {
-		channels = append(channels, "discord")
-	}
-	if cfg.Channels.Slack.Enabled && cfg.Channels.Slack.WebhookURL != "" {
-		channels = append(channels, "slack")
-	}
-	if cfg.Channels.Telegram.Enabled && cfg.Channels.Telegram.BotToken != "" && cfg.Channels.Telegram.ChatID != "" {
-		channels = append(channels, "telegram")
+	for _, ch := range chatChannels(cfg.Channels) {
+		if ch.usable {
+			channels = append(channels, ch.name)
+		}
 	}
 	return channels
 }
@@ -579,7 +573,7 @@ func (s *ReminderScheduler) deliverOne(ctx context.Context, job models.ReminderJ
 		return
 	}
 
-	cfg, err := s.calendarConfig(calendar)
+	cfg, err := models.ParseNotifyConfig(calendar.NotifyConfig)
 	if err != nil {
 		s.logger.Error("Failed to parse notify config for reminder delivery",
 			"calendar_id", job.CalendarID, "error", err)
@@ -604,7 +598,7 @@ func (s *ReminderScheduler) deliverOne(ctx context.Context, job models.ReminderJ
 		return
 	}
 
-	qualified, err := s.eventQualifies(ctx, calendar, job.EventDate)
+	qualified, err := s.eventQualifiesAt(ctx, calendar, job.EventDate, s.now())
 	if err != nil {
 		// Transient error checking the event: retry with backoff. A count query
 		// failing must not cancel the whole event.
@@ -668,7 +662,7 @@ func (s *ReminderScheduler) jobStillWanted(calendar *calendarModels.Calendar, cf
 	}
 
 	matched := false
-	for _, spec := range s.planDelivery(calendar, cfg) {
+	for _, spec := range s.planDelivery(cfg) {
 		if spec.recipientType == job.RecipientType && spec.channel == job.Channel {
 			matched = true
 			break
@@ -687,10 +681,6 @@ func (s *ReminderScheduler) jobStillWanted(calendar *calendarModels.Calendar, cf
 
 	return job.ScheduledAt.Sub(scheduledAt) <= reminderTimeTolerance &&
 		scheduledAt.Sub(job.ScheduledAt) <= reminderTimeTolerance
-}
-
-func (s *ReminderScheduler) eventQualifies(ctx context.Context, calendar *calendarModels.Calendar, date time.Time) (bool, error) {
-	return s.eventQualifiesAt(ctx, calendar, date, s.now())
 }
 
 func (s *ReminderScheduler) eventQualifiesAt(ctx context.Context, calendar *calendarModels.Calendar, date, now time.Time) (bool, error) {
@@ -835,15 +825,7 @@ func (s *ReminderScheduler) sendOwnerChat(
 	}
 	defer cancel()
 
-	var sendErr error
-	switch channel {
-	case "discord":
-		sendErr = s.externalNotifier.SendDiscord(sendCtx, cfg.Channels.Discord.WebhookURL, text)
-	case "slack":
-		sendErr = s.externalNotifier.SendSlack(sendCtx, cfg.Channels.Slack.WebhookURL, text)
-	case "telegram":
-		sendErr = s.externalNotifier.SendTelegram(sendCtx, cfg.Channels.Telegram.BotToken, cfg.Channels.Telegram.ChatID, text)
-	}
+	sendErr := sendChat(sendCtx, s.externalNotifier, cfg.Channels, channel, text)
 	if sendErr != nil {
 		return &reminderProviderError{channel: channel, cause: sendErr}
 	}

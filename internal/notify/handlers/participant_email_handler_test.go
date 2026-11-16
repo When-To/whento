@@ -18,6 +18,7 @@ import (
 
 	calendarModels "github.com/whento/whento/internal/calendar/models"
 	"github.com/whento/whento/internal/notify/handlers"
+	"github.com/whento/whento/internal/notify/service"
 	"github.com/whento/whento/internal/testutil"
 )
 
@@ -328,8 +329,15 @@ func TestVerifyEmail(t *testing.T) {
 		{
 			name:       "the token is unknown or expired",
 			token:      "a-token",
-			verifyErr:  errors.New("invalid or expired verification token"),
+			verifyErr:  service.ErrInvalidVerificationToken,
 			wantStatus: http.StatusBadRequest,
+		},
+		{
+			// The cause stays in the log: a database error is not shown to the client.
+			name:       "the write fails",
+			token:      "a-token",
+			verifyErr:  errors.New("failed to verify email: connection reset"),
+			wantStatus: http.StatusInternalServerError,
 		},
 	}
 
@@ -346,6 +354,9 @@ func TestVerifyEmail(t *testing.T) {
 
 			if w.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", w.Code, tt.wantStatus, w.Body.String())
+			}
+			if strings.Contains(w.Body.String(), "connection reset") {
+				t.Errorf("the response exposes the internal error: %s", w.Body.String())
 			}
 			if tt.wantStatus == http.StatusOK && !strings.Contains(w.Body.String(), "Email verified successfully") {
 				t.Errorf("response does not carry the confirmation: %s", w.Body.String())

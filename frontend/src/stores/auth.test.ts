@@ -19,7 +19,6 @@ const authApi = {
   logout: vi.fn(),
   getMe: vi.fn(),
   updateProfile: vi.fn(),
-  updatePassword: vi.fn(),
   forgotPassword: vi.fn(),
   completeAccountRecovery: vi.fn(),
 };
@@ -531,14 +530,6 @@ describe('auth store', () => {
       expect(store.user?.display_name).toBe('Bee');
     });
 
-    it('translates a password change failure', async () => {
-      authApi.updatePassword.mockRejectedValue({ code: 'UNAUTHORIZED' });
-      const store = freshStore();
-
-      await expect(store.updatePassword('old', 'new')).rejects.toBeDefined();
-      expect(store.error).toBe(i18n.global.t('errors.unauthorized'));
-    });
-
     it('signs the user in after a password reset', async () => {
       authApi.completeAccountRecovery.mockResolvedValue(authResponse({ access_token: 'fresh' }));
       const store = freshStore();
@@ -668,6 +659,38 @@ describe('auth store', () => {
 
       expect(store.user?.id).toBe('u-b');
       expect(apiClient.clearToken).not.toHaveBeenCalled();
+    });
+
+    it('confirms a session adopted from another tab before the guard decides', async () => {
+      // A cold tab's restore can be voided by another tab's concurrent refresh: this tab
+      // adopts the broadcast token (an account boundary) and its own replay is dropped
+      // as stale. Resolving signed out would send a signed-in tab to /login.
+      apiClient.hasSession.mockReturnValue(true);
+      const gate = deferred<User>();
+      const adopted = deferred<User>();
+      authApi.getMe.mockReturnValueOnce(gate.promise).mockReturnValueOnce(adopted.promise);
+      const store = freshStore();
+
+      const pending = store.initializeAuth();
+      await vi.waitFor(() => expect(authApi.getMe).toHaveBeenCalled());
+
+      // What remoteSignout does on adoption: reset, then hydrate the new session.
+      store.resetSession();
+      void store.fetchUser().catch(() => {});
+      gate.reject(new Error('stale session'));
+
+      let settled = false;
+      void pending.then(() => (settled = true));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(settled).toBe(false);
+
+      adopted.resolve(USER);
+      await pending;
+
+      expect(store.user).toEqual(USER);
+      expect(store.error).toBeNull();
+      // It waited on the adoption's /auth/me rather than sending its own.
+      expect(authApi.getMe).toHaveBeenCalledTimes(2);
     });
 
     it('runs once however many callers ask', async () => {

@@ -42,6 +42,38 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 	return &UserRepository{pool: pool}
 }
 
+// userColumns is the full users projection, in the order scanUser reads it.
+const userColumns = `id, email, password_hash, display_name, role, locale, timezone, email_verified, verification_token, verification_token_expires_at, password_reset_token, password_reset_token_expires_at, magic_link_token, magic_link_token_expires_at, security_generation, created_at, updated_at`
+
+// scanUser scans the userColumns projection into a new model. pgx.Rows
+// satisfies pgx.Row, so it serves both single-row and list queries.
+func scanUser(row pgx.Row) (*models.User, error) {
+	user := &models.User{}
+	err := row.Scan(
+		&user.ID,
+		&user.Email,
+		&user.PasswordHash,
+		&user.DisplayName,
+		&user.Role,
+		&user.Locale,
+		&user.Timezone,
+		&user.EmailVerified,
+		&user.VerificationToken,
+		&user.VerificationTokenExpiresAt,
+		&user.PasswordResetToken,
+		&user.PasswordResetTokenExpiresAt,
+		&user.MagicLinkToken,
+		&user.MagicLinkTokenExpiresAt,
+		&user.SecurityGeneration,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
 // Create creates a new user
 func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 	query := `
@@ -75,34 +107,11 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 // GetByID retrieves a user by ID
 func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, display_name, role, locale, timezone,
-		       email_verified, verification_token, verification_token_expires_at,
-		       password_reset_token, password_reset_token_expires_at,
-		       magic_link_token, magic_link_token_expires_at,
-		       security_generation, created_at, updated_at
+		SELECT ` + userColumns + `
 		FROM users
 		WHERE id = $1`
 
-	user := &models.User{}
-	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&user.ID,
-		&user.Email,
-		&user.PasswordHash,
-		&user.DisplayName,
-		&user.Role,
-		&user.Locale,
-		&user.Timezone,
-		&user.EmailVerified,
-		&user.VerificationToken,
-		&user.VerificationTokenExpiresAt,
-		&user.PasswordResetToken,
-		&user.PasswordResetTokenExpiresAt,
-		&user.MagicLinkToken,
-		&user.MagicLinkTokenExpiresAt,
-		&user.SecurityGeneration,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
+	user, err := scanUser(r.pool.QueryRow(ctx, query, id))
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -117,34 +126,11 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 // GetByEmail retrieves a user by email
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, display_name, role, locale, timezone,
-		       email_verified, verification_token, verification_token_expires_at,
-		       password_reset_token, password_reset_token_expires_at,
-		       magic_link_token, magic_link_token_expires_at,
-		       security_generation, created_at, updated_at
+		SELECT ` + userColumns + `
 		FROM users
 		WHERE email = $1`
 
-	user := &models.User{}
-	err := r.pool.QueryRow(ctx, query, email).Scan(
-		&user.ID,
-		&user.Email,
-		&user.PasswordHash,
-		&user.DisplayName,
-		&user.Role,
-		&user.Locale,
-		&user.Timezone,
-		&user.EmailVerified,
-		&user.VerificationToken,
-		&user.VerificationTokenExpiresAt,
-		&user.PasswordResetToken,
-		&user.PasswordResetTokenExpiresAt,
-		&user.MagicLinkToken,
-		&user.MagicLinkTokenExpiresAt,
-		&user.SecurityGeneration,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
+	user, err := scanUser(r.pool.QueryRow(ctx, query, email))
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -179,32 +165,9 @@ func (r *UserRepository) UpdateProfile(
 		    timezone = COALESCE($4, timezone),
 		    updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, email, password_hash, display_name, role, locale, timezone,
-		          email_verified, verification_token, verification_token_expires_at,
-		          password_reset_token, password_reset_token_expires_at,
-		          magic_link_token, magic_link_token_expires_at,
-		          security_generation, created_at, updated_at`
+		RETURNING ` + userColumns
 
-	user := &models.User{}
-	err := r.pool.QueryRow(ctx, query, userID, displayName, locale, timezone).Scan(
-		&user.ID,
-		&user.Email,
-		&user.PasswordHash,
-		&user.DisplayName,
-		&user.Role,
-		&user.Locale,
-		&user.Timezone,
-		&user.EmailVerified,
-		&user.VerificationToken,
-		&user.VerificationTokenExpiresAt,
-		&user.PasswordResetToken,
-		&user.PasswordResetTokenExpiresAt,
-		&user.MagicLinkToken,
-		&user.MagicLinkTokenExpiresAt,
-		&user.SecurityGeneration,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
+	user, err := scanUser(r.pool.QueryRow(ctx, query, userID, displayName, locale, timezone))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUserNotFound
@@ -364,11 +327,7 @@ func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 // List lists all users
 func (r *UserRepository) List(ctx context.Context) ([]*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, display_name, role, locale, timezone,
-		       email_verified, verification_token, verification_token_expires_at,
-		       password_reset_token, password_reset_token_expires_at,
-		       magic_link_token, magic_link_token_expires_at,
-		       security_generation, created_at, updated_at
+		SELECT ` + userColumns + `
 		FROM users
 		ORDER BY created_at DESC`
 
@@ -380,26 +339,7 @@ func (r *UserRepository) List(ctx context.Context) ([]*models.User, error) {
 
 	var users []*models.User
 	for rows.Next() {
-		user := &models.User{}
-		err := rows.Scan(
-			&user.ID,
-			&user.Email,
-			&user.PasswordHash,
-			&user.DisplayName,
-			&user.Role,
-			&user.Locale,
-			&user.Timezone,
-			&user.EmailVerified,
-			&user.VerificationToken,
-			&user.VerificationTokenExpiresAt,
-			&user.PasswordResetToken,
-			&user.PasswordResetTokenExpiresAt,
-			&user.MagicLinkToken,
-			&user.MagicLinkTokenExpiresAt,
-			&user.SecurityGeneration,
-			&user.CreatedAt,
-			&user.UpdatedAt,
-		)
+		user, err := scanUser(rows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
@@ -577,35 +517,12 @@ func (r *UserRepository) SetVerificationToken(ctx context.Context, userID uuid.U
 // GetByVerificationToken retrieves a user by verification token
 func (r *UserRepository) GetByVerificationToken(ctx context.Context, token string) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, display_name, role, locale, timezone,
-		       email_verified, verification_token, verification_token_expires_at,
-		       password_reset_token, password_reset_token_expires_at,
-		       magic_link_token, magic_link_token_expires_at,
-		       security_generation, created_at, updated_at
+		SELECT ` + userColumns + `
 		FROM users
 		WHERE verification_token = $1
 		  AND verification_token_expires_at > NOW()`
 
-	user := &models.User{}
-	err := r.pool.QueryRow(ctx, query, token).Scan(
-		&user.ID,
-		&user.Email,
-		&user.PasswordHash,
-		&user.DisplayName,
-		&user.Role,
-		&user.Locale,
-		&user.Timezone,
-		&user.EmailVerified,
-		&user.VerificationToken,
-		&user.VerificationTokenExpiresAt,
-		&user.PasswordResetToken,
-		&user.PasswordResetTokenExpiresAt,
-		&user.MagicLinkToken,
-		&user.MagicLinkTokenExpiresAt,
-		&user.SecurityGeneration,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
+	user, err := scanUser(r.pool.QueryRow(ctx, query, token))
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -664,34 +581,11 @@ func (r *UserRepository) SetPasswordResetToken(ctx context.Context, userID uuid.
 // Returns ErrUserNotFound if user doesn't exist or email not verified
 func (r *UserRepository) GetByEmailVerified(ctx context.Context, email string) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, display_name, role, locale, timezone,
-		       email_verified, verification_token, verification_token_expires_at,
-		       password_reset_token, password_reset_token_expires_at,
-		       magic_link_token, magic_link_token_expires_at,
-		       security_generation, created_at, updated_at
+		SELECT ` + userColumns + `
 		FROM users
 		WHERE email = $1 AND email_verified = true`
 
-	user := &models.User{}
-	err := r.pool.QueryRow(ctx, query, email).Scan(
-		&user.ID,
-		&user.Email,
-		&user.PasswordHash,
-		&user.DisplayName,
-		&user.Role,
-		&user.Locale,
-		&user.Timezone,
-		&user.EmailVerified,
-		&user.VerificationToken,
-		&user.VerificationTokenExpiresAt,
-		&user.PasswordResetToken,
-		&user.PasswordResetTokenExpiresAt,
-		&user.MagicLinkToken,
-		&user.MagicLinkTokenExpiresAt,
-		&user.SecurityGeneration,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
+	user, err := scanUser(r.pool.QueryRow(ctx, query, email))
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -728,35 +622,12 @@ func (r *UserRepository) SetMagicLinkToken(ctx context.Context, userID uuid.UUID
 // Only returns the user if the token is valid and not expired
 func (r *UserRepository) GetByMagicLinkToken(ctx context.Context, token string) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, display_name, role, locale, timezone,
-		       email_verified, verification_token, verification_token_expires_at,
-		       password_reset_token, password_reset_token_expires_at,
-		       magic_link_token, magic_link_token_expires_at,
-		       security_generation, created_at, updated_at
+		SELECT ` + userColumns + `
 		FROM users
 		WHERE magic_link_token = $1
 		  AND magic_link_token_expires_at > NOW()`
 
-	user := &models.User{}
-	err := r.pool.QueryRow(ctx, query, token).Scan(
-		&user.ID,
-		&user.Email,
-		&user.PasswordHash,
-		&user.DisplayName,
-		&user.Role,
-		&user.Locale,
-		&user.Timezone,
-		&user.EmailVerified,
-		&user.VerificationToken,
-		&user.VerificationTokenExpiresAt,
-		&user.PasswordResetToken,
-		&user.PasswordResetTokenExpiresAt,
-		&user.MagicLinkToken,
-		&user.MagicLinkTokenExpiresAt,
-		&user.SecurityGeneration,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
+	user, err := scanUser(r.pool.QueryRow(ctx, query, token))
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -772,10 +643,10 @@ func (r *UserRepository) GetByMagicLinkToken(ctx context.Context, token string) 
 // lock. It revalidates the proof and captured security generation, then clears
 // the proof and inserts the optional refresh session in the same transaction.
 // Any failure leaves the proof usable; concurrent finalizations have one winner.
-func (r *UserRepository) ConsumeMagicLinkToken(ctx context.Context, token string, securityGeneration int64, session *models.RefreshToken) (*models.User, error) {
+func (r *UserRepository) ConsumeMagicLinkToken(ctx context.Context, token string, securityGeneration int64, session *models.RefreshToken) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("begin magic link claim: %w", err)
+		return fmt.Errorf("begin magic link claim: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -784,55 +655,32 @@ func (r *UserRepository) ConsumeMagicLinkToken(ctx context.Context, token string
 	var userID uuid.UUID
 	if err := tx.QueryRow(ctx, `SELECT id FROM users WHERE magic_link_token = $1 AND magic_link_token_expires_at > NOW()`, token).Scan(&userID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrUserNotFound
+			return ErrUserNotFound
 		}
-		return nil, fmt.Errorf("resolve magic link owner: %w", err)
+		return fmt.Errorf("resolve magic link owner: %w", err)
 	}
 	if err := sessionlock.Acquire(ctx, tx, userID); err != nil {
-		return nil, err
+		return err
 	}
 
-	user := &models.User{}
 	query := `
-		SELECT id, email, password_hash, display_name, role, locale, timezone,
-		       email_verified, verification_token, verification_token_expires_at,
-		       password_reset_token, password_reset_token_expires_at,
-		       magic_link_token, magic_link_token_expires_at,
-		       security_generation, created_at, updated_at
+		SELECT ` + userColumns + `
 		FROM users
 		WHERE magic_link_token = $1
 		  AND magic_link_token_expires_at > NOW()
 		FOR UPDATE`
-	err = tx.QueryRow(ctx, query, token).Scan(
-		&user.ID,
-		&user.Email,
-		&user.PasswordHash,
-		&user.DisplayName,
-		&user.Role,
-		&user.Locale,
-		&user.Timezone,
-		&user.EmailVerified,
-		&user.VerificationToken,
-		&user.VerificationTokenExpiresAt,
-		&user.PasswordResetToken,
-		&user.PasswordResetTokenExpiresAt,
-		&user.MagicLinkToken,
-		&user.MagicLinkTokenExpiresAt,
-		&user.SecurityGeneration,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
+	user, err := scanUser(tx.QueryRow(ctx, query, token))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrUserNotFound
+			return ErrUserNotFound
 		}
-		return nil, fmt.Errorf("failed to claim user by magic link token: %w", err)
+		return fmt.Errorf("failed to claim user by magic link token: %w", err)
 	}
 	if user.SecurityGeneration != securityGeneration {
-		return nil, ErrStaleSecurityGeneration
+		return ErrStaleSecurityGeneration
 	}
 	if session != nil && session.UserID != user.ID {
-		return nil, ErrUserNotFound
+		return ErrUserNotFound
 	}
 
 	if _, err := tx.Exec(ctx, `
@@ -841,7 +689,7 @@ func (r *UserRepository) ConsumeMagicLinkToken(ctx context.Context, token string
 		    magic_link_token_expires_at = NULL,
 		    updated_at = NOW()
 		WHERE id = $1`, user.ID); err != nil {
-		return nil, fmt.Errorf("failed to clear claimed magic link token: %w", err)
+		return fmt.Errorf("failed to clear claimed magic link token: %w", err)
 	}
 
 	// Token signing and the MFA lookup happen before claiming the proof. The
@@ -850,15 +698,15 @@ func (r *UserRepository) ConsumeMagicLinkToken(ctx context.Context, token string
 	if session != nil {
 		if err := tx.QueryRow(ctx, `INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, family_id) VALUES ($1, $2, $3, $4, $5) RETURNING created_at`,
 			session.ID, session.UserID, session.TokenHash, session.ExpiresAt, session.FamilyID).Scan(&session.CreatedAt); err != nil {
-			return nil, fmt.Errorf("insert magic link session: %w", err)
+			return fmt.Errorf("insert magic link session: %w", err)
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("commit magic link claim: %w", err)
+		return fmt.Errorf("commit magic link claim: %w", err)
 	}
 
-	return user, nil
+	return nil
 }
 
 // ConsumePasswordResetToken claims a password-reset proof and applies the new
@@ -895,33 +743,13 @@ func (r *UserRepository) ConsumePasswordResetToken(
 		return nil, err
 	}
 
-	user := &models.User{}
 	query := `
-		SELECT id, email, password_hash, display_name, role, locale, timezone,
-		       email_verified, verification_token, verification_token_expires_at,
-		       password_reset_token, password_reset_token_expires_at,
-		       security_generation, created_at, updated_at
+		SELECT ` + userColumns + `
 		FROM users
 		WHERE password_reset_token = $1
 		  AND password_reset_token_expires_at > NOW()
 		FOR UPDATE`
-	err = tx.QueryRow(ctx, query, token).Scan(
-		&user.ID,
-		&user.Email,
-		&user.PasswordHash,
-		&user.DisplayName,
-		&user.Role,
-		&user.Locale,
-		&user.Timezone,
-		&user.EmailVerified,
-		&user.VerificationToken,
-		&user.VerificationTokenExpiresAt,
-		&user.PasswordResetToken,
-		&user.PasswordResetTokenExpiresAt,
-		&user.SecurityGeneration,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
+	user, err := scanUser(tx.QueryRow(ctx, query, token))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUserNotFound

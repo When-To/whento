@@ -8,7 +8,6 @@ package quota
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -23,18 +22,12 @@ const SelfHostedCalendarLimit = 0
 // SelfHostedQuotaService implements QuotaService for the self-hosted version.
 // Limits are server-wide rather than per user, and there are none.
 type SelfHostedQuotaService struct {
-	calendarRepo CalendarCounter
-}
-
-// CalendarCounter is an interface for counting calendars
-type CalendarCounter interface {
-	CountByUser(ctx context.Context, userID uuid.UUID) (int, error)
-	CountAll(ctx context.Context) (int, error)
+	usage
 }
 
 // NewSelfHostedService creates a new self-hosted quota service
 func NewSelfHostedService(calendarRepo CalendarCounter) *SelfHostedQuotaService {
-	return &SelfHostedQuotaService{calendarRepo: calendarRepo}
+	return &SelfHostedQuotaService{usage{calendarRepo}}
 }
 
 // CanCreateCalendar always allows creation: self-hosting is unrestricted
@@ -50,26 +43,6 @@ func (s *SelfHostedQuotaService) GetUserLimit(ctx context.Context, _ uuid.UUID) 
 // GetServerLimit returns 0, meaning unlimited
 func (s *SelfHostedQuotaService) GetServerLimit(_ context.Context) (int, error) {
 	return SelfHostedCalendarLimit, nil
-}
-
-// GetCurrentUsage returns the current calendar count for a user
-func (s *SelfHostedQuotaService) GetCurrentUsage(ctx context.Context, userID uuid.UUID) (int, error) {
-	count, err := s.calendarRepo.CountByUser(ctx, userID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count calendars: %w", err)
-	}
-
-	return count, nil
-}
-
-// GetServerUsage returns the total calendar count across all users
-func (s *SelfHostedQuotaService) GetServerUsage(ctx context.Context) (int, error) {
-	count, err := s.calendarRepo.CountAll(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count all calendars: %w", err)
-	}
-
-	return count, nil
 }
 
 // QuotaLockKey returns a fixed server-wide advisory lock key for self-hosted quota enforcement

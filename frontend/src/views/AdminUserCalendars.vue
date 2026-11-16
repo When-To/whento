@@ -106,7 +106,7 @@
             <div class="flex items-center justify-between">
               <span class="text-gray-600 dark:text-gray-400">{{ t('admin.createdAt') }}:</span>
               <span class="text-gray-900 dark:text-white">
-                {{ formatDate(calendar.created_at) }}
+                {{ formatCreatedAt(calendar.created_at) }}
               </span>
             </div>
           </div>
@@ -175,6 +175,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date/intlFormatters';
 import { ref, onMounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter, useRoute } from 'vue-router';
@@ -234,12 +235,7 @@ async function loadCalendars() {
   }
 }
 
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString(authStore.user?.locale || 'fr', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+function formatCreatedAt(dateString: string): string {
+  return formatDate(new Date(dateString), authStore.user?.locale || 'fr', 'dayMonthYearShort');
 }
 </script>

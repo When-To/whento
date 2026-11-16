@@ -12,10 +12,6 @@ export interface UsersListResponse {
   total: number;
 }
 
-export interface UpdateRoleRequest {
-  role: 'user' | 'admin';
-}
-
 export interface AdminDisable2FAResponse {
   totp_disabled: boolean;
   backup_codes_removed: number;

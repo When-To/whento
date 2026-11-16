@@ -272,11 +272,6 @@ export class ApiClient {
   private removeWakeListeners: (() => void) | null = null;
   private disposed = false;
 
-  /** Whether this instance has been disposed (tests/HMR); nothing runs on a disposed client. */
-  get isDisposed(): boolean {
-    return this.disposed;
-  }
-
   constructor() {
     this.client = axios.create({
       baseURL: '/api/v1',

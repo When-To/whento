@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -45,9 +44,8 @@ func TestNagerFallbackIsDisabledUntilExplicitlyEnabled(t *testing.T) {
 	})
 	defer func() { http.DefaultTransport = previous }()
 
-	_, coverage, err := holidaysForYear(context.Background(), "kr", 2026)
-	if coverage != CoverageUnavailable || !errors.Is(err, errHolidayUnavailable) {
-		t.Fatalf("disabled fallback = %v, %v", coverage, err)
+	if _, err := isHolidayErrCtx(context.Background(), date(t, "2026-08-15"), "kr"); !errors.Is(err, errHolidayUnavailable) {
+		t.Fatalf("disabled fallback = %v", err)
 	}
 	if !IsDateAllowed(date(t, "2026-08-15"), "Asia/Seoul", everyDay, "block", false) {
 		t.Fatal("uncovered holiday must fail open to an allowed weekday")
@@ -107,18 +105,12 @@ func TestBundledHolidayReviewMatrixWithoutNetwork(t *testing.T) {
 			}
 		})
 	}
-	offlineOnce.Do(buildOfflineCalendars)
-	countries := offlineCountries
-	if len(countries) != 47 || !sort.StringsAreSorted(countries) {
-		t.Fatalf("offline country list = %v; want 47 sorted codes", countries)
+	if n := len(offlineHolidays()); n != 47 {
+		t.Fatalf("offline table has %d countries; want 47", n)
 	}
 	for _, country := range []string{"AU", "JP", "TH"} {
 		if !isOfflineCountry(country) {
 			t.Fatalf("missing offline country %s", country)
-		}
-		holidays, coverage, err := holidaysForYear(context.Background(), strings.ToLower(country), 2026)
-		if err != nil || coverage != CoverageOffline || len(holidays) == 0 {
-			t.Fatalf("%s list = %v, %v, %v", country, holidays, coverage, err)
 		}
 	}
 }
@@ -129,13 +121,13 @@ func TestJapanConcurrentYearsKeepCompiledRulesImmutable(t *testing.T) {
 		want bool
 	}
 	var fixtures []fixture
+	// Sequential lookups are the oracle the concurrent ones must agree with.
 	for year := 2024; year <= 2030; year++ {
-		holidays, _ := offlineHolidaysForYear("JP", year)
 		for day := 20; day <= 21; day++ {
 			d := time.Date(year, time.March, day, 0, 0, 0, 0, time.UTC)
-			want := false
-			for _, h := range holidays {
-				want = want || sameDate(h.Date, d)
+			want, err := offlineIsHoliday(d, "JP")
+			if err != nil {
+				t.Fatal(err)
 			}
 			fixtures = append(fixtures, fixture{d, want})
 		}
@@ -149,9 +141,6 @@ func TestJapanConcurrentYearsKeepCompiledRulesImmutable(t *testing.T) {
 				got, err := offlineIsHoliday(tc.day, "JP")
 				if err != nil || got != tc.want {
 					t.Errorf("JP %s = %t, %v; want %t", tc.day, got, err, tc.want)
-				}
-				if _, ok := offlineHolidaysForYear("JP", tc.day.Year()); !ok {
-					t.Error("JP list unavailable during concurrent lookup")
 				}
 			}
 		}()
@@ -197,7 +186,7 @@ func TestNagerFirstCallerCancellationDoesNotAbortOtherWaiters(t *testing.T) {
 	defer cancel()
 	first := make(chan error, 1)
 	go func() {
-		_, _, err := client.fetch(firstCtx, "KR", 2026)
+		_, err := client.fetch(firstCtx, "KR", 2026)
 		first <- err
 	}()
 	select {
@@ -206,10 +195,10 @@ func TestNagerFirstCallerCancellationDoesNotAbortOtherWaiters(t *testing.T) {
 		t.Fatal("shared fetch never started")
 	}
 	secondCtx := &holidayWaitContext{Context: context.Background(), waiting: make(chan struct{})}
-	second := make(chan nagerResult, 1)
+	second := make(chan nagerCacheEntry, 1)
 	go func() {
-		holidays, coverage, err := client.fetch(secondCtx, "KR", 2026)
-		second <- nagerResult{holidays: holidays, coverage: coverage, err: err}
+		holidays, err := client.fetch(secondCtx, "KR", 2026)
+		second <- nagerCacheEntry{holidays: holidays, err: err}
 	}()
 	select {
 	case <-secondCtx.waiting:
@@ -222,10 +211,10 @@ func TestNagerFirstCallerCancellationDoesNotAbortOtherWaiters(t *testing.T) {
 	}
 	unblock()
 	result := <-second
-	if result.err != nil || result.coverage != CoverageFallback || len(result.holidays) != 1 {
+	if result.err != nil || len(result.holidays) != 1 {
 		t.Fatalf("second caller inherited cancellation: %+v", result)
 	}
-	_, _, err := client.fetch(context.Background(), "KR", 2026)
+	_, err := client.fetch(context.Background(), "KR", 2026)
 	if err != nil || hits.Load() != 1 {
 		t.Fatalf("successful shared result not cached: hits=%d err=%v", hits.Load(), err)
 	}
@@ -245,9 +234,9 @@ func TestNagerRefusesAllRedirects(t *testing.T) {
 			}))
 			defer server.Close()
 			client := newNagerClient(server.URL + "/%d/%s")
-			_, coverage, err := client.fetch(context.Background(), "KR", 2026)
-			if coverage != CoverageUnavailable || !errors.Is(err, errHolidayUnavailable) || !strings.Contains(err.Error(), "unexpected status") {
-				t.Fatalf("redirect = %v, %v; want refused redirect response", coverage, err)
+			_, err := client.fetch(context.Background(), "KR", 2026)
+			if !errors.Is(err, errHolidayUnavailable) || !strings.Contains(err.Error(), "unexpected status") {
+				t.Fatalf("redirect = %v; want refused redirect response", err)
 			}
 		})
 	}
@@ -262,7 +251,7 @@ func TestNagerTransportAndDecodeErrorsKeepTheirCauses(t *testing.T) {
 	client.client.Transport = holidayRoundTripper(func(*http.Request) (*http.Response, error) {
 		return nil, cause
 	})
-	_, _, err := client.fetch(context.Background(), "KR", 2026)
+	_, err := client.fetch(context.Background(), "KR", 2026)
 	var transport *url.Error
 	if !errors.Is(err, cause) || !errors.Is(err, errHolidayUnavailable) || !errors.As(err, &transport) {
 		t.Fatalf("transport cause lost: %v", err)
@@ -271,7 +260,7 @@ func TestNagerTransportAndDecodeErrorsKeepTheirCauses(t *testing.T) {
 	client.client.Transport = holidayRoundTripper(func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("not json"))}, nil
 	})
-	_, _, err = client.fetch(context.Background(), "KR", 2026)
+	_, err = client.fetch(context.Background(), "KR", 2026)
 	var syntax *json.SyntaxError
 	if !errors.Is(err, errHolidayUnavailable) || !errors.As(err, &syntax) {
 		t.Fatalf("decode cause lost: %v", err)
@@ -290,11 +279,11 @@ func TestNagerOwnTimeoutIsBoundedAndFailureCached(t *testing.T) {
 		<-r.Context().Done()
 		return nil, r.Context().Err()
 	})
-	_, coverage, err := client.fetch(context.Background(), "KR", 2026)
-	if coverage != CoverageUnavailable || !errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, errHolidayUnavailable) {
-		t.Fatalf("timeout = %v, %v", coverage, err)
+	_, err := client.fetch(context.Background(), "KR", 2026)
+	if !errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, errHolidayUnavailable) {
+		t.Fatalf("timeout = %v", err)
 	}
-	_, _, err = client.fetch(context.Background(), "KR", 2026)
+	_, err = client.fetch(context.Background(), "KR", 2026)
 	if err == nil || hits.Load() != 1 {
 		t.Fatalf("provider timeout not cooled down: hits=%d err=%v", hits.Load(), err)
 	}

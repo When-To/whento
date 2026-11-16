@@ -359,10 +359,7 @@ func (s *BootstrapService) ensureKeyLocked(ctx context.Context) error {
 		return nil
 	}
 
-	generated, err := generateBootKey()
-	if err != nil {
-		return err
-	}
+	generated := RandomHex(bootKeyBytes)
 	s.key = generated
 	// The key is deliberately part of the message, not a field: this is the one
 	// secret the operator is meant to read out of the logs (Grist-style), and it
@@ -446,13 +443,13 @@ func runningInContainer() bool {
 	return false
 }
 
-// generateBootKey produces a cryptographically random, hex-encoded boot key.
-func generateBootKey() (string, error) {
-	buf := make([]byte, bootKeyBytes)
-	if _, err := rand.Read(buf); err != nil {
-		return "", fmt.Errorf("failed to read randomness for boot key: %w", err)
-	}
-	return hex.EncodeToString(buf), nil
+// RandomHex returns n cryptographically random bytes, hex-encoded: the format
+// of every token the auth flows mail out or hand to the operator.
+func RandomHex(n int) string {
+	b := make([]byte, n)
+	// Since Go 1.24 rand.Read never returns an error: it crashes the program instead.
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // logFor tags the audit lines with the request they belong to, so a rejected key

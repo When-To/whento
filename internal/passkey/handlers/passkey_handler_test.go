@@ -122,7 +122,6 @@ func newHandler(t *testing.T, store *fakePasskeyStore) *PasskeyHandler {
 		WebAuthnRPName:   "WhenTo",
 		WebAuthnRPID:     "localhost",
 		WebAuthnRPOrigin: "http://localhost:8080",
-		WebAuthnTimeout:  60 * time.Second,
 	}
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -449,7 +448,6 @@ func TestBeginRegistrationNeedsAKnownUser(t *testing.T) {
 		WebAuthnRPName:   "WhenTo",
 		WebAuthnRPID:     "localhost",
 		WebAuthnRPOrigin: "http://localhost:8080",
-		WebAuthnTimeout:  60 * time.Second,
 	}
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 

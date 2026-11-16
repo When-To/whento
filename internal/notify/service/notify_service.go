@@ -255,9 +255,7 @@ func (s *NotifyService) CheckThresholdAndNotify(
 	// Then handle email notifications with deduplication
 	if config.NotifyOwner || config.NotifyParticipants {
 		s.logger.Debug("Sending email notifications (deduplicated)", "calendar_id", calendarID)
-		if err := s.sendDeduplicatedEmailNotifications(ctx, calendar, transition, config); err != nil {
-			s.logger.Error("Failed to send deduplicated email notifications", "calendar_id", calendarID, "error", err)
-		}
+		s.sendDeduplicatedEmailNotifications(ctx, calendar, transition, config)
 	}
 
 	return nil
@@ -312,95 +310,67 @@ func (s *NotifyService) notifyOwnerExternalChannels(
 	// Build notification message for external channels (text-only)
 	textMessage := s.buildNotificationMessage(calendar, transition)
 
-	s.logger.Debug("Checking Discord channel",
-		"enabled", config.Channels.Discord.Enabled,
-		"has_webhook", config.Channels.Discord.WebhookURL != "")
+	for _, ch := range chatChannels(config.Channels) {
+		if !ch.usable {
+			s.logger.Debug(ch.label + " channel disabled or not configured")
+			continue
+		}
 
-	if config.Channels.Discord.Enabled && config.Channels.Discord.WebhookURL != "" {
 		sent, _ := s.notificationLog.WasNotificationSentRecently(
-			ctx, calendar.ID, transition.Date, transition.TransitionType, owner.ID, "discord",
+			ctx, calendar.ID, transition.Date, transition.TransitionType, owner.ID, ch.name,
 		)
-		if !sent {
-			s.logger.Info("Sending Discord notification", "webhook_url", config.Channels.Discord.WebhookURL[:20]+"...")
-			if err := s.externalNotifier.SendDiscord(ctx, config.Channels.Discord.WebhookURL, textMessage); err != nil {
-				s.logger.Error("Failed to send Discord notification", "error", err)
-			} else {
-				s.logger.Info("Discord notification sent successfully")
-				_ = s.notificationLog.LogNotification(
-					ctx, calendar.ID, transition.Date, transition.TransitionType, "owner", owner.ID, "discord",
-				)
-			}
-		} else {
+		if sent {
 			// Info, not Debug: this is the whole outcome for the channel, and at Debug
 			// a suppressed notice was indistinguishable from one that never ran.
-			s.logger.Info("Discord notification suppressed: already sent for this transition within the hour")
+			s.logger.Info(ch.label + " notification suppressed: already sent for this transition within the hour")
+			continue
 		}
-	} else {
-		s.logger.Debug("Discord channel disabled or webhook not configured")
-	}
 
-	s.logger.Debug("Checking Slack channel",
-		"enabled", config.Channels.Slack.Enabled,
-		"has_webhook", config.Channels.Slack.WebhookURL != "")
-
-	if config.Channels.Slack.Enabled && config.Channels.Slack.WebhookURL != "" {
-		sent, _ := s.notificationLog.WasNotificationSentRecently(
-			ctx, calendar.ID, transition.Date, transition.TransitionType, owner.ID, "slack",
+		// No destination on this line: a webhook URL is itself the credential, and a
+		// Telegram chat id names a person's chat. ExternalNotifier logs a fingerprint
+		// of either once the post goes through.
+		s.logger.Info("Sending " + ch.label + " notification")
+		if err := sendChat(ctx, s.externalNotifier, config.Channels, ch.name, textMessage); err != nil {
+			s.logger.Error("Failed to send "+ch.label+" notification", "error", err)
+			continue
+		}
+		s.logger.Info(ch.label + " notification sent successfully")
+		_ = s.notificationLog.LogNotification(
+			ctx, calendar.ID, transition.Date, transition.TransitionType, "owner", owner.ID, ch.name,
 		)
-		if !sent {
-			s.logger.Info("Sending Slack notification", "webhook_url", config.Channels.Slack.WebhookURL[:20]+"...")
-			if err := s.externalNotifier.SendSlack(ctx, config.Channels.Slack.WebhookURL, textMessage); err != nil {
-				s.logger.Error("Failed to send Slack notification", "error", err)
-			} else {
-				s.logger.Info("Slack notification sent successfully")
-				_ = s.notificationLog.LogNotification(
-					ctx, calendar.ID, transition.Date, transition.TransitionType, "owner", owner.ID, "slack",
-				)
-			}
-		} else {
-			// Info, not Debug: this is the whole outcome for the channel, and at Debug
-			// a suppressed notice was indistinguishable from one that never ran.
-			s.logger.Info("Slack notification suppressed: already sent for this transition within the hour")
-		}
-	} else {
-		s.logger.Debug("Slack channel disabled or webhook not configured")
-	}
-
-	s.logger.Debug("Checking Telegram channel",
-		"enabled", config.Channels.Telegram.Enabled,
-		"has_token", config.Channels.Telegram.BotToken != "",
-		"has_chat_id", config.Channels.Telegram.ChatID != "")
-
-	if config.Channels.Telegram.Enabled && config.Channels.Telegram.BotToken != "" && config.Channels.Telegram.ChatID != "" {
-		sent, _ := s.notificationLog.WasNotificationSentRecently(
-			ctx, calendar.ID, transition.Date, transition.TransitionType, owner.ID, "telegram",
-		)
-		if !sent {
-			// A Telegram chat id names a person's chat as surely as an address
-			// names their mailbox, and unlike the two webhook lines above it was
-			// logged whole.
-			s.logger.Info("Sending Telegram notification",
-				"chat_ref", pkglog.Fingerprint(config.Channels.Telegram.ChatID))
-			if err := s.externalNotifier.SendTelegram(
-				ctx, config.Channels.Telegram.BotToken, config.Channels.Telegram.ChatID, textMessage,
-			); err != nil {
-				s.logger.Error("Failed to send Telegram notification", "error", err)
-			} else {
-				s.logger.Info("Telegram notification sent successfully")
-				_ = s.notificationLog.LogNotification(
-					ctx, calendar.ID, transition.Date, transition.TransitionType, "owner", owner.ID, "telegram",
-				)
-			}
-		} else {
-			// Info, not Debug: this is the whole outcome for the channel, and at Debug
-			// a suppressed notice was indistinguishable from one that never ran.
-			s.logger.Info("Telegram notification suppressed: already sent for this transition within the hour")
-		}
-	} else {
-		s.logger.Debug("Telegram channel disabled or credentials not configured")
 	}
 
 	s.logger.Debug("notifyOwnerExternalChannels completed")
+	return nil
+}
+
+// chatChannel is one of the three chat channels, and whether it can be posted to:
+// switched on and its credentials filled in. The threshold notice and the reminder
+// scheduler both read this list, in this order.
+type chatChannel struct {
+	name   string // as the notification ledger records it
+	label  string // as the log names it
+	usable bool
+}
+
+func chatChannels(c models.ChannelConfig) []chatChannel {
+	return []chatChannel{
+		{"discord", "Discord", c.Discord.Enabled && c.Discord.WebhookURL != ""},
+		{"slack", "Slack", c.Slack.Enabled && c.Slack.WebhookURL != ""},
+		{"telegram", "Telegram", c.Telegram.Enabled && c.Telegram.BotToken != "" && c.Telegram.ChatID != ""},
+	}
+}
+
+// sendChat posts text to the named chat channel with the credentials in c.
+func sendChat(ctx context.Context, n ChannelNotifier, c models.ChannelConfig, channel, text string) error {
+	switch channel {
+	case "discord":
+		return n.SendDiscord(ctx, c.Discord.WebhookURL, text)
+	case "slack":
+		return n.SendSlack(ctx, c.Slack.WebhookURL, text)
+	case "telegram":
+		return n.SendTelegram(ctx, c.Telegram.BotToken, c.Telegram.ChatID, text)
+	}
 	return nil
 }
 
@@ -411,13 +381,13 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 	calendar *calendarModels.Calendar,
 	transition *models.ThresholdTransition,
 	config models.NotifyConfig,
-) error {
+) {
 	s.logger.Debug("sendDeduplicatedEmailNotifications called", "calendar_id", calendar.ID)
 
 	// Check if email channel is enabled and SMTP configured
 	if !config.Channels.Email.Enabled || !s.emailService.IsConfigured() {
 		s.logger.Debug("Email channel disabled or SMTP not configured, skipping email notifications")
-		return nil
+		return
 	}
 
 	// Map to store unique email recipients (key = email address)
@@ -601,7 +571,7 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 			"is_owner", recipient.IsOwner,
 			"personalised_link", recipient.ParticipantID != nil)
 
-		if err := s.sendEmailNotification(recipient.Email, htmlMessage, recipient.Locale, true); err != nil {
+		if err := s.sendEmailNotification(recipient.Email, htmlMessage, recipient.Locale); err != nil {
 			failed++
 
 			s.logger.Error("Failed to send email",
@@ -638,7 +608,6 @@ func (s *NotifyService) sendDeduplicatedEmailNotifications(
 		"sent", sentCount,
 		"suppressed_as_already_sent", suppressed,
 		"failed", failed)
-	return nil
 }
 
 // participantSuffix renders "<label><name>", or the empty string when there is no ref.
@@ -701,6 +670,31 @@ func (s *NotifyService) buildNotificationMessage(
 	)
 }
 
+// htmlLabels is the wording of the threshold email, per locale; anything but "fr" gets
+// English. The three sentences take the date, the count and the threshold, and the
+// first two a participant suffix.
+var htmlLabels = map[string]struct {
+	calendar, date, participants, participantList, viewButton, cancelButton string
+	reached, lost, changed, lastJoined, withdrew                            string
+}{
+	"en": {
+		calendar: "Calendar:", date: "Date:", participants: "Participants available:",
+		participantList: "Participant list:", viewButton: "View Calendar", cancelButton: "Cancel my participation",
+		reached:    "Threshold reached for %s! (%d/%d participants available)%s",
+		lost:       "Threshold lost for %s (%d/%d participants)%s",
+		changed:    "Availability changed for %s (%d/%d participants)",
+		lastJoined: " — last to join: ", withdrew: " — withdrew: ",
+	},
+	"fr": {
+		calendar: "Calendrier :", date: "Date :", participants: "Participants disponibles :",
+		participantList: "Liste des participants :", viewButton: "Voir le calendrier", cancelButton: "Annuler ma participation",
+		reached:    "Seuil atteint pour %s ! (%d/%d participants disponibles)%s",
+		lost:       "Seuil perdu pour %s (%d/%d participants)%s",
+		changed:    "Disponibilité modifiée pour %s (%d/%d participants)",
+		lastJoined: " — dernier inscrit : ", withdrew: " — s'est retiré : ",
+	},
+}
+
 // buildHTMLNotificationMessage creates HTML notification with calendar link
 func (s *NotifyService) buildHTMLNotificationMessage(
 	calendar *calendarModels.Calendar,
@@ -712,80 +706,23 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 ) string {
 	dateStr := transition.Date.Format("2006-01-02")
 
-	// Translations
-	var emoji, messageText, calendarLabel, dateLabel, participantsLabel, participantListLabel, viewButton, cancelButtonText string
-
+	l := htmlLabels["en"]
 	if locale == "fr" {
-		calendarLabel = "Calendrier :"
-		dateLabel = "Date :"
-		participantsLabel = "Participants disponibles :"
-		participantListLabel = "Liste des participants :"
-		viewButton = "Voir le calendrier"
-		cancelButtonText = "Annuler ma participation"
+		l = htmlLabels["fr"]
+	}
 
-		switch transition.TransitionType {
-		case "threshold_reached":
-			emoji = "🎉"
-			messageText = fmt.Sprintf(
-				"Seuil atteint pour %s ! (%d/%d participants disponibles)%s",
-				dateStr,
-				transition.NewCount,
-				transition.Threshold,
-				htmlParticipantSuffix(transition.LastJoined, " — dernier inscrit : "),
-			)
-		case "threshold_lost":
-			emoji = "⚠️"
-			messageText = fmt.Sprintf(
-				"Seuil perdu pour %s (%d/%d participants)%s",
-				dateStr,
-				transition.NewCount,
-				transition.Threshold,
-				htmlParticipantSuffix(transition.LastWithdrawn, " — s'est retiré : "),
-			)
-		default:
-			messageText = fmt.Sprintf(
-				"Disponibilité modifiée pour %s (%d/%d participants)",
-				dateStr,
-				transition.NewCount,
-				transition.Threshold,
-			)
-		}
-	} else {
-		// Default to English
-		calendarLabel = "Calendar:"
-		dateLabel = "Date:"
-		participantsLabel = "Participants available:"
-		participantListLabel = "Participant list:"
-		viewButton = "View Calendar"
-		cancelButtonText = "Cancel my participation"
-
-		switch transition.TransitionType {
-		case "threshold_reached":
-			emoji = "🎉"
-			messageText = fmt.Sprintf(
-				"Threshold reached for %s! (%d/%d participants available)%s",
-				dateStr,
-				transition.NewCount,
-				transition.Threshold,
-				htmlParticipantSuffix(transition.LastJoined, " — last to join: "),
-			)
-		case "threshold_lost":
-			emoji = "⚠️"
-			messageText = fmt.Sprintf(
-				"Threshold lost for %s (%d/%d participants)%s",
-				dateStr,
-				transition.NewCount,
-				transition.Threshold,
-				htmlParticipantSuffix(transition.LastWithdrawn, " — withdrew: "),
-			)
-		default:
-			messageText = fmt.Sprintf(
-				"Availability changed for %s (%d/%d participants)",
-				dateStr,
-				transition.NewCount,
-				transition.Threshold,
-			)
-		}
+	var emoji, messageText string
+	switch transition.TransitionType {
+	case "threshold_reached":
+		emoji = "🎉"
+		messageText = fmt.Sprintf(l.reached, dateStr, transition.NewCount, transition.Threshold,
+			htmlParticipantSuffix(transition.LastJoined, l.lastJoined))
+	case "threshold_lost":
+		emoji = "⚠️"
+		messageText = fmt.Sprintf(l.lost, dateStr, transition.NewCount, transition.Threshold,
+			htmlParticipantSuffix(transition.LastWithdrawn, l.withdrew))
+	default:
+		messageText = fmt.Sprintf(l.changed, dateStr, transition.NewCount, transition.Threshold)
 	}
 
 	// Build participant list HTML (escape user-supplied names to prevent XSS)
@@ -793,7 +730,7 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 	if len(participantNames) > 0 {
 		participantListHTML = fmt.Sprintf(`<div class="participant-list">
 			<div class="participant-list-header">%s</div>
-			<ul class="participant-names">`, participantListLabel)
+			<ul class="participant-names">`, l.participantList)
 		for _, name := range participantNames {
 			participantListHTML += fmt.Sprintf(`<li>%s</li>`, html.EscapeString(name))
 		}
@@ -804,7 +741,7 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 	var cancelButton string
 	if hasParticipantID {
 		cancelURL := fmt.Sprintf("%s?cancel=%s", calendarURL, dateStr)
-		cancelButton = fmt.Sprintf(`<a href="%s" class="btn btn-danger">%s</a>`, cancelURL, cancelButtonText)
+		cancelButton = fmt.Sprintf(`<a href="%s" class="btn btn-danger">%s</a>`, cancelURL, l.cancelButton)
 	}
 
 	// Build HTML with clickable calendar link and conditional cancel button.
@@ -895,7 +832,7 @@ func (s *NotifyService) buildHTMLNotificationMessage(
 	</div>
 </body>
 </html>
-	`, emoji, messageText, calendarLabel, html.EscapeString(calendar.Name), dateLabel, dateStr, participantsLabel, transition.NewCount, transition.Threshold, participantListHTML, calendarURL, viewButton, cancelButton)
+	`, emoji, messageText, l.calendar, html.EscapeString(calendar.Name), l.date, dateStr, l.participants, transition.NewCount, transition.Threshold, participantListHTML, calendarURL, l.viewButton, cancelButton)
 
 	return body
 }
@@ -908,7 +845,6 @@ func (s *NotifyService) sendEmailNotification(
 	to string,
 	message string,
 	locale string,
-	isHTML bool,
 ) error {
 	subject := "WhenTo Calendar Notification"
 	if locale == "fr" {
@@ -919,6 +855,6 @@ func (s *NotifyService) sendEmailNotification(
 		To:      []string{to},
 		Subject: subject,
 		Body:    message,
-		HTML:    isHTML,
+		HTML:    true,
 	})
 }
