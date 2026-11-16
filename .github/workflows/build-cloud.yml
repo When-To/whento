@@ -171,6 +171,7 @@ jobs:
             VERSION=${{ steps.version.outputs.version }}
           platforms: linux/amd64
           cache-from: type=gha
+          no-cache-filters: runtime
           cache-to: type=gha,mode=max
 
       - name: Scan image for vulnerabilities
@@ -201,6 +202,7 @@ jobs:
           sbom: true
           provenance: mode=max
           cache-from: type=gha
+          no-cache-filters: runtime
           cache-to: type=gha,mode=max
 
       - name: Summary

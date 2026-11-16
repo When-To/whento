@@ -92,7 +92,7 @@ RUN go mod init migratebuild && \
     github.com/golang-migrate/migrate/v4/cmd/migrate
 
 # Runtime stage
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
+FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS runtime
 
 LABEL org.opencontainers.image.title="WhenTo" \
     org.opencontainers.image.description="Self-hosted scheduling and calendar application" \
@@ -105,8 +105,9 @@ LABEL org.opencontainers.image.title="WhenTo" \
 # every time this layer *runs*, but a digest-pinned base means the layer itself can be
 # served from the build cache for weeks without running at all. That is how the v2.0.0
 # release image came to carry libpq 18.4-r0 while Alpine had long shipped 18.6-r0: the
-# packages were stale, the pin was current. Upgrading makes any rebuild self-healing
-# instead of merely reproducible.
+# packages were stale, the pin was current. The upgrade only helps when the layer runs,
+# so the workflows build this stage with `no-cache-filters: runtime`: v3.0.0's first
+# build still got libpq 18.6-r0 from the cache after Alpine shipped 18.7-r0.
 RUN apk upgrade --no-cache && \
     apk add --no-cache ca-certificates tzdata openssl postgresql-client
 

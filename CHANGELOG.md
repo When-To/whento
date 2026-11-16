@@ -401,6 +401,9 @@ Existing sessions survive: nobody is signed out.
   revoked", since a password change is not the only cause.
 - Images build with Go 1.27.3, clearing CVE-2026-78667, CVE-2026-78669,
   CVE-2026-97031 (#187) and CVE-2026-111943 (#209).
+- The images ship libpq and the PostgreSQL client 18.7-r0, clearing the HIGH
+  advisories fixed in PostgreSQL 18.7. Image builds no longer reuse a cached
+  runtime layer, which had kept 18.6-r0 after Alpine published the fix.
 - The root module requires chi v5.5.0 for GHSA-j6qf-3m9c-vwj3 (#216). WhenTo
   never called the affected middleware.
 - **MFA codes are spent once.** A backup code is now marked used by a single

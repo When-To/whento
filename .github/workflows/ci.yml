@@ -795,6 +795,7 @@ jobs:
           build-args: |
             VERSION=${{ github.event_name == 'pull_request' && format('PR{0}', github.event.pull_request.number) || 'dev' }}
           cache-from: type=gha
+          no-cache-filters: runtime
           cache-to: type=gha,mode=max
 
       # ignore-unfixed, because an advisory with no fixed version available is not
@@ -849,4 +850,5 @@ jobs:
           build-args: |
             VERSION=${{ github.event_name == 'pull_request' && format('PR{0}', github.event.pull_request.number) || 'dev' }}
           cache-from: type=gha
+          no-cache-filters: runtime
           cache-to: type=gha,mode=max
