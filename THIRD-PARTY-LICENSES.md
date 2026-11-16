@@ -38,16 +38,16 @@ single binary, so the tables below are the union of the two `go.mod` files.
 | [github.com/go-webauthn/webauthn](https://github.com/go-webauthn/webauthn) | v0.17.4 | BSD-3-Clause |
 | [github.com/golang-jwt/jwt/v5](https://github.com/golang-jwt/jwt) | v5.3.1 | MIT |
 | [github.com/google/uuid](https://github.com/google/uuid) | v1.6.0 | BSD-3-Clause |
-| [github.com/jackc/pgx/v5](https://github.com/jackc/pgx) | v5.12.0 | MIT |
+| [github.com/jackc/pgx/v5](https://github.com/jackc/pgx) | v5.13.0 | MIT |
 | [github.com/joho/godotenv](https://github.com/joho/godotenv) | v1.5.1 | MIT |
 | [github.com/pquerna/otp](https://github.com/pquerna/otp) | v1.5.0 | Apache-2.0 |
 | [github.com/prometheus/client_golang](https://github.com/prometheus/client_golang) | v1.25.0 | Apache-2.0 |
 | [github.com/redis/go-redis/v9](https://github.com/redis/go-redis) | v9.23.0 | BSD-2-Clause |
-| [github.com/rickar/cal/v2](https://github.com/rickar/cal/tree/v2.1.32) | v2.1.32 | BSD-3-Clause |
+| [github.com/rickar/cal/v2](https://github.com/rickar/cal/tree/v2.1.32) | v2.1.33 | BSD-3-Clause |
 | [github.com/skip2/go-qrcode](https://github.com/skip2/go-qrcode) | v0.0.0-20200617195104 | MIT |
 | [github.com/swaggo/http-swagger/v2](https://github.com/swaggo/http-swagger) | v2.0.2 | MIT |
 | [github.com/swaggo/swag](https://github.com/swaggo/swag) | v1.16.6 | MIT |
-| [golang.org/x/crypto](https://golang.org/x/crypto) | v0.58.0 | BSD-3-Clause |
+| [golang.org/x/crypto](https://golang.org/x/crypto) | v0.59.0 | BSD-3-Clause |
 | [golang.org/x/sync](https://golang.org/x/sync) | v0.25.0 | BSD-3-Clause |
 | [golang.org/x/time](https://golang.org/x/time) | v0.16.0 | BSD-3-Clause |
 
@@ -85,17 +85,17 @@ single binary, so the tables below are the union of the two `go.mod` files.
 | github.com/pandatix/go-abnf | v0.5.5 | MIT |
 | github.com/philhofer/fwd | v1.2.0 | MIT |
 | github.com/prometheus/client_model | v0.6.3 | Apache-2.0 |
-| github.com/prometheus/common | v0.73.1 | Apache-2.0 |
+| github.com/prometheus/common | v0.74.0 | Apache-2.0 |
 | github.com/prometheus/procfs | v0.23.0 | Apache-2.0 |
 | github.com/swaggo/files/v2 | v2.0.2 | MIT |
 | github.com/tinylib/msgp | v1.6.4 | MIT |
 | github.com/x448/float16 | v0.8.4 | MIT |
 | go.uber.org/atomic | v1.12.0 | MIT |
 | go.yaml.in/yaml/v3 | v3.0.5 | MIT AND Apache-2.0* |
-| golang.org/x/mod | v0.41.0 | BSD-3-Clause |
-| golang.org/x/sys | v0.49.0 | BSD-3-Clause |
-| golang.org/x/text | v0.43.0 | BSD-3-Clause |
-| golang.org/x/tools | v0.51.0 | BSD-3-Clause |
+| golang.org/x/mod | v0.42.0 | BSD-3-Clause |
+| golang.org/x/sys | v0.50.0 | BSD-3-Clause |
+| golang.org/x/text | v0.44.0 | BSD-3-Clause |
+| golang.org/x/tools | v0.52.0 | BSD-3-Clause |
 | google.golang.org/protobuf | v1.36.12 | BSD-3-Clause |
 
 \* *go.yaml.in/yaml/v3 ships a single LICENSE covering the package under both MIT and Apache-2.0; both are permissive and BSL-compatible.*
@@ -110,13 +110,13 @@ single binary, so the tables below are the union of the two `go.mod` files.
 |---------|---------|---------|
 | [@fontsource-variable/inter](https://www.npmjs.com/package/@fontsource-variable/inter) | 5.3.0 | OFL-1.1† |
 | [@vueuse/core](https://www.npmjs.com/package/@vueuse/core) | 15.0.0 | MIT |
-| [axios](https://www.npmjs.com/package/axios) | 1.21.0 | MIT |
+| [axios](https://www.npmjs.com/package/axios) | 1.21.1 | MIT |
 | [countries-and-timezones](https://www.npmjs.com/package/countries-and-timezones) | 3.11.0 | MIT |
-| [date-holidays](https://www.npmjs.com/package/date-holidays) | 3.38.0 | ISC* |
+| [date-holidays](https://www.npmjs.com/package/date-holidays) | 3.39.1 | ISC* |
 | [pinia](https://www.npmjs.com/package/pinia) | 4.1.0 | MIT |
 | [vue](https://www.npmjs.com/package/vue) | 3.5.45 | MIT |
-| [vue-i18n](https://www.npmjs.com/package/vue-i18n) | 11.4.18 | MIT |
-| [vue-router](https://www.npmjs.com/package/vue-router) | 5.4.0 | MIT |
+| [vue-i18n](https://www.npmjs.com/package/vue-i18n) | 11.4.19 | MIT |
+| [vue-router](https://www.npmjs.com/package/vue-router) | 5.5.1 | MIT |
 
 \* *date-holidays: Code is ISC licensed, holiday data is CC-BY-3.0 (Creative Commons Attribution)*
 
@@ -131,22 +131,22 @@ single binary, so the tables below are the union of the two `go.mod` files.
 | [@tailwindcss/postcss](https://www.npmjs.com/package/@tailwindcss/postcss) | 4.3.5 | MIT |
 | [@types/node](https://www.npmjs.com/package/@types/node) | 24.19.2 | MIT |
 | [@types/pg](https://www.npmjs.com/package/@types/pg) | 8.23.1 | MIT |
-| [@vitejs/plugin-vue](https://www.npmjs.com/package/@vitejs/plugin-vue) | 6.0.10 | MIT |
+| [@vitejs/plugin-vue](https://www.npmjs.com/package/@vitejs/plugin-vue) | 6.0.11 | MIT |
 | [@vitest/coverage-v8](https://www.npmjs.com/package/@vitest/coverage-v8) | 5.1.0 | MIT |
 | [@vue/test-utils](https://www.npmjs.com/package/@vue/test-utils) | 2.5.1 | MIT |
 | [eslint](https://www.npmjs.com/package/eslint) | 10.14.0 | MIT |
 | [eslint-config-prettier](https://www.npmjs.com/package/eslint-config-prettier) | 10.1.8 | MIT |
-| [eslint-plugin-vue](https://www.npmjs.com/package/eslint-plugin-vue) | 10.12.0 | MIT |
+| [eslint-plugin-vue](https://www.npmjs.com/package/eslint-plugin-vue) | 10.12.1 | MIT |
 | [eslint-plugin-vuejs-accessibility](https://www.npmjs.com/package/eslint-plugin-vuejs-accessibility) | 2.6.3 | MIT |
 | [globals](https://www.npmjs.com/package/globals) | 17.14.0 | MIT |
-| [jsdom](https://www.npmjs.com/package/jsdom) | 31.0.0 | MIT |
+| [jsdom](https://www.npmjs.com/package/jsdom) | 31.0.1 | MIT |
 | [openapi-typescript](https://www.npmjs.com/package/openapi-typescript) | 7.13.0 | MIT |
 | [pg](https://www.npmjs.com/package/pg) | 8.23.1 | MIT |
-| [prettier](https://www.npmjs.com/package/prettier) | 3.9.10 | MIT |
+| [prettier](https://www.npmjs.com/package/prettier) | 3.10.1 | MIT |
 | [swagger2openapi](https://www.npmjs.com/package/swagger2openapi) | 7.0.8 | BSD-3-Clause |
 | [typescript](https://www.npmjs.com/package/typescript) | 6.0.3 | Apache-2.0 |
-| [typescript-eslint](https://www.npmjs.com/package/typescript-eslint) | 8.72.1 | MIT |
-| [vite](https://www.npmjs.com/package/vite) | 8.3.6 | MIT |
+| [typescript-eslint](https://www.npmjs.com/package/typescript-eslint) | 8.72.2 | MIT |
+| [vite](https://www.npmjs.com/package/vite) | 8.3.8 | MIT |
 | [vitest](https://www.npmjs.com/package/vitest) | 5.1.0 | MIT |
 | [vue-tsc](https://www.npmjs.com/package/vue-tsc) | 3.3.14 | MIT |
 
