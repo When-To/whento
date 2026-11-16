@@ -294,7 +294,7 @@ func TestPasskeysGoWithTheirUser(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	if err := authRepo.NewUserRepository(pool).Delete(ctx, user.ID); err != nil {
+	if _, err := authRepo.NewUserRepository(pool).Delete(ctx, user.ID); err != nil {
 		t.Fatalf("delete user: %v", err)
 	}
 

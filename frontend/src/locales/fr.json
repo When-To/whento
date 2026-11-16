@@ -245,6 +245,31 @@
       "regenerateError": "Échec de la régénération des codes de récupération",
       "setupError": "Échec du démarrage de la configuration 2FA",
       "downloadCodes": "Télécharger les codes"
+    },
+    "deleteAccount": {
+      "dangerZone": "Zone de danger",
+      "dangerZoneDescription": "Supprimer votre compte l'efface définitivement, avec tous les calendriers que vous possédez. Cette action est irréversible.",
+      "openButton": "Supprimer mon compte",
+      "title": "Supprimer définitivement votre compte ?",
+      "calendarsDeleted": "Votre calendrier sera supprimé : | Vos {count} calendriers seront supprimés :",
+      "andOthers": "et {count} autre | et {count} autres",
+      "participantsErased": "Les réponses de {count} participant seront effacées, et les liens de participation et abonnements ICS que vous avez partagés cesseront de fonctionner. | Les réponses de {count} participants seront effacées, et les liens de participation et abonnements ICS que vous avez partagés cesseront de fonctionner.",
+      "noCalendars": "Vous ne possédez aucun calendrier.",
+      "impactGeneric": "Tous vos calendriers et les réponses de leurs participants seront supprimés, et les liens de participation et abonnements ICS que vous avez partagés cesseront de fonctionner.",
+      "securityDeleted": "Vos passkeys, votre double authentification et toutes vos sessions seront supprimées.",
+      "notDeletedTitle": "Ce qui n'est pas supprimé",
+      "notDeleted": "Vos réponses aux calendriers d'autres personnes restent visibles par leurs propriétaires. Supprimez-les depuis chaque lien de participation si vous le souhaitez.",
+      "backups": "Les copies présentes dans les sauvegardes de l'opérateur sont effacées à leur expiration, sous 30 jours.",
+      "notifyParticipants": "Les participants ne seront pas prévenus par WhenTo. Pensez à les informer vous-même avant de supprimer votre compte.",
+      "irreversible": "Cette action est immédiate et irréversible.",
+      "passwordLabel": "Mot de passe actuel",
+      "confirmCheckbox": "Je comprends que mon compte et mes calendriers seront supprimés définitivement.",
+      "confirmButton": "Supprimer définitivement mon compte",
+      "deleting": "Suppression…",
+      "wrongPassword": "Mot de passe incorrect.",
+      "lastAdmin": "Vous êtes le seul administrateur. Nommez un autre administrateur avant de supprimer votre compte.",
+      "success": "Votre compte a été supprimé.",
+      "error": "Votre compte n'a pas pu être supprimé. Rien n'a été effacé."
     }
   },
   "dashboard": {

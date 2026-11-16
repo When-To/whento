@@ -415,7 +415,7 @@ func TestCalendarsGoWithTheirOwner(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	if err := authRepo.NewUserRepository(pool).Delete(ctx, owner.ID); err != nil {
+	if _, err := authRepo.NewUserRepository(pool).Delete(ctx, owner.ID); err != nil {
 		t.Fatalf("delete owner: %v", err)
 	}
 

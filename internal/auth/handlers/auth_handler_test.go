@@ -29,6 +29,9 @@ type mockUserRepository struct {
 	// (e.g. the last-admin invariant) without breaking the existence check that
 	// the handler performs first.
 	roleErr error
+	// deleteErr is separate from err for the same reason: self-deletion reads
+	// the user (password check) before the delete refuses.
+	deleteErr error
 	// firstUserCreatedErr makes the durable "has a first user ever been created"
 	// read fail, so a test can pin that Register surfaces an unreadable marker as
 	// 503 instead of treating it as "no users".
@@ -78,8 +81,11 @@ func (m *mockUserRepository) UpdateProfile(
 	return m.user, nil
 }
 
-func (m *mockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return m.err
+func (m *mockUserRepository) Delete(ctx context.Context, id uuid.UUID) ([]string, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return nil, m.deleteErr
 }
 
 func (m *mockUserRepository) List(ctx context.Context) ([]*models.User, error) {

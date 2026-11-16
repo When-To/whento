@@ -68,6 +68,13 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password" validate:"required,strongpassword,max=72,maxbytes=72"`
 }
 
+// DeleteAccountRequest re-confirms the current password before the caller's own
+// account is deleted. Bounded like every password field so the bcrypt check
+// never sees more than its 72 bytes.
+type DeleteAccountRequest struct {
+	Password string `json:"password" validate:"required,max=72,maxbytes=72"`
+}
+
 // UpdateRoleRequest represents a role update request (admin only)
 type UpdateRoleRequest struct {
 	Role string `json:"role" validate:"required,oneof=user admin"`

@@ -245,6 +245,31 @@
       "regenerateError": "Failed to regenerate backup codes",
       "setupError": "Failed to start 2FA setup",
       "downloadCodes": "Download Codes"
+    },
+    "deleteAccount": {
+      "dangerZone": "Danger zone",
+      "dangerZoneDescription": "Deleting your account permanently removes it, together with every calendar you own. This cannot be undone.",
+      "openButton": "Delete my account",
+      "title": "Permanently delete your account?",
+      "calendarsDeleted": "Your calendar will be deleted: | Your {count} calendars will be deleted:",
+      "andOthers": "and {count} other | and {count} others",
+      "participantsErased": "The responses of {count} participant will be erased, and the participation links and ICS subscriptions you shared will stop working. | The responses of {count} participants will be erased, and the participation links and ICS subscriptions you shared will stop working.",
+      "noCalendars": "You do not own any calendar.",
+      "impactGeneric": "All your calendars and their participants' responses will be deleted, and the participation links and ICS subscriptions you shared will stop working.",
+      "securityDeleted": "Your passkeys, your two-factor authentication and all your sessions will be deleted.",
+      "notDeletedTitle": "What is not deleted",
+      "notDeleted": "Your responses to other people's calendars stay visible to their owners. Remove them from each participation link if you wish.",
+      "backups": "Copies in the operator's backups are erased as those backups expire, within 30 days.",
+      "notifyParticipants": "Participants will not be notified by WhenTo. Consider letting them know yourself before deleting your account.",
+      "irreversible": "This action is immediate and irreversible.",
+      "passwordLabel": "Current password",
+      "confirmCheckbox": "I understand that my account and my calendars will be permanently deleted.",
+      "confirmButton": "Permanently delete my account",
+      "deleting": "Deleting…",
+      "wrongPassword": "Incorrect password.",
+      "lastAdmin": "You are the only administrator. Make someone else an administrator before deleting your account.",
+      "success": "Your account has been deleted.",
+      "error": "Your account could not be deleted. Nothing was removed."
     }
   },
   "dashboard": {

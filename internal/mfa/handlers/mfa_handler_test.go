@@ -222,7 +222,7 @@ func newHarness(t *testing.T, store *fakeMFAStore, users *fakeUserLookup, appCac
 	authUsersStub := &stubAuthUserRepo{user: users.user}
 	authSvc := authService.NewAuthService(
 		authUsersStub, tokensStub, &stubAuthMFARepo{record: store.record},
-		manager, appCache, bcrypt.MinCost, true, []string{"*"},
+		manager, appCache, nil, bcrypt.MinCost, true, []string{"*"},
 	)
 
 	return &harness{
@@ -282,7 +282,7 @@ func (s *stubAuthUserRepo) UpdateProfile(
 ) (*authModels.User, error) {
 	return s.user, nil
 }
-func (s *stubAuthUserRepo) Delete(context.Context, uuid.UUID) error { return nil }
+func (s *stubAuthUserRepo) Delete(context.Context, uuid.UUID) ([]string, error) { return nil, nil }
 func (s *stubAuthUserRepo) CreateFirstUser(context.Context, *authModels.User) error {
 	return nil
 }

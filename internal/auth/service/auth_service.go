@@ -80,7 +80,9 @@ type UserRepository interface {
 		locale *string,
 		timezone *string,
 	) (*models.User, error)
-	Delete(ctx context.Context, id uuid.UUID) error
+	// Delete removes the user and returns the public tokens of the calendars
+	// deleted with it, for cache purging.
+	Delete(ctx context.Context, id uuid.UUID) ([]string, error)
 	List(ctx context.Context) ([]*models.User, error)
 	UpdateRole(ctx context.Context, userID uuid.UUID, role string) error
 	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash, previousHash string) error
@@ -127,6 +129,7 @@ type AuthService struct {
 	mfaRepo         MFARepository
 	jwtManager      *jwt.Manager
 	cache           cache.Cache
+	mailer          AccountMailer
 	bcryptCost      int
 	allowedRegister bool
 	allowedEmails   []string
@@ -139,6 +142,7 @@ func NewAuthService(
 	mfaRepo MFARepository,
 	jwtManager *jwt.Manager,
 	appCache cache.Cache,
+	mailer AccountMailer,
 	bcryptCost int,
 	allowedRegister bool,
 	allowedEmails []string,
@@ -149,6 +153,7 @@ func NewAuthService(
 		mfaRepo:         mfaRepo,
 		jwtManager:      jwtManager,
 		cache:           appCache,
+		mailer:          mailer,
 		bcryptCost:      bcryptCost,
 		allowedRegister: allowedRegister,
 		allowedEmails:   allowedEmails,
@@ -530,14 +535,8 @@ func (s *AuthService) DeleteUser(ctx context.Context, currentUserID, targetUserI
 		return ErrUserNotFound
 	}
 
-	if err := s.userRepo.Delete(ctx, uid); err != nil {
-		if errors.Is(err, repository.ErrLastAdmin) {
-			return ErrLastAdmin
-		}
-		return err
-	}
-
-	return nil
+	_, err = s.deleteAccount(ctx, uid)
+	return err
 }
 
 // IssueSession is the one place a fresh session is created: it issues the

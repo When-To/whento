@@ -880,7 +880,82 @@ export interface paths {
     };
     put?: never;
     post?: never;
-    delete?: never;
+    /**
+     * Delete own account
+     * @description Permanently deletes the authenticated user's account and everything it owns (calendars, their participants and availabilities, sessions, passkeys, 2FA). Requires the current password. An administrator can only delete their account while another administrator exists. A confirmation email is sent when SMTP is configured.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      /** @description Current password */
+      requestBody: {
+        content: {
+          'application/json': components['schemas']['models.DeleteAccountRequest'];
+        };
+      };
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: string;
+            };
+          };
+        };
+        /** @description Invalid request or password incorrect */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Unauthorized */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description The caller is the last administrator */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Rate limit exceeded */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Internal server error */
+        500: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+      };
+    };
     options?: never;
     head?: never;
     /**
@@ -994,6 +1069,15 @@ export interface paths {
         };
         /** @description Unauthorized */
         401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Rate limit exceeded */
+        429: {
           headers: {
             [name: string]: unknown;
           };
@@ -5061,6 +5145,9 @@ export interface components {
       start_date: string;
       /** @description Format: "HH:MM" */
       start_time?: string;
+    };
+    'models.DeleteAccountRequest': {
+      password: string;
     };
     'models.DiscordChannelConfig': {
       enabled?: boolean;
