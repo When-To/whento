@@ -7,16 +7,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   addMinutesCapped,
-  contains,
   coversTime,
-  DAY_END_MIN,
   isFullDay,
-  LAST_MINUTE,
   mergeIntervals,
   minutesToTime,
-  overlaps,
   timeToMinutes,
-  toInterval,
   type Interval,
 } from './timeRange';
 
@@ -75,26 +70,6 @@ describe('isFullDay', () => {
   });
 });
 
-describe('toInterval', () => {
-  it('maps absent times to the whole day, ending at midnight', () => {
-    expect(toInterval({})).toEqual({ startMin: 0, endMin: DAY_END_MIN });
-  });
-
-  it('converts explicit times', () => {
-    expect(toInterval({ start_time: '09:00', end_time: '17:30' })).toEqual({
-      startMin: 540,
-      endMin: 1050,
-    });
-  });
-
-  it('deliberately ends at 1440, not 1439, unlike coversTime', () => {
-    // Documented asymmetry, ported verbatim: coverage maths runs to midnight while
-    // slot painting stops at 23:59. See the TODO in timeRange.ts.
-    expect(toInterval({ start_time: '09:00' }).endMin).toBe(DAY_END_MIN);
-    expect(DAY_END_MIN).toBe(LAST_MINUTE + 1);
-  });
-});
-
 describe('coversTime', () => {
   it('covers everything when both times are absent', () => {
     expect(coversTime({}, '00:00')).toBe(true);
@@ -113,26 +88,6 @@ describe('coversTime', () => {
     const range = { start_time: '09:00' };
     expect(coversTime(range, '23:45')).toBe(true);
     expect(coversTime(range, '23:59')).toBe(false);
-  });
-});
-
-describe('overlaps / contains', () => {
-  const nine = { startMin: 540, endMin: 720 };
-
-  it('detects genuine overlap', () => {
-    expect(overlaps(nine, { startMin: 600, endMin: 800 })).toBe(true);
-    expect(overlaps(nine, { startMin: 400, endMin: 600 })).toBe(true);
-  });
-
-  it('does not treat touching intervals as overlapping', () => {
-    expect(overlaps(nine, { startMin: 720, endMin: 800 })).toBe(false);
-    expect(overlaps(nine, { startMin: 400, endMin: 540 })).toBe(false);
-  });
-
-  it('detects containment', () => {
-    expect(contains(nine, { startMin: 600, endMin: 700 })).toBe(true);
-    expect(contains(nine, nine)).toBe(true);
-    expect(contains(nine, { startMin: 600, endMin: 800 })).toBe(false);
   });
 });
 

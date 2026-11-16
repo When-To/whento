@@ -12,7 +12,6 @@ import (
 
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/logger"
-	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/availability/models"
 	"github.com/whento/whento/internal/availability/service"
 )
@@ -46,17 +45,7 @@ func (h *AvailabilityHandler) CreateAvailability(w http.ResponseWriter, r *http.
 	participantID := chi.URLParam(r, "pid")
 
 	var req models.CreateAvailabilityRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -121,17 +110,7 @@ func (h *AvailabilityHandler) UpdateAvailability(w http.ResponseWriter, r *http.
 	date := chi.URLParam(r, "date")
 
 	var req models.UpdateAvailabilityRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
@@ -263,6 +242,8 @@ func handleAvailabilityError(w http.ResponseWriter, r *http.Request, err error, 
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "This day of the week is not allowed for this calendar")
 	case errors.Is(err, service.ErrDateInPast):
 		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Cannot modify availability for past dates")
+	case errors.Is(err, service.ErrActivityRangeTooLong):
+		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "The activity range must not exceed 92 days")
 	default:
 		log.Error(defaultMsg, "error", err)
 		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, defaultMsg)

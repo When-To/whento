@@ -74,6 +74,13 @@ func registerCalendarRoutes(r chi.Router, d *deps, h *handlers) {
 			r.Get("/{id}/notify-config", h.notifyConfig.GetConfig)
 			r.Patch("/{id}/notify-config", h.notifyConfig.UpdateConfig)
 
+			// Per-date activity journal (owner only).
+			//
+			// Authenticated half on purpose, with no token-addressed twin: a public
+			// token is a participant capability, and this answers a question about
+			// every other participant.
+			r.Get("/{id}/activity", h.activity.GetActivity)
+
 			// Admin routes
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole("admin"))

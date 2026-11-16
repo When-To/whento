@@ -38,9 +38,8 @@ const authApi = {
   logout: vi.fn(),
   getMe: vi.fn(),
   updateProfile: vi.fn(),
-  updatePassword: vi.fn(),
   forgotPassword: vi.fn(),
-  resetPassword: vi.fn(),
+  completeAccountRecovery: vi.fn(),
 };
 
 const apiClient = {
@@ -70,7 +69,7 @@ describe('ResetPassword.vue', () => {
     vi.clearAllMocks();
     setActivePinia(createPinia());
     routeParams = { token: 'a'.repeat(64) };
-    authApi.resetPassword.mockResolvedValue({
+    authApi.completeAccountRecovery.mockResolvedValue({
       user: { id: 'u1', email: 'user@example.test', display_name: 'User', role: 'admin' },
       access_token: 'access-1',
       expires_in: 900,
@@ -127,7 +126,10 @@ describe('ResetPassword.vue', () => {
     await wrapper.find('form').trigger('submit');
     await flushPromises();
 
-    expect(authApi.resetPassword).toHaveBeenCalledWith('a'.repeat(64), 'StrongP@ssw0rd123!');
+    expect(authApi.completeAccountRecovery).toHaveBeenCalledWith(
+      'a'.repeat(64),
+      'StrongP@ssw0rd123!'
+    );
     // The toast is pushed onto the store (rendered by a global container, not
     // this component's markup) and the page swaps to its success state.
     expect(useToastStore().toasts.map(t => t.message)).toContain(
@@ -144,7 +146,7 @@ describe('ResetPassword.vue', () => {
     await wrapper.find('form').trigger('submit');
     await flushPromises();
 
-    expect(authApi.resetPassword).not.toHaveBeenCalled();
+    expect(authApi.completeAccountRecovery).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain('Passwords do not match');
   });
 });

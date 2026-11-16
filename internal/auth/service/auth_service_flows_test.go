@@ -1314,6 +1314,12 @@ func TestAdminActionsOnOtherUsers(t *testing.T) {
 	if fixture.users.roleUpdated != models.RoleAdmin {
 		t.Errorf("role = %q, want admin", fixture.users.roleUpdated)
 	}
+	// The role is an access-token claim, so the target's live tokens are withdrawn.
+	revocationKey := cache.UserPasswordChangedKey(target.ID.String())
+	if _, ok := fixture.cache.values[revocationKey]; !ok {
+		t.Error("a role change left the target's access tokens valid")
+	}
+	delete(fixture.cache.values, revocationKey)
 
 	if err := fixture.service.DeleteUser(
 		context.Background(), admin.ID.String(), target.ID.String(),
@@ -1322,6 +1328,9 @@ func TestAdminActionsOnOtherUsers(t *testing.T) {
 	}
 	if fixture.users.deleted != target.ID {
 		t.Errorf("deleted %v, want %v", fixture.users.deleted, target.ID)
+	}
+	if _, ok := fixture.cache.values[revocationKey]; !ok {
+		t.Error("a deleted account kept its access tokens")
 	}
 }
 

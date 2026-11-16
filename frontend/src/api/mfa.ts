@@ -47,6 +47,7 @@ export const mfaApi = {
   ): Promise<{
     access_token: string;
     expires_in: number;
+    session_id?: string;
     user: any;
   }> {
     return apiClient.post('/auth/mfa/verify', {

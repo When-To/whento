@@ -76,14 +76,27 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
 let cachedToken: string | null = null;
 
-/** The access token for the run's shared owner account, created by globalSetup. */
-export function ownerToken(): string {
-  if (cachedToken) return cachedToken;
+/** Whether a JWT is still valid for at least another minute. */
+function isFresh(token: string): boolean {
+  const { exp } = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()) as {
+    exp: number;
+  };
+  return exp - 60 > Date.now() / 1000;
+}
 
+/**
+ * A valid access token for the run's shared owner account, created by globalSetup.
+ *
+ * A full run outlasts the token globalSetup left behind (15 minutes by default), so an
+ * expiring token is replaced by one fresh login: once per worker per lifetime, well
+ * clear of the login rate limit.
+ */
+export async function ownerToken(): Promise<string> {
+  if (cachedToken && isFresh(cachedToken)) return cachedToken;
+
+  let account: { email: string; password: string; accessToken: string };
   try {
-    const account = JSON.parse(readFileSync(ACCOUNT_FILE, 'utf8')) as { accessToken: string };
-    cachedToken = account.accessToken;
-    return cachedToken;
+    account = JSON.parse(readFileSync(ACCOUNT_FILE, 'utf8'));
   } catch (cause) {
     throw new Error(
       `Could not read the seeded account at ${ACCOUNT_FILE}. globalSetup registers it, ` +
@@ -91,4 +104,14 @@ export function ownerToken(): string {
       { cause }
     );
   }
+
+  cachedToken = isFresh(account.accessToken)
+    ? account.accessToken
+    : (
+        await apiFetch<{ access_token: string }>('/auth/login', {
+          method: 'POST',
+          body: { email: account.email, password: account.password },
+        })
+      ).access_token;
+  return cachedToken;
 }

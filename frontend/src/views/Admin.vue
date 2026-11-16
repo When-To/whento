@@ -172,7 +172,7 @@
 
                 <!-- Created At -->
                 <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                  {{ formatDate(user.created_at) }}
+                  {{ formatCreatedAt(user.created_at) }}
                 </td>
 
                 <!-- Actions -->
@@ -280,6 +280,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date/intlFormatters';
 import { ref, onMounted, reactive } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
@@ -288,11 +289,18 @@ import { useToastStore } from '@/stores/toast';
 import { adminApi } from '@/api/admin';
 import type { User } from '@/types';
 import { translateErrorMessage } from '@/utils/errorTranslator';
+import { useAccountScopedReload } from '@/composables/useAccountScopedReload';
 
 const { t } = useI18n();
 const router = useRouter();
 const authStore = useAuthStore();
 const toastStore = useToastStore();
+
+// A remote account replacement advances the account generation, not a document
+// reload; the admin list is account-scoped admin data, so reload it in place.
+useAccountScopedReload(() => {
+  void loadUsers();
+});
 
 const loading = ref(true);
 const users = ref<User[]>([]);
@@ -416,13 +424,8 @@ function viewUserCalendars(user: User) {
   });
 }
 
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString(authStore.user?.locale || 'fr', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+function formatCreatedAt(dateString: string): string {
+  return formatDate(new Date(dateString), authStore.user?.locale || 'fr', 'dayMonthYearShort');
 }
 </script>
 

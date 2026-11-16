@@ -19,8 +19,8 @@ const fetchQuota = async () => {
     loading.value = true;
     error.value = null;
     quota.value = await getQuotaStatus();
-  } catch (err: any) {
-    error.value = err.response?.data?.error || t('quota.errorLoading');
+  } catch (err) {
+    error.value = t('quota.errorLoading');
     console.error('Failed to fetch quota:', err);
   } finally {
     loading.value = false;
@@ -58,18 +58,11 @@ const percentage = computed(() => {
   return Math.round((usage.value / limit.value) * 100);
 });
 
-const usageColor = computed(() => {
-  if (isUnlimited.value) return 'text-green-600';
-  if (percentage.value >= 90) return 'text-red-600';
-  if (percentage.value >= 75) return 'text-orange-600';
-  return 'text-green-600';
-});
-
-const barColor = computed(() => {
-  if (isUnlimited.value) return 'bg-green-500';
-  if (percentage.value >= 90) return 'bg-red-500';
-  if (percentage.value >= 75) return 'bg-orange-500';
-  return 'bg-green-500';
+// Literal class names, so Tailwind's scanner still finds them. Unlimited reads as 0%.
+const levelClasses = computed(() => {
+  if (percentage.value >= 90) return { text: 'text-red-600', bar: 'bg-red-500' };
+  if (percentage.value >= 75) return { text: 'text-orange-600', bar: 'bg-orange-500' };
+  return { text: 'text-green-600', bar: 'bg-green-500' };
 });
 
 const quotaLabel = computed(() => {
@@ -104,7 +97,7 @@ onMounted(() => {
       <!-- Header -->
       <div class="flex items-center justify-between text-sm">
         <span class="text-gray-700 font-medium dark:text-gray-300">{{ quotaLabel }}</span>
-        <span :class="usageColor" class="font-semibold">
+        <span :class="levelClasses.text" class="font-semibold">
           <template v-if="isUnlimited"> {{ usage }} / {{ t('quota.unlimited') }} </template>
           <template v-else> {{ usage }} / {{ limit }} </template>
         </span>
@@ -113,7 +106,7 @@ onMounted(() => {
       <!-- Progress bar (only if not unlimited) -->
       <div v-if="!isUnlimited" class="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
         <div
-          :class="barColor"
+          :class="levelClasses.bar"
           class="h-2 rounded-full transition-all duration-300"
           :style="{ width: `${percentage}%` }"
         />

@@ -32,6 +32,7 @@ const baseURL = process.env.WHENTO_BASE_URL ?? 'http://127.0.0.1:8080';
 
 export default defineConfig({
   testDir: './e2e-backend',
+  outputDir: './test-results/backend',
   testMatch: '**/*.spec.ts', // fixture unit tests belong to Vitest, not Playwright.
   // Bootstraps/registers the run's owner. It cannot be done per test: /auth/register
   // allows 3 requests per minute per IP and /auth/login 5, so a per-test registration
@@ -50,5 +51,19 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'desktop', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'desktop',
+      testIgnore: 'session-rotation.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'rotation',
+      testMatch: 'session-rotation.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: process.env.WHENTO_ROTATION_BASE_URL ?? 'http://127.0.0.1:5174',
+      },
+    },
+  ],
 });

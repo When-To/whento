@@ -12,7 +12,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,42 +20,6 @@ import (
 
 	"golang.org/x/sync/singleflight"
 )
-
-// Coverage describes where a year's holiday list came from: the bundled
-// offline table, the Nager network fallback, or nowhere at all.
-type Coverage int
-
-const (
-	// CoverageOffline means the bundled rickar/cal table served the list.
-	CoverageOffline Coverage = iota
-	// CoverageFallback means the Nager API served the list.
-	CoverageFallback
-	// CoverageUnavailable means no provider could serve the list.
-	CoverageUnavailable
-)
-
-// String returns a stable identifier for the coverage ("offline", "fallback" or
-// "unavailable") suitable for an API envelope.
-func (c Coverage) String() string {
-	switch c {
-	case CoverageOffline:
-		return "offline"
-	case CoverageFallback:
-		return "fallback"
-	case CoverageUnavailable:
-		return "unavailable"
-	default:
-		return "unknown"
-	}
-}
-
-// Holiday is one public holiday, from the offline table or the Nager fallback.
-type Holiday struct {
-	Date      time.Time // the holiday's calendar date
-	Name      string    // the holiday name (local language for the offline source, English for the fallback)
-	LocalName string    // the local-language name (same as Name for the offline source)
-	Source    string    // "offline" or "fallback"
-}
 
 var (
 	errInvalidCountry = errors.New("invalid country code")
@@ -68,7 +32,7 @@ var (
 //	nagerDefaultBaseURL = "https://date.nager.at/api/v3/PublicHolidays/%d/%s"
 //
 // Production uses this fixed endpoint only after operator opt-in; tests use
-// SetNagerBaseURL to point it at an httptest server.
+// setNagerBaseURL to point it at an httptest server.
 const (
 	nagerDefaultBaseURL = "https://date.nager.at/api/v3/PublicHolidays/%d/%s"
 	nagerMinYear        = 1900
@@ -84,29 +48,19 @@ const (
 var countryCodeRE = regexp.MustCompile(`^[A-Z]{2}$`)
 
 // nagerHoliday is one element of the Nager PublicHolidays response. Only the
-// three fields below are kept; the rest of the payload (subnational scope,
-// observance type, launch year) is deliberately ignored.
+// date is kept; the rest of the payload (names, subnational scope, observance
+// type, launch year) is deliberately ignored.
 type nagerHoliday struct {
-	Date      string `json:"date"`
-	Name      string `json:"name"`
-	LocalName string `json:"localName"`
+	Date string `json:"date"`
 }
 
+// nagerCacheEntry is a cached load outcome, and also what the singleflight group
+// hands every caller sharing one upstream request: the error rides inside the value
+// so a failure is cached the same way as a success.
 type nagerCacheEntry struct {
-	coverage Coverage
-	holidays []Holiday
+	holidays []time.Time
 	err      error
 	at       time.Time
-}
-
-// nagerResult is what the singleflight group hands back to every caller sharing
-// one upstream request. The error rides inside the value rather than in
-// singleflight's error slot so the load outcome is cached uniformly whether it
-// succeeded or failed.
-type nagerResult struct {
-	holidays []Holiday
-	coverage Coverage
-	err      error
 }
 
 // nagerClient is the bounded, cached Nager fallback.
@@ -118,9 +72,7 @@ type nagerResult struct {
 type nagerClient struct {
 	baseURL string // fmt.Sprintf template; empty disables the fallback
 
-	client     *http.Client
-	successTTL time.Duration // how long a loaded year is trusted
-	failureTTL time.Duration // cooldown before a failed year is retried
+	client *http.Client
 
 	mu    sync.Mutex
 	cache map[string]nagerCacheEntry
@@ -128,8 +80,7 @@ type nagerClient struct {
 	sf    singleflight.Group
 }
 
-// newNagerClient builds a fallback client. A successTTL/failureTTL of zero uses
-// the package defaults; tests shrink them to exercise expiry.
+// newNagerClient builds a fallback client.
 func newNagerClient(baseURL string) *nagerClient {
 	return &nagerClient{
 		baseURL: baseURL,
@@ -139,72 +90,57 @@ func newNagerClient(baseURL string) *nagerClient {
 				return http.ErrUseLastResponse
 			},
 		},
-		successTTL: nagerSuccessTTL,
-		failureTTL: nagerFailureTTL,
-		cache:      make(map[string]nagerCacheEntry),
+		cache: make(map[string]nagerCacheEntry),
 	}
 }
 
-// defaultNager is the process-wide fallback used by IsDateAllowed. SetNagerBaseURL replaces it for tests and mirrors.
+// defaultNager is the process-wide fallback used by IsDateAllowed. setNagerBaseURL replaces it for tests and mirrors.
 var defaultNager = newNagerClient("")
 
 // SetNagerFallbackEnabled configures the process-wide network fallback before
 // serving requests. It is disabled unless the operator explicitly enables it.
-// Like SetNagerBaseURL, this startup setting must not change during lookups.
+// Like setNagerBaseURL, this startup setting must not change during lookups.
 func SetNagerFallbackEnabled(enabled bool) (restore func()) {
 	baseURL := ""
 	if enabled {
 		baseURL = nagerDefaultBaseURL
 	}
-	return SetNagerBaseURL(baseURL)
+	return setNagerBaseURL(baseURL)
 }
 
-// SetNagerBaseURL points the built-in fallback provider at a different base URL
+// setNagerBaseURL points the built-in fallback provider at a different base URL
 // template and returns a function that restores the previous setting.
 //
 // The production endpoint is the fixed, trusted date.nager.at API; this hook
 // exists so tests can dial an httptest server and so a self-hosted deployment
 // can pin a mirror of the same schema. An empty URL disables the fallback
-// entirely (every fetch reports CoverageUnavailable without dialing anything).
+// entirely (every fetch reports errHolidayUnavailable without dialing anything).
 // Each URL gets its own cached client, so switching URLs starts a fresh cache.
 // It must not be called concurrently with lookups.
-func SetNagerBaseURL(url string) (restore func()) {
+func setNagerBaseURL(url string) (restore func()) {
 	old := defaultNager
 	defaultNager = newNagerClient(url)
 	return func() { defaultNager = old }
 }
 
-// holidaysForYear returns the public holidays of a country for a year. The
-// bundled offline table answers first when it covers the country; otherwise the
-// Nager fallback is consulted through its bounded cache (fetch validates the
-// code and the year). A country no provider can serve reports
-// CoverageUnavailable with a non-nil error.
-func holidaysForYear(ctx context.Context, country string, year int) ([]Holiday, Coverage, error) {
-	country = strings.ToUpper(strings.TrimSpace(country))
-	if holidays, ok := offlineHolidaysForYear(country, year); ok {
-		return holidays, CoverageOffline, nil
-	}
-	return defaultNager.fetch(ctx, country, year)
-}
-
 // fetch returns a country+year from the bounded cache or, on a miss, through a
 // single singleflight request coalescing every concurrent caller.
-func (n *nagerClient) fetch(ctx context.Context, country string, year int) ([]Holiday, Coverage, error) {
+func (n *nagerClient) fetch(ctx context.Context, country string, year int) ([]time.Time, error) {
 	country = strings.ToUpper(strings.TrimSpace(country))
 	if !countryCodeRE.MatchString(country) {
-		return nil, CoverageUnavailable, fmt.Errorf("%w: %q", errInvalidCountry, country)
+		return nil, fmt.Errorf("%w: %q", errInvalidCountry, country)
 	}
 	if year < nagerMinYear || year > nagerMaxYear {
-		return nil, CoverageUnavailable, fmt.Errorf("%w: %d", errInvalidYear, year)
+		return nil, fmt.Errorf("%w: %d", errInvalidYear, year)
 	}
 	if n.baseURL == "" {
-		return nil, CoverageUnavailable, fmt.Errorf("%w: no fallback endpoint configured", errHolidayUnavailable)
+		return nil, fmt.Errorf("%w: no fallback endpoint configured", errHolidayUnavailable)
 	}
 
 	key := country + ":" + strconv.Itoa(year)
 
 	if e, ok := n.cached(key); ok {
-		return cloneHolidays(e.holidays), e.coverage, e.err
+		return slices.Clone(e.holidays), e.err
 	}
 
 	// The shared request has its own bounded lifetime. Canceling any caller
@@ -213,23 +149,22 @@ func (n *nagerClient) fetch(ctx context.Context, country string, year int) ([]Ho
 		// Another fetch may have filled the cache between our first check
 		// and joining this group; do not issue an unnecessary second request.
 		if e, ok := n.cached(key); ok {
-			return nagerResult{holidays: e.holidays, coverage: e.coverage, err: e.err}, nil
+			return e, nil
 		}
 		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), nagerTimeout)
 		defer cancel()
-		holidays, coverage, err := n.load(fetchCtx, country, year)
-		return nagerResult{holidays: holidays, coverage: coverage, err: err}, nil
+		return n.load(fetchCtx, key, country, year), nil
 	})
 
 	select {
 	case res := <-ch:
-		r, ok := res.Val.(nagerResult)
+		r, ok := res.Val.(nagerCacheEntry)
 		if !ok {
-			return nil, CoverageUnavailable, fmt.Errorf("unexpected singleflight result type %T", res.Val)
+			return nil, fmt.Errorf("unexpected singleflight result type %T", res.Val)
 		}
-		return cloneHolidays(r.holidays), r.coverage, r.err
+		return slices.Clone(r.holidays), r.err
 	case <-ctx.Done():
-		return nil, CoverageUnavailable, ctx.Err()
+		return nil, ctx.Err()
 	}
 }
 
@@ -241,11 +176,11 @@ func (n *nagerClient) cached(key string) (nagerCacheEntry, bool) {
 }
 
 // valid reports whether a cached entry is still within its TTL: a loaded year
-// is trusted for successTTL, a failed one for failureTTL only.
+// is trusted for nagerSuccessTTL, a failed one for nagerFailureTTL only.
 func (n *nagerClient) valid(e nagerCacheEntry) bool {
-	ttl := n.successTTL
-	if e.coverage == CoverageUnavailable {
-		ttl = n.failureTTL
+	ttl := nagerSuccessTTL
+	if e.err != nil {
+		ttl = nagerFailureTTL
 	}
 	return time.Since(e.at) < ttl
 }
@@ -253,15 +188,15 @@ func (n *nagerClient) valid(e nagerCacheEntry) bool {
 // load caches the shared request's outcome, including its own timeout as a
 // provider failure. Caller cancellation never reaches this context. A failure
 // is never cached as a successful empty list.
-func (n *nagerClient) load(ctx context.Context, country string, year int) ([]Holiday, Coverage, error) {
-	holidays, coverage, err := n.dial(ctx, country, year)
-	key := country + ":" + strconv.Itoa(year)
+func (n *nagerClient) load(ctx context.Context, key, country string, year int) nagerCacheEntry {
+	holidays, err := n.dial(ctx, country, year)
+	entry := nagerCacheEntry{holidays: holidays, err: err, at: time.Now()}
 
 	n.mu.Lock()
 	if _, exists := n.cache[key]; !exists {
 		n.order = append(n.order, key)
 	}
-	n.cache[key] = nagerCacheEntry{coverage: coverage, holidays: holidays, err: err, at: time.Now()}
+	n.cache[key] = entry
 	for len(n.cache) > nagerCacheSize {
 		oldest := n.order[0]
 		n.order = n.order[1:]
@@ -269,57 +204,55 @@ func (n *nagerClient) load(ctx context.Context, country string, year int) ([]Hol
 	}
 	n.mu.Unlock()
 
-	return holidays, coverage, err
+	return entry
 }
 
 // dial talks to the Nager API. Any provider, schema or HTTP error is reported
-// as CoverageUnavailable — never as "an ordinary day".
-func (n *nagerClient) dial(ctx context.Context, country string, year int) ([]Holiday, Coverage, error) {
+// as errHolidayUnavailable — never as "an ordinary day".
+func (n *nagerClient) dial(ctx context.Context, country string, year int) ([]time.Time, error) {
 	url := fmt.Sprintf(n.baseURL, year, country)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, CoverageUnavailable, fmt.Errorf("%w: build request: %w", errHolidayUnavailable, err)
+		return nil, fmt.Errorf("%w: build request: %w", errHolidayUnavailable, err)
 	}
 
 	resp, err := n.client.Do(req)
 	if err != nil {
-		return nil, CoverageUnavailable, fmt.Errorf("%w: %w", errHolidayUnavailable, err)
+		return nil, fmt.Errorf("%w: %w", errHolidayUnavailable, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, CoverageUnavailable, fmt.Errorf("%w: unexpected status %d", errHolidayUnavailable, resp.StatusCode)
+		return nil, fmt.Errorf("%w: unexpected status %d", errHolidayUnavailable, resp.StatusCode)
 	}
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, nagerBodyLimit+1))
 	if err != nil {
-		return nil, CoverageUnavailable, fmt.Errorf("%w: read body: %w", errHolidayUnavailable, err)
+		return nil, fmt.Errorf("%w: read body: %w", errHolidayUnavailable, err)
 	}
 	if len(raw) > nagerBodyLimit {
-		return nil, CoverageUnavailable, fmt.Errorf("%w: response body exceeds %d bytes", errHolidayUnavailable, nagerBodyLimit)
+		return nil, fmt.Errorf("%w: response body exceeds %d bytes", errHolidayUnavailable, nagerBodyLimit)
 	}
 
 	var upstream []nagerHoliday
 	if err := json.Unmarshal(raw, &upstream); err != nil {
-		return nil, CoverageUnavailable, fmt.Errorf("%w: decode: %w", errHolidayUnavailable, err)
+		return nil, fmt.Errorf("%w: decode: %w", errHolidayUnavailable, err)
 	}
 
 	// Ordering is by date only; subnational filtering is never guessed at.
-	holidays := make([]Holiday, 0, len(upstream))
+	holidays := make([]time.Time, 0, len(upstream))
 	for _, h := range upstream {
 		d, err := parseNagerDate(h.Date)
 		if err != nil {
-			return nil, CoverageUnavailable, fmt.Errorf("%w: %w", errHolidayUnavailable, err)
+			return nil, fmt.Errorf("%w: %w", errHolidayUnavailable, err)
 		}
 		if d.Year() != year {
 			continue
 		}
-		holidays = append(holidays, Holiday{Date: d, Name: h.Name, LocalName: h.LocalName, Source: "fallback"})
+		holidays = append(holidays, d)
 	}
-	sort.Slice(holidays, func(i, j int) bool {
-		return holidays[i].Date.Before(holidays[j].Date)
-	})
-	return holidays, CoverageFallback, nil
+	slices.SortFunc(holidays, time.Time.Compare)
+	return holidays, nil
 }
 
 // parseNagerDate accepts the v3 "YYYY-MM-DD" wire format and, defensively, the
@@ -332,17 +265,6 @@ func parseNagerDate(s string) (time.Time, error) {
 		return t, nil
 	}
 	return time.Time{}, fmt.Errorf("unrecognized holiday date %q", s)
-}
-
-// cloneHolidays returns a defensive copy so a caller mutating the slice it got
-// cannot corrupt the cache or the offline table.
-func cloneHolidays(in []Holiday) []Holiday {
-	if in == nil {
-		return nil
-	}
-	out := make([]Holiday, len(in))
-	copy(out, in)
-	return out
 }
 
 // sameDate reports whether two times fall on the same calendar date.

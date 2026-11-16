@@ -169,7 +169,7 @@
               :class="{ 'card-action-on': viewMode === mode }"
               :aria-label="t(viewModeAriaLabel(mode))"
               :aria-pressed="viewMode === mode"
-              @click="setViewMode(mode)"
+              @click="dashboardStore.setViewMode(mode)"
             >
               <svg
                 class="h-4 w-4"
@@ -386,6 +386,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
@@ -399,6 +400,7 @@ import type { CalendarWithParticipants } from '@/types';
 import QuotaUsage from '@/components/QuotaUsage.vue';
 import CalendarCard from '@/components/dashboard/CalendarCard.vue';
 import { translateErrorMessage } from '@/utils/errorTranslator';
+import { useAccountScopedReload } from '@/composables/useAccountScopedReload';
 
 const router = useRouter();
 const { t } = useI18n();
@@ -408,23 +410,32 @@ const dashboardStore = useDashboardStore();
 const unifiedFeedStore = useUnifiedFeedStore();
 const toastStore = useToastStore();
 
-const user = computed(() => authStore.user);
+// A remote account replacement (or a refresh that discovered a different server
+// family) advances the local account generation, not a document reload (the loop
+// this PR removes). Clear and reload this account's own data instead.
+useAccountScopedReload(() => {
+  void loadCalendars();
+  // A restored account's config failure has the same sole inline alert as mount.
+  feedErrorIsToasted.value = false;
+  void unifiedFeedStore.fetchConfig().catch(() => {});
+});
+
+const { user } = storeToRefs(authStore);
 const calendars = computed(() => {
   const cals = calendarStore.calendars;
   return Array.isArray(cals) ? cals.filter((c): c is CalendarWithParticipants => c != null) : [];
 });
-const loading = computed(() => calendarStore.loading);
+const { loading } = storeToRefs(calendarStore);
 const fetchError = ref<string | null>(null);
 
 const viewModes: DashboardViewMode[] = ['card', 'list', 'expanded', 'compact'];
 
-const viewMode = computed(() => dashboardStore.viewMode);
+const { viewMode } = storeToRefs(dashboardStore);
 const isCustomOrder = computed(() => dashboardStore.sortMode === 'custom');
 
 const feedConfigured = computed(() => unifiedFeedStore.config?.configured === true);
 
-const unifiedFeedConfig = computed(() => unifiedFeedStore.config);
-const unifiedFeedLoading = computed(() => unifiedFeedStore.loading);
+const { config: unifiedFeedConfig, loading: unifiedFeedLoading } = storeToRefs(unifiedFeedStore);
 // Enable failures use a toast when there is no feed; every other feed failure
 // uses the inline alert. Never announce the same failure through both channels.
 const feedErrorIsToasted = ref(false);
@@ -509,10 +520,6 @@ watch(
 );
 
 // --- View switching -------------------------------------------------------------
-
-function setViewMode(mode: DashboardViewMode) {
-  dashboardStore.setViewMode(mode);
-}
 
 function viewModeAriaLabel(mode: DashboardViewMode): string {
   switch (mode) {
@@ -697,8 +704,9 @@ async function onDropOn(targetId: string) {
   const to = group.indexOf(targetId);
   if (from === -1 || to === -1) return;
 
-  // Drop inserts before the target, accounting for the source's removal.
-  persistGroupMove(sourceId, to - (from < to ? 1 : 0));
+  // The dropped card takes the target's slot, so dropping onto the next card swaps
+  // the two and the last slot of the group is reachable.
+  persistGroupMove(sourceId, to);
   announceMove(sourceId, 'drop');
   await nextTick();
   focusCardAfterMove(sourceId, 'auto');

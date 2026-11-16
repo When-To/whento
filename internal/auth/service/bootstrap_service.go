@@ -12,6 +12,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -352,14 +355,11 @@ func (s *BootstrapService) ensureKeyLocked(ctx context.Context) error {
 	if s.cfg.BootstrapKey != "" {
 		s.key = s.cfg.BootstrapKey
 		s.log.Info("Bootstrap: the instance has no users yet; the boot key is the one set via BOOTSTRAP_KEY or BOOTSTRAP_KEY_FILE. " +
-			"Create the first administrator at /bootstrap.")
+			"Create the first administrator at " + bootstrapURL(s.cfg.AppURL, serverIP()) + ".")
 		return nil
 	}
 
-	generated, err := generateBootKey()
-	if err != nil {
-		return err
-	}
+	generated := RandomHex(bootKeyBytes)
 	s.key = generated
 	// The key is deliberately part of the message, not a field: this is the one
 	// secret the operator is meant to read out of the logs (Grist-style), and it
@@ -368,19 +368,88 @@ func (s *BootstrapService) ensureKeyLocked(ctx context.Context) error {
 	// unset — and a deployment of more than one instance must pin it via
 	// BOOTSTRAP_KEY, or the replicas will each hold a different key.
 	s.log.Warn(fmt.Sprintf("Bootstrap: the instance has no users yet. Create the first administrator "+
-		"at /bootstrap using this one-time boot key: %s. It is valid until the first account is created; "+
+		"at %s using this one-time boot key: %s. It is valid until the first account is created; "+
 		"on restart an unpinned key is regenerated and printed again, so a multi-instance deployment "+
-		"must set BOOTSTRAP_KEY to the same value on every replica.", generated))
+		"must set BOOTSTRAP_KEY to the same value on every replica.", bootstrapURL(s.cfg.AppURL, serverIP()), generated))
 	return nil
 }
 
-// generateBootKey produces a cryptographically random, hex-encoded boot key.
-func generateBootKey() (string, error) {
-	buf := make([]byte, bootKeyBytes)
-	if _, err := rand.Read(buf); err != nil {
-		return "", fmt.Errorf("failed to read randomness for boot key: %w", err)
+// bootstrapURL is the full /bootstrap address printed to the operator: APP_URL
+// when it names a real host, otherwise (APP_URL left at its localhost default)
+// the same URL on the server's own IP, which is reachable from the operator's
+// machine where localhost is not. Without a usable IP it keeps APP_URL as is.
+func bootstrapURL(appURL string, ip net.IP) string {
+	u, err := url.Parse(strings.TrimRight(appURL, "/"))
+	if err != nil {
+		return "/bootstrap"
 	}
-	return hex.EncodeToString(buf), nil
+	host := u.Hostname()
+	loopback := host == "localhost"
+	if parsed := net.ParseIP(host); parsed != nil {
+		loopback = parsed.IsLoopback() || parsed.IsUnspecified()
+	}
+	if loopback && ip != nil {
+		if port := u.Port(); port != "" {
+			u.Host = net.JoinHostPort(ip.String(), port)
+		} else if ip.To4() == nil {
+			u.Host = "[" + ip.String() + "]"
+		} else {
+			u.Host = ip.String()
+		}
+	}
+	return u.String() + "/bootstrap"
+}
+
+// serverIP returns the first non-loopback unicast address of the host,
+// preferring IPv4, or nil when there is none. Inside a container it is nil: the
+// container's own address is a bridge or pod IP the operator cannot reach
+// either, while the published APP_URL port (localhost:8080 on the Docker host by
+// default) is.
+func serverIP() net.IP {
+	if runningInContainer() {
+		return nil
+	}
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
+	var v6 net.IP
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok || !ipNet.IP.IsGlobalUnicast() {
+			continue
+		}
+		if ipNet.IP.To4() != nil {
+			return ipNet.IP
+		}
+		if v6 == nil {
+			v6 = ipNet.IP
+		}
+	}
+	return v6
+}
+
+// runningInContainer reports the markers Docker, Podman and Kubernetes leave in
+// a container.
+func runningInContainer() bool {
+	if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
+		return true
+	}
+	for _, marker := range []string{"/.dockerenv", "/run/.containerenv"} {
+		if _, err := os.Stat(marker); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// RandomHex returns n cryptographically random bytes, hex-encoded: the format
+// of every token the auth flows mail out or hand to the operator.
+func RandomHex(n int) string {
+	b := make([]byte, n)
+	// Since Go 1.24 rand.Read never returns an error: it crashes the program instead.
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // logFor tags the audit lines with the request they belong to, so a rejected key

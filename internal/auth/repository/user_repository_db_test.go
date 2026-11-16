@@ -1041,18 +1041,14 @@ func TestConsumeMagicLinkTokenSingleUse(t *testing.T) {
 		t.Fatalf("SetMagicLinkToken: %v", err)
 	}
 
-	got, err := repo.ConsumeMagicLinkToken(ctx, token, user.SecurityGeneration, nil)
-	if err != nil {
+	if err := repo.ConsumeMagicLinkToken(ctx, token, user.SecurityGeneration, nil); err != nil {
 		t.Fatalf("first consume: %v", err)
-	}
-	if got.ID != user.ID {
-		t.Errorf("claimed user = %v, want %v", got.ID, user.ID)
 	}
 
 	if _, err := repo.GetByMagicLinkToken(ctx, token); !errors.Is(err, repository.ErrUserNotFound) {
 		t.Errorf("token still resolves after being claimed: %v", err)
 	}
-	if _, err := repo.ConsumeMagicLinkToken(ctx, token, user.SecurityGeneration, nil); !errors.Is(err, repository.ErrUserNotFound) {
+	if err := repo.ConsumeMagicLinkToken(ctx, token, user.SecurityGeneration, nil); !errors.Is(err, repository.ErrUserNotFound) {
 		t.Errorf("second consume = %v, want ErrUserNotFound (single-use)", err)
 	}
 }
@@ -1080,8 +1076,7 @@ func TestConsumeMagicLinkTokenConcurrent(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		go func() {
 			<-start
-			_, err := repo.ConsumeMagicLinkToken(ctx, token, user.SecurityGeneration, nil)
-			results <- err
+			results <- repo.ConsumeMagicLinkToken(ctx, token, user.SecurityGeneration, nil)
 		}()
 	}
 	close(start)
@@ -1120,7 +1115,7 @@ func TestConsumeMagicLinkTokenExpiredMustNotClaim(t *testing.T) {
 	if err := repo.SetMagicLinkToken(ctx, user.ID, token, time.Now().Add(-time.Minute)); err != nil {
 		t.Fatalf("SetMagicLinkToken: %v", err)
 	}
-	if _, err := repo.ConsumeMagicLinkToken(ctx, token, user.SecurityGeneration, nil); !errors.Is(err, repository.ErrUserNotFound) {
+	if err := repo.ConsumeMagicLinkToken(ctx, token, user.SecurityGeneration, nil); !errors.Is(err, repository.ErrUserNotFound) {
 		t.Errorf("consume of an expired token = %v, want ErrUserNotFound", err)
 	}
 }

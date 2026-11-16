@@ -209,7 +209,7 @@ describe('useDragSelection', () => {
       await flushFrame();
       pointerUp();
 
-      expect(harness.drag.isDragging.value).toBe(false);
+      expect(harness.drag.selected.value.size).toBe(0);
       expect(harness.commits).toHaveLength(0);
     });
 
@@ -262,7 +262,7 @@ describe('useDragSelection', () => {
 
       pointerDown(harness.drag, 1, 'touch');
       vi.advanceTimersByTime(TOUCH_HOLD_MS + 1);
-      expect(harness.drag.isDragging.value).toBe(true);
+      expect(harness.drag.selected.value.size).toBe(1);
 
       vi.useRealTimers();
       pointerMove(3);
@@ -292,13 +292,13 @@ describe('useDragSelection', () => {
       expect(harness.commits).toHaveLength(0);
     });
 
-    it('cancels without committing', async () => {
+    it('cancels without committing on pointercancel', async () => {
       harness = setup();
 
       pointerDown(harness.drag, 1);
       pointerMove(4);
       await flushFrame();
-      harness.drag.cancel();
+      window.dispatchEvent(new PointerEvent('pointercancel'));
       pointerUp();
 
       expect(harness.commits).toHaveLength(0);
@@ -315,7 +315,6 @@ describe('useDragSelection', () => {
 
       pointerUp();
       expect(harness.drag.selected.value.size).toBe(0);
-      expect(harness.drag.isDragging.value).toBe(false);
     });
   });
 });

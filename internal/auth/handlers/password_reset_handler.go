@@ -11,7 +11,6 @@ import (
 	"net/http"
 
 	"github.com/whento/pkg/httputil"
-	"github.com/whento/pkg/validator"
 	"github.com/whento/whento/internal/auth/models"
 	"github.com/whento/whento/internal/auth/service"
 	"github.com/whento/whento/internal/auth/sessioncookie"
@@ -19,7 +18,7 @@ import (
 
 // PasswordResetService is the handler's domain boundary.
 type PasswordResetService interface {
-	RequestPasswordReset(context.Context, *models.ForgotPasswordRequest) error
+	RequestPasswordReset(*models.ForgotPasswordRequest)
 	ResetPassword(context.Context, *models.ResetPasswordRequest) (*models.ResetPasswordResponse, error)
 }
 
@@ -54,22 +53,12 @@ func NewPasswordResetHandler(passwordResetService PasswordResetService, logger *
 //	@Router			/api/v1/auth/forgot-password [post]
 func (h *PasswordResetHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var req models.ForgotPasswordRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 
 	// Always returns nil (fire-and-forget pattern)
-	_ = h.passwordResetService.RequestPasswordReset(r.Context(), &req)
+	h.passwordResetService.RequestPasswordReset(&req)
 
 	// Always return success to prevent email enumeration
 	httputil.JSON(w, http.StatusOK, models.ForgotPasswordResponse{
@@ -77,30 +66,21 @@ func (h *PasswordResetHandler) ForgotPassword(w http.ResponseWriter, r *http.Req
 	})
 }
 
-// ResetPassword validates token and updates password with auto-login
+// ResetPassword validates token and updates password, then signs in or asks for MFA
 //
 //	@Summary		Reset password
-//	@Description	Validates the reset token and updates the password. Automatically logs in the user and returns JWT tokens.
+//	@Description	Validates the reset token and updates the password. Without MFA, signs the user in: the access token is returned and the refresh token is set as an httpOnly cookie. With MFA enabled no session is issued: require_mfa and temp_token are returned, and the login completes through the MFA flow.
 //	@Tags			Authentication
 //	@Accept			json
 //	@Produce		json
 //	@Param			request	body		models.ResetPasswordRequest	true	"Reset token and new password"
-//	@Success		200		{object}	models.AuthResponse
+//	@Success		200		{object}	models.ResetPasswordResponse
 //	@Failure		400		{object}	httputil.ErrorResponse	"Invalid request, validation error, or invalid/expired token"
+//	@Failure		500		{object}	httputil.ErrorResponse	"Internal server error"
 //	@Router			/api/v1/auth/reset-password [post]
 func (h *PasswordResetHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	var req models.ResetPasswordRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := validator.Validate(&req); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			httputil.ValidationError(w, validationErrs)
-			return
-		}
-		httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeValidation, err.Error())
+	if !httputil.DecodeValid(w, r, &req) {
 		return
 	}
 

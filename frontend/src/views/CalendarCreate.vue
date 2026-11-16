@@ -431,6 +431,11 @@ async function handleSubmit() {
       participants: participants.value.filter(name => name.trim() !== ''),
     });
 
+    // A create that settles after the account changed returns null: the store did
+    // not commit it (it must not inject into the next account's list) and this view
+    // must not continue its success navigation either.
+    if (!calendar) return;
+
     // The creation endpoint deliberately ignores a notification configuration:
     // the backend only accepts one through PATCH /notify-config, which validates
     // the webhook URLs. This used to post a `notify_config` JSON string that the

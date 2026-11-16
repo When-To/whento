@@ -5,8 +5,10 @@
 -->
 
 <script setup lang="ts">
-import { computed, ref, useAttrs, watch, onMounted, onBeforeUnmount } from 'vue';
+import { computed, ref, useAttrs } from 'vue';
+import { useEventListener } from '@vueuse/core';
 import { useI18n } from 'vue-i18n';
+import { minutesToTime } from '@/utils/date/timeRange';
 
 interface Props {
   modelValue?: string;
@@ -14,15 +16,16 @@ interface Props {
   min?: string;
   max?: string;
   placeholder?: string;
-  roundInterval?: 15 | 30 | 60; // Rounding interval in minutes (15, 30, or 60)
 }
 
 const props = withDefaults(defineProps<Props>(), {
   modelValue: '',
   disabled: false,
   placeholder: '--:--',
-  roundInterval: 15,
 });
+
+/** Suggestion step and typed-value rounding, in minutes. */
+const STEP = 15;
 
 const emit = defineEmits<{
   'update:modelValue': [value: string];
@@ -59,21 +62,15 @@ const dropdownStyle = ref({
   width: '0px',
 });
 
-// Generate time options based on roundInterval for suggestions
+// Suggestions every STEP minutes, filtered by min/max.
 const timeOptions = computed(() => {
   const options: string[] = [];
-  const interval = props.roundInterval;
-  for (let hour = 0; hour < 24; hour++) {
-    for (let minute = 0; minute < 60; minute += interval) {
-      const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-
-      // Filter based on min/max if provided
-      if (props.min && timeStr < props.min) continue;
-      // Treat "00:00" as end of day (24:00), so don't filter when max is "00:00"
-      if (props.max && props.max !== '00:00' && timeStr > props.max) continue;
-
-      options.push(timeStr);
-    }
+  for (let m = 0; m < 24 * 60; m += STEP) {
+    const timeStr = minutesToTime(m);
+    if (props.min && timeStr < props.min) continue;
+    // Treat "00:00" as end of day (24:00), so don't filter when max is "00:00"
+    if (props.max && props.max !== '00:00' && timeStr > props.max) continue;
+    options.push(timeStr);
   }
   return options;
 });
@@ -216,12 +213,7 @@ const handleInput = (event: Event) => {
       const minutes = digits.slice(1, 3);
       formattedValue = `${hours}:${minutes}`;
 
-      const oldDigits = oldValue.replace(/\D/g, '');
-      if (digits.length > oldDigits.length && digits.length >= 2) {
-        newCursorPos = formattedValue.length;
-      } else {
-        newCursorPos = formattedValue.length;
-      }
+      newCursorPos = formattedValue.length;
     }
   }
 
@@ -350,26 +342,8 @@ const handleBlur = () => {
       value = formatTimeInput(value);
     }
 
-    // Check if it matches H:MM or HH:MM format
-    const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
-    if (timeRegex.test(value)) {
-      const [hours, minutes] = value.split(':');
-      let finalHours = parseInt(hours);
-      let finalMinutes = parseInt(minutes);
-
-      // Round minutes to nearest interval based on roundInterval prop
-      const interval = props.roundInterval;
-      let roundedMinutes = Math.round(finalMinutes / interval) * interval;
-
-      // Handle edge case: 60 minutes should become next hour
-      if (roundedMinutes >= 60) {
-        roundedMinutes = 0;
-        finalHours = (finalHours + 1) % 24;
-      }
-      finalMinutes = roundedMinutes;
-
-      // Normalize to HH:MM format
-      const normalized = `${finalHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+    const normalized = roundTime(value);
+    if (normalized) {
       inputRef.value.value = normalized;
       emit('update:modelValue', normalized);
     }
@@ -410,57 +384,20 @@ const handleScroll = (event: Event) => {
   highlightedIndex.value = -1;
 };
 
-// Apply rounding to current value based on roundInterval
-function applyRounding() {
-  const value = props.modelValue;
-  if (!value || !value.includes(':')) return;
-
-  const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
-  if (!timeRegex.test(value)) return;
-
-  const [hours, minutes] = value.split(':');
-  let finalHours = parseInt(hours);
-  let finalMinutes = parseInt(minutes);
-
-  // Round minutes to nearest interval based on roundInterval prop
-  const interval = props.roundInterval;
-  let roundedMinutes = Math.round(finalMinutes / interval) * interval;
-
-  // Handle edge case: 60 minutes should become next hour
-  if (roundedMinutes >= 60) {
-    roundedMinutes = 0;
-    finalHours = (finalHours + 1) % 24;
-  }
-  finalMinutes = roundedMinutes;
-
-  // Normalize to HH:MM format
-  const normalized = `${finalHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
-
-  // Only emit if value changed
-  if (normalized !== value) {
-    emit('update:modelValue', normalized);
-  }
+/**
+ * Round an H:MM / HH:MM value to the nearest STEP and normalise to HH:MM
+ * (rounding past 23:59 wraps to 00:00). Null when not a valid time.
+ */
+function roundTime(value: string): string | null {
+  const match = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/.exec(value);
+  if (!match) return null;
+  const total = Number(match[1]) * 60 + Math.round(Number(match[2]) / STEP) * STEP;
+  return minutesToTime(total % (24 * 60));
 }
 
-// Re-apply rounding when roundInterval changes
-watch(
-  () => props.roundInterval,
-  () => {
-    applyRounding();
-  }
-);
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside);
-  window.addEventListener('scroll', handleScroll, true);
-  window.addEventListener('resize', handleScroll);
-});
-
-onBeforeUnmount(() => {
-  document.removeEventListener('click', handleClickOutside);
-  window.removeEventListener('scroll', handleScroll, true);
-  window.removeEventListener('resize', handleScroll);
-});
+useEventListener(document, 'click', handleClickOutside);
+useEventListener(window, 'scroll', handleScroll, true);
+useEventListener(window, 'resize', handleScroll);
 </script>
 
 <template>

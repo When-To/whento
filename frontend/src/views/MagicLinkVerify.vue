@@ -100,7 +100,6 @@ import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { authApi } from '@/api/auth';
-import { apiClient } from '@/api/client';
 
 const router = useRouter();
 const route = useRoute();
@@ -158,7 +157,9 @@ async function confirmVerification() {
     }
 
     authStore.user = response.user;
-    apiClient.setToken(response.access_token, response.expires_in);
+    // Route through the store action so the account generation advances (a verified
+    // link is a new session; the previous account's pending work must not commit).
+    authStore.setTokens(response.access_token, response.expires_in, response.session_id);
     router.push('/dashboard');
   } catch (err: any) {
     verifying.value = false;

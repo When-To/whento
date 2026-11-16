@@ -80,7 +80,7 @@ whento_db_pool_max_lifetime_destroys_total 4
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewPoolCollector(func() PoolStats { return tt.stats })
+			c := newPoolCollector(func() PoolStats { return tt.stats })
 
 			if err := testutil.CollectAndCompare(c, strings.NewReader(tt.want), tt.metric); err != nil {
 				t.Error(err)
@@ -92,7 +92,7 @@ whento_db_pool_max_lifetime_destroys_total 4
 // TestPoolCollectorPublishesEveryStat guards against a field being added to
 // PoolStats and never wired to a Desc.
 func TestPoolCollectorPublishesEveryStat(t *testing.T) {
-	c := NewPoolCollector(func() PoolStats { return PoolStats{} })
+	c := newPoolCollector(func() PoolStats { return PoolStats{} })
 
 	const want = 12
 	if got := testutil.CollectAndCount(c); got != want {
@@ -105,7 +105,7 @@ func TestPoolCollectorPublishesEveryStat(t *testing.T) {
 // at the moment it was registered.
 func TestPoolCollectorReadsAtScrapeTime(t *testing.T) {
 	stats := PoolStats{TotalConns: 1}
-	c := NewPoolCollector(func() PoolStats { return stats })
+	c := newPoolCollector(func() PoolStats { return stats })
 
 	if got := testutil.ToFloat64(collectOne(t, c, "whento_db_pool_total_connections")); got != 1 {
 		t.Fatalf("total_connections = %v, want 1", got)
@@ -120,7 +120,7 @@ func TestPoolCollectorReadsAtScrapeTime(t *testing.T) {
 // TestPoolCollectorWithoutASource covers the defensive path: a scrape must
 // never be able to panic the process.
 func TestPoolCollectorWithoutASource(t *testing.T) {
-	if got := testutil.CollectAndCount(NewPoolCollector(nil)); got != 0 {
+	if got := testutil.CollectAndCount(newPoolCollector(nil)); got != 0 {
 		t.Errorf("a collector with no source published %d metrics, want 0", got)
 	}
 }
@@ -129,10 +129,10 @@ func TestRegisterPoolRefusesADuplicate(t *testing.T) {
 	stats := func() PoolStats { return PoolStats{} }
 
 	reg := prometheus.NewRegistry()
-	if err := reg.Register(NewPoolCollector(stats)); err != nil {
+	if err := reg.Register(newPoolCollector(stats)); err != nil {
 		t.Fatalf("first registration: %v", err)
 	}
-	if err := reg.Register(NewPoolCollector(stats)); err == nil {
+	if err := reg.Register(newPoolCollector(stats)); err == nil {
 		t.Error("registering a second pool collector succeeded, want a duplicate error")
 	}
 }
@@ -143,7 +143,7 @@ func TestRegisterPoolOnTheDefaultRegistry(t *testing.T) {
 	if err := RegisterPool(func() PoolStats { return PoolStats{MaxConns: 25} }); err != nil {
 		t.Fatalf("RegisterPool: %v", err)
 	}
-	t.Cleanup(func() { registry.Unregister(NewPoolCollector(nil)) })
+	t.Cleanup(func() { registry.Unregister(newPoolCollector(nil)) })
 
 	families, err := registry.Gather()
 	if err != nil {

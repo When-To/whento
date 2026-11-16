@@ -251,9 +251,11 @@ import type { AvailabilityOperation } from '@/types/calendar';
 import { buildCoverageMap } from '@/utils/calendar/segments';
 import { buildWeekModel } from '@/utils/calendar/weekModel';
 import { dayOfWeekISO, formatDateISO, parseISODate } from '@/utils/date/isoDate';
+import { formatDate } from '@/utils/date/intlFormatters';
 import { useParticipantCalendar } from '@/composables/calendar/useParticipantCalendar';
 import { useParticipantDisplaySettings } from '@/composables/calendar/useParticipantDisplaySettings';
 import { useCalendarStream } from '@/composables/calendar/useCalendarStream';
+import { useAccountScopedReload } from '@/composables/useAccountScopedReload';
 import { translateErrorMessage } from '@/utils/errorTranslator';
 import { useSmtpProbe } from '@/utils/smtpProbe';
 import type {
@@ -589,15 +591,8 @@ const calendarDateRangeText = computed(() => {
   const endDate = calendar.value.end_date;
 
   // Helper function to format date
-  const formatDateShort = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    const localeCode = locale.value;
-    return new Intl.DateTimeFormat(localeCode, {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }).format(date);
-  };
+  const formatDateShort = (dateStr: string): string =>
+    formatDate(new Date(dateStr), locale.value, 'dayMonthYearShort');
 
   if (startDate && endDate) {
     // Both dates: "from ... to ..."
@@ -647,6 +642,13 @@ async function loadOwnedCalendars() {
     // Ignored on purpose: the edit link simply stays hidden.
   }
 }
+
+// A remote account replacement clears the previous owner's cached list via the store;
+// when the new identity confirms, reload it so an owner of this calendar sees their
+// edit link again. Public payload is untouched.
+useAccountScopedReload(() => {
+  void loadOwnedCalendars();
+});
 
 async function loadCalendar() {
   loading.value = true;
@@ -872,12 +874,7 @@ async function handleCalendarDaysSelect(dates: string[]) {
 
   // Show appropriate messages
   if (failed === 0) {
-    toastStore.success(
-      t('availability.multipleAdded', {
-        count: succeeded,
-        defaultValue: `${succeeded} availability(ies) added`,
-      })
-    );
+    toastStore.success(t('availability.multipleAdded', { count: succeeded }));
   } else if (succeeded === 0) {
     toastStore.error(t('errors.availabilityConflict'));
   } else {
@@ -917,12 +914,7 @@ async function handleCalendarDaysDeselect(dates: string[]) {
 
   // Show appropriate messages
   if (failed === 0) {
-    toastStore.success(
-      t('availability.multipleRemoved', {
-        count: succeeded,
-        defaultValue: `${succeeded} availability(ies) removed`,
-      })
-    );
+    toastStore.success(t('availability.multipleRemoved', { count: succeeded }));
   } else if (succeeded === 0) {
     toastStore.error(t('errors.deleteFailed'));
   } else {

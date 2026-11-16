@@ -257,35 +257,6 @@ func (r *ParticipantRepository) VerifyEmail(ctx context.Context, participantID u
 	return nil
 }
 
-// SetEmailAsVerified sets an email for a participant and marks it as verified immediately (used for owner participant)
-func (r *ParticipantRepository) SetEmailAsVerified(
-	ctx context.Context,
-	participantID uuid.UUID,
-	email string,
-) error {
-	query := `
-		UPDATE participants
-		SET email = $1,
-		    email_verified = true,
-		    email_verification_token = NULL,
-		    email_verification_token_expires_at = NULL
-		WHERE id = $2`
-
-	result, err := r.pool.Exec(ctx, query, email, participantID)
-	if err != nil {
-		if dberr.IsUniqueViolation(err) {
-			return ErrParticipantEmailInUse
-		}
-		return fmt.Errorf("failed to set email as verified: %w", err)
-	}
-
-	if result.RowsAffected() == 0 {
-		return ErrParticipantNotFound
-	}
-
-	return nil
-}
-
 // GetVerifiedParticipantsByCalendar retrieves participants with verified emails
 func (r *ParticipantRepository) GetVerifiedParticipantsByCalendar(
 	ctx context.Context,

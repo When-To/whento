@@ -83,9 +83,3 @@ func TestPoolStatsFunc(t *testing.T) {
 		}
 	})
 }
-
-func TestClose(t *testing.T) {
-	// Close is called from a defer that runs whether or not the pool was ever
-	// created.
-	Close(nil)
-}

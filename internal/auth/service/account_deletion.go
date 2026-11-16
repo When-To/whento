@@ -106,19 +106,9 @@ func (s *AuthService) deleteAccount(ctx context.Context, uid uuid.UUID) (int, er
 		return 0, err
 	}
 
-	// Refresh tokens went with the row (cascade). Access tokens are
-	// self-contained, so they are revoked through the same marker a password
-	// change uses. One second ahead: the middleware compares whole seconds and
-	// refuses only tokens issued strictly before the marker, and unlike a
-	// password change no fresh token has to survive this one.
-	//
-	// A cache failure does not undo the deletion (the database is the source of
-	// truth), but a missed revocation leaves earlier access tokens, admin claim
-	// included, valid until they expire, so it is logged for the operator.
+	// Refresh tokens went with the row (cascade); access tokens need the marker.
+	s.RevokeAccessTokens(ctx, uid.String())
 	if s.cache != nil && s.cache.IsEnabled() {
-		if err := s.cache.Set(ctx, cache.UserPasswordChangedKey(uid.String()), time.Now().Unix()+1, s.jwtManager.AccessExpiry()); err != nil {
-			logger.FromContext(ctx).Error("failed to revoke access tokens of a deleted account", "error", err)
-		}
 		for _, token := range publicTokens {
 			_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(token))
 		}

@@ -144,7 +144,7 @@ func (b *redisBroker) Publish(ctx context.Context, topic string) error {
 }
 
 func (b *redisBroker) Subscribe(ctx context.Context, topic string) (<-chan struct{}, func()) {
-	return b.hub.subscribe(ctx, channelName(topic))
+	return b.hub.Subscribe(ctx, channelName(topic))
 }
 
 func (b *redisBroker) Close() error {
@@ -154,7 +154,7 @@ func (b *redisBroker) Close() error {
 		if b.pubsub != nil {
 			err = b.pubsub.Close()
 		}
-		b.hub.close()
+		_ = b.hub.Close()
 	})
 
 	return err

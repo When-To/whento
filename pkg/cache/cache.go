@@ -27,8 +27,8 @@ type Cache interface {
 	IsEnabled() bool
 }
 
-// RedisCache implements Cache using Redis
-type RedisCache struct {
+// redisCache implements Cache using Redis
+type redisCache struct {
 	client *redis.Client
 }
 
@@ -37,11 +37,11 @@ func NewRedisCache(client *redis.Client) Cache {
 	if client == nil {
 		return &NoOpCache{}
 	}
-	return &RedisCache{client: client}
+	return &redisCache{client: client}
 }
 
 // Get retrieves a value from Redis and unmarshals it
-func (c *RedisCache) Get(ctx context.Context, key string, dest interface{}) error {
+func (c *redisCache) Get(ctx context.Context, key string, dest interface{}) error {
 	val, err := c.client.Get(ctx, key).Result()
 	if err != nil {
 		return err
@@ -51,7 +51,7 @@ func (c *RedisCache) Get(ctx context.Context, key string, dest interface{}) erro
 }
 
 // Set stores a value in Redis with the given TTL
-func (c *RedisCache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+func (c *redisCache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return err
@@ -61,15 +61,15 @@ func (c *RedisCache) Set(ctx context.Context, key string, value interface{}, ttl
 }
 
 // Delete removes values from Redis
-func (c *RedisCache) Delete(ctx context.Context, keys ...string) error {
+func (c *redisCache) Delete(ctx context.Context, keys ...string) error {
 	if len(keys) == 0 {
 		return nil
 	}
 	return c.client.Del(ctx, keys...).Err()
 }
 
-// IsEnabled returns true for RedisCache
-func (c *RedisCache) IsEnabled() bool {
+// IsEnabled returns true for redisCache
+func (c *redisCache) IsEnabled() bool {
 	return true
 }
 

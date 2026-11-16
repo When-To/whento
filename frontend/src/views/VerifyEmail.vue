@@ -104,7 +104,8 @@ import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { translateErrorMessage } from '@/utils/errorTranslator';
-import axios from 'axios';
+import type { ApiError } from '@/types';
+import { apiClient } from '@/api/client';
 
 const route = useRoute();
 const { t } = useI18n();
@@ -118,11 +119,9 @@ const errorMessage = ref('');
 /**
  * Resolve a failed verification to an i18n key.
  *
- * This view talks to axios directly rather than through `apiClient`, so it used to render
- * `error.message` from the envelope verbatim — English developer prose on an otherwise
- * French page. Only the structured `code` carries meaning across locales, and on this
- * endpoint a rejected request means the token itself is bad, which deserves a more
- * specific line than the generic "bad request".
+ * Only the structured `code` carries meaning across locales — the envelope's `message`
+ * is English developer prose — and on this endpoint a rejected request means the token
+ * itself is bad, which deserves a more specific line than the generic "bad request".
  */
 function verificationErrorKey(code: string | undefined): string {
   return translateErrorMessage(
@@ -142,32 +141,21 @@ const verifyEmail = async (token: string) => {
     loading.value = true;
     error.value = false;
 
-    const response = await axios.get(`/api/v1/auth/verify-email/${token}`);
+    await apiClient.get(`/auth/verify-email/${token}`);
+    success.value = true;
 
-    if (response.data.success) {
-      success.value = true;
-
-      // Refresh user data if authenticated to update email_verified status
-      if (authStore.isAuthenticated) {
-        try {
-          await authStore.fetchUser();
-        } catch (err) {
-          // Ignore error - user data will be refreshed on next page load
-          console.error('Failed to refresh user data:', err);
-        }
+    // Refresh user data if authenticated to update email_verified status
+    if (authStore.isAuthenticated) {
+      try {
+        await authStore.fetchUser();
+      } catch (err) {
+        // Ignore error - user data will be refreshed on next page load
+        console.error('Failed to refresh user data:', err);
       }
-    } else {
-      error.value = true;
-      errorMessage.value = t(verificationErrorKey(response.data.error?.code));
     }
-  } catch (err: any) {
+  } catch (err) {
     error.value = true;
-    errorMessage.value = t(
-      verificationErrorKey(
-        err.response?.data?.error?.code ??
-          (err.response?.status === 400 ? 'BAD_REQUEST' : undefined)
-      )
-    );
+    errorMessage.value = t(verificationErrorKey((err as ApiError).code));
   } finally {
     loading.value = false;
   }

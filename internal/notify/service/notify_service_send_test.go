@@ -93,6 +93,23 @@ func (f *fakeAvailabilityStore) GetParticipantCountForDate(
 	return f.count, nil
 }
 
+// fakeActivityLog is the per-date journal, answering with whatever the test seeded.
+// No database: the interface names only availability models, which is the point of
+// declaring it on the consuming side.
+type fakeActivityLog struct {
+	activity *availabilityModels.DateActivity
+	err      error
+}
+
+func (f *fakeActivityLog) GetForDate(
+	_ context.Context, _ uuid.UUID, _ time.Time,
+) (*availabilityModels.DateActivity, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.activity, nil
+}
+
 type fakeUserStore struct {
 	user *authModels.User
 	err  error
@@ -262,6 +279,7 @@ type notifyFixture struct {
 	calendars   *fakeCalendarStore
 	people      *fakeParticipantStore
 	slots       *fakeAvailabilityStore
+	journal     *fakeActivityLog
 	users       *fakeUserStore
 	log         *fakeNotificationLog
 	mailer      *fakeMailer
@@ -337,6 +355,7 @@ func newNotifyFixture(t *testing.T, config models.NotifyConfig) *notifyFixture {
 			verified: []calendarModels.Participant{participant, ownerParticipant},
 		},
 		slots:    &fakeAvailabilityStore{available: available},
+		journal:  &fakeActivityLog{},
 		users:    &fakeUserStore{user: owner},
 		log:      &fakeNotificationLog{sentRecently: map[string]bool{}},
 		mailer:   &fakeMailer{configured: true},
@@ -348,7 +367,7 @@ func newNotifyFixture(t *testing.T, config models.NotifyConfig) *notifyFixture {
 
 func (f *notifyFixture) service() *NotifyService {
 	return NewNotifyService(
-		f.calendars, f.people, f.slots, f.users, f.log,
+		f.calendars, f.people, f.slots, f.journal, f.users, f.log,
 		f.mailer, f.external, f.detector,
 		"https://whento.test", quietLogger(),
 	)
@@ -479,6 +498,32 @@ func TestCheckThresholdAndNotifyDeduplicatesRecipients(t *testing.T) {
 	}
 	if ownerRows != 1 || participantRows != 1 {
 		t.Errorf("ledger should hold one owner row and one participant row, got %d and %d", ownerRows, participantRows)
+	}
+}
+
+// TestThresholdEmailNamesThePersonToTheOwnerOnly: the journal is owner-only, so a
+// participant's copy of "threshold lost" must not say who withdrew.
+func TestThresholdEmailNamesThePersonToTheOwnerOnly(t *testing.T) {
+	f := newNotifyFixture(t, emailConfig())
+	f.detector.transition = &models.ThresholdTransition{
+		Date: f.date, PreviousCount: 2, NewCount: 1, Threshold: 2, TransitionType: "threshold_lost",
+	}
+	f.journal.activity = &availabilityModels.DateActivity{
+		LastWithdrawn: &availabilityModels.ParticipantRef{ID: uuid.New(), Name: "Grace", At: f.date},
+	}
+
+	if err := f.service().CheckThresholdAndNotify(context.Background(), f.calendar.ID, f.date, 2); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, msg := range f.mailer.messages() {
+		named := strings.Contains(msg.Body, "Grace")
+		if owner := msg.To[0] == f.owner.Email; owner != named {
+			t.Errorf("%s: names the person who withdrew = %v, want %v", msg.To[0], named, owner)
+		}
+	}
+	if len(f.mailer.messages()) != 2 {
+		t.Fatalf("expected owner + Ada, got %d message(s)", len(f.mailer.messages()))
 	}
 }
 
@@ -878,7 +923,7 @@ func TestSendEmailNotificationSubject(t *testing.T) {
 			mailer := &fakeMailer{configured: true}
 			service := &NotifyService{emailService: mailer, logger: quietLogger()}
 
-			err := service.sendEmailNotification("someone@example.test", "<p>body</p>", tt.locale, true)
+			err := service.sendEmailNotification("someone@example.test", "<p>body</p>", tt.locale)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -901,7 +946,7 @@ func TestSendEmailNotificationPropagatesFailure(t *testing.T) {
 	mailer := &fakeMailer{configured: true, err: errors.New("smtp refused")}
 	service := &NotifyService{emailService: mailer, logger: quietLogger()}
 
-	err := service.sendEmailNotification("a@example.test", "body", "en", false)
+	err := service.sendEmailNotification("a@example.test", "body", "en")
 	if err == nil {
 		t.Fatal("expected the SMTP failure to propagate")
 	}
@@ -924,7 +969,7 @@ func TestASuppressedBatchSaysSo(t *testing.T) {
 	}
 
 	service := NewNotifyService(
-		f.calendars, f.people, f.slots, f.users, f.log,
+		f.calendars, f.people, f.slots, f.journal, f.users, f.log,
 		f.mailer, f.external, f.detector,
 		"https://whento.test",
 		slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})),

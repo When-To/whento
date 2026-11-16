@@ -158,7 +158,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/auth/admin/users/{id}/mfa/totp': {
+  '/api/v1/auth/admin/users/{id}/disable-2fa': {
     parameters: {
       query?: never;
       header?: never;
@@ -167,12 +167,11 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    post?: never;
     /**
      * Disable user 2FA (admin)
      * @description Disables TOTP two-factor authentication for a specific user. Admin only. Cannot disable own 2FA.
      */
-    delete: {
+    post: {
       parameters: {
         query?: never;
         header?: never;
@@ -191,9 +190,8 @@ export interface paths {
           };
           content: {
             'application/json': {
-              disabled_by_admin?: string;
-              disabled_for_user?: string;
-              message?: string;
+              backup_codes_removed?: number;
+              totp_disabled?: boolean;
             };
           };
         };
@@ -244,6 +242,7 @@ export interface paths {
         };
       };
     };
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -1465,7 +1464,7 @@ export interface paths {
     put?: never;
     /**
      * Reset password
-     * @description Validates the reset token and updates the password. Automatically logs in the user and returns JWT tokens.
+     * @description Validates the reset token and updates the password. Without MFA, signs the user in: the access token is returned and the refresh token is set as an httpOnly cookie. With MFA enabled no session is issued: require_mfa and temp_token are returned, and the login completes through the MFA flow.
      */
     post: {
       parameters: {
@@ -1487,11 +1486,20 @@ export interface paths {
             [name: string]: unknown;
           };
           content: {
-            'application/json': components['schemas']['models.AuthResponse'];
+            'application/json': components['schemas']['models.ResetPasswordResponse'];
           };
         };
         /** @description Invalid request, validation error, or invalid/expired token */
         400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Internal server error */
+        500: {
           headers: {
             [name: string]: unknown;
           };
@@ -2854,6 +2862,98 @@ export interface paths {
         };
       };
     };
+    trace?: never;
+  };
+  '/api/v1/calendars/{id}/activity': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get the per-date activity journal
+     * @description Returns, for each date of the range with a journal entry or any availability, who is currently available, who joined last and who withdrew last while the date had reached its threshold (owner only). The range must not exceed 92 days.
+     */
+    get: {
+      parameters: {
+        query: {
+          /** @description Range end (YYYY-MM-DD) */
+          end: string;
+          /** @description Range start (YYYY-MM-DD) */
+          start: string;
+        };
+        header?: never;
+        path: {
+          /** @description Calendar ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['models.DateActivityResponse'];
+          };
+        };
+        /** @description Invalid calendar ID or date range */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Not authenticated */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Not the calendar owner */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Calendar not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+        /** @description Internal Server Error */
+        500: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['httputil.ErrorResponse'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   '/api/v1/calendars/{id}/notify-config': {
@@ -5029,6 +5129,10 @@ export interface components {
       start_time?: string;
       updated_at?: string;
     };
+    'models.AvailableParticipant': {
+      name?: string;
+      participant_id?: string;
+    };
     'models.BackupCodesResponse': {
       backup_codes?: string[];
     };
@@ -5146,6 +5250,18 @@ export interface components {
       /** @description Format: "HH:MM" */
       start_time?: string;
     };
+    'models.DateActivityEntry': {
+      available?: components['schemas']['models.AvailableParticipant'][];
+      count?: number;
+      /** @description Date is "2006-01-02". */
+      date?: string;
+      last_joined?: components['schemas']['models.ParticipantRef'];
+      last_withdrawn?: components['schemas']['models.ParticipantRef'];
+      threshold?: number;
+    };
+    'models.DateActivityResponse': {
+      activity?: components['schemas']['models.DateActivityEntry'][];
+    };
     'models.DeleteAccountRequest': {
       password: string;
     };
@@ -5231,6 +5347,11 @@ export interface components {
       email_verified?: boolean;
       id?: string;
       name?: string;
+    };
+    'models.ParticipantRef': {
+      at?: string;
+      name?: string;
+      participant_id?: string;
     };
     'models.PasskeyResponse': {
       created_at?: string;
@@ -5355,6 +5476,17 @@ export interface components {
     'models.ResetPasswordRequest': {
       new_password: string;
       token: string;
+    };
+    'models.ResetPasswordResponse': {
+      access_token?: string;
+      message?: string;
+      /** @description True if 2FA verification is required */
+      require_mfa?: boolean;
+      /** @description SessionID is the server family of the auto-login cookie, same contract as AuthResponse. */
+      session_id?: string;
+      /** @description Temporary token for 2FA flow (5min expiry) */
+      temp_token?: string;
+      user?: components['schemas']['models.UserResponse'];
     };
     'models.SlackChannelConfig': {
       enabled?: boolean;

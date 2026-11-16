@@ -140,10 +140,6 @@ func (m *mockParticipantRepository) Delete(ctx context.Context, id uuid.UUID) er
 	return m.err
 }
 
-func (m *mockParticipantRepository) SetEmailAsVerified(ctx context.Context, participantID uuid.UUID, locale string) error {
-	return m.err
-}
-
 type mockCache struct{}
 
 func (m *mockCache) Get(ctx context.Context, key string, dest interface{}) error {
@@ -237,7 +233,7 @@ func TestCalendarHandler_CreateCalendar_Success(t *testing.T) {
 
 	calendarSvc := service.NewCalendarService(mockCalRepo, mockPartRepo, nil, mockCache)
 	cfg := &config.Config{Email: config.EmailConfig{VerificationEnabled: false}}
-	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg, nil)
+	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg, &stubQuotaLock{})
 
 	reqBody := map[string]interface{}{
 		"name":         "Team Meeting",
@@ -271,7 +267,7 @@ func TestCalendarHandler_CreateCalendar_QuotaExceeded(t *testing.T) {
 
 	calendarSvc := service.NewCalendarService(mockCalRepo, mockPartRepo, nil, mockCache)
 	cfg := &config.Config{Email: config.EmailConfig{VerificationEnabled: false}}
-	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg, nil)
+	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg, &stubQuotaLock{})
 
 	reqBody := map[string]interface{}{
 		"name": "Test Calendar",
@@ -310,7 +306,7 @@ func TestCalendarHandler_CreateCalendar_Unauthorized(t *testing.T) {
 
 	calendarSvc := service.NewCalendarService(mockCalRepo, mockPartRepo, nil, mockCache)
 	cfg := &config.Config{Email: config.EmailConfig{VerificationEnabled: false}}
-	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg, nil)
+	handler := handlers.NewCalendarHandler(calendarSvc, mockQuota, nil, cfg, &stubQuotaLock{})
 
 	reqBody := map[string]interface{}{
 		"name": "Test Calendar",
@@ -341,7 +337,7 @@ func TestCalendarHandler_InvalidDatesAreBadRequests(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				mockCalRepo := &mockCalendarRepository{}
 				calendarSvc := service.NewCalendarService(mockCalRepo, &mockParticipantRepository{}, nil, &mockCache{})
-				handler := handlers.NewCalendarHandler(calendarSvc, &mockQuotaService{canCreate: true}, nil, cfg, nil)
+				handler := handlers.NewCalendarHandler(calendarSvc, &mockQuotaService{canCreate: true}, nil, cfg, &stubQuotaLock{})
 
 				req := testutil.WithAuth(testutil.MakeJSONRequest(http.MethodPost, "/api/v1/calendars", body), ownerID.String(), "user")
 				w := httptest.NewRecorder()
@@ -374,7 +370,7 @@ func TestCalendarHandler_InvalidDatesAreBadRequests(t *testing.T) {
 				calendar.ID = uuid.New()
 				mockCalRepo := &mockCalendarRepository{calendar: calendar, patchErr: tc.patchErr}
 				calendarSvc := service.NewCalendarService(mockCalRepo, &mockParticipantRepository{}, nil, &mockCache{})
-				handler := handlers.NewCalendarHandler(calendarSvc, &mockQuotaService{canCreate: true}, nil, cfg, nil)
+				handler := handlers.NewCalendarHandler(calendarSvc, &mockQuotaService{canCreate: true}, nil, cfg, &stubQuotaLock{})
 
 				req := testutil.MakeJSONRequest(http.MethodPatch, "/api/v1/calendars/"+calendar.ID.String(), tc.body)
 				req = testutil.WithURLParams(testutil.WithAuth(req, ownerID.String(), "user"), map[string]string{"id": calendar.ID.String()})

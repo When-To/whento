@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/middleware"
@@ -41,7 +42,7 @@ func newRouter(d *deps, h *handlers, spa http.Handler) chi.Router {
 	r.Use(middleware.Metrics)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.SecurityHeaders)
-	r.Use(middleware.LimitRequestSize(1 * 1024 * 1024)) // 1MB max payload
+	r.Use(chimw.RequestSize(1 << 20)) // 1MB max payload
 	r.Use(middleware.CORS(d.cfg.CORSOrigins))
 
 	// Configure trusted proxies for X-Forwarded-For validation

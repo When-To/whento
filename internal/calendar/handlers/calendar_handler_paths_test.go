@@ -228,20 +228,6 @@ func TestCreateCalendarUnderTheQuotaLock(t *testing.T) {
 			t.Errorf("a lock failure was reported as a quota refusal: %s", w.Body.String())
 		}
 	})
-
-	t.Run("without a lock the creation still happens", func(t *testing.T) {
-		svc := &stubCalendarService{calendar: calendarResponse()}
-		handler := handlers.NewCalendarHandler(svc, &mockQuotaService{canCreate: true}, nil, noVerificationConfig(), nil)
-
-		req := testutil.WithAuth(testutil.MakeJSONRequest(http.MethodPost, "/api/v1/calendars", body), uuid.New().String(), "user")
-		w := httptest.NewRecorder()
-
-		handler.CreateCalendar(w, req)
-
-		if w.Code != http.StatusCreated {
-			t.Fatalf("status = %d, want 201: %s", w.Code, w.Body.String())
-		}
-	})
 }
 
 // TestCreateCalendarRejections covers every refusal the create path can produce.
@@ -388,7 +374,7 @@ func TestCreateCalendarRejections(t *testing.T) {
 // calendarHandler builds a handler over a stub service, for the read and write
 // endpoints that have no quota involvement.
 func calendarHandler(svc *stubCalendarService) *handlers.CalendarHandler {
-	return handlers.NewCalendarHandler(svc, &mockQuotaService{canCreate: true}, nil, noVerificationConfig(), nil)
+	return handlers.NewCalendarHandler(svc, &mockQuotaService{canCreate: true}, nil, noVerificationConfig(), &stubQuotaLock{})
 }
 
 // TestCalendarHandlerErrorTranslation is the contract between the service's

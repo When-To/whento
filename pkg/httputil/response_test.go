@@ -59,7 +59,7 @@ func TestJSON(t *testing.T) {
 				t.Errorf("JSON() Content-Type = %v, want application/json", contentType)
 			}
 
-			var resp Response
+			var resp response
 			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 				t.Fatalf("Failed to unmarshal response: %v", err)
 			}
@@ -107,7 +107,7 @@ func TestError(t *testing.T) {
 				t.Errorf("Error() status = %v, want %v", w.Code, tt.status)
 			}
 
-			var resp Response
+			var resp response
 			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 				t.Fatalf("Failed to unmarshal response: %v", err)
 			}
@@ -138,13 +138,13 @@ func TestValidationError(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	ValidationError(w, errs)
+	validationError(w, errs)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("ValidationError() status = %v, want %v", w.Code, http.StatusBadRequest)
 	}
 
-	var resp Response
+	var resp response
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
@@ -163,6 +163,32 @@ func TestValidationError(t *testing.T) {
 
 	if len(resp.Error.Details) != 2 {
 		t.Errorf("ValidationError() details count = %v, want 2", len(resp.Error.Details))
+	}
+}
+
+func TestValidate(t *testing.T) {
+	type input struct {
+		Email string `json:"email" validate:"required,email"`
+	}
+
+	w := httptest.NewRecorder()
+	if !Validate(w, &input{Email: "a@example.com"}) {
+		t.Fatal("Validate() rejected a valid input")
+	}
+	if w.Body.Len() != 0 {
+		t.Errorf("Validate() wrote %q for a valid input", w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	if Validate(w, &input{}) {
+		t.Fatal("Validate() accepted an invalid input")
+	}
+	var resp response
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+	if w.Code != http.StatusBadRequest || resp.Error == nil || resp.Error.Code != ErrCodeValidation || len(resp.Error.Details) != 1 {
+		t.Errorf("Validate() wrote status %d, body %s", w.Code, w.Body.String())
 	}
 }
 

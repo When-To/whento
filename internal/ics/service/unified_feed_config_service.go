@@ -47,14 +47,14 @@ func NewUnifiedFeedConfigService(feedRepo UnifiedFeedConfigRepository) *UnifiedF
 }
 
 // GetConfig returns the unified feed configuration for a user
-func (s *UnifiedFeedConfigService) GetConfig(ctx context.Context, userID uuid.UUID) (*UnifiedFeedConfig, error) {
+func (s *UnifiedFeedConfigService) GetConfig(ctx context.Context, userID uuid.UUID) *UnifiedFeedConfig {
 	feed, calendarIDs, err := s.feedRepo.GetByUserID(ctx, userID)
 	if err != nil {
 		// If no feed exists, return unconfigured state
 		return &UnifiedFeedConfig{
 			Configured:          false,
 			IncludedCalendarIDs: []string{},
-		}, nil
+		}
 	}
 
 	ids := make([]string, len(calendarIDs))
@@ -66,7 +66,7 @@ func (s *UnifiedFeedConfigService) GetConfig(ctx context.Context, userID uuid.UU
 		Configured:          true,
 		ICSToken:            feed.ICSToken,
 		IncludedCalendarIDs: ids,
-	}, nil
+	}
 }
 
 // CreateFeed creates a new unified feed for a user

@@ -8,16 +8,19 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, disposePinia, setActivePinia } from 'pinia';
-import { flushPromises } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
+import { bumpAccountGeneration } from '@/accountFence';
 import type { CalendarWithParticipants, User } from '@/types';
 
 import { mountWithI18n } from '@/test/harness';
 
+enableAutoUnmount(afterEach);
+
 const routerPush = vi.fn();
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: routerPush }),
+  useRouter: () => ({ push: routerPush, currentRoute: { value: { meta: {} } } }),
 }));
 
 const calendarsApi = {
@@ -40,10 +43,9 @@ const authApi = {
   bootstrapStatus: vi.fn(),
   getMe: vi.fn(),
   updateProfile: vi.fn(),
-  updatePassword: vi.fn(),
   logout: vi.fn(),
   forgotPassword: vi.fn(),
-  resetPassword: vi.fn(),
+  completeAccountRecovery: vi.fn(),
   checkMagicLinkAvailable: vi.fn(),
 };
 const apiClient = {
@@ -145,6 +147,19 @@ beforeEach(() => {
 });
 
 describe('Dashboard.vue — my calendars', () => {
+  it('reloads each account-scoped resource exactly once after a replacement', async () => {
+    const wrapper = await mountDashboard([calendar('a', 'Alpha')]);
+    calendarsApi.getAll.mockClear();
+    unifiedFeedApi.getConfig.mockClear();
+
+    bumpAccountGeneration();
+    await flushPromises();
+
+    expect(calendarsApi.getAll).toHaveBeenCalledTimes(1);
+    expect(unifiedFeedApi.getConfig).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
   it('renders calendars alphabetically ascending by default', async () => {
     const wrapper = await mountDashboard([
       calendar('z', 'Zebra'),
@@ -257,7 +272,19 @@ describe('Dashboard.vue — my calendars', () => {
     await byId(wrapper, 'c').find('article').trigger('drop');
     await nextTick();
 
-    expect(renderedIds(wrapper)).toEqual(['b', 'a', 'c']);
+    // The dropped card takes the target's slot, the last one included.
+    expect(renderedIds(wrapper)).toEqual(['b', 'c', 'a']);
+
+    // Onto the adjacent card is a swap, not a no-op; upwards works the same way.
+    await byId(wrapper, 'b').find('.drag-grip').trigger('dragstart');
+    await byId(wrapper, 'c').find('article').trigger('drop');
+    await nextTick();
+    expect(renderedIds(wrapper)).toEqual(['c', 'b', 'a']);
+
+    await byId(wrapper, 'a').find('.drag-grip').trigger('dragstart');
+    await byId(wrapper, 'c').find('article').trigger('drop');
+    await nextTick();
+    expect(renderedIds(wrapper)).toEqual(['a', 'c', 'b']);
   });
 
   it('does not let drag-and-drop cross the pinned/unpinned boundary', async () => {
@@ -423,6 +450,25 @@ describe('Dashboard.vue — my calendars', () => {
     wrapper.unmount();
   });
 
+  it('announces an account-reload feed failure inline without duplicating its toast', async () => {
+    const wrapper = await mountDashboard([calendar('a', 'Alpha')]);
+    unifiedFeedApi.create.mockRejectedValue(new Error('offline'));
+    await wrapper
+      .findAll('button')
+      .find(b => b.text() === 'Enable Unified Feed')!
+      .trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    useToastStore().toasts = [];
+    unifiedFeedApi.getConfig.mockRejectedValue(new Error('offline'));
+    bumpAccountGeneration();
+    await flushPromises();
+    expect(wrapper.findAll('[role="alert"]')).toHaveLength(1);
+    expect(wrapper.find('[role="alert"]').text()).toBe('Failed to load the unified feed');
+    expect(useToastStore().toasts.filter(t => t.type === 'error')).toEqual([]);
+    wrapper.unmount();
+  });
+
   it('renders a unified-feed load failure inline instead of swallowing it', async () => {
     const wrapper = await mountDashboard([calendar('a', 'Alpha')], () =>
       unifiedFeedApi.getConfig.mockRejectedValue(new Error('offline'))
@@ -577,7 +623,7 @@ describe('Dashboard.vue — keyboard focus after reorder (S3 regression)', () =>
     await byId(wrapper, 'c').find('article').trigger('drop');
     await flushPromises();
 
-    expect(renderedIds(wrapper)).toEqual(['b', 'a', 'c', 'd']);
+    expect(renderedIds(wrapper)).toEqual(['b', 'c', 'a', 'd']);
     // The dragged calendar ("a") keeps focus on one of its enabled move controls.
     expect(focused()?.calendar).toBe('a');
     expect(focused()?.disabled).toBe(false);

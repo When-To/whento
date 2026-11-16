@@ -20,7 +20,7 @@
 # index digests, so multi-platform builds keep working.
 
 # Build stage
-FROM golang:1.27-alpine3.24@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS builder
+FROM golang:1.27-alpine3.24@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 AS builder
 
 WORKDIR /build
 
@@ -59,7 +59,7 @@ RUN go build \
 
 # Build the migrate CLI. On BUILDPLATFORM, as before, but now because Go
 # cross-compiles natively rather than to dodge QEMU on a download.
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine3.24@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS migrate-builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine3.24@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 AS migrate-builder
 
 ARG TARGETARCH
 
@@ -92,7 +92,7 @@ RUN go mod init migratebuild && \
     github.com/golang-migrate/migrate/v4/cmd/migrate
 
 # Runtime stage
-FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS runtime
 
 LABEL org.opencontainers.image.title="WhenTo" \
     org.opencontainers.image.description="Self-hosted scheduling and calendar application" \
@@ -105,8 +105,9 @@ LABEL org.opencontainers.image.title="WhenTo" \
 # every time this layer *runs*, but a digest-pinned base means the layer itself can be
 # served from the build cache for weeks without running at all. That is how the v2.0.0
 # release image came to carry libpq 18.4-r0 while Alpine had long shipped 18.6-r0: the
-# packages were stale, the pin was current. Upgrading makes any rebuild self-healing
-# instead of merely reproducible.
+# packages were stale, the pin was current. The upgrade only helps when the layer runs,
+# so the workflows build this stage with `no-cache-filters: runtime`: v3.0.0's first
+# build still got libpq 18.6-r0 from the cache after Alpine shipped 18.7-r0.
 RUN apk upgrade --no-cache && \
     apk add --no-cache ca-certificates tzdata openssl postgresql-client
 

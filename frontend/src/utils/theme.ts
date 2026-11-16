@@ -6,14 +6,14 @@
 
 export type Theme = 'light' | 'dark';
 
-/** The localStorage key. Duplicated in the pre-paint snippet in index.html. */
+/** The localStorage key. Duplicated in the pre-paint snippet in public/theme-init.js. */
 export const THEME_STORAGE_KEY = 'theme';
 
 /**
  * The theme to render with: an explicit choice if the user made one, otherwise the
  * operating system preference.
  *
- * The exact same rule is inlined in `index.html` and runs before the bundle is even
+ * The exact same rule is duplicated in `public/theme-init.js` and runs before the bundle is even
  * fetched. That duplication is the point: applying the class from `onMounted`, as
  * this app used to, means every dark-theme user gets a full light-coloured first
  * paint before Vue hydrates. The two must stay in step — change one, change both.

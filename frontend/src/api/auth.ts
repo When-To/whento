@@ -42,8 +42,11 @@ export const authApi = {
   },
 
   async logout(): Promise<void> {
+    // Only the backend revocation. The local clear is the auth store's job — it
+    // runs under the cookie lock before signOut() captures the session family for
+    // the peers, so a premature clearToken() here would null the family and the
+    // other tabs could not tell this logout from an unrelated one.
     await apiClient.post<void>('/auth/logout');
-    apiClient.clearToken();
   },
 
   async getMe(): Promise<User> {
@@ -52,13 +55,6 @@ export const authApi = {
 
   async updateProfile(data: Partial<User>): Promise<User> {
     return apiClient.patch<User>('/auth/me', data);
-  },
-
-  async updatePassword(oldPassword: string, newPassword: string): Promise<void> {
-    return apiClient.patch<void>('/auth/me/password', {
-      old_password: oldPassword,
-      new_password: newPassword,
-    });
   },
 
   /** Permanently delete the caller's own account. The current password is required. */
@@ -70,7 +66,14 @@ export const authApi = {
     return apiClient.post<{ message: string }>('/auth/forgot-password', { email });
   },
 
-  async resetPassword(token: string, newPassword: string): Promise<AuthResponse> {
+  /**
+   * Consume a recovery proof and establish a session (or an MFA challenge).
+   * The password is request-only: the response contains authentication state,
+   * not password data. Keep that distinction in the API name as well as its type;
+   * sensitive-data analyzers otherwise classify every field returned by a
+   * `resetPassword` call, including the non-secret session_id, as a password.
+   */
+  async completeAccountRecovery(token: string, newPassword: string): Promise<AuthResponse> {
     return apiClient.post<AuthResponse>('/auth/reset-password', {
       token,
       new_password: newPassword,

@@ -25,7 +25,7 @@ import (
 // from a unit test with no database, no Redis and no listener.
 
 // testDeps returns the wiring newRouter reads: the configuration it takes CORS
-// and trusted proxies from, the quota services the symmetric RegisterQuotaRoutes
+// and trusted proxies from, the quota services RegisterQuotaRoutes
 // needs, and the rate limiter under test.
 func testDeps(rateLimitEnabled bool) *deps {
 	return &deps{
@@ -181,6 +181,7 @@ var wantRoutes = []string{
 	"DELETE /api/v1/calendars/{id}/participants/{pid}",
 	"GET /api/v1/calendars/{id}/notify-config",
 	"PATCH /api/v1/calendars/{id}/notify-config",
+	"GET /api/v1/calendars/{id}/activity",
 	"GET /api/v1/calendars/admin/users/{id}/calendars",
 
 	// Availabilities
@@ -300,6 +301,7 @@ var wantRateLimited = []string{
 	"DELETE /api/v1/calendars/{id}/participants/{pid}",
 	"GET /api/v1/calendars/{id}/notify-config",
 	"PATCH /api/v1/calendars/{id}/notify-config",
+	"GET /api/v1/calendars/{id}/activity",
 	"GET /api/v1/calendars/admin/users/{id}/calendars",
 
 	// The availability stream, in a bucket of its own, and the participant API

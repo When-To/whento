@@ -179,27 +179,6 @@ func TestUpdateProfileRequest_Validation(t *testing.T) {
 	}
 }
 
-func TestUser_IsAdmin(t *testing.T) {
-	tests := []struct {
-		name     string
-		role     string
-		expected bool
-	}{
-		{"admin role", models.RoleAdmin, true},
-		{"user role", models.RoleUser, false},
-		{"empty role", "", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			user := &models.User{Role: tt.role}
-			if got := user.IsAdmin(); got != tt.expected {
-				t.Errorf("User.IsAdmin() = %v, want %v", got, tt.expected)
-			}
-		})
-	}
-}
-
 func TestUser_ToResponse(t *testing.T) {
 	user := &models.User{
 		Email:       "test@example.com",

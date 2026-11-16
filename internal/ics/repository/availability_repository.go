@@ -15,13 +15,11 @@ import (
 )
 
 type DateAvailability struct {
-	Date              time.Time
-	ParticipantName   string
-	StartTime         *string
-	EndTime           *string
-	Note              string
-	AvailableCount    int
-	TotalParticipants int
+	Date            time.Time
+	ParticipantName string
+	StartTime       *string
+	EndTime         *string
+	Note            string
 }
 
 type AvailabilityRepository struct {
@@ -107,12 +105,9 @@ const eventsAboveThresholdQuery = `
 					AND a.date = d.date
 				)
 		),
-		-- Count availabilities per date
+		-- Dates that reach the threshold
 		date_counts AS (
-			SELECT
-				date,
-				COUNT(DISTINCT participant_id) as available_count,
-				(SELECT COUNT(*) FROM participants WHERE calendar_id = $1) as total_participants
+			SELECT date
 			FROM all_availabilities
 			GROUP BY date
 			HAVING COUNT(DISTINCT participant_id) >= $2
@@ -123,9 +118,7 @@ const eventsAboveThresholdQuery = `
 			aa.participant_name,
 			aa.start_time,
 			aa.end_time,
-			aa.note,
-			dc.available_count,
-			dc.total_participants
+			aa.note
 		FROM all_availabilities aa
 		JOIN date_counts dc ON dc.date = aa.date
 		ORDER BY aa.date, aa.participant_name
@@ -216,8 +209,6 @@ func scanEventsByDate(rows pgx.Rows) (map[time.Time][]DateAvailability, error) {
 			&startTime,
 			&endTime,
 			&da.Note,
-			&da.AvailableCount,
-			&da.TotalParticipants,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan availability: %w", err)

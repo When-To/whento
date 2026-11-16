@@ -74,6 +74,14 @@ func (f *fakeMFAStore) Update(_ context.Context, mfa *models.UserMFA) error {
 	return f.writeErr
 }
 
+func (f *fakeMFAStore) ConsumeBackupCode(context.Context, uuid.UUID, string) (bool, error) {
+	return f.writeErr == nil, f.writeErr
+}
+
+func (f *fakeMFAStore) ConsumeTOTPStep(context.Context, uuid.UUID, string, int64) (bool, error) {
+	return f.writeErr == nil, f.writeErr
+}
+
 func (f *fakeMFAStore) EnableAndRevokeSessions(_ context.Context, _ uuid.UUID, _ string, enabledAt time.Time) error {
 	if f.writeErr != nil {
 		return f.writeErr
@@ -214,7 +222,7 @@ func newHarness(t *testing.T, store *fakeMFAStore, users *fakeUserLookup, appCac
 	manager := newJWTManager(t)
 	// A cost of 4 rather than the production 12: these tests hash backup codes and the
 	// difference is seconds per run.
-	cfg := &config.Config{TOTPIssuer: "WhenTo", TOTPPeriod: 30, TOTPDigits: 6, BcryptCost: bcrypt.MinCost}
+	cfg := &config.Config{TOTPIssuer: "WhenTo", BcryptCost: bcrypt.MinCost}
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	mfaSvc := service.NewMFAService(store, users, cfg, discard)

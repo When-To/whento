@@ -139,6 +139,67 @@ func TestMFAUpdateStoresUsedBackupCodes(t *testing.T) {
 	}
 }
 
+// TestMFAConsumeSpendsOnce runs the conditional UPDATEs in order against one row:
+// each code or step is spent exactly once, and nothing is spent for a code that
+// was never issued, a stale secret, or a step behind the last accepted one.
+func TestMFAConsumeSpendsOnce(t *testing.T) {
+	pool := dbtest.Pool(t)
+	repo := repository.NewMFARepository(pool)
+	ctx := dbtest.Context(t)
+
+	user := newUser(t, pool)
+	const secret = "JBSWY3DPEHPK3PXP"
+	if err := repo.Create(ctx, &models.UserMFA{
+		UserID:          user.ID,
+		Enabled:         true,
+		Secret:          secret,
+		BackupCodes:     []string{"$2a$04$aaa", "$2a$04$bbb"},
+		BackupCodesUsed: []string{},
+	}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	backup := func(hash string) func() (bool, error) {
+		return func() (bool, error) { return repo.ConsumeBackupCode(ctx, user.ID, hash) }
+	}
+	totpStep := func(secret string, step int64) func() (bool, error) {
+		return func() (bool, error) { return repo.ConsumeTOTPStep(ctx, user.ID, secret, step) }
+	}
+
+	steps := []struct {
+		name    string
+		consume func() (bool, error)
+		want    bool
+	}{
+		{"first use of a backup code", backup("$2a$04$aaa"), true},
+		{"second use of the same backup code", backup("$2a$04$aaa"), false},
+		{"another backup code is still spendable", backup("$2a$04$bbb"), true},
+		{"a hash that was never issued", backup("$2a$04$zzz"), false},
+		{"first TOTP step", totpStep(secret, 100), true},
+		{"the same TOTP step again", totpStep(secret, 100), false},
+		{"an older TOTP step", totpStep(secret, 99), false},
+		{"a newer TOTP step", totpStep(secret, 101), true},
+		{"a newer step under a different secret", totpStep("OTHERSECRET", 102), false},
+	}
+	for _, step := range steps {
+		got, err := step.consume()
+		if err != nil {
+			t.Fatalf("%s: %v", step.name, err)
+		}
+		if got != step.want {
+			t.Errorf("%s: consumed = %v, want %v", step.name, got, step.want)
+		}
+	}
+
+	got, err := repo.GetByUserID(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("GetByUserID: %v", err)
+	}
+	if len(got.BackupCodesUsed) != 2 {
+		t.Errorf("BackupCodesUsed = %v, want each code recorded once", got.BackupCodesUsed)
+	}
+}
+
 func TestMFAIsEnabled(t *testing.T) {
 	pool := dbtest.Pool(t)
 	repo := repository.NewMFARepository(pool)

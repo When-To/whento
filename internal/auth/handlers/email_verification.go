@@ -6,9 +6,7 @@ package handlers
 
 import (
 	"bytes"
-	"crypto/rand"
 	_ "embed"
-	"encoding/hex"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -21,6 +19,7 @@ import (
 	"github.com/whento/pkg/httputil"
 	"github.com/whento/pkg/logger"
 	"github.com/whento/pkg/middleware"
+	"github.com/whento/whento/internal/auth/service"
 )
 
 // SendVerificationEmail sends a verification email to the authenticated user
@@ -66,12 +65,7 @@ func (h *AuthHandler) SendVerificationEmail(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Generate verification token (32 bytes = 64 hex chars)
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to generate verification token")
-		return
-	}
-	token := hex.EncodeToString(tokenBytes)
+	token := service.RandomHex(32)
 
 	// Set token expiry (from config)
 	expiresAt := time.Now().Add(h.cfg.Email.VerificationExpiry)

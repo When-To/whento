@@ -5,6 +5,8 @@
 package models
 
 import (
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,8 +53,19 @@ type Occurrence struct {
 // answer. Reading it any other way is what kept recurrence-only participants out of
 // their own threshold notifications.
 type AvailableParticipant struct {
-	ID   uuid.UUID
-	Name string
+	ID   uuid.UUID `json:"participant_id"`
+	Name string    `json:"name"`
+}
+
+// DateStats is what one date of a range looks like once the occurrences covering it
+// have been projected both ways: who is available, and how many of them are free at
+// once for long enough to hold the event.
+//
+// The two travel together because they are two readings of the same expansion, and
+// computing them apart is what made the range read cost a query per date per question.
+type DateStats struct {
+	Available []AvailableParticipant
+	Count     int
 }
 
 // CreateAvailabilityRequest represents a request to create availability
@@ -166,20 +179,13 @@ func (p ParticipantAvailabilitySummary) Window() TimeWindow {
 // needs it too, and the dependency runs availability -> notify: the detector cannot reach
 // back into the service without a cycle. Both packages already import this one.
 func MaxSimultaneousFor(windows []TimeWindow, minMinutes int) int {
-	if len(windows) == 0 {
-		return 0
-	}
+	// Normalize participant times (treat nil as 00:00-23:59). A window that does not
+	// parse is left out entirely: it neither counts nor contributes a boundary.
+	type span struct{ startMinutes, endMinutes int }
 
-	// Normalize participant times (treat nil as 00:00-23:59)
-	type normalizedParticipant struct {
-		startMinutes int
-		endMinutes   int
-		valid        bool
-	}
-
-	normalized := make([]normalizedParticipant, len(windows))
-	validCount := 0
-	for i, p := range windows {
+	spans := make([]span, 0, len(windows))
+	boundarySet := make(map[int]struct{})
+	for _, p := range windows {
 		startStr := "00:00"
 		endStr := "23:59"
 
@@ -192,53 +198,20 @@ func MaxSimultaneousFor(windows []TimeWindow, minMinutes int) int {
 
 		startTime, err1 := time.Parse("15:04", startStr)
 		endTime, err2 := time.Parse("15:04", endStr)
-
 		if err1 != nil || err2 != nil {
-			// If parsing fails, mark as invalid
-			normalized[i] = normalizedParticipant{valid: false}
 			continue
 		}
 
-		normalized[i] = normalizedParticipant{
+		sp := span{
 			startMinutes: startTime.Hour()*60 + startTime.Minute(),
 			endMinutes:   endTime.Hour()*60 + endTime.Minute(),
-			valid:        true,
 		}
-		validCount++
+		spans = append(spans, sp)
+		boundarySet[sp.startMinutes] = struct{}{}
+		boundarySet[sp.endMinutes] = struct{}{}
 	}
 
-	if validCount == 0 {
-		return 0
-	}
-
-	// Collect all unique time boundaries
-	boundarySet := make(map[int]bool)
-	for _, p := range normalized {
-		if p.valid {
-			boundarySet[p.startMinutes] = true
-			boundarySet[p.endMinutes] = true
-		}
-	}
-
-	if len(boundarySet) == 0 {
-		return 0
-	}
-
-	// Sort boundaries
-	boundaries := make([]int, 0, len(boundarySet))
-	for b := range boundarySet {
-		boundaries = append(boundaries, b)
-	}
-	sortInts := func(arr []int) {
-		for i := 0; i < len(arr); i++ {
-			for j := i + 1; j < len(arr); j++ {
-				if arr[i] > arr[j] {
-					arr[i], arr[j] = arr[j], arr[i]
-				}
-			}
-		}
-	}
-	sortInts(boundaries)
+	boundaries := slices.Sorted(maps.Keys(boundarySet))
 
 	// The largest group covering any window long enough to be worth meeting in.
 	//
@@ -256,16 +229,14 @@ func MaxSimultaneousFor(windows []TimeWindow, minMinutes int) int {
 			}
 
 			count := 0
-			for _, p := range normalized {
+			for _, p := range spans {
 				// Available if their range completely covers the candidate window.
-				if p.valid && p.startMinutes <= boundaries[i] && p.endMinutes >= boundaries[j] {
+				if p.startMinutes <= boundaries[i] && p.endMinutes >= boundaries[j] {
 					count++
 				}
 			}
 
-			if count > maxCount {
-				maxCount = count
-			}
+			maxCount = max(maxCount, count)
 		}
 	}
 

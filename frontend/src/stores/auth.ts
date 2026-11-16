@@ -8,7 +8,14 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { authApi } from '@/api/auth';
 import { apiClient } from '@/api/client';
+import { isDefinitiveRejection } from '@/api/failureClassification';
 import { useAsyncActions } from '@/stores/asyncAction';
+import { resetAccountScopedState } from '@/stores/remoteSignout';
+import {
+  currentAccountGeneration,
+  bumpAccountGeneration,
+  useAccountGeneration,
+} from '@/accountFence';
 import type {
   User,
   LoginRequest,
@@ -22,6 +29,15 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null);
   const initialized = ref(false);
   const { loading, error, run, clearError } = useAsyncActions();
+  /**
+   * The local account generation (third PR-7 concept). Advanced on every account
+   * boundary — login, registration, bootstrap, password reset, MFA/passkey completion,
+   * /auth/me hydrate, and every local/remote sign-out. Route loaders that hold
+   * account-scoped data watch it and clear/reload only their own data when it moves,
+   * which is what replaces the old whole-document reload on a session-restored
+   * broadcast. Same-family refresh rotations never advance it.
+   */
+  const accountGeneration = useAccountGeneration();
 
   /**
    * Whether the instance will accept new registrations. Comes from the server's
@@ -54,11 +70,7 @@ export const useAuthStore = defineStore('auth', () => {
    *
    * `main.ts` deliberately kicks initialisation off without awaiting it, so the app
    * shell paints immediately. Everything that needs a settled auth state — the router
-   * guard above all — awaits this promise instead of polling `initialized`. The
-   * previous guard slept in 100 ms slices up to fifty times and then gave up, which
-   * both blocked navigation for up to five seconds and, on timeout, evaluated
-   * `requiresAuth` against a store that had never been populated, bouncing a
-   * perfectly authenticated user to /login.
+   * guard above all — awaits this promise instead of polling `initialized`.
    *
    * Held in the setup closure rather than at module scope so each Pinia instance —
    * and so each test — gets its own.
@@ -74,8 +86,9 @@ export const useAuthStore = defineStore('auth', () => {
     return run('auth.registerError', async () => {
       const response = await authApi.register(data);
       user.value = response.user;
+      bumpAccountGeneration();
       if (response.access_token) {
-        apiClient.setToken(response.access_token, response.expires_in);
+        apiClient.setToken(response.access_token, response.expires_in, response.session_id);
       }
       // A successful registration means the instance now has a user, so it can
       // no longer need bootstrapping. Clearing the flag here keeps the guard
@@ -99,8 +112,9 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await authApi.bootstrap(data);
       bootstrapRequired.value = false;
       user.value = response.user;
+      bumpAccountGeneration();
       if (response.access_token) {
-        apiClient.setToken(response.access_token, response.expires_in);
+        apiClient.setToken(response.access_token, response.expires_in, response.session_id);
       }
       return response;
     });
@@ -122,8 +136,9 @@ export const useAuthStore = defineStore('auth', () => {
         }
 
         user.value = response.user;
+        bumpAccountGeneration();
         if (response.access_token) {
-          apiClient.setToken(response.access_token, response.expires_in);
+          apiClient.setToken(response.access_token, response.expires_in, response.session_id);
         }
         return response;
       },
@@ -135,41 +150,138 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout() {
     try {
-      await run('auth.logoutError', () => authApi.logout());
+      await run('auth.logoutError', () => apiClient.logoutThroughLock(() => authApi.logout()));
     } catch {
       // A failed logout still logs the user out locally: the access token is
       // dropped below either way, and the refresh cookie is short-lived.
       clearError();
     } finally {
-      user.value = null;
-      // signOut rather than clearToken: the other tabs on this browser share the
-      // refresh cookie the backend just revoked, and have to be told.
+      // Drop everything that belonged to the previous account — the session user, the
+      // temp token, the dashboard list (full participant ids) and the unified-feed
+      // capability — through the one account-scoped reset, then tell the other tabs.
+      resetAccountScopedState();
       apiClient.signOut();
     }
   }
 
-  async function fetchUser() {
-    return run('auth.fetchUserError', async () => {
+  /**
+   * Read the signed-in user (cold hydrate, re-fetch, remote restore).
+   *
+   * The account boundary this restore started under is captured up front. Even an
+   * *unqualified* /auth/me (cold hydrate, or an ordinary re-fetch) is fenced here: a
+   * reset or replacement that lands while the request is on the wire must not let the
+   * stale answer overwrite the replacement session's user, or let a stale failure clear
+   * the replacement session's token.
+   *
+   * The account generation is advanced by explicit account-boundary events (login,
+   * register, logout, a remote restore), *not* by the client's own refresh that first
+   * obtains a token during a cold restore — so an ordinary null-to-new-session startup
+   * is not mistaken for a replacement and rejected.
+   *
+   * @param expectedFamily the server family the caller accepted; when provided, a /auth/me
+   *                       answer (or failure) is committed only while the client still
+   *                       belongs to that family.
+   */
+  /** The latest /auth/me hydration, so a voided cold restore can wait on its successor. */
+  let latestFetch: Promise<unknown> = Promise.resolve();
+
+  async function fetchUser(expectedFamily?: string | null): Promise<User | null> {
+    const fetching = run('auth.fetchUserError', async () => {
+      const boundary = currentAccountGeneration();
       try {
-        user.value = await authApi.getMe();
+        const me = await authApi.getMe();
+        // A remote-session restore can be overtaken by a still newer session while
+        // /auth/me is on the wire: a late answer for an older family must not overwrite
+        // the account the receiver accepted in the meantime.
+        if (expectedFamily !== undefined && apiClient.getFamilyId() !== expectedFamily) {
+          return null;
+        }
+        // A reset or replacement landed while /auth/me was in flight: the answer
+        // belongs to a session that is no longer the current one. Discard it without
+        // touching user.value — the replacement session's login already wrote it.
+        if (boundary !== currentAccountGeneration()) {
+          return null;
+        }
+        user.value = me;
+        // A /auth/me answer installs a session (cold hydrate or another tab's fresh
+        // login): advance the account fence so nothing started under the previous
+        // account can still commit.
+        bumpAccountGeneration();
+        return me;
       } catch (err) {
-        user.value = null;
-        apiClient.clearToken();
+        // Only a *definitive* rejection of the current session may clear it: the
+        // backend answered UNAUTHORIZED, so the credential is genuinely dead. A
+        // transient failure says nothing about the session — preserve it and rethrow
+        // so callers can retry.
+        const fenceHolds =
+          boundary === currentAccountGeneration() &&
+          (expectedFamily === undefined || apiClient.getFamilyId() === expectedFamily);
+        if (fenceHolds && isDefinitiveRejection(err)) {
+          user.value = null;
+          apiClient.clearToken();
+        }
         throw err;
       }
     });
+    latestFetch = fetching;
+    return fetching;
   }
 
-  async function updateProfile(data: Partial<User>) {
+  /**
+   * Serialises profile/preferences writes, one at a time.
+   *
+   * The backend rewrites the whole profile row from each request's submitted
+   * snapshot, so two overlapping partial saves would silently lose each other's field
+   * in the database. Chaining the PATCHes closes that window client-side.
+   */
+  let profileWriteChain: Promise<unknown> = Promise.resolve();
+
+  /**
+   * Update the signed-in user's profile/preferences.
+   *
+   * The response can land after a logout or an account switch, and Vue does not cancel
+   * an async continuation when the submitting view unmounts. Both the initiating user's
+   * id and the account-fence generation are captured up front; the commit happens only
+   * if neither moved while the request was on the wire — and the queued write itself
+   * rechecks the same fence *before* the HTTP request is issued, so a save queued
+   * behind an earlier one on account A can never ride account B's token on the wire.
+   * Returns the fresh user, or `null` when the session changed and nothing was committed.
+   */
+  async function updateProfile(data: Partial<User>): Promise<User | null> {
     return run('auth.updateProfileError', async () => {
-      user.value = await authApi.updateProfile(data);
+      const requesterId = user.value?.id ?? null;
+      const generation = currentAccountGeneration();
+      const write = profileWriteChain.then(() => {
+        if (generation !== currentAccountGeneration()) {
+          return null;
+        }
+        if ((user.value?.id ?? null) !== requesterId) {
+          return null;
+        }
+        return authApi.updateProfile(data);
+      });
+      profileWriteChain = write.catch(() => {});
+      const updated = (await write) as User | null;
+      if (updated === null) {
+        return null;
+      }
+      if (generation !== currentAccountGeneration()) {
+        return null;
+      }
+      if ((user.value?.id ?? null) !== requesterId) {
+        return null;
+      }
+      // Field-wise merge: commit only the columns this request submitted.
+      if (user.value) {
+        const patch = Object.fromEntries(
+          Object.keys(data).map(key => [key, updated[key as keyof User]])
+        ) as Partial<User>;
+        user.value = { ...user.value, ...patch };
+        return user.value;
+      }
+      user.value = updated;
+      return updated;
     });
-  }
-
-  async function updatePassword(oldPassword: string, newPassword: string) {
-    return run('settings.passwordChangeFailed', () =>
-      authApi.updatePassword(oldPassword, newPassword)
-    );
   }
 
   /**
@@ -190,7 +302,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function resetPassword(token: string, newPassword: string) {
     return run('auth.resetPassword.error', async () => {
-      const response = await authApi.resetPassword(token, newPassword);
+      const response = await authApi.completeAccountRecovery(token, newPassword);
 
       // An MFA-protected account gets a pending challenge from a reset, not a
       // session: the password has been changed, but the login must not complete
@@ -202,8 +314,9 @@ export const useAuthStore = defineStore('auth', () => {
 
       // Auto-login after successful reset
       user.value = response.user;
+      bumpAccountGeneration();
       if (response.access_token) {
-        apiClient.setToken(response.access_token, response.expires_in);
+        apiClient.setToken(response.access_token, response.expires_in, response.session_id);
       }
 
       return response;
@@ -211,8 +324,11 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // Set tokens directly (for MFA verification and passkey login)
-  function setTokens(accessToken: string, expiresIn?: number) {
-    apiClient.setToken(accessToken, expiresIn);
+  function setTokens(accessToken: string, expiresIn?: number, sessionId?: string) {
+    apiClient.setToken(accessToken, expiresIn, sessionId);
+    // A session is being established (MFA complete, passkey): advance the account
+    // fence so older in-flight continuations cannot overwrite this new session.
+    bumpAccountGeneration();
     // Note: refresh_token is httpOnly cookie, handled by backend
   }
 
@@ -236,15 +352,27 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * Refresh the public auth capability state (bootstrap/mount needs, registration
-   * open or not). Idempotent enough to call on every initializeAuth: it is one
-   * cheap public read, and the router guard makes its redirect decisions on the
-   * result.
+   * Drop the signed-in user locally, without calling the server or broadcasting.
    *
-   * On failure the capability flags are *not* overwritten with the startup
-   * defaults-as-if-authoritative: `bootstrapStatusKnown` goes false instead, so
-   * the guard knows it has no answer and must not close the only setup route on
-   * a guess. The server remains the authority for either direction.
+   * The shared account-scoped reset (stores/remoteSignout.ts) calls this for every
+   * sign-out path: a deliberate logout in this tab, one reported by another tab, and
+   * a locally detected expiry. None of those should call `/auth/logout` again (the
+   * deliberate logout already did, and re-broadcasting would loop), and all of them
+   * must end up with no user left in memory.
+   */
+  function resetSession() {
+    user.value = null;
+    tempToken.value = null;
+    // A sign-out is an account boundary: fence off any account-scoped continuation
+    // that was still in flight, and drop queued profile writes so none can ride a
+    // replacement account's token.
+    profileWriteChain = Promise.resolve();
+    bumpAccountGeneration();
+  }
+
+  /**
+   * Refresh the public auth capability state (bootstrap/mount needs, registration
+   * open or not). Idempotent enough to call on every initializeAuth.
    */
   async function loadAuthStatus() {
     try {
@@ -262,14 +390,9 @@ export const useAuthStore = defineStore('auth', () => {
    *
    * A cold load starts with no access token — it only ever lives in memory — so
    * `/auth/me` 401s and the client's interceptor spends the refresh cookie and
-   * replays the call. That is the same path an expired token has always taken, so
-   * there is no second refresh implementation to keep honest here.
+   * replays the call. That is the same path an expired token has always taken.
    *
-   * The session flag is what keeps an anonymous visitor from paying for that round
-   * trip on every public page.
-   *
-   * Idempotent: concurrent and repeat callers all get the same promise, so the
-   * router guard calling it never triggers a second `/auth/me`.
+   * Idempotent: concurrent and repeat callers all get the same promise.
    */
   function initializeAuth(): Promise<void> {
     initPromise ??= (async () => {
@@ -278,14 +401,35 @@ export const useAuthStore = defineStore('auth', () => {
       await loadAuthStatus();
 
       if (apiClient.hasSession()) {
+        // The boundary this cold start began its restore under. The account-fence
+        // generation only advances on an explicit account-boundary event, so a
+        // replacement that lands while the restore is on the wire is visible here.
+        const restoreBoundary = currentAccountGeneration();
         try {
           await fetchUser();
-        } catch {
-          // The refresh cookie is gone or expired. Not an error the user needs to
-          // see: they are simply signed out, and the guard will send them to /login
-          // if the route needs a session.
-          apiClient.clearToken();
-          clearError();
+        } catch (err) {
+          // Only a *definitive* rejection of the refresh cookie (UNAUTHORIZED) proves
+          // the session is over: drop the restore marker. A transient fault says
+          // nothing about the cookie — preserve it and allow initialization to be
+          // retried. In both cases a failure for a restore that a replacement overtook
+          // must not clear the replacement session's token.
+          if (restoreBoundary === currentAccountGeneration()) {
+            if (isDefinitiveRejection(err)) {
+              apiClient.clearToken();
+              clearError();
+            } else {
+              // Transient: keep the recoverable session and let the next
+              // initializeAuth()/whenReady() retry the restore.
+              initPromise = null;
+            }
+          } else {
+            clearError();
+            // Overtaken by a replacement session. A cold tab that adopted another
+            // tab's fresh token started hydrating it (remoteSignout); wait for that
+            // /auth/me, or the guard reads "signed out" and sends a signed-in tab to
+            // /login.
+            await latestFetch.catch(() => clearError());
+          }
         }
       }
       initialized.value = true;
@@ -295,9 +439,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * Resolves once the session has been restored, starting the restore if nobody
-   * has yet. This is the router guard's entry point — it must never depend on
-   * `main.ts` having run first, or a directly-mounted router (tests, SSR probes)
-   * would wait forever.
+   * has yet. This is the router guard's entry point.
    */
   function whenReady(): Promise<void> {
     return initializeAuth();
@@ -310,6 +452,7 @@ export const useAuthStore = defineStore('auth', () => {
     error,
     initialized,
     tempToken,
+    accountGeneration,
     registrationEnabled,
     bootstrapRequired,
     bootstrapStatusKnown,
@@ -325,16 +468,14 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     fetchUser,
     updateProfile,
-    updatePassword,
     deleteAccount,
     forgotPassword,
     resetPassword,
     setTokens,
     setTempToken,
     clearTempToken,
-    loadAuthStatus,
+    resetSession,
     initializeAuth,
     whenReady,
-    clearError,
   };
 });

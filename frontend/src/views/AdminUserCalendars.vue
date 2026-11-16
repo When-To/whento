@@ -106,7 +106,7 @@
             <div class="flex items-center justify-between">
               <span class="text-gray-600 dark:text-gray-400">{{ t('admin.createdAt') }}:</span>
               <span class="text-gray-900 dark:text-white">
-                {{ formatDate(calendar.created_at) }}
+                {{ formatCreatedAt(calendar.created_at) }}
               </span>
             </div>
           </div>
@@ -175,6 +175,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date/intlFormatters';
 import { ref, onMounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter, useRoute } from 'vue-router';
@@ -183,12 +184,19 @@ import { useToastStore } from '@/stores/toast';
 import { adminApi } from '@/api/admin';
 import type { CalendarWithParticipants } from '@/types';
 import { translateErrorMessage } from '@/utils/errorTranslator';
+import { useAccountScopedReload } from '@/composables/useAccountScopedReload';
 
 const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
 const toastStore = useToastStore();
+
+// A remote account replacement advances the account generation, not a document
+// reload; this admin listing is account-scoped, so reload it in place.
+useAccountScopedReload(() => {
+  void loadCalendars();
+});
 
 const loading = ref(true);
 const calendars = ref<CalendarWithParticipants[]>([]);
@@ -227,12 +235,7 @@ async function loadCalendars() {
   }
 }
 
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString(authStore.user?.locale || 'fr', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+function formatCreatedAt(dateString: string): string {
+  return formatDate(new Date(dateString), authStore.user?.locale || 'fr', 'dayMonthYearShort');
 }
 </script>

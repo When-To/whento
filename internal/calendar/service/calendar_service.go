@@ -5,10 +5,10 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -16,10 +16,10 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/whento/pkg/cache"
-	"github.com/whento/pkg/logger"
 	authRepo "github.com/whento/whento/internal/auth/repository"
 	"github.com/whento/whento/internal/calendar/models"
 	"github.com/whento/whento/internal/calendar/repository"
+	notifyModels "github.com/whento/whento/internal/notify/models"
 )
 
 var (
@@ -53,7 +53,6 @@ type ParticipantRepository interface {
 	GetByCalendarID(ctx context.Context, calendarID uuid.UUID) ([]models.Participant, error)
 	Update(ctx context.Context, id uuid.UUID, name string) error
 	Delete(ctx context.Context, id uuid.UUID) error
-	SetEmailAsVerified(ctx context.Context, participantID uuid.UUID, email string) error
 }
 
 // CalendarService handles calendar business logic
@@ -87,38 +86,13 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 	}
 
 	// Generate tokens
-	publicToken, err := generateToken()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate public token: %w", err)
-	}
-
-	icsToken, err := generateToken()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate ics token: %w", err)
-	}
-
-	// Set default threshold
-	threshold := req.Threshold
-	if threshold == 0 {
-		threshold = 1
-	}
+	publicToken := randomHex(32)
+	icsToken := randomHex(32)
 
 	// Set default allowed weekdays (all days if not specified)
 	allowedWeekdays := req.AllowedWeekdays
 	if len(allowedWeekdays) == 0 {
 		allowedWeekdays = []int{0, 1, 2, 3, 4, 5, 6}
-	}
-
-	// Set default timezone (Europe/Paris if not specified)
-	timezone := req.Timezone
-	if timezone == "" {
-		timezone = "Europe/Paris"
-	}
-
-	// Set default holidays_policy (ignore if not specified)
-	holidaysPolicy := req.HolidaysPolicy
-	if holidaysPolicy == "" {
-		holidaysPolicy = "ignore"
 	}
 
 	// Normalize weekday times (swap if min > max)
@@ -170,11 +144,11 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 		Description:                req.Description,
 		PublicToken:                publicToken,
 		ICSToken:                   icsToken,
-		Threshold:                  threshold,
+		Threshold:                  cmp.Or(req.Threshold, 1),
 		AllowedWeekdays:            allowedWeekdays,
 		MinDurationHours:           req.MinDurationHours,
-		Timezone:                   timezone,
-		HolidaysPolicy:             holidaysPolicy,
+		Timezone:                   cmp.Or(req.Timezone, "Europe/Paris"),
+		HolidaysPolicy:             cmp.Or(req.HolidaysPolicy, "ignore"),
 		AllowHolidayEves:           req.AllowHolidayEves,
 		AllowedHours:               allowedHoursJSON,
 		NotifyOnThreshold:          req.NotifyOnThreshold,
@@ -189,21 +163,19 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 	participantLocale := req.ParticipantLocale
 	var ownerEmail string
 	var ownerDisplayName string
-	if participantLocale == "" || s.userRepo != nil {
-		// Get owner information for participant email matching and locale
-		if s.userRepo != nil {
-			owner, err := s.userRepo.GetByID(ctx, ownerUUID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get owner information: %w", err)
-			}
-			if participantLocale == "" {
-				participantLocale = owner.Locale
-			}
-			if owner.EmailVerified {
-				ownerEmail = owner.Email
-			}
-			ownerDisplayName = owner.DisplayName
+	// Get owner information for participant email matching and locale
+	if s.userRepo != nil {
+		owner, err := s.userRepo.GetByID(ctx, ownerUUID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get owner information: %w", err)
 		}
+		if participantLocale == "" {
+			participantLocale = owner.Locale
+		}
+		if owner.EmailVerified {
+			ownerEmail = owner.Email
+		}
+		ownerDisplayName = owner.DisplayName
 	}
 	if participantLocale == "" {
 		participantLocale = "en" // Default fallback
@@ -217,7 +189,8 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 			Locale: participantLocale,
 		}
 
-		// If participant name matches owner's display name and email is available, pre-populate email
+		// If participant name matches owner's display name and email is available, store it
+		// already verified: the account holder's own address is proven.
 		if ownerEmail != "" && name == ownerDisplayName {
 			input.Email = &ownerEmail
 			input.EmailVerified = true
@@ -233,30 +206,6 @@ func (s *CalendarService) CreateCalendar(ctx context.Context, userID string, req
 			return nil, fmt.Errorf("duplicate participant name in request")
 		}
 		return nil, fmt.Errorf("failed to create calendar: %w", err)
-	}
-
-	// Auto-populate owner participant's email if user has verified email
-	if len(participants) > 0 && s.userRepo != nil {
-		// Get owner user information
-		owner, err := s.userRepo.GetByID(ctx, ownerUUID)
-		if err == nil && owner != nil && owner.EmailVerified && owner.Email != "" {
-			// Find participant matching owner's display name (frontend auto-adds owner as first participant)
-			for _, participant := range participants {
-				if participant.Name == owner.DisplayName {
-					// Set email as already verified for the owner participant.
-					// A failure must not fail calendar creation — the owner can add
-					// their email manually — but the branch used to be empty, so the
-					// error was not logged either, contrary to what it claimed.
-					if err := s.participantRepo.SetEmailAsVerified(ctx, participant.ID, owner.Email); err != nil {
-						logger.FromContext(ctx).Warn("Failed to pre-verify the owner participant's email",
-							"calendar_id", calendar.ID,
-							"participant_ref", logger.Fingerprint(participant.ID.String()),
-							"error", err)
-					}
-					break
-				}
-			}
-		}
 	}
 
 	return buildCalendarResponse(calendar, participants)
@@ -313,23 +262,7 @@ func buildPublicCalendarResponse(calendar *models.Calendar, participants []model
 	// requires the email channel. The SMTP capability of the instance is not
 	// decided here (that is the frontend's /auth/magic-link/available check), but
 	// the owner's declared channel preference is.
-	notifyParticipants := false
-	if calendar.NotifyConfig != nil && *calendar.NotifyConfig != "" {
-		var notifyConfig struct {
-			Enabled            bool `json:"enabled"`
-			NotifyParticipants bool `json:"notify_participants"`
-			Channels           struct {
-				Email struct {
-					Enabled bool `json:"enabled"`
-				} `json:"email"`
-			} `json:"channels"`
-		}
-		if err := json.Unmarshal([]byte(*calendar.NotifyConfig), &notifyConfig); err == nil {
-			notifyParticipants = notifyConfig.Enabled &&
-				notifyConfig.NotifyParticipants &&
-				notifyConfig.Channels.Email.Enabled
-		}
-	}
+	notifyParticipants := notifyModels.ParticipantEmailOn(calendar.NotifyConfig)
 
 	return &models.PublicCalendarResponse{
 		ID:                         calendar.ID,
@@ -369,65 +302,30 @@ func filterParticipants(lockParticipants bool, participantID string, participant
 		}
 	}
 
+	// IDs are visible unless lock_participants is set; email info is only ever
+	// included for the specified participant.
 	publicParticipants := make([]models.PublicParticipant, len(participants))
-
-	if !lockParticipants {
-		// Return all participants with their IDs visible
-		// Email info is only included for the specified participant
-		for i, p := range participants {
-			isCurrentParticipant := participantID != "" && p.ID == parsedID
-			publicParticipants[i] = models.PublicParticipant{
-				ID:            &p.ID,
-				CalendarID:    p.CalendarID,
-				Name:          p.Name,
-				Email:         conditionalEmail(isCurrentParticipant, p.Email),
-				EmailVerified: isCurrentParticipant && p.EmailVerified,
-				CreatedAt:     p.CreatedAt,
-			}
-		}
-		return publicParticipants
-	}
-
-	// If lock_participants is true, mask IDs except for the specified participant
-	// Email info is still only shown for the specified participant
 	for i, p := range participants {
 		isCurrentParticipant := participantID != "" && p.ID == parsedID
+		publicParticipants[i] = models.PublicParticipant{
+			CalendarID: p.CalendarID,
+			Name:       p.Name,
+			CreatedAt:  p.CreatedAt,
+		}
+		if !lockParticipants || isCurrentParticipant {
+			publicParticipants[i].ID = &p.ID
+		}
 		if isCurrentParticipant {
-			// Keep the participant with their ID and email
-			publicParticipants[i] = models.PublicParticipant{
-				ID:            &p.ID,
-				CalendarID:    p.CalendarID,
-				Name:          p.Name,
-				Email:         p.Email,
-				EmailVerified: p.EmailVerified,
-				CreatedAt:     p.CreatedAt,
-			}
-		} else {
-			// Mask the ID and email by setting them to nil/false
-			publicParticipants[i] = models.PublicParticipant{
-				ID:            nil,
-				CalendarID:    p.CalendarID,
-				Name:          p.Name,
-				Email:         nil,
-				EmailVerified: false,
-				CreatedAt:     p.CreatedAt,
-			}
+			publicParticipants[i].Email = p.Email
+			publicParticipants[i].EmailVerified = p.EmailVerified
 		}
 	}
 
 	return publicParticipants
 }
 
-// conditionalEmail returns the email if condition is true, otherwise nil
-func conditionalEmail(condition bool, email *string) *string {
-	if condition {
-		return email
-	}
-	return nil
-}
-
-// GetCalendar retrieves a calendar by ID (requires ownership or admin role)
-func (s *CalendarService) GetCalendar(ctx context.Context, userID, userRole, calendarID string) (*models.CalendarResponse, error) {
+// ownedCalendar loads a calendar and checks that the caller owns it or is an admin.
+func (s *CalendarService) ownedCalendar(ctx context.Context, userID, userRole, calendarID string) (*models.Calendar, error) {
 	id, err := uuid.Parse(calendarID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid calendar id: %w", err)
@@ -441,9 +339,18 @@ func (s *CalendarService) GetCalendar(ctx context.Context, userID, userRole, cal
 		return nil, err
 	}
 
-	// Check ownership or admin role
 	if calendar.OwnerID.String() != userID && userRole != "admin" {
 		return nil, ErrUnauthorized
+	}
+
+	return calendar, nil
+}
+
+// GetCalendar retrieves a calendar by ID (requires ownership or admin role)
+func (s *CalendarService) GetCalendar(ctx context.Context, userID, userRole, calendarID string) (*models.CalendarResponse, error) {
+	calendar, err := s.ownedCalendar(ctx, userID, userRole, calendarID)
+	if err != nil {
+		return nil, err
 	}
 
 	// Get participants
@@ -487,22 +394,9 @@ func (s *CalendarService) ListMyCalendars(ctx context.Context, userID string) ([
 
 // UpdateCalendar updates a calendar (requires ownership or admin role)
 func (s *CalendarService) UpdateCalendar(ctx context.Context, userID, userRole, calendarID string, req *models.UpdateCalendarRequest) (*models.CalendarResponse, error) {
-	id, err := uuid.Parse(calendarID)
+	calendar, err := s.ownedCalendar(ctx, userID, userRole, calendarID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid calendar id: %w", err)
-	}
-
-	calendar, err := s.calendarRepo.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, repository.ErrCalendarNotFound) {
-			return nil, ErrCalendarNotFound
-		}
 		return nil, err
-	}
-
-	// Check ownership or admin role
-	if calendar.OwnerID.String() != userID && userRole != "admin" {
-		return nil, ErrUnauthorized
 	}
 
 	// Update fields if provided
@@ -651,8 +545,7 @@ func (s *CalendarService) UpdateCalendar(ctx context.Context, userID, userRole, 
 	calendar = updated
 
 	// Invalidate the public calendar cache
-	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-	_ = s.cache.Delete(ctx, cacheKey)
+	_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 
 	// Get participants
 	participants, err := s.participantRepo.GetByCalendarID(ctx, calendar.ID)
@@ -665,29 +558,15 @@ func (s *CalendarService) UpdateCalendar(ctx context.Context, userID, userRole, 
 
 // DeleteCalendar deletes a calendar (requires ownership or admin role)
 func (s *CalendarService) DeleteCalendar(ctx context.Context, userID, userRole, calendarID string) error {
-	id, err := uuid.Parse(calendarID)
+	calendar, err := s.ownedCalendar(ctx, userID, userRole, calendarID)
 	if err != nil {
-		return fmt.Errorf("invalid calendar id: %w", err)
-	}
-
-	calendar, err := s.calendarRepo.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, repository.ErrCalendarNotFound) {
-			return ErrCalendarNotFound
-		}
 		return err
 	}
 
-	// Check ownership or admin role
-	if calendar.OwnerID.String() != userID && userRole != "admin" {
-		return ErrUnauthorized
-	}
-
 	// Invalidate the public calendar cache before deletion
-	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-	_ = s.cache.Delete(ctx, cacheKey)
+	_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 
-	return s.calendarRepo.Delete(ctx, id)
+	return s.calendarRepo.Delete(ctx, calendar.ID)
 }
 
 // RegenerateToken regenerates a token (public or ics)
@@ -696,38 +575,21 @@ func (s *CalendarService) RegenerateToken(ctx context.Context, userID, userRole,
 		return nil, ErrInvalidTokenType
 	}
 
-	id, err := uuid.Parse(calendarID)
+	calendar, err := s.ownedCalendar(ctx, userID, userRole, calendarID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid calendar id: %w", err)
-	}
-
-	calendar, err := s.calendarRepo.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, repository.ErrCalendarNotFound) {
-			return nil, ErrCalendarNotFound
-		}
 		return nil, err
-	}
-
-	// Check ownership or admin role
-	if calendar.OwnerID.String() != userID && userRole != "admin" {
-		return nil, ErrUnauthorized
 	}
 
 	// If regenerating public token, invalidate the old cache first
 	if tokenType == "public" {
-		oldCacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-		_ = s.cache.Delete(ctx, oldCacheKey)
+		_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 	}
 
 	// Generate new token
-	newToken, err := generateToken()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate token: %w", err)
-	}
+	newToken := randomHex(32)
 
 	// Update the appropriate token
-	if err := s.calendarRepo.RegenerateToken(ctx, id, tokenType, newToken); err != nil {
+	if err := s.calendarRepo.RegenerateToken(ctx, calendar.ID, tokenType, newToken); err != nil {
 		return nil, err
 	}
 
@@ -749,26 +611,13 @@ func (s *CalendarService) RegenerateToken(ctx context.Context, userID, userRole,
 
 // AddParticipant adds a participant to a calendar
 func (s *CalendarService) AddParticipant(ctx context.Context, userID, userRole, calendarID string, req *models.AddParticipantRequest) (*models.Participant, error) {
-	id, err := uuid.Parse(calendarID)
+	calendar, err := s.ownedCalendar(ctx, userID, userRole, calendarID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid calendar id: %w", err)
-	}
-
-	calendar, err := s.calendarRepo.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, repository.ErrCalendarNotFound) {
-			return nil, ErrCalendarNotFound
-		}
 		return nil, err
 	}
 
-	// Check ownership or admin role
-	if calendar.OwnerID.String() != userID && userRole != "admin" {
-		return nil, ErrUnauthorized
-	}
-
 	participant := &models.Participant{
-		CalendarID: id,
+		CalendarID: calendar.ID,
 		Name:       req.Name,
 	}
 	participant.ID = uuid.New()
@@ -781,8 +630,7 @@ func (s *CalendarService) AddParticipant(ctx context.Context, userID, userRole, 
 	}
 
 	// Invalidate the public calendar cache since participants list changed
-	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-	_ = s.cache.Delete(ctx, cacheKey)
+	_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 
 	return participant, nil
 }
@@ -816,30 +664,16 @@ func (s *CalendarService) AddAnonymousParticipant(ctx context.Context, publicTok
 	}
 
 	// Invalidate the public calendar cache since participants list changed
-	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-	_ = s.cache.Delete(ctx, cacheKey)
+	_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 
 	return participant, nil
 }
 
 // UpdateParticipant updates a participant's name
 func (s *CalendarService) UpdateParticipant(ctx context.Context, userID, userRole, calendarID, participantID string, req *models.UpdateParticipantRequest) (*models.Participant, error) {
-	calID, err := uuid.Parse(calendarID)
+	calendar, err := s.ownedCalendar(ctx, userID, userRole, calendarID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid calendar id: %w", err)
-	}
-
-	calendar, err := s.calendarRepo.GetByID(ctx, calID)
-	if err != nil {
-		if errors.Is(err, repository.ErrCalendarNotFound) {
-			return nil, ErrCalendarNotFound
-		}
 		return nil, err
-	}
-
-	// Check ownership or admin role
-	if calendar.OwnerID.String() != userID && userRole != "admin" {
-		return nil, ErrUnauthorized
 	}
 
 	partID, err := uuid.Parse(participantID)
@@ -856,7 +690,7 @@ func (s *CalendarService) UpdateParticipant(ctx context.Context, userID, userRol
 		return nil, err
 	}
 
-	if participant.CalendarID != calID {
+	if participant.CalendarID != calendar.ID {
 		return nil, ErrParticipantNotFound
 	}
 
@@ -869,8 +703,7 @@ func (s *CalendarService) UpdateParticipant(ctx context.Context, userID, userRol
 	}
 
 	// Invalidate the public calendar cache since participants list changed
-	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-	_ = s.cache.Delete(ctx, cacheKey)
+	_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 
 	// Get updated participant
 	participant, err = s.participantRepo.GetByID(ctx, partID)
@@ -883,22 +716,9 @@ func (s *CalendarService) UpdateParticipant(ctx context.Context, userID, userRol
 
 // RemoveParticipant removes a participant from a calendar
 func (s *CalendarService) RemoveParticipant(ctx context.Context, userID, userRole, calendarID, participantID string) error {
-	calID, err := uuid.Parse(calendarID)
+	calendar, err := s.ownedCalendar(ctx, userID, userRole, calendarID)
 	if err != nil {
-		return fmt.Errorf("invalid calendar id: %w", err)
-	}
-
-	calendar, err := s.calendarRepo.GetByID(ctx, calID)
-	if err != nil {
-		if errors.Is(err, repository.ErrCalendarNotFound) {
-			return ErrCalendarNotFound
-		}
 		return err
-	}
-
-	// Check ownership or admin role
-	if calendar.OwnerID.String() != userID && userRole != "admin" {
-		return ErrUnauthorized
 	}
 
 	partID, err := uuid.Parse(participantID)
@@ -915,7 +735,7 @@ func (s *CalendarService) RemoveParticipant(ctx context.Context, userID, userRol
 		return err
 	}
 
-	if participant.CalendarID != calID {
+	if participant.CalendarID != calendar.ID {
 		return ErrParticipantNotFound
 	}
 
@@ -924,7 +744,7 @@ func (s *CalendarService) RemoveParticipant(ctx context.Context, userID, userRol
 	}
 
 	// Count remaining participants
-	remainingParticipants, err := s.participantRepo.GetByCalendarID(ctx, calID)
+	remainingParticipants, err := s.participantRepo.GetByCalendarID(ctx, calendar.ID)
 	if err != nil {
 		return fmt.Errorf("failed to count remaining participants: %w", err)
 	}
@@ -939,8 +759,7 @@ func (s *CalendarService) RemoveParticipant(ctx context.Context, userID, userRol
 	}
 
 	// Invalidate the public calendar cache since participants list changed
-	cacheKey := cache.CalendarByPublicTokenKey(calendar.PublicToken)
-	_ = s.cache.Delete(ctx, cacheKey)
+	_ = s.cache.Delete(ctx, cache.CalendarByPublicTokenKey(calendar.PublicToken))
 
 	return nil
 }
@@ -981,11 +800,10 @@ func (s *CalendarService) GetPublicCalendar(ctx context.Context, token, particip
 	return response, nil
 }
 
-// generateToken generates a random 64-character hex token
-func generateToken() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
+// randomHex returns n cryptographically random bytes, hex-encoded.
+func randomHex(n int) string {
+	b := make([]byte, n)
+	// Since Go 1.24 rand.Read never returns an error: it crashes the program instead.
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }

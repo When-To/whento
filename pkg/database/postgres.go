@@ -82,13 +82,6 @@ func NewPool(ctx context.Context, cfg *Config) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// Close closes the database pool
-func Close(pool *pgxpool.Pool) {
-	if pool != nil {
-		pool.Close()
-	}
-}
-
 // PoolStatsFunc adapts a pgx pool to the snapshot function metrics.RegisterPool
 // expects. The snapshot is taken when the function is called — at scrape time —
 // not when this is wired up.

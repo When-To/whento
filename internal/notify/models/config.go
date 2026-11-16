@@ -4,6 +4,28 @@
 
 package models
 
+import "encoding/json"
+
+// ParseNotifyConfig decodes a calendar's stored notify_config. A missing or
+// empty value is the zero config: notifications off.
+func ParseNotifyConfig(raw *string) (NotifyConfig, error) {
+	var cfg NotifyConfig
+	if raw == nil || *raw == "" {
+		return cfg, nil
+	}
+	err := json.Unmarshal([]byte(*raw), &cfg)
+	return cfg, err
+}
+
+// ParticipantEmailOn reports whether the owner opened participant e-mail:
+// notifications, participant delivery and the email channel all switched on.
+// A config that does not parse counts as closed, so corruption never opens a
+// channel the owner did not open.
+func ParticipantEmailOn(raw *string) bool {
+	cfg, err := ParseNotifyConfig(raw)
+	return err == nil && cfg.Enabled && cfg.NotifyParticipants && cfg.Channels.Email.Enabled
+}
+
 // NotifyConfig represents the notification configuration for a calendar
 type NotifyConfig struct {
 	Enabled            bool           `json:"enabled"`

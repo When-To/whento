@@ -1,95 +1,98 @@
 #!/bin/bash
+# WhenTo - Collaborative event calendar for self-hosted environments
+# Copyright (C) 2025 WhenTo Contributors
+# SPDX-License-Identifier: BSL-1.1
 
-# init-db.sh - Initialize database for WhenTo (first time setup)
-# Usage: ./scripts/init-db.sh
+# init-db.sh - Initialize a database by applying pending migrations (non-destructive).
+#
+# Usage: ./scripts/init-db.sh [--build-type selfhosted|cloud] [--reset] [--yes --confirm-database <name>]
+#
+# Normal run: resolves ONE canonical DATABASE_URL, connects, and applies pending
+# migrations with `up`. Tables existing does NOT trigger a reset — an initialized
+# database is a normal upgrade case and an empty schema is a normal first-run
+# case. A genuine reset is only ever performed through `--reset`, which delegates
+# to the guarded reset in scripts/migrate.sh (explicit consent required; never
+# silently chosen because tables exist).
 
-set -e
+set -euo pipefail
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Load environment variables from .env if it exists
-if [ -f .env ]; then
-    export $(cat .env | grep -v '^#' | xargs)
-fi
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/migration-common.sh" || exit $?
 
-# Default database connection parameters
-DB_HOST="${DB_HOST:-postgres}"
-DB_PORT="${DB_PORT:-5432}"
-DB_NAME="${DB_NAME:-whento}"
-DB_USER="${DB_USER:-whento}"
-DB_PASSWORD="${DB_PASSWORD:-whento}"
+BUILD_TYPE="${BUILD_TYPE:-selfhosted}"
+RESET=0
+EXTRA_ARGS=()
 
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  WhenTo - Database Initialization${NC}"
-echo -e "${BLUE}========================================${NC}"
-echo ""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --build-type)
+            if [ $# -lt 2 ]; then
+                echo 'error: --build-type needs a value' >&2
+                exit 2
+            fi
+            BUILD_TYPE="$2"
+            shift 2
+            ;;
+        --reset)
+            RESET=1
+            shift
+            ;;
+        --yes)
+            EXTRA_ARGS+=(--yes)
+            shift
+            ;;
+        --confirm-database)
+            if [ $# -lt 2 ]; then
+                echo 'error: --confirm-database needs a value' >&2
+                exit 2
+            fi
+            EXTRA_ARGS+=(--confirm-database "$2")
+            shift 2
+            ;;
+        --confirm-database=*)
+            EXTRA_ARGS+=("$1")
+            shift
+            ;;
+        -h | --help)
+            echo "Usage: $0 [--build-type selfhosted|cloud] [--reset] [--yes --confirm-database <name>]"
+            echo ""
+            echo "Applies pending migrations to the connected database. Never resets by default."
+            echo "--reset delegates to the guarded reset (explicit consent required)."
+            exit 0
+            ;;
+        *)
+            echo "error: unknown option '$1'" >&2
+            exit 2
+            ;;
+    esac
+done
 
-# Check if we're in devcontainer
-if [ -n "$DEVCONTAINER" ]; then
-    echo -e "${GREEN}✓ Running in DevContainer${NC}"
-fi
+migration_resolve_database_url
 
-# Check PostgreSQL connection
-echo -e "${YELLOW}Checking PostgreSQL connection...${NC}"
-if ! PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c '\q' 2>/dev/null; then
-    echo -e "${RED}Error: Cannot connect to PostgreSQL${NC}"
-    echo "Connection details:"
-    echo "  Host: $DB_HOST"
-    echo "  Port: $DB_PORT"
-    echo "  Database: $DB_NAME"
-    echo "  User: $DB_USER"
-    echo ""
-    echo "Make sure PostgreSQL is running:"
-    echo "  docker compose -f docker-compose.dev.yml up -d postgres"
+# Confirm we can reach the database before doing anything (read-only).
+identity="$(migration_connected_identity)"
+if [ "$identity" = "unknown" ]; then
+    echo "error: cannot connect to the database (DATABASE_URL is redacted: $(migration_redact_url "$MIGRATION_DATABASE_URL"))" >&2
     exit 1
 fi
 
-echo -e "${GREEN}✓ Connected to PostgreSQL${NC}"
-echo ""
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-# Check if database is already initialized
-echo -e "${YELLOW}Checking if database is initialized...${NC}"
-TABLE_COUNT=$(PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" 2>/dev/null | xargs)
+echo -e "${GREEN}Connected to PostgreSQL: $identity${NC}"
 
-if [ "$TABLE_COUNT" -gt 0 ]; then
-    echo -e "${YELLOW}Warning: Database already has $TABLE_COUNT table(s)${NC}"
-    read -p "Do you want to reset the database? This will delete all data! (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "${YELLOW}Aborted. Database unchanged.${NC}"
-        exit 0
-    fi
-    echo -e "${YELLOW}Resetting database...${NC}"
+# --reset delegates to the guarded reset wrapper: consent is always required.
+if [ "$RESET" = "1" ]; then
+    # shellcheck disable=SC2086
+    bash "$SCRIPT_DIR/migrate.sh" --build-type "$BUILD_TYPE" ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} reset
+    exit 0
 fi
 
-# Run migrations
-echo -e "${GREEN}Running database migrations...${NC}"
-export DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable"
+echo -e "${YELLOW}Applying pending migrations (up) — existing data is preserved.${NC}"
+bash "$SCRIPT_DIR/migrate.sh" --build-type "$BUILD_TYPE" up
 
-if [ -x ./scripts/migrate.sh ]; then
-    ./scripts/migrate.sh reset
-else
-    echo -e "${YELLOW}migrate.sh not found or not executable, using migrate directly...${NC}"
-    migrate -path ./migrations -database "$DATABASE_URL" up
-fi
-
-echo ""
-
-# Show created tables
-echo -e "${GREEN}Database tables created:${NC}"
-PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;"
-
-echo ""
-echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  ✓ Database initialization complete!${NC}"
-echo -e "${GREEN}========================================${NC}"
-echo ""
-echo "Next steps:"
-echo "  1. Generate JWT keys: ./scripts/generate-keys.sh"
-echo "  2. Start services: make dev-auth"
-echo ""
+echo -e "${GREEN}✓ Migrations applied. Database tables:${NC}"
+psql "$MIGRATION_DATABASE_URL" -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;"

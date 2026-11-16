@@ -83,9 +83,8 @@ import { useConfirm } from '@/composables/useConfirm';
 import { useFocusTrap } from '@/composables/useFocusTrap';
 
 const { t } = useI18n();
-const { pending, resolveConfirm } = useConfirm();
+const { pending: request, resolveConfirm } = useConfirm();
 
-const request = computed(() => pending.value);
 const isDanger = computed(() => (request.value?.options.tone ?? 'danger') === 'danger');
 
 const titleId = useId();

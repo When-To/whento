@@ -49,6 +49,8 @@ env:
   # different binary from the one that applies them in production.
   MIGRATE_VERSION: v4.19.1
   # sha256 of migrate.linux-amd64.tar.gz, from the release's own sha256sum.txt.
+  # Keep version/checksum aligned with scripts/migrate.sh and its installer
+  # assertions in scripts/test-migrations.sh when updating the release.
   MIGRATE_SHA256: 2ac648fbd1b127b69ab5a7b33cf96212178f71e22379fc50573630c6f4c7ce18
 
 jobs:
@@ -130,14 +132,8 @@ jobs:
           done
           echo "✓ All Compose files are valid"
 
-      - name: Check bootstrap settings reach the backend
-        run: python3 scripts/check-bootstrap-compose.py
-
-      - name: Check reminder settings reach the backend
-        run: python3 scripts/check-reminder-compose.py
-
-      - name: Check holiday fallback is opt-in and reaches the backend
-        run: python3 scripts/check-holiday-compose.py
+      - name: Check bootstrap, reminder and holiday settings reach only the backend
+        run: python3 scripts/check-compose-env.py
 
   # `make format-check` existed but was never called anywhere: Go formatting was enforced
   # only by the opt-in .githooks/pre-commit, which `git commit --no-verify` walks past.
@@ -404,6 +400,14 @@ jobs:
           DATABASE_URL: postgres://test:test@localhost:5432/whento_test?sslmode=disable
         run: make migrate-up BUILD_TYPE=selfhosted
 
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Migration wrapper and both-variant upgrade acceptance
+        env:
+          DISPOSABLE_DB_URL: postgres://test:test@localhost:5432/whento_test?sslmode=disable
+        run: bash scripts/test-migrations.sh
+
       - name: Run tests with coverage
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/whento_test?sslmode=disable
@@ -509,7 +513,7 @@ jobs:
     # Two health waits of 60 x 2s, plus install and build. Without this the job's ceiling
     # was the six-hour default.
     timeout-minutes: 30
-    needs: [generate-swagger]
+    needs: [generate-swagger, build-frontend]
     services:
       postgres:
         image: postgres:16
@@ -539,6 +543,9 @@ jobs:
       REDIS_URL: redis://localhost:6379
       # Synthetic operator key shared by the fresh backend and its E2E seeder.
       BOOTSTRAP_KEY: ci-only-bootstrap-key-not-for-production
+      APP_URL: http://127.0.0.1:8080
+      WHENTO_ROTATION_BASE_URL: http://127.0.0.1:5174
+      WHENTO_ROTATION_API: http://127.0.0.1:5174/api/v1
       # The limiter allows 3 registrations and 60 availability writes per minute per IP.
       # A suite driving a real calendar from one address is exactly the traffic it exists
       # to refuse, so it is turned off for the run rather than paced around.
@@ -592,21 +599,24 @@ jobs:
       # nothing creates them and the server exits on "failed to load private key".
       # The same script is used here, so there is one source of truth.
       #
-      # A fresh pair per run is correct: pkg/participanttoken seeds its HMAC from this
-      # key, and no token outlives the job.
+      # A fresh pair per run is correct: no JWT outlives the job.
       - name: Generate JWT keys
         run: ./scripts/generate-keys.sh
+
+      - name: Download frontend build for the rotation backend
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: frontend-dist
+          path: web/dist
 
       # Built as its own step rather than left to `go run` in the background, so a
       # compile or link failure reports itself instead of surfacing later as "the
       # backend did not become healthy".
       #
-      # ensure-dist-placeholder must come first: web/embed.go resolves its //go:embed
-      # at compile time and will not build against an empty web/dist. The browser
-      # tests are served by Vite, so a placeholder is all this needs.
+      # Embed the real build: the normal suite uses Vite, while the separate
+      # short-TTL backend serves its own production frontend on port 5174.
       - name: Build backend
         run: |
-          make ensure-dist-placeholder
           go build -tags selfhosted -o /tmp/whento ./cmd/
 
       # Both servers are started detached with nohup, and each step waits for its own
@@ -632,6 +642,24 @@ jobs:
           done
           echo "backend did not become healthy; log follows"
           cat /tmp/backend.log
+          exit 1
+
+      - name: Start short-TTL rotation backend
+        run: |
+          PORT=5174 JWT_ACCESS_EXPIRY=2m APP_URL=http://127.0.0.1:5174 \
+            nohup /tmp/whento > /tmp/rotation-backend.log 2>&1 &
+          echo $! > /tmp/rotation-backend.pid
+          for _ in $(seq 1 60); do
+            if ! kill -0 "$(cat /tmp/rotation-backend.pid)" 2>/dev/null; then
+              cat /tmp/rotation-backend.log
+              exit 1
+            fi
+            if curl -sf http://127.0.0.1:5174/api/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/rotation-backend.log
           exit 1
 
       - name: Start frontend
@@ -664,6 +692,16 @@ jobs:
         run: |
           echo "===== backend ====="; tail -100 /tmp/backend.log || true
           echo "===== frontend ====="; tail -50 /tmp/frontend.log || true
+          echo "===== rotation backend ====="; tail -100 /tmp/rotation-backend.log || true
+
+      - name: Stop E2E servers
+        if: always()
+        run: |
+          for file in /tmp/backend.pid /tmp/rotation-backend.pid /tmp/frontend.pid; do
+            if [ -f "$file" ]; then
+              kill "$(cat "$file")" 2>/dev/null || true
+            fi
+          done
 
       - name: Upload failure artefacts
         if: failure()
@@ -713,7 +751,7 @@ jobs:
         # Fork PRs get a read-only token. Keep their build/scans below, but
         # publish only on the trusted events that can actually write packages.
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -757,6 +795,7 @@ jobs:
           build-args: |
             VERSION=${{ github.event_name == 'pull_request' && format('PR{0}', github.event.pull_request.number) || 'dev' }}
           cache-from: type=gha
+          no-cache-filters: runtime
           cache-to: type=gha,mode=max
 
       # ignore-unfixed, because an advisory with no fixed version available is not
@@ -811,4 +850,5 @@ jobs:
           build-args: |
             VERSION=${{ github.event_name == 'pull_request' && format('PR{0}', github.event.pull_request.number) || 'dev' }}
           cache-from: type=gha
+          no-cache-filters: runtime
           cache-to: type=gha,mode=max

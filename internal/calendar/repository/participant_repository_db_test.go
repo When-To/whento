@@ -264,35 +264,6 @@ func TestExpiredParticipantTokenDoesNotResolve(t *testing.T) {
 	}
 }
 
-// TestSetEmailAsVerified is the owner shortcut: the account holder's own address is
-// already proven, so their participant row skips the e-mail round trip.
-func TestSetEmailAsVerified(t *testing.T) {
-	pool := dbtest.Pool(t)
-	repo := repository.NewParticipantRepository(pool)
-	ctx := dbtest.Context(t)
-
-	calendar := seedCalendar(t, pool)
-	participant := newParticipant(calendar.ID, "Owner")
-	if err := repo.Create(ctx, participant); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-
-	if err := repo.SetEmailAsVerified(ctx, participant.ID, "owner@example.test"); err != nil {
-		t.Fatalf("SetEmailAsVerified: %v", err)
-	}
-
-	got, err := repo.GetByID(ctx, participant.ID)
-	if err != nil {
-		t.Fatalf("GetByID: %v", err)
-	}
-	if got.Email == nil || *got.Email != "owner@example.test" {
-		t.Errorf("Email = %v", got.Email)
-	}
-	if !got.EmailVerified {
-		t.Error("the address was not marked verified")
-	}
-}
-
 func TestGetVerifiedParticipantsByCalendar(t *testing.T) {
 	pool := dbtest.Pool(t)
 	repo := repository.NewParticipantRepository(pool)
@@ -304,8 +275,13 @@ func TestGetVerifiedParticipantsByCalendar(t *testing.T) {
 	if err := repo.Create(ctx, verified); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if err := repo.SetEmailAsVerified(ctx, verified.ID, "verified@example.test"); err != nil {
-		t.Fatalf("SetEmailAsVerified: %v", err)
+	if err := repo.SetEmailVerificationToken(
+		ctx, verified.ID, "verified@example.test", uuid.NewString(), time.Now().Add(time.Hour),
+	); err != nil {
+		t.Fatalf("SetEmailVerificationToken: %v", err)
+	}
+	if err := repo.VerifyEmail(ctx, verified.ID); err != nil {
+		t.Fatalf("VerifyEmail: %v", err)
 	}
 
 	// One with an address that was never confirmed, and one with no address at all.

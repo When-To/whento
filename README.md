@@ -329,6 +329,8 @@ EMAIL_VERIFICATION_ENABLED=true   # Default: false
 # PASSWORD_RESET_EXPIRY=1h
 # MAGIC_LINK_EXPIRY=1h
 ALLOWED_REGISTER=true             # Default: true
+# BOOTSTRAP_KEY=                  # Pins the first-admin setup key (16–256 chars, 32+ in production); see First Account
+# BOOTSTRAP_KEY_FILE=             # Same, read from a mounted secret file; mutually exclusive with BOOTSTRAP_KEY
 ALLOWED_EMAILS=*                  # Comma-separated patterns (e.g., *@company.com). Default: * (all)
 
 # Rate Limiting
@@ -344,12 +346,9 @@ TRUSTED_PROXIES=                              # Comma-separated trusted reverse 
 # WEBAUTHN_RP_NAME=WhenTo
 # WEBAUTHN_RP_ID=your-domain.com
 # WEBAUTHN_RP_ORIGIN=https://your-domain.com
-# WEBAUTHN_TIMEOUT=60s
 
 # TOTP / 2FA (optional)
 # TOTP_ISSUER=WhenTo
-# TOTP_PERIOD=30
-# TOTP_DIGITS=6
 ```
 
 The two build variants read the same environment. There is nothing to configure that is
@@ -402,9 +401,14 @@ known holiday data. No holiday lookup HTTP endpoints are exposed. See
 Calendar owners enable reminders in notification settings and choose a lead time
 of 1–168 hours before the event date's midnight in the calendar's timezone.
 Only dates meeting the availability threshold qualify. Migration 020 persists
-delivery jobs, so pending work survives restarts; fresh/re-enabled work is only
-issued within the configured catch-up window. Pending retries stop when the
-event's local day begins or its current settings/availability no longer qualify.
+delivery jobs, so pending work survives restarts. A send time that passed while
+the scheduler was down is only caught up within the configured catch-up window;
+a date that reaches its threshold after a send time the scheduler saw pass
+(someone joins the day before) is reminded at once, as long as the event is
+still ahead, even if the server restarted in between. Pending retries stop when the event's local day begins or its
+current settings/availability no longer qualify. Reminders were stored but never
+sent before v3.0.0, so calendars that already had them enabled start sending
+after the upgrade.
 
 Each external send renews its claim and has a deadline shorter than its lease;
 participant fanout renews per recipient. Delivery is **at least once**, not exactly

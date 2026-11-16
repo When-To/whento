@@ -388,6 +388,10 @@ func TestGetCountryFromTimezone(t *testing.T) {
 		{name: "united states", timezone: "America/New_York", want: "US"},
 		{name: "united kingdom", timezone: "Europe/London", want: "GB"},
 		{name: "japan", timezone: "Asia/Tokyo", want: "JP"},
+		// tzdata 2022 links these to Europe/Berlin; they must keep their own country (#206).
+		{name: "denmark", timezone: "Europe/Copenhagen", want: "DK"},
+		{name: "norway", timezone: "Europe/Oslo", want: "NO"},
+		{name: "sweden", timezone: "Europe/Stockholm", want: "SE"},
 		{name: "UTC has no country", timezone: "UTC", want: ""},
 		{name: "empty", timezone: "", want: ""},
 		{name: "unknown zone", timezone: "Mars/Olympus_Mons", want: ""},

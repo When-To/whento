@@ -6,24 +6,20 @@ package datevalidation
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/go-playground/tz"
 )
 
-// isHolidayErr is the error-aware holiday check: it distinguishes "this date is
-// not a public holiday; data present" (false, nil) from "no holiday data could
-// be obtained for this country" (false, err). The offline table answers for the
-// bundled countries; everything else uses the opt-in Nager fallback with
-// its bounded cache. Callers decide what a missing dataset means for their
-// policy; the lookup itself never lies.
-func isHolidayErr(date time.Time, countryCode string) (bool, error) {
-	return isHolidayErrCtx(context.Background(), date, countryCode)
-}
-
-// isHolidayErrCtx is the context-aware form of isHolidayErr. The context only
-// reaches the network fallback; the offline table never touches it.
+// isHolidayErrCtx is the error-aware holiday check: it distinguishes "this date
+// is not a public holiday; data present" (false, nil) from "no holiday data
+// could be obtained for this country" (false, err). The offline table answers
+// for the bundled countries; everything else uses the opt-in Nager fallback
+// with its bounded cache. Callers decide what a missing dataset means for their
+// policy; the lookup itself never lies. The context only reaches the network
+// fallback; the offline table never touches it.
 func isHolidayErrCtx(ctx context.Context, date time.Time, countryCode string) (bool, error) {
 	cc := strings.ToUpper(strings.TrimSpace(countryCode))
 	if cc == "" {
@@ -32,19 +28,11 @@ func isHolidayErrCtx(ctx context.Context, date time.Time, countryCode string) (b
 	if isOfflineCountry(cc) {
 		return offlineIsHoliday(date, cc)
 	}
-	holidays, coverage, err := holidaysForYear(ctx, cc, date.Year())
+	holidays, err := defaultNager.fetch(ctx, cc, date.Year())
 	if err != nil {
 		return false, err
 	}
-	if coverage != CoverageFallback {
-		return false, errHolidayUnavailable
-	}
-	for _, h := range holidays {
-		if sameDate(h.Date, date) {
-			return true, nil
-		}
-	}
-	return false, nil
+	return slices.ContainsFunc(holidays, func(h time.Time) bool { return sameDate(h, date) }), nil
 }
 
 // IsDateAllowed checks if a date is allowed for availability based on calendar settings
@@ -61,24 +49,16 @@ func isHolidayErrCtx(ctx context.Context, date time.Time, countryCode string) (b
 // neither the offline table nor the fallback could say whether the day is a
 // holiday, the ordinary weekday decision applies — an eligible Wednesday is
 // admitted rather than refused on a guess. A day that IS a known holiday is
-// still refused. Unavailability is surfaced through the error-aware API
-// (IsDateAllowedContext's sibling entry points) instead of
-// being collapsed into a refusal here.
+// still refused. Unavailability is surfaced through the error-aware lookup
+// instead of being collapsed into a refusal here.
 func IsDateAllowed(date time.Time, timezone string, allowedWeekdays []int, holidaysPolicy string, allowHolidayEves bool) bool {
-	return IsDateAllowedContext(context.Background(), date, timezone, allowedWeekdays, holidaysPolicy, allowHolidayEves)
-}
-
-// IsDateAllowedContext is IsDateAllowed with a context that reaches the network
-// holiday fallback. The offline table
-// is unaffected by it, and the decision is otherwise identical.
-func IsDateAllowedContext(ctx context.Context, date time.Time, timezone string, allowedWeekdays []int, holidaysPolicy string, allowHolidayEves bool) bool {
 	// Get country code from timezone for holiday checking.
 	countryCode := GetCountryFromTimezone(timezone)
 	// The lookup error is deliberately discarded here: under the block policy it
 	// means "the providers could not classify the day", which fails open to the
 	// weekday decision below. Unavailability reaches callers through the
-	// error-aware holidaysForYear API instead.
-	isHolidayDate, _ := isHolidayErrCtx(ctx, date, countryCode)
+	// error-aware isHolidayErrCtx instead.
+	isHolidayDate := IsHoliday(date, countryCode)
 
 	// Apply holidays_policy.
 	switch holidaysPolicy {
@@ -101,36 +81,19 @@ func IsDateAllowedContext(ctx context.Context, date time.Time, timezone string, 
 
 	// Check if the weekday is in the allowed list.
 	weekday := int(date.Weekday())
-	if isWeekdayAllowed(weekday, allowedWeekdays) {
+	if IsWeekdayAllowed(weekday, allowedWeekdays) {
 		return true
 	}
 
 	// If weekday is not allowed, check holiday eve exception. An eve is only
 	// ever an *addition*, so a failed eve lookup is safe to treat as "not an
 	// eve": it can cost a day, never admit a blocked one.
-	if countryCode != "" && allowHolidayEves {
-		nextDay := date.AddDate(0, 0, 1)
-		if isEve, err := isHolidayErrCtx(ctx, nextDay, countryCode); err == nil && isEve {
-			return true
-		}
-	}
-
-	return false
+	return countryCode != "" && allowHolidayEves && IsHolidayEve(date, countryCode)
 }
 
 // IsWeekdayAllowed checks if a weekday is in the list of allowed weekdays
 func IsWeekdayAllowed(weekday int, allowedWeekdays []int) bool {
-	for _, allowed := range allowedWeekdays {
-		if allowed == weekday {
-			return true
-		}
-	}
-	return false
-}
-
-// isWeekdayAllowed is a private alias for backward compatibility
-func isWeekdayAllowed(weekday int, allowedWeekdays []int) bool {
-	return IsWeekdayAllowed(weekday, allowedWeekdays)
+	return slices.Contains(allowedWeekdays, weekday)
 }
 
 // GetCountryFromTimezone converts a timezone to a country code
@@ -157,7 +120,7 @@ func GetCountryFromTimezone(timezone string) string {
 // country without usable data reads as "not a holiday" here. Do not use it for
 // the "block" policy; IsDateAllowed handles that one.
 func IsHoliday(date time.Time, countryCode string) bool {
-	isHolidayDate, _ := isHolidayErr(date, countryCode)
+	isHolidayDate, _ := isHolidayErrCtx(context.Background(), date, countryCode)
 	return isHolidayDate
 }
 

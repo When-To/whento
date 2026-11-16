@@ -7,11 +7,155 @@ package database
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
+
+func TestCircuitBreakerCallerErrorsDoNotChangeSharedHealth(t *testing.T) {
+	for _, pipeline := range []bool{false, true} {
+		for _, halfOpen := range []bool{false, true} {
+			for _, operationError := range []error{context.Canceled, fmt.Errorf("operation: %w", context.Canceled)} {
+				t.Run(fmt.Sprintf("pipeline=%t/half-open=%t/error=%v", pipeline, halfOpen, operationError), func(t *testing.T) {
+					h := newCircuitBreakerHook(time.Hour)
+					if halfOpen {
+						h.openedAt.Store(time.Now().Add(-time.Hour).UnixNano())
+					}
+					before := h.openedAt.Load()
+					cmd := redis.NewStatusCmd(context.Background(), "PING")
+					var err error
+					if pipeline {
+						err = h.ProcessPipelineHook(func(_ context.Context, _ []redis.Cmder) error {
+							return operationError
+						})(context.Background(), []redis.Cmder{cmd})
+					} else {
+						err = h.ProcessHook(func(_ context.Context, _ redis.Cmder) error {
+							return operationError
+						})(context.Background(), cmd)
+					}
+					if !errors.Is(err, context.Canceled) || h.openedAt.Load() != before {
+						t.Fatalf("caller error changed shared health: err=%v before=%d after=%d", err, before, h.openedAt.Load())
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestCircuitBreakerExpiredCallerDoesNotRunOrChangeSharedHealth(t *testing.T) {
+	for _, pipeline := range []bool{false, true} {
+		for _, open := range []bool{false, true} {
+			for _, cancelled := range []bool{false, true} {
+				t.Run(fmt.Sprintf("pipeline=%t/open=%t/cancelled=%t", pipeline, open, cancelled), func(t *testing.T) {
+					ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+					if cancelled {
+						cancel()
+						ctx, cancel = context.WithCancel(context.Background())
+						cancel()
+					}
+					defer cancel()
+					h := newCircuitBreakerHook(time.Hour)
+					if open {
+						h.openedAt.Store(time.Now().Add(time.Hour).UnixNano())
+					}
+					before := h.openedAt.Load()
+					cmd := redis.NewStatusCmd(ctx, "PING")
+					var err error
+					if pipeline {
+						err = h.ProcessPipelineHook(func(_ context.Context, _ []redis.Cmder) error {
+							t.Fatal("expired caller reached Redis")
+							return nil
+						})(ctx, []redis.Cmder{cmd})
+					} else {
+						err = h.ProcessHook(func(_ context.Context, _ redis.Cmder) error {
+							t.Fatal("expired caller reached Redis")
+							return nil
+						})(ctx, cmd)
+					}
+					if !errors.Is(err, ctx.Err()) || !errors.Is(cmd.Err(), ctx.Err()) || h.openedAt.Load() != before {
+						t.Fatalf("expired caller changed shared health or lost its error: err=%v cmd=%v", err, cmd.Err())
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestCircuitBreakerCallerDeadlineDuringOperationDoesNotChangeSharedHealth(t *testing.T) {
+	for _, pipeline := range []bool{false, true} {
+		t.Run(fmt.Sprintf("pipeline=%t", pipeline), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+			defer cancel()
+			h := newCircuitBreakerHook(time.Hour)
+			before := time.Now().Add(-time.Hour).UnixNano()
+			h.openedAt.Store(before)
+			cmd := redis.NewStatusCmd(ctx, "PING")
+			operation := func() error {
+				<-ctx.Done()
+				return fmt.Errorf("operation: %w", ctx.Err())
+			}
+			var err error
+			if pipeline {
+				err = h.ProcessPipelineHook(func(_ context.Context, _ []redis.Cmder) error {
+					return operation()
+				})(ctx, []redis.Cmder{cmd})
+			} else {
+				err = h.ProcessHook(func(_ context.Context, _ redis.Cmder) error {
+					return operation()
+				})(ctx, cmd)
+			}
+			if !errors.Is(err, context.DeadlineExceeded) || h.openedAt.Load() != before {
+				t.Fatalf("caller deadline changed shared health: err=%v before=%d after=%d", err, before, h.openedAt.Load())
+			}
+		})
+	}
+}
+
+func TestCircuitBreakerTransportDeadlineStillTrips(t *testing.T) {
+	for _, pipeline := range []bool{false, true} {
+		t.Run(fmt.Sprintf("pipeline=%t", pipeline), func(t *testing.T) {
+			// A Redis transport deadline without an expired caller must still trip.
+			h := newCircuitBreakerHook(time.Hour)
+			cmd := redis.NewStatusCmd(context.Background(), "PING")
+			var err error
+			if pipeline {
+				err = h.ProcessPipelineHook(func(_ context.Context, _ []redis.Cmder) error {
+					return context.DeadlineExceeded
+				})(context.Background(), []redis.Cmder{cmd})
+			} else {
+				err = h.ProcessHook(func(_ context.Context, _ redis.Cmder) error {
+					return context.DeadlineExceeded
+				})(context.Background(), cmd)
+			}
+			if !errors.Is(err, context.DeadlineExceeded) || h.openedAt.Load() == 0 {
+				t.Fatal("transport deadline did not trip the breaker")
+			}
+		})
+	}
+}
+
+func TestCancelledRedisCallerDoesNotBlockHealthyPeer(t *testing.T) {
+	url := os.Getenv("REDIS_URL")
+	if url == "" {
+		t.Skip("set REDIS_URL to the disposable integration service")
+	}
+	client, err := NewRedisClient(context.Background(), url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := client.Ping(ctx).Err(); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled caller: %v", err)
+	}
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		t.Fatalf("cancelled caller blocked healthy peer: %v", err)
+	}
+}
 
 func TestCircuitBreaker_TripsOnError(t *testing.T) {
 	h := newCircuitBreakerHook(time.Hour)
@@ -142,48 +286,4 @@ func TestCircuitBreaker_PipelineShortCircuit(t *testing.T) {
 			t.Fatalf("cmd %d: expected per-cmd ErrRedisCircuitOpen, got %v", i, c.Err())
 		}
 	}
-}
-
-func TestNewRedisPinger(t *testing.T) {
-	t.Run("no client yields no probe", func(t *testing.T) {
-		// Returning a typed nil here would be worse than returning nothing: the
-		// caller would store it in an interface, the interface would test
-		// non-nil, and readiness would report a hard failure for a dependency
-		// the operator deliberately did not deploy.
-		if p := NewRedisPinger(nil); p != nil {
-			t.Errorf("NewRedisPinger(nil) = %v, want nil", p)
-		}
-	})
-
-	t.Run("a nil probe still answers rather than panicking", func(t *testing.T) {
-		var p *RedisPinger
-		if err := p.Ping(context.Background()); !errors.Is(err, ErrRedisUnavailable) {
-			t.Errorf("Ping() = %v, want ErrRedisUnavailable", err)
-		}
-	})
-
-	t.Run("an unreachable Redis reports an error and does not hang", func(t *testing.T) {
-		client := redis.NewClient(&redis.Options{
-			Addr:        "127.0.0.1:1",
-			DialTimeout: 100 * time.Millisecond,
-			MaxRetries:  -1,
-		})
-		t.Cleanup(func() { _ = client.Close() })
-
-		p := NewRedisPinger(client)
-		if p == nil {
-			t.Fatal("NewRedisPinger returned nil for a real client")
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-
-		start := time.Now()
-		if err := p.Ping(ctx); err == nil {
-			t.Skip("something is listening on 127.0.0.1:1")
-		}
-		if elapsed := time.Since(start); elapsed > time.Second {
-			t.Errorf("the probe took %v; a readiness check must fail fast", elapsed)
-		}
-	})
 }

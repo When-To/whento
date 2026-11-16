@@ -24,9 +24,7 @@ type resetServiceStub struct {
 	err    error
 }
 
-func (*resetServiceStub) RequestPasswordReset(context.Context, *models.ForgotPasswordRequest) error {
-	return nil
-}
+func (*resetServiceStub) RequestPasswordReset(*models.ForgotPasswordRequest) {}
 func (s *resetServiceStub) ResetPassword(context.Context, *models.ResetPasswordRequest) (*models.ResetPasswordResponse, error) {
 	s.called = true
 	if s.err != nil {

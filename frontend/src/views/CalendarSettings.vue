@@ -522,6 +522,15 @@
             @save="handleSaveNotifications"
           />
 
+          <!-- Activity journal (owner only) -->
+          <CollapsibleSection :title="t('calendar.activity.title')" :default-open="false">
+            <ActivityLogSection
+              :entries="activityEntries"
+              :loading="activityLoading"
+              :error="activityError"
+            />
+          </CollapsibleSection>
+
           <!-- Danger Zone -->
           <CollapsibleSection
             :title="t('common.dangerZone')"
@@ -592,18 +601,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
+import { useEventListener } from '@vueuse/core';
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useCalendarStore } from '@/stores/calendar';
 import { useToastStore } from '@/stores/toast';
 import { confirm } from '@/composables/useConfirm';
+import { useAccountScopedReload } from '@/composables/useAccountScopedReload';
 import CollapsibleSection from '@/components/CollapsibleSection.vue';
 import NotificationSettings from '@/components/NotificationSettings.vue';
 import CalendarInfoFields from '@/components/calendar/CalendarInfoFields.vue';
 import CalendarThresholdFields from '@/components/calendar/CalendarThresholdFields.vue';
 import CalendarScheduleFields from '@/components/calendar/CalendarScheduleFields.vue';
 import ParticipantAccessToggles from '@/components/calendar/ParticipantAccessToggles.vue';
+import ActivityLogSection from '@/components/calendar/ActivityLogSection.vue';
 import { translateErrorMessage } from '@/utils/errorTranslator';
 import { useSmtpProbe } from '@/utils/smtpProbe';
 import {
@@ -617,6 +629,9 @@ import {
   getDefaultNotifyConfig,
   type NotifyConfig,
 } from '@/api/notify';
+import { calendarsApi } from '@/api/calendars';
+import type { DateActivityEntry } from '@/types';
+import { addDaysISO, todayISO } from '@/utils/date/isoDate';
 
 const router = useRouter();
 const route = useRoute();
@@ -625,6 +640,13 @@ const calendarStore = useCalendarStore();
 const toastStore = useToastStore();
 
 const calendarId = route.params.id as string;
+
+// A remote account replacement (or a refresh that discovered a different server
+// family) advances the local account generation, not a document reload. Reload this
+// calendar's own data instead; the owner is the same route, the data is account-scoped.
+useAccountScopedReload(() => {
+  void loadCalendar();
+});
 
 const loading = ref(true);
 const updating = ref(false);
@@ -683,6 +705,34 @@ const notifyConfig = ref<NotifyConfig>(getDefaultNotifyConfig());
 // configured; the probe is tri-state so a failure is a retryable warning, never
 // a rewrite of the owner's saved email.enabled.
 const { state: smtpProbe, probe: probeSmtp } = useSmtpProbe();
+
+// Activity journal. The section is collapsed by default but CollapsibleSection keeps its
+// slot mounted (v-show), so there is no "opened" event to hang a lazy load on; this is
+// loaded with the calendar, like the notification config above it.
+const activityEntries = ref<DateActivityEntry[]>([]);
+const activityLoading = ref(false);
+const activityError = ref(false);
+
+/** How far ahead the journal looks. The backend refuses more than 92 days. */
+const ACTIVITY_RANGE_DAYS = 60;
+
+async function loadActivity(): Promise<void> {
+  activityLoading.value = true;
+  activityError.value = false;
+
+  try {
+    const start = todayISO(form.timezone || undefined);
+    const end = addDaysISO(start, ACTIVITY_RANGE_DAYS);
+
+    activityEntries.value = await calendarsApi.getActivity(calendarId, start, end);
+  } catch (_error) {
+    // A journal that will not load must not take the settings page with it: the rest of
+    // this view is what the owner actually came to edit.
+    activityError.value = true;
+  } finally {
+    activityLoading.value = false;
+  }
+}
 
 // Track if form has unsaved changes
 const hasUnsavedChanges = computed(() => {
@@ -799,6 +849,10 @@ async function loadCalendar() {
         // If notify config doesn't exist, use default
         notifyConfig.value = getDefaultNotifyConfig();
       }
+
+      // Not awaited: the journal is one collapsed section, and the page should not wait
+      // on it. It sets its own loading and error state.
+      void loadActivity();
     }
   } catch (error: any) {
     toastStore.error(t(translateErrorMessage(error, { fallback: 'calendar.fetchError' })));
@@ -1119,12 +1173,7 @@ onMounted(() => {
   // Email options follow the instance's actual SMTP configuration. On failure
   // the probe goes to 'error' (retryable), preserving saved email.enabled.
   probeSmtp();
-  // Add beforeunload listener
-  window.addEventListener('beforeunload', handleBeforeUnload);
 });
 
-onBeforeUnmount(() => {
-  // Remove beforeunload listener
-  window.removeEventListener('beforeunload', handleBeforeUnload);
-});
+useEventListener(window, 'beforeunload', handleBeforeUnload);
 </script>

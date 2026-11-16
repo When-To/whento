@@ -203,25 +203,8 @@ func (e *ExternalNotifier) SendDiscord(
 		},
 	}
 
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal Discord payload: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", webhookURL, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return fmt.Errorf("failed to create Discord request: %w", withoutURL(err))
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := e.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send Discord notification: %w", withoutURL(err))
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("discord webhook returned status %d", resp.StatusCode)
+	if err := e.postJSON(ctx, "Discord", "discord webhook", webhookURL, payload); err != nil {
+		return err
 	}
 
 	e.logger.Info("Discord notification sent successfully", "webhook_ref", pkglog.Fingerprint(webhookURL))
@@ -252,25 +235,8 @@ func (e *ExternalNotifier) SendSlack(
 		},
 	}
 
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal Slack payload: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", webhookURL, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return fmt.Errorf("failed to create Slack request: %w", withoutURL(err))
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := e.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send Slack notification: %w", withoutURL(err))
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("slack webhook returned status %d", resp.StatusCode)
+	if err := e.postJSON(ctx, "Slack", "slack webhook", webhookURL, payload); err != nil {
+		return err
 	}
 
 	e.logger.Info("Slack notification sent successfully", "webhook_ref", pkglog.Fingerprint(webhookURL))
@@ -303,30 +269,39 @@ func (e *ExternalNotifier) SendTelegram(
 		"parse_mode": "Markdown",
 	}
 
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal Telegram payload: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return fmt.Errorf("failed to create Telegram request: %w", withoutURL(err))
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := e.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send Telegram notification: %w", withoutURL(err))
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("telegram API returned status %d", resp.StatusCode)
+	if err := e.postJSON(ctx, "Telegram", "telegram API", apiURL, payload); err != nil {
+		return err
 	}
 
 	// A Telegram chat id names a person's chat as surely as an address names
 	// their mailbox.
 	e.logger.Info("Telegram notification sent successfully", "chat_ref", pkglog.Fingerprint(chatID))
+	return nil
+}
+
+// postJSON posts payload to rawURL and fails on anything but a 2xx. provider names the
+// service in the error; target names the endpoint in the status error.
+func (e *ExternalNotifier) postJSON(ctx context.Context, provider, target, rawURL string, payload any) error {
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal %s payload: %w", provider, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return fmt.Errorf("failed to create %s request: %w", provider, withoutURL(err))
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := e.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send %s notification: %w", provider, withoutURL(err))
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("%s returned status %d", target, resp.StatusCode)
+	}
 	return nil
 }
 

@@ -25,7 +25,7 @@ function seed(value: unknown) {
 /**
  * A fresh Pinia per test.
  *
- * The store calls init() at creation, so localStorage has to be arranged *before* the
+ * The store reads localStorage at creation, so localStorage has to be arranged *before* the
  * store is instantiated — which is exactly the sequence that makes a corrupt value a
  * page-load failure rather than a recoverable one.
  */
@@ -258,7 +258,7 @@ describe('calendarHistory', () => {
       store.addCalendar('tok-1', 'First');
       store.updateDisplaySettings('tok-1', { periodCount: 3 });
 
-      expect(store.getMonthCount('tok-1')).toBe(3);
+      expect(store.calendars[0].monthCount).toBe(3);
     });
 
     it('falls back to the legacy monthCount when periodCount is absent', () => {

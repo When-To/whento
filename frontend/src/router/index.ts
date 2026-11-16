@@ -12,9 +12,8 @@ import {
 } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 
-// Get build type from environment
-const buildType = import.meta.env.VITE_BUILD_TYPE || 'cloud';
-const isCloud = buildType === 'cloud';
+// Always defined: vite.config.ts injects it at build time.
+const isCloud = import.meta.env.VITE_BUILD_TYPE === 'cloud';
 
 export const routes: RouteRecordRaw[] = [
   {

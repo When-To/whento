@@ -102,11 +102,6 @@ func Info(msg string, args ...any) {
 	defaultLogger.Info(msg, args...)
 }
 
-// Debug logs at debug level
-func Debug(msg string, args ...any) {
-	defaultLogger.Debug(msg, args...)
-}
-
 // Warn logs at warn level
 func Warn(msg string, args ...any) {
 	defaultLogger.Warn(msg, args...)
