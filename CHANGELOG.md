@@ -40,6 +40,27 @@ line per release rather than listed individually.
 
 ## [Unreleased]
 
+### Added
+
+- Self-service account deletion: `DELETE /api/v1/auth/me`, re-confirmed by the
+  current password and rate limited per user (5 per 15 minutes), plus a
+  "Danger zone" in Settings → Profile. Its confirmation dialog lists the calendars
+  and the number of participants that go with the account, says what is not
+  deleted (answers on other people's calendars, operator backups), and stays
+  disabled until the password is typed and the box ticked. Everything the account
+  owns goes in one transaction (calendars, participants, availabilities,
+  sessions, passkeys, 2FA, unified feed); earlier access tokens are revoked and
+  the bootstrap marker is kept. An administrator can delete their own account
+  only while another administrator exists (409 otherwise). A confirmation email,
+  without a link, is sent when SMTP is configured. No migration.
+
+### Security
+
+- `PATCH /api/v1/auth/me/password` is now rate limited per user (5 per 15
+  minutes), so a stolen session cannot use it to guess the current password.
+- A failed write of the access-token revocation marker is now logged instead of
+  being dropped silently.
+
 ## [v3.0.0] — 2026-11-16
 
 A major version: the first administrator is now created through an operator-key

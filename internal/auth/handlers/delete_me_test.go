@@ -28,7 +28,11 @@ func (c *memCache) Get(_ context.Context, key string, dest interface{}) error {
 	if !ok {
 		return errors.New("miss")
 	}
-	*dest.(*int64) = v
+	target, ok := dest.(*int64)
+	if !ok {
+		return errors.New("memCache only holds int64 markers")
+	}
+	*target = v
 	return nil
 }
 
