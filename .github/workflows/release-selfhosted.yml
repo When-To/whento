@@ -150,6 +150,10 @@ jobs:
             echo "tag=${VERSION}"
             echo "version=${VERSION_NUM}"
             echo "image=${IMAGE}"
+            # Computed once, so the scanned and the pushed builds share one value and
+            # the push still reuses the scan's layers.
+            echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "vcs_ref=$(git rev-parse --short HEAD)"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
@@ -197,6 +201,8 @@ jobs:
           tags: whento-scan:candidate
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
+            BUILD_DATE=${{ steps.version.outputs.build_date }}
+            VCS_REF=${{ steps.version.outputs.vcs_ref }}
           platforms: linux/amd64
           cache-from: type=gha
           no-cache-filters: runtime
@@ -225,6 +231,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
+            BUILD_DATE=${{ steps.version.outputs.build_date }}
+            VCS_REF=${{ steps.version.outputs.vcs_ref }}
           platforms: linux/amd64,linux/arm64
           # In-registry SPDX SBOM and build provenance, readable with
           # `docker buildx imagetools inspect --format '{{ json .SBOM }}'`.

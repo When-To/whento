@@ -40,6 +40,11 @@ line per release rather than listed individually.
 
 ## [Unreleased]
 
+### Fixed
+
+- The release images report their build date and commit at startup instead of
+  `unknown`, like the downloadable binaries already did.
+
 ## [v3.0.0] — 2026-11-16
 
 A major version: the first administrator is now created through an operator-key
