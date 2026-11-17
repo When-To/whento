@@ -40,6 +40,11 @@ line per release rather than listed individually.
 
 ## [Unreleased]
 
+## [v3.1.0] — 2026-11-17
+
+A minor version: users can now delete their own account. No migration and no
+configuration change; upgrading from v3.0.0 is a drop-in image or binary swap.
+
 ### Added
 
 - Self-service account deletion: `DELETE /api/v1/auth/me`, re-confirmed by the
@@ -934,7 +939,8 @@ community templates landed with it.
 
 _Note: this tag is not an ancestor of `main` — see the caveats at the top._
 
-[unreleased]: https://github.com/When-To/whento/compare/v3.0.0...HEAD
+[unreleased]: https://github.com/When-To/whento/compare/v3.1.0...HEAD
+[v3.1.0]: https://github.com/When-To/whento/compare/v3.0.0...v3.1.0
 [v3.0.0]: https://github.com/When-To/whento/releases/tag/v3.0.0
 [v2.0.0]: https://github.com/When-To/whento/releases/tag/v2.0.0
 [v1.6.3]: https://github.com/When-To/whento/releases/tag/v1.6.3
