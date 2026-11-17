@@ -54,6 +54,11 @@ line per release rather than listed individually.
   only while another administrator exists (409 otherwise). A confirmation email,
   without a link, is sent when SMTP is configured. No migration.
 
+### Fixed
+
+- The release images report their build date and commit at startup instead of
+  `unknown`, like the downloadable binaries already did.
+
 ### Security
 
 - `PATCH /api/v1/auth/me/password` is now rate limited per user (5 per 15
