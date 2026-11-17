@@ -177,7 +177,8 @@ const passwordError = ref<string | null>(null);
 const shownCalendars = computed(() => calendars.value?.slice(0, MAX_NAMES) ?? []);
 const hiddenCount = computed(() => Math.max((calendars.value?.length ?? 0) - MAX_NAMES, 0));
 const participantCount = computed(
-  () => calendars.value?.reduce((sum, c) => sum + c.participants.length, 0) ?? 0
+  // The list omits `participants` on a calendar that has none (omitempty).
+  () => calendars.value?.reduce((sum, c) => sum + (c.participants?.length ?? 0), 0) ?? 0
 );
 const canSubmit = computed(
   () => understood.value && password.value !== '' && !deleting.value && !lastAdmin.value
@@ -199,7 +200,9 @@ watch(
     passwordError.value = null;
     calendars.value = null;
     try {
-      calendars.value = await calendarsApi.getAll();
+      // An owner of no calendar gets `data: null`, not [] (same guard as the calendar store).
+      const result = await calendarsApi.getAll();
+      calendars.value = Array.isArray(result) ? result : [];
     } catch {
       // The deletion stays possible; the impact is just not counted.
     }

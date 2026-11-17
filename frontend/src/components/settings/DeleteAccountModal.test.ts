@@ -23,7 +23,9 @@ vi.mock('vue-router', () => ({ useRouter: () => ({ push: routerPush }) }));
 
 const { default: DeleteAccountModal } = await import('./DeleteAccountModal.vue');
 
+/** Shaped like GET /calendars: `participants` is absent, not empty, when there are none. */
 function calendar(name: string, participants: number) {
+  if (participants === 0) return { id: name, name };
   return {
     id: name,
     name,
@@ -100,6 +102,13 @@ describe('DeleteAccountModal.vue', () => {
     expect(items[5].text()).toBe('and 2 others');
     // No participants: no reminder to warn them.
     expect(page().text()).not.toContain('Participants will not be notified');
+    wrapper.unmount();
+  });
+
+  it('says so when the list comes back null (no calendar owned)', async () => {
+    getAll.mockResolvedValue(null);
+    const wrapper = await mountModal();
+    expect(page().text()).toContain('You do not own any calendar.');
     wrapper.unmount();
   });
 
