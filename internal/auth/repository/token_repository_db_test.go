@@ -144,7 +144,7 @@ func TestRefreshTokensGoWithTheirUser(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	if err := users.Delete(ctx, user.ID); err != nil {
+	if _, err := users.Delete(ctx, user.ID); err != nil {
 		t.Fatalf("delete user: %v", err)
 	}
 

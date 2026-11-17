@@ -271,57 +271,74 @@ func (r *UserRepository) UpdateRole(ctx context.Context, userID uuid.UUID, role 
 	return nil
 }
 
-// Delete deletes a user
+// Delete deletes a user and, by cascade, everything the account owns. It returns
+// the public tokens of the calendars that went with it, read in the same
+// transaction, so the caller can purge them from the cache once the delete has
+// committed.
 //
 // Admin invariant: the last administrator cannot be deleted. Like UpdateRole, this
 // runs under advisory lock 2, so two admins deleting each other concurrently
 // cannot both commit — the second sees one admin left and refuses.
-func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) ([]string, error) {
+	// pool.Begin without options runs at the server default, READ COMMITTED, and
+	// it must stay there: each statement then sees what committed before it, so
+	// the admin count below reflects a deletion that committed while this
+	// transaction waited on the lock. Under REPEATABLE READ the snapshot would
+	// be taken at the lock call, and the two last admins could both see two.
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Same lock as UpdateRole: deletion and demotion both change the admin
 	// count, so they must serialize with each other.
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(2)`); err != nil {
-		return fmt.Errorf("failed to acquire advisory lock: %w", err)
+		return nil, fmt.Errorf("failed to acquire advisory lock: %w", err)
 	}
 
 	var currentRole string
 	if err := tx.QueryRow(ctx, `SELECT role FROM users WHERE id = $1`, id).Scan(&currentRole); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrUserNotFound
+			return nil, ErrUserNotFound
 		}
-		return fmt.Errorf("failed to read user role: %w", err)
+		return nil, fmt.Errorf("failed to read user role: %w", err)
 	}
 
 	// Deleting an admin? Refuse when the instance has only this one.
 	if currentRole == models.RoleAdmin {
 		var admins int
 		if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE role = $1`, models.RoleAdmin).Scan(&admins); err != nil {
-			return fmt.Errorf("failed to count administrators: %w", err)
+			return nil, fmt.Errorf("failed to count administrators: %w", err)
 		}
 		if admins <= 1 {
-			return ErrLastAdmin
+			return nil, ErrLastAdmin
 		}
+	}
+
+	rows, err := tx.Query(ctx, `SELECT public_token FROM calendars WHERE owner_id = $1`, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read owned calendars: %w", err)
+	}
+	publicTokens, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("failed to read owned calendars: %w", err)
 	}
 
 	result, err := tx.Exec(ctx, `DELETE FROM users WHERE id = $1`, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete user: %w", err)
+		return nil, fmt.Errorf("failed to delete user: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
-		return ErrUserNotFound
+		return nil, ErrUserNotFound
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return nil
+	return publicTokens, nil
 }
 
 // List lists all users

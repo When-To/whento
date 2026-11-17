@@ -425,6 +425,7 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 //	@Success		200		{object}	map[string]string
 //	@Failure		400		{object}	httputil.ErrorResponse	"Invalid request or current password incorrect"
 //	@Failure		401		{object}	httputil.ErrorResponse	"Unauthorized"
+//	@Failure		429		{object}	httputil.ErrorResponse	"Rate limit exceeded"
 //	@Router			/api/v1/auth/me/password [patch]
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
@@ -449,6 +450,54 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "Password changed successfully"})
+}
+
+// DeleteMe deletes the authenticated user's own account
+//
+//	@Summary		Delete own account
+//	@Description	Permanently deletes the authenticated user's account and everything it owns (calendars, their participants and availabilities, sessions, passkeys, 2FA). Requires the current password. An administrator can only delete their account while another administrator exists. A confirmation email is sent when SMTP is configured.
+//	@Tags			Authentication
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			request	body		models.DeleteAccountRequest	true	"Current password"
+//	@Success		200		{object}	map[string]string
+//	@Failure		400		{object}	httputil.ErrorResponse	"Invalid request or password incorrect"
+//	@Failure		401		{object}	httputil.ErrorResponse	"Unauthorized"
+//	@Failure		409		{object}	httputil.ErrorResponse	"The caller is the last administrator"
+//	@Failure		429		{object}	httputil.ErrorResponse	"Rate limit exceeded"
+//	@Failure		500		{object}	httputil.ErrorResponse	"Internal server error"
+//	@Router			/api/v1/auth/me [delete]
+func (h *AuthHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
+		return
+	}
+
+	var req models.DeleteAccountRequest
+	if !httputil.DecodeValid(w, r, &req) {
+		return
+	}
+
+	if err := h.authService.DeleteOwnAccount(r.Context(), userID, req.Password); err != nil {
+		switch {
+		// 400, not 401, as for a password change: a 401 would make the client
+		// refresh and then sign the user out over a typo.
+		case errors.Is(err, service.ErrPasswordMismatch):
+			httputil.Error(w, http.StatusBadRequest, httputil.ErrCodeBadRequest, "Password is incorrect")
+		case errors.Is(err, service.ErrLastAdmin):
+			httputil.Error(w, http.StatusConflict, httputil.ErrCodeConflict, "Cannot delete the last administrator")
+		case errors.Is(err, service.ErrUserNotFound):
+			httputil.Error(w, http.StatusUnauthorized, httputil.ErrCodeUnauthorized, "Unauthorized")
+		default:
+			httputil.Error(w, http.StatusInternalServerError, httputil.ErrCodeInternal, "Failed to delete account")
+		}
+		return
+	}
+
+	sessioncookie.ClearRefreshToken(w, r)
+	httputil.JSON(w, http.StatusOK, map[string]string{"message": "Account deleted successfully"})
 }
 
 // ListUsers is implemented in list_users.go.

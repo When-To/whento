@@ -102,7 +102,7 @@ func TestLoginDoesNotPublishASessionAfterPasswordChange(t *testing.T) {
 		release:       release,
 	}
 	users.passwordChanged = func(ctx context.Context, id uuid.UUID) error { _, err := tokens.DeleteByUserID(ctx, id); return err }
-	svc := NewAuthService(users, tokens, &fakeMFARepo{}, testJWT(t), cache.NewRedisCache(nil), bcrypt.MinCost, true, nil)
+	svc := NewAuthService(users, tokens, &fakeMFARepo{}, testJWT(t), cache.NewRedisCache(nil), nil, bcrypt.MinCost, true, nil)
 
 	loginErr := make(chan error, 1)
 	go func() {
@@ -160,7 +160,7 @@ func mfaService(t *testing.T, users UserRepository, tokens TokenRepository, enab
 	if !isFenced {
 		t.Fatalf("tokens must be *fenceTokens to observe the generation fence")
 	}
-	svc := NewAuthService(users, tokens, mfa, testJWT(t), cache.NewRedisCache(nil), bcrypt.MinCost, true, nil)
+	svc := NewAuthService(users, tokens, mfa, testJWT(t), cache.NewRedisCache(nil), nil, bcrypt.MinCost, true, nil)
 
 	return svc, fenced
 }

@@ -80,7 +80,9 @@ type UserRepository interface {
 		locale *string,
 		timezone *string,
 	) (*models.User, error)
-	Delete(ctx context.Context, id uuid.UUID) error
+	// Delete removes the user and returns the public tokens of the calendars
+	// deleted with it, for cache purging.
+	Delete(ctx context.Context, id uuid.UUID) ([]string, error)
 	List(ctx context.Context) ([]*models.User, error)
 	UpdateRole(ctx context.Context, userID uuid.UUID, role string) error
 	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash, previousHash string) error
@@ -126,6 +128,7 @@ type AuthService struct {
 	mfaRepo         MFARepository
 	jwtManager      *jwt.Manager
 	cache           cache.Cache
+	mailer          AccountMailer
 	bcryptCost      int
 	allowedRegister bool
 	allowedEmails   []string
@@ -138,6 +141,7 @@ func NewAuthService(
 	mfaRepo MFARepository,
 	jwtManager *jwt.Manager,
 	appCache cache.Cache,
+	mailer AccountMailer,
 	bcryptCost int,
 	allowedRegister bool,
 	allowedEmails []string,
@@ -148,6 +152,7 @@ func NewAuthService(
 		mfaRepo:         mfaRepo,
 		jwtManager:      jwtManager,
 		cache:           appCache,
+		mailer:          mailer,
 		bcryptCost:      bcryptCost,
 		allowedRegister: allowedRegister,
 		allowedEmails:   allowedEmails,
@@ -465,10 +470,16 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID string, req *mo
 // now. Access tokens are self-contained, so this cache entry, checked by
 // middleware.Auth, is the only way to withdraw one before it expires; without
 // Redis an access token lives out its JWT_ACCESS_EXPIRY.
+//
+// A failed write does not undo the change that called it (the database is the
+// source of truth), but it leaves earlier tokens, admin claim included, valid
+// until they expire, so it is logged for the operator.
 func (s *AuthService) RevokeAccessTokens(ctx context.Context, userID string) {
 	if s.cache != nil && s.cache.IsEnabled() {
 		pwdKey := cache.UserPasswordChangedKey(userID)
-		_ = s.cache.Set(ctx, pwdKey, time.Now().UnixMilli(), s.jwtManager.AccessExpiry())
+		if err := s.cache.Set(ctx, pwdKey, time.Now().UnixMilli(), s.jwtManager.AccessExpiry()); err != nil {
+			logger.FromContext(ctx).Error("failed to revoke access tokens", "error", err)
+		}
 	}
 }
 
@@ -518,19 +529,8 @@ func (s *AuthService) DeleteUser(ctx context.Context, currentUserID, targetUserI
 		return ErrUserNotFound
 	}
 
-	if err := s.userRepo.Delete(ctx, uid); err != nil {
-		if errors.Is(err, repository.ErrLastAdmin) {
-			return ErrLastAdmin
-		}
-		if errors.Is(err, repository.ErrUserNotFound) {
-			return ErrUserNotFound
-		}
-		return err
-	}
-
-	s.RevokeAccessTokens(ctx, uid.String())
-
-	return nil
+	_, err = s.deleteAccount(ctx, uid)
+	return err
 }
 
 // IssueSession is the one place a fresh session is created: it issues the

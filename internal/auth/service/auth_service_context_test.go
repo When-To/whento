@@ -120,7 +120,7 @@ func newContextFixture(t *testing.T) *contextFixture {
 
 	return &contextFixture{
 		service: NewAuthService(
-			users, tokens, mfa, manager, newCountingCache(),
+			users, tokens, mfa, manager, newCountingCache(), nil,
 			bcrypt.MinCost, true, []string{"*"},
 		),
 		users:  users,

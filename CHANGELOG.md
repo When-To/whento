@@ -40,10 +40,36 @@ line per release rather than listed individually.
 
 ## [Unreleased]
 
+## [v3.1.0] — 2026-11-17
+
+A minor version: users can now delete their own account. No migration and no
+configuration change; upgrading from v3.0.0 is a drop-in image or binary swap.
+
+### Added
+
+- Self-service account deletion: `DELETE /api/v1/auth/me`, re-confirmed by the
+  current password and rate limited per user (5 per 15 minutes), plus a
+  "Danger zone" in Settings → Profile. Its confirmation dialog lists the calendars
+  and the number of participants that go with the account, says what is not
+  deleted (answers on other people's calendars, operator backups), and stays
+  disabled until the password is typed and the box ticked. Everything the account
+  owns goes in one transaction (calendars, participants, availabilities,
+  sessions, passkeys, 2FA, unified feed); earlier access tokens are revoked and
+  the bootstrap marker is kept. An administrator can delete their own account
+  only while another administrator exists (409 otherwise). A confirmation email,
+  without a link, is sent when SMTP is configured. No migration.
+
 ### Fixed
 
 - The release images report their build date and commit at startup instead of
   `unknown`, like the downloadable binaries already did.
+
+### Security
+
+- `PATCH /api/v1/auth/me/password` is now rate limited per user (5 per 15
+  minutes), so a stolen session cannot use it to guess the current password.
+- A failed write of the access-token revocation marker is now logged instead of
+  being dropped silently.
 
 ## [v3.0.0] — 2026-11-16
 
@@ -913,7 +939,8 @@ community templates landed with it.
 
 _Note: this tag is not an ancestor of `main` — see the caveats at the top._
 
-[unreleased]: https://github.com/When-To/whento/compare/v3.0.0...HEAD
+[unreleased]: https://github.com/When-To/whento/compare/v3.1.0...HEAD
+[v3.1.0]: https://github.com/When-To/whento/compare/v3.0.0...v3.1.0
 [v3.0.0]: https://github.com/When-To/whento/releases/tag/v3.0.0
 [v2.0.0]: https://github.com/When-To/whento/releases/tag/v2.0.0
 [v1.6.3]: https://github.com/When-To/whento/releases/tag/v1.6.3

@@ -57,7 +57,9 @@ type fakeUserRepo struct {
 	concurrentDisplayName string
 	listErr               error
 	deleteErr             error
-	roleSetErr            error
+	// ownedTokens is what Delete reports as the deleted calendars' public tokens.
+	ownedTokens []string
+	roleSetErr  error
 
 	created         *models.User
 	passwordUpdated string
@@ -162,10 +164,16 @@ func (f *fakeUserRepo) UpdateProfile(
 	return user, nil
 }
 
-func (f *fakeUserRepo) Delete(_ context.Context, id uuid.UUID) error {
+func (f *fakeUserRepo) Delete(_ context.Context, id uuid.UUID) ([]string, error) {
+	if f.deleteErr != nil {
+		return nil, f.deleteErr
+	}
+	if _, ok := f.byID[id]; !ok {
+		return nil, repository.ErrUserNotFound
+	}
 	f.deleted = id
 
-	return f.deleteErr
+	return f.ownedTokens, nil
 }
 
 func (f *fakeUserRepo) FirstUserCreated(context.Context) (bool, error) {
@@ -468,6 +476,7 @@ type fixture struct {
 	tokens  *fakeTokenRepo
 	mfa     *fakeMFARepo
 	cache   *countingCache
+	mailer  *fakeMailer
 }
 
 type options struct {
@@ -492,10 +501,11 @@ func newFixture(t *testing.T, configure func(*options)) *fixture {
 	users.passwordChanged = func(ctx context.Context, id uuid.UUID) error { _, err := tokens.DeleteByUserID(ctx, id); return err }
 	mfa := &fakeMFARepo{mfa: opts.mfa}
 	appCache := newCountingCache()
+	mailer := &fakeMailer{configured: true}
 
 	return &fixture{
 		service: NewAuthService(
-			users, tokens, mfa, testJWT(t), appCache,
+			users, tokens, mfa, testJWT(t), appCache, mailer,
 			bcrypt.MinCost, // the default cost makes every password test take ~1s
 			opts.allowRegistration, opts.allowedEmails,
 		),
@@ -503,6 +513,7 @@ func newFixture(t *testing.T, configure func(*options)) *fixture {
 		tokens: tokens,
 		mfa:    mfa,
 		cache:  appCache,
+		mailer: mailer,
 	}
 }
 
@@ -1029,7 +1040,7 @@ func TestExpiresInDescribesTheTokenItCameWith(t *testing.T) {
 	// path whose token it is asserting on.
 	users.add(&models.User{Email: "existing@example.test", Role: models.RoleAdmin})
 	service := NewAuthService(
-		users, newFakeTokenRepo(), &fakeMFARepo{}, manager, newCountingCache(),
+		users, newFakeTokenRepo(), &fakeMFARepo{}, manager, newCountingCache(), nil,
 		bcrypt.MinCost, true, []string{"*"},
 	)
 

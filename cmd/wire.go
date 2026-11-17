@@ -163,7 +163,7 @@ func buildHandlers(d *deps) (*handlers, error) {
 
 	// The MFA repository is for the 2FA check during login; the cache is for
 	// temporary-token replay prevention.
-	authSvc := authService.NewAuthService(userRepo, tokenRepo, mfaRepository, d.jwtManager, d.cacheStore, d.cfg.BcryptCost, d.cfg.AllowedRegister, d.cfg.AllowedEmails)
+	authSvc := authService.NewAuthService(userRepo, tokenRepo, mfaRepository, d.jwtManager, d.cacheStore, d.mailer, d.cfg.BcryptCost, d.cfg.AllowedRegister, d.cfg.AllowedEmails)
 	passwordResetSvc := authService.NewPasswordResetService(userRepo, tokenRepo, mfaRepository, d.mailer, d.jwtManager, authSvc, d.cfg, d.log, d.cfg.BcryptCost)
 	magicLinkSvc := authService.NewMagicLinkService(userRepo, mfaRepository, d.mailer, d.jwtManager, d.cfg, d.log)
 

@@ -221,7 +221,7 @@ func newRig(t *testing.T, opts rigOptions) *rig {
 	manager := newManager(t)
 	// Cost 4 rather than the production 12: these tests hash passwords repeatedly.
 	authSvc := service.NewAuthService(opts.users, opts.tokens, opts.mfa, manager,
-		opts.appCache, bcrypt.MinCost, opts.allowedRegister, opts.allowedEmails)
+		opts.appCache, nil, bcrypt.MinCost, opts.allowedRegister, opts.allowedEmails)
 
 	store := &fakeUserStore{user: opts.users.user}
 	mail := &fakeEmailSender{configured: opts.emailConfigured}

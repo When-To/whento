@@ -229,7 +229,7 @@ func newBootstrapFixture(t *testing.T, cfg *config.Config) *bootstrapFixture {
 	mfa := &fakeMFARepo{}
 
 	authSvc := NewAuthService(
-		users, tokens, mfa, testJWT(t), newCountingCache(),
+		users, tokens, mfa, testJWT(t), newCountingCache(), nil,
 		bcrypt.MinCost, cfg.AllowedRegister, []string{"*"},
 	)
 

@@ -236,7 +236,7 @@ func TestUserDelete(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	if err := repo.Delete(ctx, user.ID); err != nil {
+	if _, err := repo.Delete(ctx, user.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
@@ -883,7 +883,8 @@ func TestAdminInvariantCrossDeletion(t *testing.T) {
 	run := func(id uuid.UUID) func() outcome {
 		repo := repository.NewUserRepository(newSingleConnPool(t, ctx))
 		return func() outcome {
-			return outcome{id: id, err: repo.Delete(ctx, id)}
+			_, err := repo.Delete(ctx, id)
+			return outcome{id: id, err: err}
 		}
 	}
 
@@ -949,7 +950,8 @@ func TestAdminInvariantDeletionRacingOrdinaryRegistration(t *testing.T) {
 	start := make(chan struct{})
 	go func() {
 		<-start
-		results <- outcome{deleteErr: delRepo.Delete(ctx, admin.ID)}
+		_, err := delRepo.Delete(ctx, admin.ID)
+		results <- outcome{deleteErr: err}
 	}()
 	go func() {
 		<-start
@@ -1006,7 +1008,7 @@ func TestAdminLastAdminRejected(t *testing.T) {
 	if err := repo.UpdateRole(ctx, solo.ID, models.RoleUser); !errors.Is(err, repository.ErrLastAdmin) {
 		t.Errorf("demoting the last admin = %v, want ErrLastAdmin", err)
 	}
-	if err := repo.Delete(ctx, solo.ID); !errors.Is(err, repository.ErrLastAdmin) {
+	if _, err := repo.Delete(ctx, solo.ID); !errors.Is(err, repository.ErrLastAdmin) {
 		t.Errorf("deleting the last admin = %v, want ErrLastAdmin", err)
 	}
 
@@ -1016,7 +1018,7 @@ func TestAdminLastAdminRejected(t *testing.T) {
 	if err := repo.Create(ctx, plain); err != nil {
 		t.Fatalf("Create plain: %v", err)
 	}
-	if err := repo.Delete(ctx, plain.ID); err != nil {
+	if _, err := repo.Delete(ctx, plain.ID); err != nil {
 		t.Errorf("deleting a plain user = %v, want nil", err)
 	}
 }

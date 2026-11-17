@@ -68,7 +68,11 @@ func registerAuthRoutes(r chi.Router, d *deps, h *handlers) {
 
 			r.Get("/me", h.auth.GetMe)
 			r.Patch("/me", h.auth.UpdateMe)
-			r.Patch("/me/password", h.auth.ChangePassword)
+			// Per user: both endpoints check the current password, so a stolen
+			// session must not turn either into a guessing oracle. Separate
+			// buckets, so failed deletions do not lock out a password change.
+			l.on(r, perUser("auth-change-password", 5, 15*time.Minute)).Patch("/me/password", h.auth.ChangePassword)
+			l.on(r, perUser("auth-delete-me", 5, 15*time.Minute)).Delete("/me", h.auth.DeleteMe)
 
 			// Email verification (authenticated - requires login)
 			r.Post("/send-verification", h.auth.SendVerificationEmail)

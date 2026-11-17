@@ -134,6 +134,7 @@ var wantRoutes = []string{
 	// Auth, authenticated
 	"GET /api/v1/auth/me",
 	"PATCH /api/v1/auth/me",
+	"DELETE /api/v1/auth/me",
 	"PATCH /api/v1/auth/me/password",
 	"POST /api/v1/auth/send-verification",
 	"GET /api/v1/auth/admin/users",
@@ -268,6 +269,8 @@ var wantRateLimited = []string{
 	"POST /api/v1/auth/magic-link/request",
 	"POST /api/v1/auth/magic-link/verify",
 	"GET /api/v1/auth/verify-email/{token}",
+	"PATCH /api/v1/auth/me/password",
+	"DELETE /api/v1/auth/me",
 	"POST /api/v1/auth/passkey/login/begin",
 	"POST /api/v1/auth/passkey/login/finish",
 	"POST /api/v1/auth/mfa/verify",

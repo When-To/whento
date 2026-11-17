@@ -57,6 +57,11 @@ export const authApi = {
     return apiClient.patch<User>('/auth/me', data);
   },
 
+  /** Permanently delete the caller's own account. The current password is required. */
+  async deleteAccount(password: string): Promise<void> {
+    await apiClient.delete<void>('/auth/me', { data: { password } });
+  },
+
   async forgotPassword(email: string): Promise<{ message: string }> {
     return apiClient.post<{ message: string }>('/auth/forgot-password', { email });
   },

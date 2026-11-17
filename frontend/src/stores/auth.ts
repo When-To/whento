@@ -284,6 +284,17 @@ export const useAuthStore = defineStore('auth', () => {
     });
   }
 
+  /**
+   * Delete the account, then end the session locally the way logout does. There is
+   * no /auth/logout call: the server already revoked every session with the account,
+   * so it would only fail.
+   */
+  async function deleteAccount(password: string) {
+    await run('settings.deleteAccount.error', () => authApi.deleteAccount(password));
+    user.value = null;
+    apiClient.signOut();
+  }
+
   async function forgotPassword(email: string) {
     // Always returns success to prevent email enumeration
     return run('auth.forgotPassword.error', () => authApi.forgotPassword(email));
@@ -457,6 +468,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     fetchUser,
     updateProfile,
+    deleteAccount,
     forgotPassword,
     resetPassword,
     setTokens,

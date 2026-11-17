@@ -1,0 +1,18 @@
+{
+  "fr": {
+    "subject": "Votre compte WhenTo a été supprimé",
+    "greeting": "Bonjour {{.DisplayName}},",
+    "deleted_at": "Votre compte WhenTo a été supprimé le {{.DeletedAt}}.",
+    "calendars_deleted": "Calendriers supprimés avec le compte : {{.Count}}.",
+    "security_notice": "Si vous n'êtes pas à l'origine de cette demande, contactez l'administrateur de cette instance.",
+    "signature": "Cordialement,<br>L'équipe WhenTo"
+  },
+  "en": {
+    "subject": "Your WhenTo account has been deleted",
+    "greeting": "Hello {{.DisplayName}},",
+    "deleted_at": "Your WhenTo account was deleted on {{.DeletedAt}}.",
+    "calendars_deleted": "Calendars deleted with the account: {{.Count}}.",
+    "security_notice": "If you did not request this, contact the administrator of this instance.",
+    "signature": "Best regards,<br>The WhenTo Team"
+  }
+}

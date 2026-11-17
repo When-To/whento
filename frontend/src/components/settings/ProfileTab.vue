@@ -68,6 +68,21 @@
         </button>
       </form>
     </div>
+
+    <!-- Danger zone -->
+    <div class="card border-danger-300 dark:border-danger-800">
+      <h2 class="mb-2 font-display text-xl font-semibold text-danger-700 dark:text-danger-400">
+        {{ t('settings.deleteAccount.dangerZone') }}
+      </h2>
+      <p class="mb-4 text-sm text-gray-700 dark:text-gray-300">
+        {{ t('settings.deleteAccount.dangerZoneDescription') }}
+      </p>
+      <button type="button" class="btn btn-danger" @click="deleteModalOpen = true">
+        {{ t('settings.deleteAccount.openButton') }}
+      </button>
+    </div>
+
+    <DeleteAccountModal :open="deleteModalOpen" @close="deleteModalOpen = false" />
   </div>
 </template>
 
@@ -78,6 +93,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useToastStore } from '@/stores/toast';
 import { LOCALE_NAMES, SUPPORTED_LOCALES } from '@/i18n';
 import TimezoneSelector from '@/components/TimezoneSelector.vue';
+import DeleteAccountModal from '@/components/settings/DeleteAccountModal.vue';
 import { translateErrorMessage } from '@/utils/errorTranslator';
 
 const { t, locale } = useI18n();
@@ -109,6 +125,7 @@ const preferences = reactive<{
 
 const savingProfile = ref(false);
 const savingPreferences = ref(false);
+const deleteModalOpen = ref(false);
 
 // Track if profile has changed
 const hasProfileChanges = computed(() => {
