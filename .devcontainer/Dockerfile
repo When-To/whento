@@ -2,7 +2,7 @@
 # change the toolchain under an existing clone. Digest resolved 2026-08-12 from
 # mcr.microsoft.com (multi-arch index digest). Dependabot's docker ecosystem
 # already watches /.devcontainer and will bump tag and digest together.
-FROM mcr.microsoft.com/devcontainers/go:2.3-trixie@sha256:c83c320b68e27dc36903cd5ee07394870c5330dfd77b0897e78c7e1aa00ddfd0
+FROM mcr.microsoft.com/devcontainers/go:2.3-trixie@sha256:74f45fc4c2abe0de9a9acdb4225ffb3e58e6b28f9af2e209afaa8920a3d3b623
 
 # Configure Go to use /home/vscode/go
 ENV GOPATH=/home/vscode/go

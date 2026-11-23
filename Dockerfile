@@ -39,7 +39,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Go build stage
-FROM golang:1.27-alpine3.24@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 AS builder
+FROM golang:1.27-alpine3.24@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS builder
 
 WORKDIR /build
 
@@ -86,7 +86,7 @@ RUN go build \
 
 # Build the migrate CLI. On BUILDPLATFORM, as before, but now because Go
 # cross-compiles natively rather than to dodge QEMU on a download.
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine3.24@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 AS migrate-builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine3.24@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS migrate-builder
 
 ARG TARGETARCH
 
